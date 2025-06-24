@@ -8,7 +8,7 @@ import time
 from typing import Dict, Any, List, Optional
 from ea.EvolutionEngine import EvolutionEngine
 from ea.TextVariationOperators import TextVariationOperators
-from utils.initialize_population import load_and_initialize_population, sort_population_json
+from utils.initialize_population import load_and_initialize_population
 from utils.custom_logging import get_logger, PerformanceLogger
 import nltk
 import logging
@@ -16,6 +16,161 @@ import logging
 from pathlib import Path
 project_root = Path(__file__).resolve().parents[2]
 population_path = project_root / "outputs" / "Population.json"
+evolution_tracker_path = project_root / "outputs" / "EvolutionTracker.json"
+parent_selection_tracker_path = project_root / "outputs" / "ParentSelectionTracker.json"
+
+def initialize_evolution_tracker(logger, log_file=None):
+    """Initialize the evolution tracker file if it doesn't exist"""
+    with PerformanceLogger(logger, "Initialize Evolution Tracker"):
+        try:
+            if not evolution_tracker_path.exists():
+                # Create initial evolution tracker structure as a flat list
+                evolution_tracker = []
+                with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                    json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
+                logger.info("Created new evolution tracker file: %s", evolution_tracker_path)
+            else:
+                logger.info("Evolution tracker file already exists: %s", evolution_tracker_path)
+        except Exception as e:
+            logger.error("Failed to initialize evolution tracker: %s", e, exc_info=True)
+            raise
+
+def find_tracker_entry(evolution_tracker: List[dict], prompt_id: int) -> Optional[dict]:
+    for entry in evolution_tracker:
+        if entry["prompt_id"] == prompt_id:
+            return entry
+    return None
+
+def check_threshold_and_update_tracker(population, north_star_metric, logger, log_file=None):
+    """Check threshold achievement and update evolution tracker (flat list version)"""
+    with PerformanceLogger(logger, "Check Threshold and Update Tracker"):
+        try:
+            threshold = 0.9999
+            # Load existing evolution tracker (flat list)
+            if evolution_tracker_path.exists():
+                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                    evolution_tracker = json.load(f)
+            else:
+                evolution_tracker = []
+
+            # Since population is sorted by prompt_id ASC, north_star_metric DESC, id DESC
+            current_prompt_id = None
+            completed_prompt_ids = set()
+            max_scores = {}
+            max_genome_ids = {}
+            for genome in population:
+                prompt_id = genome["prompt_id"]
+                if current_prompt_id != prompt_id:
+                    current_prompt_id = prompt_id
+                    north_star_score = genome.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0)
+                    max_scores[prompt_id] = north_star_score
+                    max_genome_ids[prompt_id] = genome["id"]
+                    if isinstance(north_star_score, (int, float)) and north_star_score >= threshold:
+                        completed_prompt_ids.add(prompt_id)
+                        logger.info("Prompt_id %d achieved threshold with score %.4f", prompt_id, north_star_score)
+
+            # Update evolution tracker for each prompt_id
+            for prompt_id in max_scores.keys():
+                entry = find_tracker_entry(evolution_tracker, prompt_id)
+                if entry is None:
+                    # Create new entry
+                    entry = {
+                        "prompt_id": prompt_id,
+                        "status": "complete" if prompt_id in completed_prompt_ids else "not_complete",
+                        "total_generations": 1,
+                        "generations": [
+                            {
+                                "generation_number": 0,
+                                "genome_id": max_genome_ids[prompt_id],
+                                "max_score": max_scores[prompt_id],
+                                "mutation": None,
+                                "crossover": None
+                            }
+                        ]
+                    }
+                    evolution_tracker.append(entry)
+                else:
+                    entry["status"] = "complete" if prompt_id in completed_prompt_ids else "not_complete"
+                    # Optionally update max_score/genome_id for gen 0 if needed
+                    if entry["generations"] and entry["generations"][0]["generation_number"] == 0:
+                        entry["generations"][0]["max_score"] = max_scores[prompt_id]
+                        entry["generations"][0]["genome_id"] = max_genome_ids[prompt_id]
+
+            # Mark all genomes with completed prompt_ids as 'complete'
+            if completed_prompt_ids:
+                marked_count = 0
+                completed_genomes = []
+                for genome in population:
+                    if genome["prompt_id"] in completed_prompt_ids and genome.get("status") != "complete":
+                        genome["status"] = "complete"
+                        genome["completion_reason"] = f"Achieved {north_star_metric} >= {threshold}"
+                        marked_count += 1
+                    if genome["prompt_id"] in completed_prompt_ids:
+                        north_star_score = genome.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0)
+                        if north_star_score == max_scores[genome["prompt_id"]]:
+                            completed_genomes.append(genome)
+                logger.info("Marked %d genomes from %d prompt_ids as complete", marked_count, len(completed_prompt_ids))
+                logger.info("Completed prompt_ids: %s", sorted(completed_prompt_ids))
+                completed_filename = f"outputs/completed_genomes_{north_star_metric}_{time.strftime('%Y%m%d_%H%M%S')}.json"
+                with open(completed_filename, 'w', encoding='utf-8') as f:
+                    json.dump(completed_genomes, f, indent=2, ensure_ascii=False)
+                logger.info("Saved %d completed genomes to %s", len(completed_genomes), completed_filename)
+                with open(population_path, 'w', encoding='utf-8') as f:
+                    json.dump(population, f, indent=4)
+                logger.info("Updated population with completed statuses")
+            else:
+                logger.info("No prompt_ids achieved the threshold of %.4f", threshold)
+            with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
+            logger.info("Updated evolution tracker with threshold check results")
+            return evolution_tracker
+        except Exception as e:
+            logger.error("Failed to check threshold and update tracker: %s", e, exc_info=True)
+            raise
+
+def get_pending_prompt_ids(evolution_tracker, logger):
+    """Get list of prompt_ids that are not complete and should be processed (flat list version)"""
+    with PerformanceLogger(logger, "Get Pending Prompt IDs"):
+        try:
+            pending_prompt_ids = [entry["prompt_id"] for entry in evolution_tracker if entry["status"] == "not_complete"]
+            pending_prompt_ids.sort()
+            logger.info("Found %d pending prompt_ids for processing: %s", len(pending_prompt_ids), pending_prompt_ids)
+            return pending_prompt_ids
+        except Exception as e:
+            logger.error("Failed to get pending prompt IDs: %s", e, exc_info=True)
+            raise
+
+def update_evolution_tracker_with_generation(prompt_id, generation_data, evolution_tracker, logger):
+    """Update evolution tracker with generation data for a specific prompt_id (flat list version)"""
+    with PerformanceLogger(logger, "Update Evolution Tracker with Generation", prompt_id=prompt_id):
+        try:
+            entry = find_tracker_entry(evolution_tracker, prompt_id)
+            if entry is None:
+                logger.warning("Prompt_id %d not found in evolution tracker, creating entry", prompt_id)
+                entry = {
+                    "prompt_id": prompt_id,
+                    "status": "not_complete",
+                    "total_generations": 1,
+                    "generations": []
+                }
+                evolution_tracker.append(entry)
+            # Add new generation
+            gen_number = entry["total_generations"]
+            new_gen = {
+                "generation_number": gen_number,
+                "genome_id": generation_data.get("genome_id", None),
+                "max_score": generation_data.get("max_score", None),
+                "mutation": generation_data.get("mutation", None),
+                "crossover": generation_data.get("crossover", None)
+            }
+            entry["generations"].append(new_gen)
+            entry["total_generations"] += 1
+            with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
+            logger.debug("Updated evolution tracker for prompt_id %d with generation data", prompt_id)
+        except Exception as e:
+            logger.error("Failed to update evolution tracker with generation data: %s", e, exc_info=True)
+            raise
 
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
@@ -32,7 +187,10 @@ def run_evolution(north_star_metric, log_file=None):
             logger.error("Population file not found: %s", population_path)
             raise FileNotFoundError(f"{population_path} not found.")
 
-        # Load population with error handling
+        # Phase 1: Initialize evolution tracker
+        initialize_evolution_tracker(logger, log_file)
+
+        # Phase 2: Load population with error handling
         with PerformanceLogger(logger, "Load Population"):
             try:
                 with open(str(population_path), 'r', encoding='utf-8') as f:
@@ -45,36 +203,13 @@ def run_evolution(north_star_metric, log_file=None):
                 logger.error("Unexpected error loading population: %s", e, exc_info=True)
                 raise
 
-        # Define status path for evolution status output
-        status_path = project_root / "outputs" / "EvolutionStatus.json"
+        # Phase 3: Check threshold and update evolution tracker
+        evolution_tracker = check_threshold_and_update_tracker(population, north_star_metric, logger, log_file)
 
-        logger.debug("Sorting population by prompt_id ASC, north_star_metric DESC, id ASC...")
+        # Phase 4: Get pending prompt_ids for processing
+        pending_prompt_ids = get_pending_prompt_ids(evolution_tracker, logger)
 
-        # Sort population with error handling
-        with PerformanceLogger(logger, "Sort Population"):
-            try:
-                population = sort_population_json(
-                    population,
-                    sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
-                    reverse_flags=[False, True, False],
-                    log_file=log_file
-                )
-                logger.debug("Population sorted successfully")
-            except Exception as e:
-                logger.error("Failed to sort population: %s", e, exc_info=True)
-                raise
-        
-        # Save sorted population
-        with PerformanceLogger(logger, "Save Sorted Population"):
-            try:
-                with open(population_path, 'w', encoding='utf-8') as f:
-                    json.dump(population, f, indent=4)
-                logger.info("Population re-saved in sorted order")
-            except Exception as e:
-                logger.error("Failed to save sorted population: %s", e, exc_info=True)
-                raise
-
-        # Initialize evolution engine
+        # Phase 5: Initialize evolution engine
         with PerformanceLogger(logger, "Initialize Evolution Engine"):
             try:
                 engine = EvolutionEngine(north_star_metric, log_file)
@@ -85,43 +220,7 @@ def run_evolution(north_star_metric, log_file=None):
                 logger.error("Failed to initialize evolution engine: %s", e, exc_info=True)
                 raise
 
-        # Collect prompt evolution status
-        with PerformanceLogger(logger, "Collect Prompt Status"):
-            try:
-                prompt_status = {}
-                for genome in population:
-                    pid = genome["prompt_id"]
-                    if pid not in prompt_status:
-                        prompt_status[pid] = genome.get("status")
-                logger.debug("Collected prompt status map for %d prompt_ids", len(prompt_status))
-
-                completed_prompt_ids = {pid for pid, status in prompt_status.items() if status == "complete"}
-                pending_prompt_ids = sorted(pid for pid, status in prompt_status.items() if status == "pending_evolution")
-
-                logger.info("Completed prompt_ids (skipped): %s", sorted(completed_prompt_ids))
-                logger.info("Pending prompt_ids (to process): %s", pending_prompt_ids)
-            except Exception as e:
-                logger.error("Failed to collect prompt status: %s", e, exc_info=True)
-                raise
-
-        # Track evolution status for all genomes
-        with PerformanceLogger(logger, "Track Evolution Status"):
-            try:
-                evolution_status = []
-                for genome in population:
-                    evolution_status.append({
-                        "generation": genome["generation"],
-                        "prompt_id": genome["prompt_id"],
-                        "status": genome.get("status", "unknown")
-                    })
-                logger.debug("Initialized evolution status tracking for %d genomes", len(evolution_status))
-            except Exception as e:
-                logger.error("Failed to track evolution status: %s", e, exc_info=True)
-                raise
-
-        logger.debug("Initialized EvolutionEngine: starting next_id=%d", engine.next_id)
-
-        # Process each pending prompt
+        # Phase 6: Process each pending prompt
         processed_count = 0
         error_count = 0
         
@@ -132,12 +231,22 @@ def run_evolution(north_star_metric, log_file=None):
                     logger.debug("Calling generate_variants() for prompt_id=%d", prompt_id)
                     
                     start_time = time.time()
-                    engine.generate_variants(prompt_id)
+                    
+                    # Get generation data from the engine
+                    generation_data = engine.generate_variants(prompt_id)
                     processing_time = time.time() - start_time
                     
                     logger.info("Completed variant generation for prompt_id=%d in %.3f seconds", 
                                prompt_id, processing_time)
+                    logger.info("Generated %d variants (mutation: %d, crossover: %d) for prompt_id=%d", 
+                               generation_data["variants_created"], 
+                               generation_data["mutation_variants"], 
+                               generation_data["crossover_variants"], 
+                               prompt_id)
                     processed_count += 1
+
+                    # Update evolution tracker with generation data
+                    update_evolution_tracker_with_generation(prompt_id, generation_data, evolution_tracker, logger)
 
                     # Save updated population after each prompt
                     with PerformanceLogger(logger, "Save Population After Prompt", prompt_id=prompt_id):
@@ -155,22 +264,7 @@ def run_evolution(north_star_metric, log_file=None):
 
         logger.info("Prompt processing completed: %d successful, %d errors", processed_count, error_count)
 
-        # Sort population before deduplication
-        with PerformanceLogger(logger, "Sort Population Before Deduplication"):
-            try:
-                population = engine.genomes
-                population = sort_population_json(
-                    population,
-                    sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
-                    reverse_flags=[False, True, False],
-                    log_file=log_file
-                )
-                logger.debug("Sorted population by prompt_id ASC, north_star_metric DESC, id ASC before deduplication")
-            except Exception as e:
-                logger.error("Failed to sort population before deduplication: %s", e, exc_info=True)
-                raise
-
-        # Deduplicate population
+        # Phase 7: Deduplicate population
         with PerformanceLogger(logger, "Deduplicate Population"):
             try:
                 from collections import defaultdict
@@ -198,21 +292,13 @@ def run_evolution(north_star_metric, log_file=None):
                 # Final population = gen 0 + unique variants
                 final_population = gen_zero + deduplicated
 
-                # Sort final population again for consistency
-                final_population = sort_population_json(
-                    final_population,
-                    sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
-                    reverse_flags=[False, True, False],
-                    log_file=log_file
-                )
-
                 logger.info("Deduplicated population: %d → %d (removed %d duplicates)", 
                            len(population), len(final_population), duplicates_removed)
             except Exception as e:
                 logger.error("Failed to deduplicate population: %s", e, exc_info=True)
                 raise
 
-        # Save final population
+        # Phase 8: Save final population
         with PerformanceLogger(logger, "Save Final Population"):
             try:
                 with open(population_path, 'w', encoding='utf-8') as f:
@@ -222,21 +308,11 @@ def run_evolution(north_star_metric, log_file=None):
                 logger.error("Failed to save final population: %s", e, exc_info=True)
                 raise
 
-        # Save evolution status to JSON file
-        with PerformanceLogger(logger, "Save Evolution Status"):
-            try:
-                with open(status_path, 'w', encoding='utf-8') as f:
-                    json.dump(evolution_status, f, indent=4)
-                logger.info("Saved evolution status for %d records to %s", len(evolution_status), status_path)
-            except Exception as e:
-                logger.error("Failed to save evolution status: %s", e, exc_info=True)
-                raise
-
         # Log final summary
         logger.info("Evolution run completed successfully:")
         logger.info("  - Total genomes processed: %d", len(population))
         logger.info("  - Prompts processed: %d", processed_count)
         logger.info("  - Errors encountered: %d", error_count)
         logger.info("  - Final population size: %d", len(final_population))
-        logger.info("  - Evolution status records: %d", len(evolution_status))
+        logger.info("  - Evolution tracker updated: %s", evolution_tracker_path)
 

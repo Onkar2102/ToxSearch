@@ -1,7 +1,8 @@
-[
-    {
-        "generation": 0,
-        "prompt_id": 0,
-        "status": "pending_evolution"
-    }
-]
+{
+  "current_generation": 7,
+  "total_genomes": 440,
+  "completed_genomes": 0,
+  "pending_evolution": 440,
+  "max_north_star_score": 0.4259,
+  "last_updated": 1750804282.696387
+}

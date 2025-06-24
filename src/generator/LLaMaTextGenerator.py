@@ -10,12 +10,7 @@ from typing import List, Dict, Any, Optional
 import time
 import asyncio
 from openai import AsyncOpenAI
-
-# torch.manual_seed(42)
-# random.seed(42)
-# np.random.seed(42)
-# if torch.cuda.is_available():
-#     torch.cuda.manual_seed_all(42)
+from utils.population_io import load_population, save_population
 
 class LlaMaTextGenerator:
     _MODEL_CACHE = {}
@@ -170,7 +165,12 @@ class LlaMaTextGenerator:
         }
         
         with torch.no_grad():
-            with torch.autocast(device_type="mps" if self.device == "mps" else "cuda", enabled=True):
+            # Autocast (mixed-precision) is only valid on CUDA or MPS.  Using it
+            # on CPU raises a RuntimeError, so we enable it conditionally.
+            if self.device in ("cuda", "mps"):
+                with torch.autocast(device_type=self.device, enabled=True):
+                    outputs = self.model.generate(**inputs, **generation_kwargs)
+            else:
                 outputs = self.model.generate(**inputs, **generation_kwargs)
         
         # Decode responses
@@ -225,10 +225,10 @@ class LlaMaTextGenerator:
                 total_errors = 0
                 batch_count = 0
                 
-                for i in range(0, len(population), batch_size):
+                for i in range(0, len(pending_genomes), batch_size):
                     batch_count += 1
-                    batch_end = min(i + batch_size, len(population))
-                    batch_genomes = population[i:batch_end]
+                    batch_end = min(i + batch_size, len(pending_genomes))
+                    batch_genomes = pending_genomes[i:batch_end]
                     
                     self.logger.info("Processing batch %d: genomes %d-%d", 
                                    batch_count, i + 1, batch_end)
@@ -292,7 +292,7 @@ class LlaMaTextGenerator:
 
     def convert_population_texts_to_tokens(self, pop_path="outputs/Population.json"):
         """Convert prompts and generated texts to token IDs for genomes
-        with status 'pending_evolution' or 'most_toxic'."""
+        with status 'pending_evolution' or 'complete'."""
         self.logger.info("Converting prompt and generated text to token IDs...")
 
         try:
@@ -301,7 +301,7 @@ class LlaMaTextGenerator:
 
             updated = False
             for genome in population:
-                if genome.get("status") in ["pending_evolution", "most_toxic"]:
+                if genome.get("status") in ["pending_evolution", "complete"]:
                     prompt = genome.get("prompt", "")
                     response = genome.get("generated_text", "")
                     if prompt and response:
@@ -346,44 +346,11 @@ class LlaMaTextGenerator:
         return paraphrase_list if paraphrase_list else [text]
 
     def _load_population(self, pop_path: str) -> List[Dict[str, Any]]:
-        """Load population from JSON file with error handling and logging"""
-        with PerformanceLogger(self.logger, "Load Population", file_path=pop_path):
-            try:
-                if not os.path.exists(pop_path):
-                    self.logger.error("Population file not found: %s", pop_path)
-                    raise FileNotFoundError(f"Population file not found: {pop_path}")
-                
-                with open(pop_path, 'r', encoding='utf-8') as f:
-                    population = json.load(f)
-                
-                self.logger.info("Successfully loaded population with %d genomes", len(population))
-                self.logger.debug("Population file path: %s", pop_path)
-                
-                return population
-                
-            except json.JSONDecodeError as e:
-                self.logger.error("Failed to parse population JSON: %s", e, exc_info=True)
-                raise
-            except Exception as e:
-                self.logger.error("Unexpected error loading population: %s", e, exc_info=True)
-                raise
-    
+        return load_population(pop_path, logger=self.logger)
+
     def _save_population(self, population: List[Dict[str, Any]], pop_path: str) -> None:
-        """Save population to JSON file with error handling and logging"""
-        with PerformanceLogger(self.logger, "Save Population", file_path=pop_path, genome_count=len(population)):
-            try:
-                # Ensure output directory exists
-                os.makedirs(os.path.dirname(pop_path), exist_ok=True)
-                
-                with open(pop_path, 'w', encoding='utf-8') as f:
-                    json.dump(population, f, indent=2, ensure_ascii=False)
-                
-                self.logger.info("Successfully saved population with %d genomes to %s", len(population), pop_path)
-                
-            except Exception as e:
-                self.logger.error("Failed to save population: %s", e, exc_info=True)
-                raise
-    
+        save_population(population, pop_path, logger=self.logger)
+
     def _generate_text_simulation(self, prompt: str, genome_id: str) -> str:
         """Simulate text generation with detailed logging"""
         with PerformanceLogger(self.logger, "Text Generation", genome_id=genome_id, prompt_length=len(prompt)):

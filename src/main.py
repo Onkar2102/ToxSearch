@@ -26,7 +26,7 @@ def main(model_names=None, max_generations=None):
 
     logger.info("Initializing optimized pipeline for M3 Mac...")
 
-    from utils.initialize_population import load_and_initialize_population, sort_population_json
+    from utils.population_io import load_and_initialize_population, sort_population_json
     from generator.LLaMaTextGenerator import LlaMaTextGenerator
     generator = LlaMaTextGenerator(log_file=log_file)
 
@@ -87,27 +87,6 @@ def main(model_names=None, max_generations=None):
         # Check stopping conditions before evolution
         with PerformanceLogger(logger, "Stopping Conditions Check"):
             try:
-                with open("outputs/Population.json", "r", encoding="utf-8") as f:
-                    population = json.load(f)
-                
-                # Check if we have any completed genomes (north star metric = 1.0)
-                completed_genomes = [g for g in population 
-                                   if g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) >= 0.9999]
-                
-                if completed_genomes:
-                    logger.info("SUCCESS: Found %d genomes that achieved north star metric >= 0.9999", len(completed_genomes))
-                    for genome in completed_genomes[:3]:  # Log first 3
-                        score = genome.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0)
-                        logger.info("Genome ID %s: %s score = %.4f", genome['id'], north_star_metric, score)
-                    
-                    # Save successful genomes separately
-                    with open(f"outputs/successful_genomes_gen_{generation_count}.json", "w") as f:
-                        json.dump(completed_genomes, f, indent=2)
-                    
-                    if max_generations is None:
-                        logger.info("Stopping: North star metric achieved!")
-                        break
-                
                 # Check generation limit
                 if max_generations is not None and generation_count >= max_generations:
                     logger.info("Maximum generation limit (%d) reached. Stopping pipeline.", max_generations)
@@ -164,25 +143,29 @@ def main(model_names=None, max_generations=None):
                         north_star_metric=north_star_metric
                     )
                 
-                # Phase 6: Sort Population After Evaluation
-                with PerformanceLogger(logger, "Sort Population After Evaluation"):
-                    try:
-                        sort_start = time.time()
-                        logger.info("Sorting population after evaluation by prompt_id ASC, %s DESC, id ASC...", north_star_metric)
-                        sort_population_json(
-                            "outputs/Population.json",
-                            sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
-                            reverse_flags=[False, True, True],
-                            log_file=log_file
-                        )
-                        logger.info("Population sorting completed in %.2f seconds.", time.time() - sort_start)
-                    except Exception as e:
-                        logger.error("Failed to sort population after evaluation: %s", e, exc_info=True)
-                
                 logger.info("Post-evolution processing completed in %.2f seconds.", time.time() - post_evolution_start)
                 
             except Exception as e:
                 logger.error("Post-evolution processing failed: %s", e, exc_info=True)
+
+        # Phase 6: Sort Population After Evaluation (now outside Phase 5)
+        with PerformanceLogger(logger, "Sort Population After Evaluation"):
+            try:
+                sort_start = time.time()
+                logger.info("Sorting population after evaluation by prompt_id ASC, %s DESC, id DESC...", north_star_metric)
+                sort_population_json(
+                    "outputs/Population.json",
+                    sort_keys=[
+                        "prompt_id",
+                        lambda g: g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0),
+                        "id",
+                    ],
+                    reverse_flags=[False, True, True],
+                    log_file=log_file
+                )
+                logger.info("Population sorting completed in %.2f seconds.", time.time() - sort_start)
+            except Exception as e:
+                logger.error("Failed to sort population after evaluation: %s", e, exc_info=True)
 
         # Generation summary
         generation_time = time.time() - generation_start_time
@@ -243,8 +226,7 @@ def main(model_names=None, max_generations=None):
             
             final_stats = {
                 "total_genomes": len(population),
-                "successful_genomes": len([g for g in population 
-                                         if g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) >= 0.9999]),
+                "successful_genomes": len([g for g in population if g.get("status") == "complete"]),
                 "average_score": sum([g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) 
                                     for g in population]) / len(population),
                 "execution_time_seconds": total_time,

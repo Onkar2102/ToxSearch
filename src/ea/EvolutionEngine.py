@@ -3,7 +3,9 @@ import random
 from typing import List, Dict, Any, Optional
 from utils.custom_logging import get_logger
 from ea.TextVariationOperators import get_applicable_operators
+from ea.ParentSelector import ParentSelector
 from itertools import combinations
+from utils.evolution_utils import append_parents_by_generation_entry
 
 class EvolutionEngine:
 
@@ -12,7 +14,8 @@ class EvolutionEngine:
         self.next_id = 0
         self.north_star_metric = north_star_metric
         self.logger = get_logger("EvolutionEngine", log_file)
-        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={self.north_star_metric}")
+        self.parent_selector = ParentSelector(north_star_metric, log_file)
+        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}")
 
     def update_next_id(self):
         if self.genomes:
@@ -23,60 +26,80 @@ class EvolutionEngine:
             self.next_id = 1  # Start from 1 since we removed "genome_" prefix
         self.logger.debug(f"Updated next_id to {self.next_id}")
     
-    def select_parents(self, prompt_id: int):
-        prompt_genomes = [g for g in self.genomes if g["prompt_id"] == prompt_id]
-
-        if len(prompt_genomes) == 1:
-            mutation_parent = prompt_genomes[0]
-            crossover_parents = None
-        elif 2 <= len(prompt_genomes) < 5:
-            sorted_genomes = sorted(
-                prompt_genomes,
-                key=lambda g: -(g.get(self.north_star_metric) if isinstance(g.get(self.north_star_metric), (int, float)) else 0.0)
-            )
-            mutation_parent = sorted_genomes[0]
-            crossover_parents = sorted_genomes
-        elif len(prompt_genomes) >= 5:
-            sorted_genomes = sorted(
-                prompt_genomes,
-                key=lambda g: -(g.get(self.north_star_metric) if isinstance(g.get(self.north_star_metric), (int, float)) else 0.0)
-            )
-            top_5_score = sorted(set(
-                g.get(self.north_star_metric, 0.0)
-                for g in sorted_genomes
-                if isinstance(g.get(self.north_star_metric, (int, float)))
-            ), reverse=True)[:5]
-            top_5_genomes = [g for g in sorted_genomes if g.get(self.north_star_metric, 0.0) in top_5_score]
-
-            if not top_5_score:
-                self.logger.warning(f"No valid north star scores for prompt_id={prompt_id}. Skipping parent selection.")
-                mutation_parent = None
-                crossover_parents = None
-            else:
-                max_score = max(top_5_score)
-                mutation_candidates = [g for g in top_5_genomes if g.get(self.north_star_metric, 0.0) == max_score]
-                mutation_parent = random.choice(mutation_candidates)
-                crossover_parents = random.sample(top_5_genomes, min(5, len(top_5_genomes)))
-        else:
-            mutation_parent = None
-            crossover_parents = None
-
-        return mutation_parent, crossover_parents
-    
-    def generate_variants(self, prompt_id: int) -> List[Dict]:
+    def generate_variants(self, prompt_id: int) -> Dict[str, Any]:
         self.logger.debug(f"Generating variants for prompt_id={prompt_id}")
+
+        # Ensure ``next_id`` is always in sync with the current population each
+        # time we start a new generation cycle.  This prevents reused IDs when
+        # the engine object persists across multiple calls.
+        self.update_next_id()
+
         prompt_genomes = [g for g in self.genomes if g["prompt_id"] == prompt_id]
         if not prompt_genomes:
             self.logger.error(f"No genomes found for prompt_id={prompt_id}. Exiting evolution process.")
             raise SystemExit(1)
 
-        mutation_parent, crossover_parents = self.select_parents(prompt_id)
+        mutation_parent, crossover_parents = self.parent_selector.select_parents(prompt_genomes, prompt_id)
         if mutation_parent is None:
             self.logger.warning(f"No suitable genomes found for prompt_id={prompt_id}")
 
         existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g["prompt_id"] == prompt_id)
 
         offspring = []
+        generation_data = {
+            "parents": [],
+            "variants_created": 0,
+            "mutation_variants": 0,
+            "crossover_variants": 0
+        }
+
+        # Track parent information for parent selection tracker
+        def get_parent_info(parent):
+            return {
+                "id": parent["id"],
+                "score": parent.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                "parents_id": parent.get("parents", None)
+            }
+
+        # For generation 0, parents is null
+        if all(g["generation"] == 0 for g in prompt_genomes):
+            append_parents_by_generation_entry(prompt_id, 0, None, "initial", self.logger)
+
+        # For mutation, use the topmost genome as parent
+        if mutation_parent:
+            generation_data["parents"].append({
+                "id": mutation_parent["id"],
+                "north_star_score": mutation_parent.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                "generation": mutation_parent["generation"],
+                "type": "mutation_parent"
+            })
+            # Track mutation parents for this generation
+            append_parents_by_generation_entry(
+                prompt_id, 
+                mutation_parent["generation"] + 1, 
+                [mutation_parent["id"]], 
+                "mutation", 
+                self.logger
+            )
+
+        if crossover_parents:
+            for parent in crossover_parents:
+                generation_data["parents"].append({
+                    "id": parent["id"],
+                    "north_star_score": parent.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                    "generation": parent["generation"],
+                    "type": "crossover_parent"
+                })
+            # Track crossover parents for this generation
+            crossover_parent_ids = [p["id"] for p in crossover_parents]
+            max_generation = max(p["generation"] for p in crossover_parents)
+            append_parents_by_generation_entry(
+                prompt_id, 
+                max_generation + 1, 
+                crossover_parent_ids, 
+                "crossover", 
+                self.logger
+            )
 
         mutation_operators = get_applicable_operators(1, self.north_star_metric)
         self.logger.debug(f"Running mutation on prompt_id={prompt_id} using parent id={mutation_parent['id']} with {len(mutation_operators)} operators.")
@@ -114,16 +137,7 @@ class EvolutionEngine:
             except Exception as e:
                 self.logger.error(f"[Mutation Error] {op.name}: {e}")
 
-        # Deduplicate and save unique mutation offspring to population
-        unique_mutation_offspring = {}
-        for child in offspring:
-            key = child["prompt"].strip().lower()
-            if key not in unique_mutation_offspring:
-                unique_mutation_offspring[key] = child
-
-        self.genomes.extend(unique_mutation_offspring.values())
-        self.logger.debug(f"Saved {len(unique_mutation_offspring)} unique mutation variants to the population.")
-
+        # --- Crossover phase -------------------------------------------------
         if crossover_parents:
             crossover_operators = get_applicable_operators(len(crossover_parents), self.north_star_metric)
             self.logger.debug(f"Running crossover on prompt_id={prompt_id} with {len(crossover_parents)} parents and {len(crossover_operators)} operators.")
@@ -164,13 +178,34 @@ class EvolutionEngine:
                     except Exception as e:
                         self.logger.error(f"[Crossover Error] {op.name} with parents {[p['id'] for p in parent_pair]}: {e}")
 
-        # Deduplicate and save unique crossover offspring to population
-        unique_crossover_offspring = {}
+        # --------------------------------------------------------------------
+        # Final deduplication – run **once** over the combined offspring list
+        # to avoid double-inserting the mutation children that are already
+        # present when we process the crossover phase.
+        # --------------------------------------------------------------------
+
+        unique_offspring = {}
         for child in offspring:
             key = child["prompt"].strip().lower()
-            if key not in unique_crossover_offspring:
-                unique_crossover_offspring[key] = child
+            if key not in unique_offspring:
+                unique_offspring[key] = child
 
-        self.genomes.extend(unique_crossover_offspring.values())
-        self.logger.debug(f"Saved {len(unique_crossover_offspring)} unique crossover variants to the population.")
+        # Classify counts
+        generation_data["mutation_variants"] = sum(
+            1 for c in unique_offspring.values() if c["creation_info"]["type"] == "mutation"
+        )
+        generation_data["crossover_variants"] = sum(
+            1 for c in unique_offspring.values() if c["creation_info"]["type"] == "crossover"
+        )
+        generation_data["variants_created"] = len(unique_offspring)
+
+        self.genomes.extend(unique_offspring.values())
+        self.logger.debug(
+            "Saved %d unique variants to the population (mutation: %d, crossover: %d).",
+            generation_data["variants_created"],
+            generation_data["mutation_variants"],
+            generation_data["crossover_variants"],
+        )
+        
+        return generation_data
 
