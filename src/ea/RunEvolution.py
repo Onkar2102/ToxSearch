@@ -8,7 +8,7 @@ import time
 from typing import Dict, Any, List, Optional
 from ea.EvolutionEngine import EvolutionEngine
 from ea.TextVariationOperators import TextVariationOperators
-from utils.initialize_population import load_and_initialize_population
+from utils.initialize_population import load_and_initialize_population, sort_population_json
 from utils.custom_logging import get_logger, PerformanceLogger
 import nltk
 import logging
@@ -53,11 +53,12 @@ def run_evolution(north_star_metric, log_file=None):
         # Sort population with error handling
         with PerformanceLogger(logger, "Sort Population"):
             try:
-                population.sort(key=lambda g: (
-                    g["prompt_id"],
-                    -(g.get(north_star_metric) if isinstance(g.get(north_star_metric), (int, float)) else 0.0),
-                    g["id"]
-                ))
+                population = sort_population_json(
+                    population,
+                    sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
+                    reverse_flags=[False, True, False],
+                    log_file=log_file
+                )
                 logger.debug("Population sorted successfully")
             except Exception as e:
                 logger.error("Failed to sort population: %s", e, exc_info=True)
@@ -158,11 +159,12 @@ def run_evolution(north_star_metric, log_file=None):
         with PerformanceLogger(logger, "Sort Population Before Deduplication"):
             try:
                 population = engine.genomes
-                population.sort(key=lambda g: (
-                    g["prompt_id"],
-                    -(g.get(north_star_metric) if isinstance(g.get(north_star_metric), (int, float)) else 0.0),
-                    g["id"]
-                ))
+                population = sort_population_json(
+                    population,
+                    sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
+                    reverse_flags=[False, True, False],
+                    log_file=log_file
+                )
                 logger.debug("Sorted population by prompt_id ASC, north_star_metric DESC, id ASC before deduplication")
             except Exception as e:
                 logger.error("Failed to sort population before deduplication: %s", e, exc_info=True)
@@ -197,11 +199,12 @@ def run_evolution(north_star_metric, log_file=None):
                 final_population = gen_zero + deduplicated
 
                 # Sort final population again for consistency
-                final_population.sort(key=lambda g: (
-                    g["prompt_id"],
-                    -(g.get(north_star_metric) if isinstance(g.get(north_star_metric), (int, float)) else 0.0),
-                    g["id"]
-                ))
+                final_population = sort_population_json(
+                    final_population,
+                    sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
+                    reverse_flags=[False, True, False],
+                    log_file=log_file
+                )
 
                 logger.info("Deduplicated population: %d → %d (removed %d duplicates)", 
                            len(population), len(final_population), duplicates_removed)

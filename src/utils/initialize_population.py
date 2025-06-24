@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import json
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from utils.custom_logging import PerformanceLogger
 import logging
 
@@ -62,8 +62,8 @@ def load_and_initialize_population(input_path: str, output_path: str, log_file: 
                     logger.info("Using column '%s' for prompts", prompt_column)
                     
                     # Extract prompts
-                    prompts = df[prompt_column].dropna().tolist()
-                    logger.info("Extracted %d prompts from column '%s'", len(prompts), prompt_column)
+                    prompts = df[prompt_column].dropna().drop_duplicates().tolist()
+                    logger.info("Extracted %d unique prompts from column '%s'", len(prompts), prompt_column)
                     
                     # Log some sample prompts
                     for i, prompt in enumerate(prompts[:3]):
@@ -147,7 +147,7 @@ def load_and_initialize_population(input_path: str, output_path: str, log_file: 
                     raise
             
             # Log final summary
-            total_time = time.time() - time.time()  # This will be 0, but tracks the operation
+            total_time = time.time() - start_time
             logger.info("Population initialization completed successfully:")
             logger.info("  - Input file: %s", input_path)
             logger.info("  - Output file: %s", output_path)
@@ -248,4 +248,80 @@ def validate_population_file(population_path: str, log_file: Optional[str] = Non
 
         except Exception as e:
             logger.error("Population validation failed: %s", e, exc_info=True)
+            raise
+
+def sort_population_json(
+    population: 'Union[str, list]',
+    sort_keys: list,
+    reverse_flags: list = None,
+    output_path: str = None,
+    log_file: Optional[str] = None
+) -> list:
+    """
+    Sorts a population (from JSON file or in-memory list) efficiently by specified keys and returns the sorted list.
+    Args:
+        population (str or list): Path to the input population JSON file, or a list of genomes.
+        sort_keys (list): List of keys or callables to sort by (in order of priority).
+        reverse_flags (list, optional): List of bools for each key, True for descending. Defaults to all False.
+        output_path (str, optional): Path to save the sorted population. If None and input was a file, overwrites input file.
+        log_file (str, optional): Log file for logging actions.
+    Returns:
+        list: The sorted population.
+    """
+    import collections.abc
+    logger = get_logger("sort_population", log_file)
+    with PerformanceLogger(logger, "Sort Population JSON", population_path=str(population) if isinstance(population, str) else None, output_path=output_path):
+        try:
+            # Load if population is a file path
+            if isinstance(population, str):
+                if not os.path.exists(population):
+                    logger.error("Population file not found: %s", population)
+                    raise FileNotFoundError(f"Population file not found: {population}")
+                with open(population, 'r', encoding='utf-8') as f:
+                    pop_list = json.load(f)
+                logger.info("Loaded population with %d genomes", len(pop_list))
+                input_is_file = True
+            elif isinstance(population, collections.abc.Sequence):
+                pop_list = list(population)
+                logger.info("Received in-memory population with %d genomes", len(pop_list))
+                input_is_file = False
+            else:
+                raise ValueError("population must be a file path or a list of genomes")
+
+            # Prepare reverse flags
+            if reverse_flags is None:
+                reverse_flags = [False] * len(sort_keys)
+            if len(reverse_flags) != len(sort_keys):
+                raise ValueError("reverse_flags must match sort_keys in length")
+
+            # Compose a key function for multi-key sorting
+            def sort_key_func(genome):
+                key_values = []
+                for i, key in enumerate(sort_keys):
+                    if callable(key):
+                        value = key(genome)
+                    else:
+                        value = genome.get(key, None)
+                    # For descending, invert numeric values
+                    if reverse_flags[i] and isinstance(value, (int, float)):
+                        value = -value if value is not None else float('-inf')
+                    key_values.append(value)
+                return tuple(key_values)
+
+            pop_list.sort(key=sort_key_func)
+            logger.info("Population sorted by keys: %s", sort_keys)
+
+            # Save sorted population if requested
+            save_path = None
+            if output_path:
+                save_path = output_path
+            elif input_is_file:
+                save_path = population
+            if save_path:
+                with open(save_path, 'w', encoding='utf-8') as f:
+                    json.dump(pop_list, f, indent=2, ensure_ascii=False)
+                logger.info("Sorted population saved to %s", save_path)
+            return pop_list
+        except Exception as e:
+            logger.error("Failed to sort and save population: %s", e, exc_info=True)
             raise

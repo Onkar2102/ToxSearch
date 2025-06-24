@@ -284,20 +284,6 @@ class LlaMaTextGenerator:
                 self.logger.error("Population processing failed: %s", e, exc_info=True)
                 raise
 
-    def generate_for_genome(self, genome: Dict):
-        """Generate a response for a single genome dictionary in-place."""
-        prompt = genome.get("prompt", "")
-        self.logger.debug(f"Generating for genome ID {genome['id']} | prompt_id {genome['prompt_id']}")
-        try:
-            response = self.generate_response(prompt)
-            genome["generated_response"] = response
-            genome["status"] = "pending_evaluation"
-            genome["model_provider"] = self.model_cfg.get("provider", "")
-            genome["model_name"] = self.model_cfg.get("name", "")
-        except Exception as e:
-            self.logger.error(f"Failed to generate for genome ID {genome['id']}: {e}")
-            raise e
-
     def convert_text_to_tokens(self, text: str) -> List[int]:
         """Convert input text to its token IDs using the model's tokenizer."""
         inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
@@ -305,9 +291,9 @@ class LlaMaTextGenerator:
         return input_ids
 
     def convert_population_texts_to_tokens(self, pop_path="outputs/Population.json"):
-        """Convert prompts and generated responses to token IDs for genomes
+        """Convert prompts and generated texts to token IDs for genomes
         with status 'pending_evolution' or 'most_toxic'."""
-        self.logger.info("Converting prompt and generated response to token IDs...")
+        self.logger.info("Converting prompt and generated text to token IDs...")
 
         try:
             with open(pop_path, "r") as f:
@@ -317,7 +303,7 @@ class LlaMaTextGenerator:
             for genome in population:
                 if genome.get("status") in ["pending_evolution", "most_toxic"]:
                     prompt = genome.get("prompt", "")
-                    response = genome.get("generated_response", "")
+                    response = genome.get("generated_text", "")
                     if prompt and response:
                         genome["input_tokens"] = self.convert_text_to_tokens(prompt)
                         genome["output_tokens"] = self.convert_text_to_tokens(response)

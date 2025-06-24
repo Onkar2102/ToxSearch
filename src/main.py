@@ -26,7 +26,7 @@ def main(model_names=None, max_generations=None):
 
     logger.info("Initializing optimized pipeline for M3 Mac...")
 
-    from utils.initialize_population import load_and_initialize_population
+    from utils.initialize_population import load_and_initialize_population, sort_population_json
     from generator.LLaMaTextGenerator import LlaMaTextGenerator
     generator = LlaMaTextGenerator(log_file=log_file)
 
@@ -163,6 +163,21 @@ def main(model_names=None, max_generations=None):
                         log_file=log_file,
                         north_star_metric=north_star_metric
                     )
+                
+                # Phase 6: Sort Population After Evaluation
+                with PerformanceLogger(logger, "Sort Population After Evaluation"):
+                    try:
+                        sort_start = time.time()
+                        logger.info("Sorting population after evaluation by prompt_id ASC, %s DESC, id ASC...", north_star_metric)
+                        sort_population_json(
+                            "outputs/Population.json",
+                            sort_keys=["prompt_id", lambda g: g.get(north_star_metric, 0.0), "id"],
+                            reverse_flags=[False, True, True],
+                            log_file=log_file
+                        )
+                        logger.info("Population sorting completed in %.2f seconds.", time.time() - sort_start)
+                    except Exception as e:
+                        logger.error("Failed to sort population after evaluation: %s", e, exc_info=True)
                 
                 logger.info("Post-evolution processing completed in %.2f seconds.", time.time() - post_evolution_start)
                 
