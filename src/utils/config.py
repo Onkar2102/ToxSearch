@@ -14,7 +14,7 @@ def load_config(config_path: str, log_file: Optional[str] = None) -> Dict[str, A
             logger.info("Loading configuration from: %s", config_path)
             
             # Check if config file exists
-    if not os.path.exists(config_path):
+            if not os.path.exists(config_path):
                 logger.error("Configuration file not found: %s", config_path)
                 raise FileNotFoundError(f"Configuration file not found: {config_path}")
             

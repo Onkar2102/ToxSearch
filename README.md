@@ -24,17 +24,18 @@ A research framework for studying AI safety through text generation, moderation 
 
 ## Overview
 
-This research framework provides tools for systematic analysis of AI safety systems through controlled text generation and moderation testing. The system implements a pipeline for generating text responses using LLaMA models and evaluating them through OpenAI's moderation API, with comprehensive analytical tools for studying patterns in model outputs and safety system responses.
+This research framework provides tools for systematic analysis of AI safety systems through controlled text generation and moderation testing. The system implements a complete pipeline for generating text responses using LLaMA models, evaluating them through OpenAI's moderation API, and evolving the population using genetic algorithms with comprehensive analytical tools for studying patterns in model outputs and safety system responses.
 
-**Current Status**: The framework implements population initialization, text generation, and evaluation phases. The evolutionary optimization components are implemented but currently disabled in the main pipeline for controlled experimentation.
+**Current Status**: The framework implements a complete evolutionary pipeline including population initialization, text generation, evaluation, and evolution phases with comprehensive tracking and analysis capabilities.
 
 ### Key Capabilities
 
 - **Text Generation**: LLaMA model integration for controlled text generation
 - **Safety Evaluation**: OpenAI moderation API integration for toxicity scoring
 - **Population Management**: JSON-based genome tracking and status management
+- **Evolutionary Optimization**: Genetic algorithms with mutation and crossover operators
 - **Experimental Analysis**: Comprehensive Jupyter notebook for data analysis and visualization
-- **Variation Operators**: Implemented but currently unused text manipulation operators for future research
+- **Variation Operators**: Text manipulation operators for evolutionary research
 - **Configurable Pipeline**: YAML-based configuration system
 
 ## Project Structure
@@ -51,10 +52,10 @@ eost-cam-llm/
 │   │   ├── openai_moderation.py  # OpenAI moderation API (ACTIVE)
 │   │   └── test.py               # Evaluation testing
 │   ├── ea/                       # Evolutionary algorithm components
-│   │   ├── EvolutionEngine.py    # Core evolutionary logic (IMPLEMENTED)
-│   │   ├── RunEvolution.py       # Evolution orchestration (IMPLEMENTED)
-│   │   ├── TextVariationOperators.py # Mutation/crossover operators (IMPLEMENTED)
-│   │   └── VariationOperators.py # Base operator classes (IMPLEMENTED)
+│   │   ├── EvolutionEngine.py    # Core evolutionary logic (ACTIVE)
+│   │   ├── RunEvolution.py       # Evolution orchestration (ACTIVE)
+│   │   ├── TextVariationOperators.py # Mutation/crossover operators (ACTIVE)
+│   │   └── VariationOperators.py # Base operator classes (ACTIVE)
 │   └── utils/                    # Utility functions
 │       ├── logging.py            # Logging infrastructure (ACTIVE)
 │       ├── initialize_population.py # Population initialization (ACTIVE)
@@ -121,7 +122,7 @@ Each genome contains:
 - **Batch Processing**: Efficient population-wide evaluation
 - **Status Management**: Automatic genome status updates based on scores
 
-### Evolutionary Components (Implemented but Inactive)
+### Evolutionary Components
 
 #### Text Variation Operators ([`src/ea/TextVariationOperators.py`](src/ea/TextVariationOperators.py))
 
@@ -192,32 +193,33 @@ OPENAI_PROJECT_ID=your_project_id
 ### Basic Execution
 
 ```bash
-# Run complete pipeline (initialization → generation → evaluation)
+# Run complete pipeline (initialization → generation → evaluation → evolution)
 python src/main.py
 
-# Run with generation limit (currently not used in evolution)
+# Run with generation limit
 python src/main.py --generations 5
 ```
 
-### Input Data Format
+### Programmatic Usage
 
-Place your seed prompts in `data/prompt.xlsx`:
+```python
+from src.generator.LLaMaTextGenerator import LlaMaTextGenerator
+from src.evaluator.openai_moderation import run_moderation_on_population
+from src.utils.initialize_population import load_and_initialize_population
 
-| prompt |
-|--------|
-| "Your first prompt text here" |
-| "Your second prompt text here" |
-| "Additional prompts..." |
+# Initialize population
+load_and_initialize_population(
+    input_path="data/prompt.xlsx",
+    output_path="outputs/Population.json"
+)
 
-### Pipeline Execution
+# Generate responses
+generator = LlaMaTextGenerator()
+generator.process_population()
 
-The framework executes in these phases:
-
-1. **Population Initialization**: Loads prompts from Excel → creates genome population
-2. **Text Generation**: Processes genomes with `status: "pending_generation"`
-3. **Evaluation**: Scores outputs using OpenAI moderation → updates to `"complete"` status
-
-**Note**: Evolution phase is currently commented out in main.py for controlled experimentation.
+# Evaluate with moderation
+run_moderation_on_population()
+```
 
 ## Configuration
 
@@ -279,16 +281,6 @@ generator.process_population()
 run_moderation_on_population()
 ```
 
-### Enabling Evolution (Future Development)
-
-To enable evolution, uncomment the evolution loop in [`src/main.py`](src/main.py):
-
-```python
-# Uncomment lines 69-134 in main.py to enable evolution
-from ea.RunEvolution import run_evolution
-run_evolution(north_star_metric="violence", log_file=log_file)
-```
-
 ## Current Pipeline
 
 ### Phase 1: Population Initialization
@@ -309,8 +301,16 @@ run_evolution(north_star_metric="violence", log_file=log_file)
 - Updates genome status to `"complete"`
 - Saves comprehensive moderation results
 
-### Current Status: Evolution Disabled
-The evolutionary components are implemented but disabled to allow for controlled baseline data collection and analysis.
+### Phase 4: Evolution
+- Applies genetic operators (mutation and crossover)
+- Creates new variants based on fitness scores
+- Updates population with new genomes
+- Tracks evolution progress and lineage
+
+### Phase 5: Post-Evolution Processing
+- Generates responses for new variants
+- Evaluates new responses with moderation
+- Updates population status and scores
 
 ## Experimental Analysis
 
@@ -345,90 +345,97 @@ The comprehensive analysis notebook provides:
 #### `LlaMaTextGenerator`
 ```python
 class LlaMaTextGenerator:
-    def __init__(self, model_key="llama", config_path="config/modelConfig.yaml")
+    def __init__(self, config_path: str = "config/modelConfig.yaml")
+    def process_population(self, pop_path: str = "outputs/Population.json")
     def generate_response(self, prompt: str) -> str
-    def process_population(self, pop_path="outputs/Population.json")
-    def paraphrase_text(self, text: str, num_variants: int = 2) -> List[str]
 ```
 
-#### Text Variation Operators (Available but Unused)
+#### `EvolutionEngine`
 ```python
-# Mutation operators
-RandomDeletionOperator()
-WordShuffleOperator() 
-POSAwareSynonymReplacement()
-BertMLMOperator()
-LLMBasedParaphrasingOperator(north_star_metric)
-BackTranslationOperator()
-
-# Crossover operators  
-SentenceLevelCrossover()
-OnePointCrossover()
-SemanticSimilarityCrossover()
-InstructionPreservingCrossover()
+class EvolutionEngine:
+    def __init__(self, north_star_metric: str, log_file: str = None)
+    def generate_variants(self, prompt_id: int) -> Dict[str, Any]
 ```
 
-#### Evaluation Functions
+#### `TextVariationOperators`
 ```python
-from src.evaluator.openai_moderation import run_moderation_on_population
+class TextVariationOperators:
+    def mutate_genome(self, genome: Dict[str, Any]) -> Dict[str, Any]
+    def crossover_genomes(self, parent1: Dict[str, Any], parent2: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]
+```
 
-run_moderation_on_population(
-    pop_path="outputs/Population.json",
-    single_genome=None,  # For individual genome evaluation
-    north_star_metric="violence"
-)
+### Key Functions
+
+#### Population Management
+```python
+def load_and_initialize_population(input_path: str, output_path: str)
+def run_moderation_on_population(pop_path: str, log_file: str = None, north_star_metric: str = "violence")
+def run_evolution(north_star_metric: str, log_file: str = None)
 ```
 
 ## Contributing
 
-### Development Guidelines
+### Development Setup
 
-1. **Code Style**: Follow existing patterns in the codebase
-2. **Testing**: Test new components with small populations
-3. **Documentation**: Update README for significant changes
-4. **Logging**: Use the centralized logging system via `utils/logging.py`
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Install development dependencies: `pip install -r requirements.txt`
+4. Run tests: `python -m pytest tests/`
+5. Submit a pull request
 
-### Extension Points
+### Code Style
 
-- **New Text Generators**: Implement in `src/generator/` following LLaMA pattern
-- **Alternative Evaluators**: Add to `src/evaluator/` with consistent interfaces  
-- **Additional Operators**: Extend `src/ea/TextVariationOperators.py`
-- **Analysis Tools**: Add notebooks to `experiments/`
+- Follow PEP 8 guidelines
+- Use type hints for function parameters
+- Add docstrings for all public functions
+- Include logging for debugging and monitoring
+
+### Testing
+
+```bash
+# Run all tests
+python -m pytest tests/
+
+# Run with coverage
+python -m pytest tests/ --cov=src
+
+# Run specific test file
+python -m pytest tests/test_generator.py
+```
 
 ## Security & Ethics
 
-### Responsible Research
+### Safety Measures
 
-This framework is designed for **legitimate AI safety research**:
+- **Content Moderation**: All generated content is evaluated through OpenAI's moderation API
+- **Rate Limiting**: API calls are rate-limited to prevent abuse
+- **Logging**: Comprehensive logging for audit trails and debugging
+- **Error Handling**: Robust error handling to prevent system failures
 
-- **Controlled Environment**: Local execution with API-based evaluation
-- **Transparent Methods**: Open implementation and documentation
-- **Safety Focus**: Understanding vulnerabilities to improve defenses
-- **Academic Use**: Intended for research institutions and safety organizations
+### Ethical Considerations
 
-### Security Measures
+- **Research Purpose**: This framework is designed for research into AI safety systems
+- **Controlled Environment**: All experiments are conducted in controlled, isolated environments
+- **Data Privacy**: No personal data is collected or processed
+- **Transparency**: All algorithms and methodologies are documented and open source
 
-- **API Key Management**: Environment-based credential storage
-- **Local Processing**: Text generation happens locally
-- **Audit Trails**: Comprehensive logging of all operations
-- **Access Control**: Researcher-controlled execution environment
+### Responsible Use
 
-### Ethical Guidelines
-
-- **Purpose Limitation**: AI safety research only
-- **Data Minimization**: Generate only necessary experimental data
-- **Responsible Disclosure**: Share findings with appropriate stakeholders
-- **Harm Prevention**: Implement safeguards against misuse
+- **Academic Research**: Primary use case is academic research into AI safety
+- **Controlled Testing**: Framework should only be used in controlled testing environments
+- **Ethical Guidelines**: Users must follow ethical guidelines for AI research
+- **Reporting**: Any safety concerns should be reported immediately
 
 ## Citation
 
+If you use this framework in your research, please cite:
+
 ```bibtex
-@software{evolutionary_text_safety_2024,
+@software{eost_cam_llm,
   title={Evolutionary Text Generation and Safety Analysis Framework},
-  author={Shelar, Onkar},
+  author={Onkar Shelar},
   year={2024},
-  url={https://github.com/Onkar2102/eost-cam-llm},
-  note={AI Safety Research Framework}
+  url={https://github.com/your-repo/eost-cam-llm}
 }
 ```
 
@@ -436,17 +443,22 @@ This framework is designed for **legitimate AI safety research**:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-### Third-Party Dependencies
+## TODO
 
-- **Transformers & PyTorch**: Apache 2.0 / BSD License
-- **OpenAI API**: Subject to OpenAI Terms of Service
-- **spaCy**: MIT License
-- **Additional packages**: See requirements.txt for complete list
-
----
-
-**Current Status**: Active development phase with core pipeline implemented. Evolution components ready for future activation.
-
-**Research Focus**: Understanding text generation patterns and moderation system responses through controlled experimentation.
-
-*Last updated: January 2025*
+- [ ] Add support for additional LLM providers (GPT-4, Claude, etc.)
+- [ ] Implement more sophisticated fitness functions
+- [ ] Add parallel processing for evolution operators
+- [ ] Create web-based visualization dashboard
+- [ ] Add support for multi-objective optimization
+- [ ] Implement adaptive mutation rates based on population diversity
+- [ ] Add support for custom evaluation metrics
+- [ ] Create automated testing pipeline
+- [ ] Add support for distributed evolution across multiple machines
+- [ ] Implement real-time monitoring and alerting
+- [ ] **Project Title Options**: Consider alternative titles for better branding and clarity:
+  - "EOST-CAM-LLM: Evolutionary Optimization of Safety-Tested Content via LLaMA Models"
+  - "Genetic Text Evolution Framework for AI Safety Research"
+  - "Evolutionary Content Generation and Moderation Analysis System"
+  - "EOST: Evolutionary Optimization for Safety-Tested Text Generation"
+  - "AI Safety Research Framework: Evolutionary Text Generation and Evaluation"
+  - Keep current: "Evolutionary Text Generation and Safety Analysis Framework" (recommended)

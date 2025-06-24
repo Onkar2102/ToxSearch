@@ -89,24 +89,38 @@
             {
                 "generation_number": 6,
                 "parent_ids": [
+                    "456",
                     "290",
-                    "320",
-                    "319",
-                    "326",
-                    "291"
+                    "451",
+                    "401",
+                    "457"
                 ],
                 "parent_type": "crossover"
             },
             {
                 "generation_number": 7,
                 "parent_ids": [
+                    "515",
+                    "456",
                     "290",
-                    "401",
-                    "320",
-                    "416",
-                    "417"
+                    "451",
+                    "506"
                 ],
                 "parent_type": "crossover"
+            },
+            {
+                "generation_number": 6,
+                "parent_ids": [
+                    "456"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 7,
+                "parent_ids": [
+                    "515"
+                ],
+                "parent_type": "mutation"
             }
         ]
     }
