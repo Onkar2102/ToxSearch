@@ -83,11 +83,10 @@ def main(model_names=None, max_generations=None):
         logger.info("=== Starting Generation %d ===", generation_count)
         generation_start_time = time.time()
         
-
         # Check stopping conditions before evolution
         with PerformanceLogger(logger, "Stopping Conditions Check"):
             try:
-                # Check generation limit
+                # Check generation limit - should stop BEFORE starting generation N+1
                 if max_generations is not None and generation_count >= max_generations:
                     logger.info("Maximum generation limit (%d) reached. Stopping pipeline.", max_generations)
                     break
@@ -207,10 +206,17 @@ def main(model_names=None, max_generations=None):
             except Exception as e:
                 logger.error("Failed to generate generation summary: %s", e, exc_info=True)
 
-        # Check if we should continue
-        if pending_evolution == 0 and completed == 0:
-            logger.info("No genomes pending evolution and none completed. Stopping.")
+        # Check if we should continue - improved stopping condition
+        if pending_evolution == 0:
+            logger.info("No genomes pending evolution. Stopping.")
             break
+        elif max_generations is not None and generation_count >= max_generations:
+            logger.info("Maximum generation limit (%d) reached. Stopping pipeline.", max_generations)
+            break
+        elif completed == 0 and pending_evolution > 0:
+            # If no genomes are completed but some are pending evolution, continue
+            logger.info("Continuing evolution with %d pending genomes.", pending_evolution)
+            continue
 
     total_time = time.time() - start_time
     logger.info("=== Pipeline Completed ===")

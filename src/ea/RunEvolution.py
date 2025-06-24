@@ -154,20 +154,50 @@ def update_evolution_tracker_with_generation(prompt_id, generation_data, evoluti
                     "generations": []
                 }
                 evolution_tracker.append(entry)
-            # Add new generation
+            
+            # Add new generation with correct data structure
             gen_number = entry["total_generations"]
+            
+            # Find the best genome for this generation (highest score)
+            best_genome_id = None
+            best_score = None
+            if generation_data.get("parents"):
+                # Find the parent with the highest score
+                best_parent = max(generation_data["parents"], 
+                                key=lambda p: p.get("north_star_score", 0.0))
+                best_genome_id = best_parent["id"]
+                best_score = best_parent["north_star_score"]
+            
+            # Determine mutation and crossover info
+            mutation_info = None
+            crossover_info = None
+            
+            if generation_data.get("mutation_variants", 0) > 0:
+                mutation_info = f"{generation_data['mutation_variants']} variants created"
+            
+            if generation_data.get("crossover_variants", 0) > 0:
+                crossover_info = f"{generation_data['crossover_variants']} variants created"
+            
             new_gen = {
                 "generation_number": gen_number,
-                "genome_id": generation_data.get("genome_id", None),
-                "max_score": generation_data.get("max_score", None),
-                "mutation": generation_data.get("mutation", None),
-                "crossover": generation_data.get("crossover", None)
+                "genome_id": best_genome_id,
+                "max_score": best_score,
+                "mutation": mutation_info,
+                "crossover": crossover_info,
+                "variants_created": generation_data.get("variants_created", 0),
+                "mutation_variants": generation_data.get("mutation_variants", 0),
+                "crossover_variants": generation_data.get("crossover_variants", 0)
             }
+            
             entry["generations"].append(new_gen)
             entry["total_generations"] += 1
+            
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
-            logger.debug("Updated evolution tracker for prompt_id %d with generation data", prompt_id)
+            
+            logger.info("Updated evolution tracker for prompt_id %d with generation %d data: %d variants created", 
+                       prompt_id, gen_number, generation_data.get("variants_created", 0))
+            
         except Exception as e:
             logger.error("Failed to update evolution tracker with generation data: %s", e, exc_info=True)
             raise

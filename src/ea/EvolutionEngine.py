@@ -39,9 +39,31 @@ class EvolutionEngine:
             self.logger.error(f"No genomes found for prompt_id={prompt_id}. Exiting evolution process.")
             raise SystemExit(1)
 
+        # Log detailed information about available genomes
+        completed_genomes = [g for g in prompt_genomes if g.get("status") == "complete"]
+        pending_genomes = [g for g in prompt_genomes if g.get("status") == "pending_evolution"]
+        other_genomes = [g for g in prompt_genomes if g.get("status") not in ["complete", "pending_evolution"]]
+        
+        self.logger.info(f"Prompt {prompt_id} genome breakdown: {len(completed_genomes)} completed, {len(pending_genomes)} pending_evolution, {len(other_genomes)} other")
+        
+        if completed_genomes:
+            max_score = max([g.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0) for g in completed_genomes])
+            self.logger.info(f"Best completed genome score for prompt {prompt_id}: {max_score}")
+        else:
+            self.logger.warning(f"No completed genomes found for prompt {prompt_id}")
+
         mutation_parent, crossover_parents = self.parent_selector.select_parents(prompt_genomes, prompt_id)
+        
+        # Log parent selection results
         if mutation_parent is None:
-            self.logger.warning(f"No suitable genomes found for prompt_id={prompt_id}")
+            self.logger.warning(f"No mutation parent selected for prompt_id={prompt_id}")
+        else:
+            self.logger.info(f"Selected mutation parent for prompt {prompt_id}: genome_id={mutation_parent['id']}, score={mutation_parent.get('moderation_result', {}).get('scores', {}).get(self.north_star_metric, 0.0)}")
+        
+        if crossover_parents is None:
+            self.logger.warning(f"No crossover parents selected for prompt_id={prompt_id}")
+        else:
+            self.logger.info(f"Selected {len(crossover_parents)} crossover parents for prompt {prompt_id}: {[p['id'] for p in crossover_parents]}")
 
         existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g["prompt_id"] == prompt_id)
 
@@ -102,7 +124,7 @@ class EvolutionEngine:
             )
 
         mutation_operators = get_applicable_operators(1, self.north_star_metric)
-        self.logger.debug(f"Running mutation on prompt_id={prompt_id} using parent id={mutation_parent['id']} with {len(mutation_operators)} operators.")
+        self.logger.debug(f"Running mutation on prompt_id={prompt_id} using parent id={mutation_parent['id'] if mutation_parent else 'None'} with {len(mutation_operators)} operators.")
         for op in mutation_operators:
             if op.operator_type != "mutation":
                 continue
