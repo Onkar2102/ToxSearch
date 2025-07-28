@@ -42,46 +42,38 @@ This research framework provides tools for systematic analysis of AI safety syst
 
 ```
 eost-cam-llm/
-├── src/                          # Core source code
-│   ├── main.py                   # Main execution pipeline
-│   ├── generator/                # Text generation modules
+├── config/
+│   └── modelConfig.yaml
+├── data/
+│   ├── prompt.xlsx
+│   └── prompt copy.xlsx
+├── src/
+│   ├── ea/                    # Evolutionary Algorithms
+│   │   ├── EvolutionEngine.py
+│   │   ├── ParentSelector.py
+│   │   ├── RunEvolution.py
+│   │   ├── TextVariationOperators.py
+│   │   └── VariationOperators.py
+│   ├── gne/                   # Generation and Evaluation
 │   │   ├── LLaMaTextGenerator.py # LLaMA model interface (ACTIVE)
-│   │   ├── Factory.py            # Generator factory pattern
-│   │   └── Generators.py         # Base generator interfaces
-│   ├── evaluator/                # Evaluation and scoring
 │   │   ├── openai_moderation.py  # OpenAI moderation API (ACTIVE)
-│   │   └── test.py               # Evaluation testing
-│   ├── ea/                       # Evolutionary algorithm components
-│   │   ├── EvolutionEngine.py    # Core evolutionary logic (ACTIVE)
-│   │   ├── RunEvolution.py       # Evolution orchestration (ACTIVE)
-│   │   ├── TextVariationOperators.py # Mutation/crossover operators (ACTIVE)
-│   │   └── VariationOperators.py # Base operator classes (ACTIVE)
-│   └── utils/                    # Utility functions
-│       ├── logging.py            # Logging infrastructure (ACTIVE)
-│       ├── initialize_population.py # Population initialization (ACTIVE)
-│       └── config.py             # Configuration management (ACTIVE)
-├── config/                       # Configuration files
-│   └── modelConfig.yaml          # Model configuration (ACTIVE)
-├── data/                         # Input data
-│   └── prompt.xlsx               # Seed prompts dataset (REQUIRED)
-├── outputs/                      # Generated results
-│   ├── Population.json           # Population data (ACTIVE)
-│   ├── EvolutionStatus.json      # Generation tracking (ACTIVE)
-│   └── *.json                    # Experimental outputs
-├── experiments/                  # Research analysis
-│   ├── experiments.ipynb         # Comprehensive analysis notebook (ACTIVE)
-│   ├── *.csv                     # Experimental metrics
-│   └── *.pdf/*.png               # Generated visualizations
-├── logs/                         # Execution logs (ACTIVE)
-├── requirements.txt              # Python dependencies (ACTIVE)
-└── README.md                     # This documentation
+│   │   └── README.md
+│   ├── utils/                 # Utilities
+│   │   ├── config.py
+│   │   ├── custom_logging.py
+│   │   ├── evolution_utils.py
+│   │   ├── initialize_population.py
+│   │   ├── m3_optimizer.py
+│   │   ├── population_io.py
+│   │   └── README.md
+│   └── main.py               # Main entry point
 ```
 
 ## Core Components
 
 ### Text Generation Pipeline
 
-#### LLaMA Integration ([`src/generator/LLaMaTextGenerator.py`](src/generator/LLaMaTextGenerator.py))
+#### LLaMA Integration ([`src/gne/LLaMaTextGenerator.py`](src/gne/LLaMaTextGenerator.py))
 - **Local LLaMA Models**: Supports meta-llama/Llama-3.2-3B-instruct via HuggingFace Transformers
 - **Configurable Generation**: Temperature, top-k, top-p, and token limit controls
 - **Prompt Templating**: Role-based formatting with user/assistant prefixes
@@ -111,7 +103,7 @@ Each genome contains:
 
 ### Evaluation System
 
-#### OpenAI Moderation ([`src/evaluator/openai_moderation.py`](src/evaluator/openai_moderation.py))
+#### OpenAI Moderation ([`src/gne/openai_moderation.py`](src/gne/openai_moderation.py))
 - **Comprehensive Toxicity Analysis**: Multi-dimensional scoring across categories:
   - Violence and violent content
   - Harassment and bullying  
@@ -203,22 +195,11 @@ python src/main.py --generations 5
 ### Programmatic Usage
 
 ```python
-from src.generator.LLaMaTextGenerator import LlaMaTextGenerator
-from src.evaluator.openai_moderation import run_moderation_on_population
-from src.utils.initialize_population import load_and_initialize_population
+from src.gne.LLaMaTextGenerator import LlaMaTextGenerator
+from src.gne.openai_moderation import run_moderation_on_population
 
-# Initialize population
-load_and_initialize_population(
-    input_path="data/prompt.xlsx",
-    output_path="outputs/Population.json"
-)
-
-# Generate responses
+# Initialize generator
 generator = LlaMaTextGenerator()
-generator.process_population()
-
-# Evaluate with moderation
-run_moderation_on_population()
 ```
 
 ## Configuration
@@ -263,22 +244,11 @@ llama:
 ### Programmatic Usage
 
 ```python
-from src.generator.LLaMaTextGenerator import LlaMaTextGenerator
-from src.evaluator.openai_moderation import run_moderation_on_population
-from src.utils.initialize_population import load_and_initialize_population
+from src.gne.LLaMaTextGenerator import LlaMaTextGenerator
+from src.gne.openai_moderation import run_moderation_on_population
 
-# Initialize population
-load_and_initialize_population(
-    input_path="data/prompt.xlsx",
-    output_path="outputs/Population.json"
-)
-
-# Generate responses
+# Initialize generator
 generator = LlaMaTextGenerator()
-generator.process_population()
-
-# Evaluate with moderation
-run_moderation_on_population()
 ```
 
 ## Current Pipeline

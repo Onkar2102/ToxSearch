@@ -15,74 +15,61 @@ The `evaluator` package provides safety evaluation and moderation capabilities f
 
 ### Architecture
 ```
-evaluator/
+gne/
+├── LLaMaTextGenerator.py         # LLaMA model implementation (ACTIVE)
 ├── openai_moderation.py          # OpenAI moderation API implementation (ACTIVE)
-├── test.py                       # Evaluation testing utilities
 └── README.md                     # This documentation
 ```
 
 ---
 
-## Quick Start
+## Usage Examples
 
-### Basic Evaluation
+### 1. Population Evaluation
 ```python
-from evaluator.openai_moderation import run_moderation_on_population
+from gne.openai_moderation import run_moderation_on_population
 
 # Evaluate entire population
 run_moderation_on_population(
     pop_path="outputs/Population.json",
+    log_file="logs/evaluation.log",
     north_star_metric="violence"
 )
 ```
 
-### Individual Text Evaluation
+### 2. Single Text Evaluation
 ```python
-from evaluator.openai_moderation import evaluate_single_text
+from gne.openai_moderation import evaluate_single_text
 
-# Evaluate single text
-result = evaluate_single_text("This is a test message")
-print(f"Flagged: {result['flagged']}")
+# Evaluate a single text
+result = evaluate_single_text("Your text here")
 print(f"Violence score: {result['scores']['violence']}")
 ```
 
-### Async Batch Evaluation
+### 3. Async Evaluation
 ```python
-import asyncio
-from evaluator.openai_moderation import AsyncOpenAIModerationEvaluator
+from gne.openai_moderation import AsyncOpenAIModerationEvaluator
 
-async def custom_evaluation():
-    evaluator = AsyncOpenAIModerationEvaluator()
-    
-    # Evaluate population asynchronously
-    await evaluator.evaluate_population(
-        pop_path="outputs/Population.json",
-        north_star_metric="violence"
-    )
-    
-    # Get performance statistics
-    stats = evaluator.get_performance_stats()
-    print(f"Evaluated {stats['evaluation_count']} texts")
-    print(f"Success rate: {stats['success_rate']:.1f}%")
-    print(f"Average time: {stats['average_evaluation_time']:.3f} seconds")
+# Create evaluator instance
+evaluator = AsyncOpenAIModerationEvaluator()
 
-# Run custom evaluation
-asyncio.run(custom_evaluation())
+# Evaluate multiple texts asynchronously
+texts = ["Text 1", "Text 2", "Text 3"]
+results = await evaluator.evaluate_batch(texts)
 ```
 
-### Score Normalization
+### 4. Score Normalization
 ```python
-from evaluator.openai_moderation import normalize_moderation_scores
+from gne.openai_moderation import normalize_moderation_scores
 
-# Normalize raw scores
+# Normalize scores
 raw_scores = {
     "violence": 0.123456,
-    "toxicity": 0.987654,
-    "harassment": 0.000001
+    "toxicity": 1.000000,
+    "harassment": 0.000123
 }
 
-normalized_scores = normalize_moderation_scores(raw_scores)
-print(normalized_scores)
+normalized = normalize_moderation_scores(raw_scores)
 # Output: {'violence': 0.1235, 'toxicity': 1.0000, 'harassment': 0.0001}
 ```
 
@@ -143,33 +130,33 @@ model = "text-moderation-latest"  # or "omni-moderation-latest"
 
 ## Testing
 
-Tests for this package are located in the `tests/evaluator/` directory.
+Tests for this package are located in the `tests/gne/` directory.
 
 To run all tests for this package:
 ```bash
-pytest tests/evaluator/
+pytest tests/gne/
 ```
 
 To run specific module tests:
 ```bash
-pytest tests/evaluator/test_openai_moderation.py
-pytest tests/evaluator/test_caching.py
+pytest tests/gne/test_openai_moderation.py
+pytest tests/gne/test_caching.py
 ```
 
 To run with coverage:
 ```bash
-pytest tests/evaluator/ --cov=src/evaluator --cov-report=html
+pytest tests/gne/ --cov=src/gne --cov-report=html
 ```
 
 To test with mock API responses:
 ```bash
 # Set up mock responses
-pytest tests/evaluator/ -k "test_mock_api"
+pytest tests/gne/ -k "test_mock_api"
 ```
 
 To test async functionality:
 ```bash
-pytest tests/evaluator/ -k "test_async" -v
+pytest tests/gne/ -k "test_async" -v
 ```
 
 ---
@@ -204,7 +191,7 @@ pytest tests/evaluator/ -k "test_async" -v
 
 - **[Main Project README](../../README.md)**: Comprehensive project overview, installation, and usage
 - **[Utils Package](../utils/README.md)**: Infrastructure services and utilities
-- **[Generator Package](../generator/README.md)**: Text generation components and interfaces
+- **[GNE Package](../gne/README.md)**: Generation and evaluation components and interfaces
 - **[OpenAI Moderation](../../README.md#openai-moderation)**: Detailed moderation API integration
 - **[Evaluation System](../../README.md#evaluation-system)**: Comprehensive toxicity analysis and scoring
 - **[Population Management](../../README.md#population-management)**: Genome structure and status management

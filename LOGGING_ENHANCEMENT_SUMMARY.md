@@ -41,7 +41,7 @@ This document summarizes the comprehensive logging enhancements made to the EOST
 - Generation summaries
 - Final statistics
 
-### 3. Text Generation (`src/generator/LLaMaTextGenerator.py`)
+### 3. Text Generation (`src/gne/LLaMaTextGenerator.py`)
 
 #### Enhanced Logging:
 - **Model Loading**: Detailed model initialization and configuration logging
@@ -57,7 +57,7 @@ This document summarizes the comprehensive logging enhancements made to the EOST
 - `_process_genome()`: Individual genome processing with status tracking
 - `get_performance_stats()`: Comprehensive performance statistics
 
-### 4. Evaluation (`src/evaluator/openai_moderation.py`)
+### 4. Evaluation (`src/gne/openai_moderation.py`)
 
 #### Enhanced Logging:
 - **API Configuration**: Log API settings and authentication status

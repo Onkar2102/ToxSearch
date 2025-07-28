@@ -2,11 +2,11 @@
 
 from ea.TextVariationOperators import POSAwareSynonymReplacement
 from ea.TextVariationOperators import BertMLMOperator, LLMBasedParaphrasingOperator, BackTranslationOperator
-from generator.LLaMaTextGenerator import LlaMaTextGenerator
+from gne.LLaMaTextGenerator import LlaMaTextGenerator
 generator = LlaMaTextGenerator()
 def test_operator():
     north_star_metric = "violence"  # or any appropriate default for testing
-    operators = [LLMBasedParaphrasingOperator(generator, north_star_metric), BackTranslationOperator(), POSAwareSynonymReplacement(), BertMLMOperator()]
+    operators = [LLMBasedParaphrasingOperator(north_star_metric, log_file=None), BackTranslationOperator(log_file=None), POSAwareSynonymReplacement(log_file=None), BertMLMOperator(log_file=None)]
     # text = "The quick brown fox jumps over the lazy dog."
     text = "The cat sat on the mat. It was a sunny day. Everything felt peaceful."
     for operator in operators:
@@ -29,8 +29,8 @@ def test_multi_parent_operators():
     
     operators = [
                 # SentenceLevelCrossover(),
-                 OnePointCrossover()
-                 , SemanticSimilarityCrossover()
+                 OnePointCrossover(log_file=None)
+                 , SemanticSimilarityCrossover(log_file=None)
                 #  , InstructionPreservingCrossover()
                 ]
     

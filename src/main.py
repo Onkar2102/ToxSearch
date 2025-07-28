@@ -27,7 +27,7 @@ def main(model_names=None, max_generations=None):
     logger.info("Initializing optimized pipeline for M3 Mac...")
 
     from utils.population_io import load_and_initialize_population, sort_population_json
-    from generator.LLaMaTextGenerator import LlaMaTextGenerator
+    from gne.LLaMaTextGenerator import LlaMaTextGenerator
     generator = LlaMaTextGenerator(log_file=log_file)
 
     # Phase 1: Population Initialization
@@ -67,7 +67,7 @@ def main(model_names=None, max_generations=None):
     with PerformanceLogger(logger, "Evaluation Phase"):
         try:
             evaluation_start = time.time()
-            from evaluator.openai_moderation import run_moderation_on_population
+            from gne.openai_moderation import run_moderation_on_population
             logger.info("Evaluating generated responses using optimized OpenAI moderation API...")
             run_moderation_on_population(
                 pop_path="outputs/Population.json",

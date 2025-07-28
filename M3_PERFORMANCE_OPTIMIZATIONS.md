@@ -4,7 +4,7 @@ This document details the comprehensive performance optimizations implemented fo
 
 ## 🏆 Performance Improvements Implemented
 
-### 1. **LLaMA Text Generation Optimizations** (`src/generator/LLaMaTextGenerator.py`)
+### 1. **LLaMA Text Generation Optimizations** (`src/gne/LLaMaTextGenerator.py`)
 
 #### **Batch Processing**
 - **Before**: Single prompt processing (1 at a time)
@@ -32,7 +32,7 @@ This document details the comprehensive performance optimizations implemented fo
 - **Device Caching**: Optimal device selection cached
 - **Tokenizer Optimization**: Fast tokenizer with left padding for batch efficiency
 
-### 2. **OpenAI Moderation API Optimizations** (`src/evaluator/openai_moderation.py`)
+### 2. **OpenAI Moderation API Optimizations** (`src/gne/openai_moderation.py`)
 
 #### **Async Batch Processing**
 - **Before**: Sequential API calls (1 at a time)

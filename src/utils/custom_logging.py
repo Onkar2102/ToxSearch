@@ -9,7 +9,7 @@ import sys
 import traceback
 from typing import Optional
 
-# Global variable to store the log file path for the current run
+# Global variable to store the current log file path
 _CURRENT_LOG_FILE = None
 
 def get_run_id():
@@ -100,9 +100,9 @@ def get_logger(name: str = "default_logger", log_file: Optional[str] = None) -> 
     except AttributeError:
         log_level = logging.INFO
     
-    # Use default log file if none provided
-    if not log_file:
-        log_file = get_log_filename()
+    # Use provided log_file, or current log file, or generate new one
+    if log_file is None:
+        log_file = _CURRENT_LOG_FILE if _CURRENT_LOG_FILE is not None else get_log_filename()
     
     # Create detailed formatter for file logging
     detailed_formatter = get_detailed_formatter()

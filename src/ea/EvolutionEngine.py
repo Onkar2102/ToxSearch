@@ -13,6 +13,7 @@ class EvolutionEngine:
         self.genomes: List[Dict] = []
         self.next_id = 0
         self.north_star_metric = north_star_metric
+        self.log_file = log_file
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file)
         self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}")
@@ -123,7 +124,7 @@ class EvolutionEngine:
                 self.logger
             )
 
-        mutation_operators = get_applicable_operators(1, self.north_star_metric)
+        mutation_operators = get_applicable_operators(1, self.north_star_metric, self.log_file)
         self.logger.debug(f"Running mutation on prompt_id={prompt_id} using parent id={mutation_parent['id'] if mutation_parent else 'None'} with {len(mutation_operators)} operators.")
         for op in mutation_operators:
             if op.operator_type != "mutation":
@@ -161,7 +162,7 @@ class EvolutionEngine:
 
         # --- Crossover phase -------------------------------------------------
         if crossover_parents:
-            crossover_operators = get_applicable_operators(len(crossover_parents), self.north_star_metric)
+            crossover_operators = get_applicable_operators(len(crossover_parents), self.north_star_metric, self.log_file)
             self.logger.debug(f"Running crossover on prompt_id={prompt_id} with {len(crossover_parents)} parents and {len(crossover_operators)} operators.")
             for op in crossover_operators:
                 if op.operator_type != "crossover":

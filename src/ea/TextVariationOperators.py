@@ -20,7 +20,7 @@ import os
 import re
 import json
 import time
-from generator.LLaMaTextGenerator import LlaMaTextGenerator
+from gne.LLaMaTextGenerator import LlaMaTextGenerator
 
 # openai.api_key = os.getenv("OPENAI_API_KEY")  # Set your API key securely
 
@@ -197,8 +197,7 @@ class LLMBasedParaphrasingOperator(VariationOperator):
     def __init__(self, north_star_metric, log_file=None):
         super().__init__("LLMBasedParaphrasing", "mutation", "Uses OpenAI LLM to paraphrase input multiple times with optimization intent.")
         self.north_star_metric = north_star_metric
-        self.log_file = log_file
-        self.logger = get_logger("LLMBasedParaphrasing", self.log_file)
+        self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name} with north_star_metric: {self.north_star_metric}")
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # Ensure your API key is set in the environment
 
@@ -291,7 +290,7 @@ SINGLE_PARENT_OPERATORS = [
     BackTranslationOperator()
 ]
 
-def get_single_parent_operators(north_star_metric):
+def get_single_parent_operators(north_star_metric, log_file=None):
     """Return operators that require only a single parent.
 
     The LLMBasedParaphrasingOperator expects the *north_star_metric* as its first
@@ -300,10 +299,10 @@ def get_single_parent_operators(north_star_metric):
     the call signature.
     """
     return [
-        POSAwareSynonymReplacement(),
-        BertMLMOperator(),
-        LLMBasedParaphrasingOperator(north_star_metric),
-        BackTranslationOperator()
+        POSAwareSynonymReplacement(log_file=log_file),
+        BertMLMOperator(log_file=log_file),
+        LLMBasedParaphrasingOperator(north_star_metric, log_file=log_file),
+        BackTranslationOperator(log_file=log_file)
     ]
 
 class SentenceLevelCrossover(VariationOperator):
@@ -491,16 +490,18 @@ class InstructionPreservingCrossover(VariationOperator):
         self.logger.debug(f"{self.name}: Limited {len(variants)} variants to {len(limited_variants)}")
         return limited_variants if limited_variants else [parent_texts[0]]
 
-MULTI_PARENT_OPERATORS = [
-    OnePointCrossover(),
-    SemanticSimilarityCrossover(),
-    InstructionPreservingCrossover()
-]
+def get_multi_parent_operators(log_file=None):
+    """Return operators that require multiple parents."""
+    return [
+        OnePointCrossover(log_file=log_file),
+        SemanticSimilarityCrossover(log_file=log_file),
+        InstructionPreservingCrossover(log_file=log_file)
+    ]
 
-def get_applicable_operators(num_parents: int, north_star_metric):
+def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):
     if num_parents == 1:
-        return get_single_parent_operators(north_star_metric)
-    return MULTI_PARENT_OPERATORS
+        return get_single_parent_operators(north_star_metric, log_file=log_file)
+    return get_multi_parent_operators(log_file=log_file)
 
 class TextVariationOperators:
     """Text variation operators for evolutionary text generation with comprehensive logging"""

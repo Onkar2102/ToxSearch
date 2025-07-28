@@ -195,8 +195,7 @@ pytest tests/utils/ --cov=src/utils --cov-report=html
 ## Related Documentation
 
 - **[Main Project README](../../README.md)**: Comprehensive project overview, installation, and usage
-- **[Generator Package](../generator/README.md)**: Text generation components and interfaces
-- **[Evaluator Package](../evaluator/README.md)**: Safety evaluation and moderation components
+- **[GNE Package](../gne/README.md)**: Generation and evaluation components and interfaces
 - **[Project Structure](../../README.md#project-structure)**: Complete directory layout and file descriptions
 
 ---
