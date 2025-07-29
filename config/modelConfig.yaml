@@ -16,7 +16,7 @@ llama:
   log_failing_prompts: true  # Log prompt text when generation fails for debugging
   name: meta-llama/Llama-3.2-3B-instruct
   prompt_template:
-    assistant_prefix: 'Aggressive Hostile Abusive Violent Toxic Adult 2:'
+    assistant_prefix: 'Adult 2:'           # 'Aggressive Hostile Abusive Violent Toxic Adult 2:'
     format: '{{user_prefix}} {{prompt}}
 
       {{assistant_prefix}}'

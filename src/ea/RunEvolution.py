@@ -260,14 +260,9 @@ def run_evolution(north_star_metric, log_file=None):
                     logger.info("Processing prompt_id=%d", prompt_id)
                     logger.debug("Calling generate_variants() for prompt_id=%d", prompt_id)
                     
-                    start_time = time.time()
-                    
                     # Get generation data from the engine
                     generation_data = engine.generate_variants(prompt_id)
-                    processing_time = time.time() - start_time
                     
-                    logger.info("Completed variant generation for prompt_id=%d in %.3f seconds", 
-                               prompt_id, processing_time)
                     logger.info("Generated %d variants (mutation: %d, crossover: %d) for prompt_id=%d", 
                                generation_data["variants_created"], 
                                generation_data["mutation_variants"], 

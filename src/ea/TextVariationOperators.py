@@ -761,7 +761,6 @@ class TextVariationOperators:
                 
                 # Update performance metrics
                 self.mutation_count += 1
-                self.total_mutation_time += time.time() - time.time()  # This will be 0, but tracks count
                 
                 self.logger.info("Successfully mutated genome %s: %d mutations applied", 
                                genome_id, len(mutations_applied))
@@ -838,7 +837,6 @@ class TextVariationOperators:
                 
                 # Update performance metrics
                 self.crossover_count += 1
-                self.total_crossover_time += time.time() - time.time()  # This will be 0, but tracks count
                 
                 self.logger.info("Successfully created offspring from genomes %s and %s", parent1_id, parent2_id)
                 self.logger.debug("Child 1 text length: %d, Child 2 text length: %d", 

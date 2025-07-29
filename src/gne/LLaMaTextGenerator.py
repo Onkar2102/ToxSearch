@@ -199,22 +199,19 @@ class LlaMaTextGenerator:
     def process_population(self, pop_path: str = "outputs/Population.json", batch_size: int = None) -> None:
         """Process entire population for text generation with batch saving for fault tolerance"""
         # Use config batch size if not provided, fallback to default
-        if batch_size is None:
-            batch_size = self.model_cfg.get("generation_batch_size", 10)
+        batch_size = batch_size or self.model_cfg.get("generation_batch_size", 10)
         
         with PerformanceLogger(self.logger, "Process Population", pop_path=pop_path, batch_size=batch_size):
             try:
                 self.logger.info("Starting population processing for text generation with batch saving")
-                self.logger.info("Using batch size: %d (from config: %s)", batch_size, 
-                               self.model_cfg.get("generation_batch_size", "default"))
+                self.logger.info("Using batch size: %d (from config: %s)", batch_size, self.model_cfg.get("generation_batch_size", "default"))
                 
                 # Load population
                 population = self._load_population(pop_path)
                 
                 # Count genomes that need processing
                 pending_genomes = [g for g in population if g.get('status') == 'pending_generation']
-                self.logger.info("Found %d genomes pending generation out of %d total", 
-                               len(pending_genomes), len(population))
+                self.logger.info("Found %d genomes pending generation out of %d total", len(pending_genomes), len(population))
                 
                 if not pending_genomes:
                     self.logger.info("No genomes pending generation. Skipping processing.")

@@ -34,7 +34,6 @@ def main(model_names=None, max_generations=None):
     with PerformanceLogger(logger, "Population Initialization"):
         if not os.path.exists("outputs/Population.json"):
             try:
-                population_start = time.time()
                 logger.info("Population file not found. Initializing population from prompt.xlsx...")
                 load_and_initialize_population(
                     input_path="data/prompt.xlsx",
@@ -42,7 +41,6 @@ def main(model_names=None, max_generations=None):
                     log_file=log_file
                 )
                 logger.info("Population successfully initialized and saved.")
-                logger.info("Population initialization completed in %.2f seconds.", time.time() - population_start)
             except Exception as e:
                 logger.error("Failed to initialize population: %s", e, exc_info=True)
                 return
@@ -55,18 +53,15 @@ def main(model_names=None, max_generations=None):
     # Phase 2: Text Generation (Optimized with batching)
     with PerformanceLogger(logger, "Text Generation Phase"):
         try:
-            generation_start = time.time()
             logger.info("Generating responses using optimized LLaMA model...")
             generator.process_population()
             logger.info("Text generation completed and population updated.")
-            logger.info("Text generation completed in %.2f seconds.", time.time() - generation_start)
         except Exception as e:
             logger.error("Generation failed: %s", e, exc_info=True)
 
     # Phase 3: Evaluation (Optimized with async batch processing)
     with PerformanceLogger(logger, "Evaluation Phase"):
         try:
-            evaluation_start = time.time()
             from gne.openai_moderation import run_moderation_on_population
             logger.info("Evaluating generated responses using optimized OpenAI moderation API...")
             run_moderation_on_population(
@@ -75,13 +70,11 @@ def main(model_names=None, max_generations=None):
                 north_star_metric=north_star_metric
             )
             logger.info("Evaluation completed and population updated with moderation scores.")
-            logger.info("Evaluation completed in %.2f seconds.", time.time() - evaluation_start)
         except Exception as e:
             logger.error("Evaluation failed: %s", e, exc_info=True)
 
     while True:
         logger.info("=== Starting Generation %d ===", generation_count)
-        generation_start_time = time.time()
         
         # Check stopping conditions before evolution
         with PerformanceLogger(logger, "Stopping Conditions Check"):
@@ -98,7 +91,6 @@ def main(model_names=None, max_generations=None):
         # Phase 4: Evolution (Now enabled and optimized)
         with PerformanceLogger(logger, "Evolution Phase"):
             try:
-                evolution_start = time.time()
                 from ea.RunEvolution import run_evolution
                 logger.info("Running optimized evolution on population...")
                 run_evolution(
@@ -106,7 +98,6 @@ def main(model_names=None, max_generations=None):
                     log_file=log_file
                 )
                 logger.info("Evolution process completed and population updated.")
-                logger.info("Evolution completed in %.2f seconds.", time.time() - evolution_start)
             except Exception as e:
                 logger.error("Evolution failed: %s", e, exc_info=True)
                 break
@@ -114,7 +105,6 @@ def main(model_names=None, max_generations=None):
         # Phase 5: Post-Evolution Generation and Evaluation (Optimized)
         with PerformanceLogger(logger, "Post-Evolution Processing"):
             try:
-                post_evolution_start = time.time()
                 logger.info("Processing new variants post-evolution...")
                 
                 # Reload population to get new variants
@@ -142,15 +132,12 @@ def main(model_names=None, max_generations=None):
                         north_star_metric=north_star_metric
                     )
                 
-                logger.info("Post-evolution processing completed in %.2f seconds.", time.time() - post_evolution_start)
-                
             except Exception as e:
                 logger.error("Post-evolution processing failed: %s", e, exc_info=True)
 
         # Phase 6: Sort Population After Evaluation (now outside Phase 5)
         with PerformanceLogger(logger, "Sort Population After Evaluation"):
             try:
-                sort_start = time.time()
                 logger.info("Sorting population after evaluation by prompt_id ASC, %s DESC, id DESC...", north_star_metric)
                 sort_population_json(
                     "outputs/Population.json",
@@ -162,12 +149,10 @@ def main(model_names=None, max_generations=None):
                     reverse_flags=[False, True, True],
                     log_file=log_file
                 )
-                logger.info("Population sorting completed in %.2f seconds.", time.time() - sort_start)
             except Exception as e:
                 logger.error("Failed to sort population after evaluation: %s", e, exc_info=True)
 
         # Generation summary
-        generation_time = time.time() - generation_start_time
         generation_count += 1
         
         with PerformanceLogger(logger, "Generation Summary"):
@@ -184,7 +169,6 @@ def main(model_names=None, max_generations=None):
                 ], default=0)
                 
                 logger.info("Generation %d Summary:", generation_count)
-                logger.info("  - Time: %.2f seconds", generation_time)
                 logger.info("  - Total genomes: %d", total_genomes)
                 logger.info("  - Completed: %d", completed)
                 logger.info("  - Pending evolution: %d", pending_evolution)
