@@ -4,6 +4,36 @@ import json
 from utils.custom_logging import get_logger, PerformanceLogger
 
 
+def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Remove None genomes and invalid entries from population.
+    
+    Parameters
+    ----------
+    population : List[Dict[str, Any]]
+        Population to clean.
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created.
+    log_file : str | None
+        Optional log-file path when a new logger is created.
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        Cleaned population with None genomes removed.
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    original_count = len(population)
+    cleaned_population = [g for g in population if g is not None]
+    removed_count = original_count - len(cleaned_population)
+    
+    if removed_count > 0:
+        _logger.warning("Removed %d None genomes from population", removed_count)
+    
+    _logger.info("Population cleaned: %d → %d genomes", original_count, len(cleaned_population))
+    return cleaned_population
+
+
 def load_population(pop_path: str, *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """Load population JSON with uniform logging & error handling.
 
@@ -32,6 +62,9 @@ def load_population(pop_path: str, *, logger=None, log_file: Optional[str] = Non
             with open(pop_path, "r", encoding="utf-8") as f:
                 population = json.load(f)
 
+            # Clean the population to remove None genomes
+            population = clean_population(population, logger=_logger, log_file=log_file)
+
             _logger.info("Successfully loaded population with %d genomes", len(population))
             return population
         except json.JSONDecodeError as e:
@@ -48,10 +81,13 @@ def save_population(population: List[Dict[str, Any]], pop_path: str, *, logger=N
 
     with PerformanceLogger(_logger, "Save Population", file_path=pop_path, genome_count=len(population)):
         try:
+            # Clean the population before saving
+            cleaned_population = clean_population(population, logger=_logger, log_file=log_file)
+            
             os.makedirs(os.path.dirname(pop_path), exist_ok=True)
             with open(pop_path, "w", encoding="utf-8") as f:
-                json.dump(population, f, indent=2, ensure_ascii=False)
-            _logger.info("Successfully saved population with %d genomes to %s", len(population), pop_path)
+                json.dump(cleaned_population, f, indent=2, ensure_ascii=False)
+            _logger.info("Successfully saved population with %d genomes to %s", len(cleaned_population), pop_path)
         except Exception as e:
             _logger.error("Failed to save population: %s", e, exc_info=True)
             raise

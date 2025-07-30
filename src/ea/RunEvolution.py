@@ -7,9 +7,9 @@ import os
 import time
 from typing import Dict, Any, List, Optional
 from ea.EvolutionEngine import EvolutionEngine
-from ea.TextVariationOperators import TextVariationOperators
 from utils.initialize_population import load_and_initialize_population
 from utils.custom_logging import get_logger, PerformanceLogger
+from utils.evolution_utils import sync_parents_tracker_with_evolution_tracker
 import nltk
 import logging
 
@@ -53,7 +53,16 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
             else:
                 evolution_tracker = []
 
-            # Since population is sorted by prompt_id ASC, north_star_metric DESC, id DESC
+            # First pass: find original generation 0 genomes for each prompt_id
+            initial_genome_ids = {}
+            initial_genome_scores = {}
+            for genome in population:
+                prompt_id = genome["prompt_id"]
+                if genome.get("generation") == 0 and prompt_id not in initial_genome_ids:
+                    initial_genome_ids[prompt_id] = genome["id"]
+                    initial_genome_scores[prompt_id] = genome.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0)
+
+            # Second pass: find current best genomes for each prompt_id (for threshold checking)
             current_prompt_id = None
             completed_prompt_ids = set()
             max_scores = {}
@@ -73,7 +82,10 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
             for prompt_id in max_scores.keys():
                 entry = find_tracker_entry(evolution_tracker, prompt_id)
                 if entry is None:
-                    # Create new entry
+                    # Create new entry using original generation 0 genome
+                    initial_genome_id = initial_genome_ids.get(prompt_id, "unknown")
+                    initial_score = initial_genome_scores.get(prompt_id, 0.0)
+                    
                     entry = {
                         "prompt_id": prompt_id,
                         "status": "complete" if prompt_id in completed_prompt_ids else "not_complete",
@@ -81,20 +93,43 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                         "generations": [
                             {
                                 "generation_number": 0,
-                                "genome_id": max_genome_ids[prompt_id],
-                                "max_score": max_scores[prompt_id],
+                                "genome_id": initial_genome_id,
+                                "max_score": initial_score,
                                 "mutation": None,
                                 "crossover": None
                             }
                         ]
                     }
                     evolution_tracker.append(entry)
+                    logger.info("Created evolution tracker entry for prompt_id %d with initial genome %s (score: %.4f)", 
+                              prompt_id, initial_genome_id, initial_score)
                 else:
                     entry["status"] = "complete" if prompt_id in completed_prompt_ids else "not_complete"
-                    # Optionally update max_score/genome_id for gen 0 if needed
-                    if entry["generations"] and entry["generations"][0]["generation_number"] == 0:
-                        entry["generations"][0]["max_score"] = max_scores[prompt_id]
-                        entry["generations"][0]["genome_id"] = max_genome_ids[prompt_id]
+                    # Only update generation 0 if it doesn't exist or is incorrect
+                    if not entry["generations"] or entry["generations"][0]["generation_number"] != 0:
+                        # Add generation 0 entry if missing
+                        initial_genome_id = initial_genome_ids.get(prompt_id, "unknown")
+                        initial_score = initial_genome_scores.get(prompt_id, 0.0)
+                        entry["generations"].insert(0, {
+                            "generation_number": 0,
+                            "genome_id": initial_genome_id,
+                            "max_score": initial_score,
+                            "mutation": None,
+                            "crossover": None
+                        })
+                        logger.info("Added missing generation 0 entry for prompt_id %d with initial genome %s", 
+                                  prompt_id, initial_genome_id)
+                    elif entry["generations"][0]["generation_number"] == 0:
+                        # Verify generation 0 entry is correct (should use original genome, not current best)
+                        current_gen_0_entry = entry["generations"][0]
+                        initial_genome_id = initial_genome_ids.get(prompt_id, "unknown")
+                        initial_score = initial_genome_scores.get(prompt_id, 0.0)
+                        
+                        if current_gen_0_entry["genome_id"] != initial_genome_id:
+                            logger.warning("Fixing generation 0 entry for prompt_id %d: %s -> %s", 
+                                         prompt_id, current_gen_0_entry["genome_id"], initial_genome_id)
+                            current_gen_0_entry["genome_id"] = initial_genome_id
+                            current_gen_0_entry["max_score"] = initial_score
 
             # Mark all genomes with completed prompt_ids as 'complete'
             if completed_prompt_ids:
@@ -123,6 +158,10 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
             logger.info("Updated evolution tracker with threshold check results")
+            
+            # Sync parents tracker with evolution tracker to ensure all generations are tracked
+            sync_parents_tracker_with_evolution_tracker(logger)
+            
             return evolution_tracker
         except Exception as e:
             logger.error("Failed to check threshold and update tracker: %s", e, exc_info=True)

@@ -143,7 +143,7 @@ def main(model_names=None, max_generations=None):
                     "outputs/Population.json",
                     sort_keys=[
                         "prompt_id",
-                        lambda g: g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0),
+                        lambda g: g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0) if g is not None else 0.0,
                         "id",
                     ],
                     reverse_flags=[False, True, True],
@@ -161,11 +161,11 @@ def main(model_names=None, max_generations=None):
                     population = json.load(f)
                 
                 total_genomes = len(population)
-                completed = len([g for g in population if g.get("status") == "complete"])
-                pending_evolution = len([g for g in population if g.get("status") == "pending_evolution"])
+                completed = len([g for g in population if g is not None and g.get("status") == "complete"])
+                pending_evolution = len([g for g in population if g is not None and g.get("status") == "pending_evolution"])
                 max_score = max([
                     g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) 
-                    for g in population
+                    for g in population if g is not None
                 ], default=0)
                 
                 logger.info("Generation %d Summary:", generation_count)
@@ -216,9 +216,9 @@ def main(model_names=None, max_generations=None):
             
             final_stats = {
                 "total_genomes": len(population),
-                "successful_genomes": len([g for g in population if g.get("status") == "complete"]),
+                "successful_genomes": len([g for g in population if g is not None and g.get("status") == "complete"]),
                 "average_score": sum([g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) 
-                                    for g in population]) / len(population),
+                                    for g in population if g is not None]) / len([g for g in population if g is not None]),
                 "execution_time_seconds": total_time,
                 "generations_completed": generation_count
             }

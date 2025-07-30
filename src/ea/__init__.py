@@ -11,15 +11,12 @@
 from ea.EvolutionEngine import EvolutionEngine
 from ea.RunEvolution import run_evolution
 from ea.TextVariationOperators import (
-    TextVariationOperators,
     get_applicable_operators,
     POSAwareSynonymReplacement,
     BertMLMOperator,
     LLMBasedParaphrasingOperator,
     BackTranslationOperator,
-    SentenceLevelCrossover,
     OnePointCrossover,
-    CutAndSpliceCrossover,
     SemanticSimilarityCrossover,
     InstructionPreservingCrossover
 )
@@ -30,12 +27,12 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "EvolutionEngine",
     "run_evolution",
-    "RandomDeletionOperator",
-    "WordShuffleOperator",
     "POSAwareSynonymReplacement",
     "BertMLMOperator",
     "BackTranslationOperator",
     "LLMBasedParaphrasingOperator",
-    "SentenceLevelCrossover",
+    "OnePointCrossover",
+    "SemanticSimilarityCrossover",
+    "InstructionPreservingCrossover",
     "get_applicable_operators",
 ]

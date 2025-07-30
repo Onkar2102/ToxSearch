@@ -114,6 +114,8 @@ class ParentSelector:
         """
         def _fitness(genome: Dict) -> float:
             """Safely extract the north-star fitness score from a genome."""
+            if genome is None:
+                return 0.0
             return float(
                 genome.get("moderation_result", {})
                       .get("scores", {})

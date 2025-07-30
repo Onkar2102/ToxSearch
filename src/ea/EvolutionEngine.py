@@ -35,7 +35,7 @@ class EvolutionEngine:
         # the engine object persists across multiple calls.
         self.update_next_id()
 
-        prompt_genomes = [g for g in self.genomes if g["prompt_id"] == prompt_id]
+        prompt_genomes = [g for g in self.genomes if g is not None and g["prompt_id"] == prompt_id]
         if not prompt_genomes:
             self.logger.error(f"No genomes found for prompt_id={prompt_id}. Exiting evolution process.")
             raise SystemExit(1)
@@ -66,7 +66,7 @@ class EvolutionEngine:
         else:
             self.logger.info(f"Selected {len(crossover_parents)} crossover parents for prompt {prompt_id}: {[p['id'] for p in crossover_parents]}")
 
-        existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g["prompt_id"] == prompt_id)
+        existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g is not None and g["prompt_id"] == prompt_id)
 
         offspring = []
         generation_data = {

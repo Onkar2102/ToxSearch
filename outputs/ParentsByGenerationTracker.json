@@ -13,6 +13,191 @@
                     "1"
                 ],
                 "parent_type": "mutation"
+            },
+            {
+                "generation_number": 2,
+                "parent_ids": [
+                    "2"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 2,
+                "parent_ids": [
+                    "2",
+                    "20",
+                    "12",
+                    "10",
+                    "16"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 3,
+                "parent_ids": [
+                    "46"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 3,
+                "parent_ids": [
+                    "46",
+                    "36",
+                    "2",
+                    "37",
+                    "35"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 4,
+                "parent_ids": [
+                    "148"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 4,
+                "parent_ids": [
+                    "148",
+                    "136",
+                    "124",
+                    "134",
+                    "46"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 5,
+                "parent_ids": [
+                    "185"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 5,
+                "parent_ids": [
+                    "185",
+                    "148",
+                    "196",
+                    "136",
+                    "198"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 6,
+                "parent_ids": [
+                    "276",
+                    "185",
+                    "148",
+                    "196",
+                    "246"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 6,
+                "parent_ids": [
+                    "276"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 7,
+                "parent_ids": [
+                    "276",
+                    "185",
+                    "401",
+                    "416",
+                    "148"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 1,
+                "parent_ids": null,
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 7,
+                "parent_ids": [
+                    "gen_6_best"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 8,
+                "parent_ids": [
+                    "gen_7_best"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 8,
+                "parent_ids": [
+                    "gen_7_parent_0",
+                    "gen_7_parent_1",
+                    "gen_7_parent_2",
+                    "gen_7_parent_3",
+                    "gen_7_parent_4"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 9,
+                "parent_ids": [
+                    "gen_8_best"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 9,
+                "parent_ids": [
+                    "gen_8_parent_0",
+                    "gen_8_parent_1",
+                    "gen_8_parent_2",
+                    "gen_8_parent_3",
+                    "gen_8_parent_4"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 10,
+                "parent_ids": [
+                    "gen_9_best"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 10,
+                "parent_ids": [
+                    "gen_9_parent_0",
+                    "gen_9_parent_1",
+                    "gen_9_parent_2",
+                    "gen_9_parent_3",
+                    "gen_9_parent_4"
+                ],
+                "parent_type": "crossover"
+            },
+            {
+                "generation_number": 11,
+                "parent_ids": [
+                    "gen_10_best"
+                ],
+                "parent_type": "mutation"
+            },
+            {
+                "generation_number": 11,
+                "parent_ids": [
+                    "gen_10_parent_0",
+                    "gen_10_parent_1",
+                    "gen_10_parent_2",
+                    "gen_10_parent_3",
+                    "gen_10_parent_4"
+                ],
+                "parent_type": "crossover"
             }
         ]
     }
