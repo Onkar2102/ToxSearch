@@ -17,9 +17,6 @@ from itertools import combinations, product
 from utils.custom_logging import get_logger, PerformanceLogger
 from openai import OpenAI
 import os
-import re
-import json
-import time
 from gne.LLaMaTextGenerator import LlaMaTextGenerator
 
 # openai.api_key = os.getenv("OPENAI_API_KEY")  # Set your API key securely
@@ -323,8 +320,6 @@ class OnePointCrossover(VariationOperator):
         return limited_children
 
 
-
-import numpy as np
 from sentence_transformers import SentenceTransformer, util
 
 class SemanticSimilarityCrossover(VariationOperator):

@@ -5,7 +5,6 @@ from utils.custom_logging import get_logger
 from ea.TextVariationOperators import get_applicable_operators
 from ea.ParentSelector import ParentSelector
 from itertools import combinations
-from utils.evolution_utils import append_parents_by_generation_entry
 
 class EvolutionEngine:
 
@@ -48,7 +47,7 @@ class EvolutionEngine:
         self.logger.info(f"Prompt {prompt_id} genome breakdown: {len(completed_genomes)} completed, {len(pending_genomes)} pending_evolution, {len(other_genomes)} other")
         
         if completed_genomes:
-            max_score = max([g.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0) for g in completed_genomes])
+            max_score = max([(g.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0) for g in completed_genomes])
             self.logger.info(f"Best completed genome score for prompt {prompt_id}: {max_score}")
         else:
             self.logger.warning(f"No completed genomes found for prompt {prompt_id}")
@@ -59,7 +58,7 @@ class EvolutionEngine:
         if mutation_parent is None:
             self.logger.warning(f"No mutation parent selected for prompt_id={prompt_id}")
         else:
-            self.logger.info(f"Selected mutation parent for prompt {prompt_id}: genome_id={mutation_parent['id']}, score={mutation_parent.get('moderation_result', {}).get('scores', {}).get(self.north_star_metric, 0.0)}")
+            self.logger.info(f"Selected mutation parent for prompt {prompt_id}: genome_id={mutation_parent['id']}, score={(mutation_parent.get('moderation_result') or {}).get('scores', {}).get(self.north_star_metric, 0.0)}")
         
         if crossover_parents is None:
             self.logger.warning(f"No crossover parents selected for prompt_id={prompt_id}")
@@ -80,49 +79,34 @@ class EvolutionEngine:
         def get_parent_info(parent):
             return {
                 "id": parent["id"],
-                "score": parent.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                "score": (parent.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0),
                 "parents_id": parent.get("parents", None)
             }
 
         # For generation 0, parents is null
         if all(g["generation"] == 0 for g in prompt_genomes):
-            append_parents_by_generation_entry(prompt_id, 0, None, "initial", self.logger)
+            # Parent tracking has been removed
+            pass
 
         # For mutation, use the topmost genome as parent
         if mutation_parent:
             generation_data["parents"].append({
                 "id": mutation_parent["id"],
-                "north_star_score": mutation_parent.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                "north_star_score": (mutation_parent.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0),
                 "generation": mutation_parent["generation"],
                 "type": "mutation_parent"
             })
-            # Track mutation parents for this generation
-            append_parents_by_generation_entry(
-                prompt_id, 
-                mutation_parent["generation"] + 1, 
-                [mutation_parent["id"]], 
-                "mutation", 
-                self.logger
-            )
+            # Mutation parent tracking has been removed
 
         if crossover_parents:
             for parent in crossover_parents:
                 generation_data["parents"].append({
                     "id": parent["id"],
-                    "north_star_score": parent.get("moderation_result", {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                    "north_star_score": (parent.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0),
                     "generation": parent["generation"],
                     "type": "crossover_parent"
                 })
-            # Track crossover parents for this generation
-            crossover_parent_ids = [p["id"] for p in crossover_parents]
-            max_generation = max(p["generation"] for p in crossover_parents)
-            append_parents_by_generation_entry(
-                prompt_id, 
-                max_generation + 1, 
-                crossover_parent_ids, 
-                "crossover", 
-                self.logger
-            )
+            # Crossover parent tracking has been removed
 
         mutation_operators = get_applicable_operators(1, self.north_star_metric, self.log_file)
         self.logger.debug(f"Running mutation on prompt_id={prompt_id} using parent id={mutation_parent['id'] if mutation_parent else 'None'} with {len(mutation_operators)} operators.")
@@ -231,4 +215,29 @@ class EvolutionEngine:
         )
         
         return generation_data
+
+    def load_parents_from_tracker(self, prompt_id: int, generation_number: int, evolution_tracker: List[dict]) -> List[Dict[str, Any]]:
+        """
+        Load parent genomes for a specific prompt_id and generation using tracker information
+        
+        This method provides an efficient way to load parents from previous generations
+        without loading the entire population.
+        
+        Parameters
+        ----------
+        prompt_id : int
+            The prompt ID to load parents for
+        generation_number : int
+            The generation number to load parents for
+        evolution_tracker : List[dict]
+            The evolution tracker containing parent information
+            
+        Returns
+        -------
+        List[Dict[str, Any]]
+            List of parent genomes found
+        """
+        from ea.RunEvolution import load_parents_from_tracker
+        return load_parents_from_tracker(prompt_id, generation_number, evolution_tracker, 
+                                       logger=self.logger, log_file=self.log_file)
 

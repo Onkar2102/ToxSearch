@@ -1,13 +1,12 @@
 import sys
 import time
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import asyncio
 from utils.custom_logging import get_logger, get_log_filename, log_system_info, PerformanceLogger
 import os
 from typing import Optional
+from pathlib import Path
 
-def main(model_names=None, max_generations=None):
+def main(model_names=None, max_generations=None, north_star_threshold=0.95):
     """Main execution pipeline for evolutionary text generation and safety analysis"""
     log_file = get_log_filename()
     print(f"DEBUG: log_file path resolved to: {log_file}")
@@ -22,6 +21,7 @@ def main(model_names=None, max_generations=None):
     start_time = time.time()
     north_star_metric = "violence"  # Primary optimization metric for evolution
     logger.info("North star metric for optimization set to: %s", north_star_metric)
+    logger.info("North star threshold for stopping: %.4f", north_star_threshold)
     logger.info("Maximum generations allowed for evolution: %s", max_generations)
 
     logger.info("Initializing optimized pipeline for M3 Mac...")
@@ -32,9 +32,12 @@ def main(model_names=None, max_generations=None):
 
     # Phase 1: Population Initialization
     with PerformanceLogger(logger, "Population Initialization"):
-        if not os.path.exists("outputs/Population.json"):
+        from utils.population_io import get_population_files_info, load_population
+        population_info = get_population_files_info("outputs")
+        
+        if not population_info["generation_files"]:
             try:
-                logger.info("Population file not found. Initializing population from prompt.xlsx...")
+                logger.info("No population files found. Initializing population from prompt.xlsx...")
                 load_and_initialize_population(
                     input_path="data/prompt.xlsx",
                     output_path="outputs/Population.json",
@@ -45,7 +48,8 @@ def main(model_names=None, max_generations=None):
                 logger.error("Failed to initialize population: %s", e, exc_info=True)
                 return
         else:
-            logger.info("Existing population found. Skipping initialization.")
+            logger.info("Existing population files found. Skipping initialization.")
+            logger.info("Available generations: %s", sorted(population_info["generation_files"].keys()))
 
     # Main evolution loop with optimized processing
     generation_count = 0
@@ -74,6 +78,7 @@ def main(model_names=None, max_generations=None):
             logger.error("Evaluation failed: %s", e, exc_info=True)
 
     while True:
+        generation_count += 1
         logger.info("=== Starting Generation %d ===", generation_count)
         
         # Check stopping conditions before evolution
@@ -82,6 +87,18 @@ def main(model_names=None, max_generations=None):
                 # Check generation limit - should stop BEFORE starting generation N+1
                 if max_generations is not None and generation_count >= max_generations:
                     logger.info("Maximum generation limit (%d) reached. Stopping pipeline.", max_generations)
+                    break
+                    
+                # Check if any genome has reached the threshold
+                from utils.population_io import load_population
+                population = load_population("outputs/Population.json", logger=logger)
+                max_score = max([
+                    (g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0) 
+                    for g in population if g is not None
+                ], default=0)
+                
+                if max_score >= north_star_threshold:
+                    logger.info("North star metric threshold (%.4f) achieved with score %.4f. Stopping pipeline.", north_star_threshold, max_score)
                     break
                     
             except Exception as e:
@@ -95,7 +112,8 @@ def main(model_names=None, max_generations=None):
                 logger.info("Running optimized evolution on population...")
                 run_evolution(
                     north_star_metric=north_star_metric,
-                    log_file=log_file
+                    log_file=log_file,
+                    threshold=north_star_threshold
                 )
                 logger.info("Evolution process completed and population updated.")
             except Exception as e:
@@ -108,8 +126,8 @@ def main(model_names=None, max_generations=None):
                 logger.info("Processing new variants post-evolution...")
                 
                 # Reload population to get new variants
-                with open("outputs/Population.json", "r", encoding="utf-8") as f:
-                    population = json.load(f)
+                from utils.population_io import load_population
+                population = load_population("outputs/Population.json", logger=logger)
 
                 # Check for pending genomes
                 pending_generation = [g for g in population if g.get("status") == "pending_generation"]
@@ -143,8 +161,8 @@ def main(model_names=None, max_generations=None):
                     "outputs/Population.json",
                     sort_keys=[
                         "prompt_id",
-                        lambda g: g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0.0) if g is not None else 0.0,
-                        "id",
+                        lambda g: (g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0.0) if g is not None else 0.0,
+                        lambda g: g.get("id", "0") if g is not None else "0",
                     ],
                     reverse_flags=[False, True, True],
                     log_file=log_file
@@ -153,18 +171,16 @@ def main(model_names=None, max_generations=None):
                 logger.error("Failed to sort population after evaluation: %s", e, exc_info=True)
 
         # Generation summary
-        generation_count += 1
-        
         with PerformanceLogger(logger, "Generation Summary"):
             try:
-                with open("outputs/Population.json", "r", encoding="utf-8") as f:
-                    population = json.load(f)
+                from utils.population_io import load_population
+                population = load_population("outputs/Population.json", logger=logger)
                 
                 total_genomes = len(population)
                 completed = len([g for g in population if g is not None and g.get("status") == "complete"])
                 pending_evolution = len([g for g in population if g is not None and g.get("status") == "pending_evolution"])
                 max_score = max([
-                    g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) 
+                    (g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0) 
                     for g in population if g is not None
                 ], default=0)
                 
@@ -211,26 +227,58 @@ def main(model_names=None, max_generations=None):
     # Final population analysis
     with PerformanceLogger(logger, "Final Analysis"):
         try:
-            with open("outputs/Population.json", "r", encoding="utf-8") as f:
-                population = json.load(f)
+            from utils.population_io import load_population
+            from ea.RunEvolution import create_final_statistics_with_tracker
             
-            final_stats = {
-                "total_genomes": len(population),
-                "successful_genomes": len([g for g in population if g is not None and g.get("status") == "complete"]),
-                "average_score": sum([g.get("moderation_result", {}).get("scores", {}).get(north_star_metric, 0) 
-                                    for g in population if g is not None]) / len([g for g in population if g is not None]),
-                "execution_time_seconds": total_time,
-                "generations_completed": generation_count
-            }
+            # Load population for basic stats
+            population = load_population("outputs/Population.json", logger=logger)
+            
+            # Load evolution tracker for comprehensive stats
+            evolution_tracker_path = Path("outputs/EvolutionTracker.json")
+            if evolution_tracker_path.exists():
+                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                    evolution_tracker = json.load(f)
+                
+                # Create comprehensive final statistics using tracker
+                final_stats = create_final_statistics_with_tracker(
+                    evolution_tracker, 
+                    north_star_metric, 
+                    total_time, 
+                    generation_count,
+                    logger=logger
+                )
+                
+                logger.info("Enhanced Final Statistics:")
+                logger.info("  - Total prompts: %d", final_stats["execution_summary"]["total_prompts"])
+                logger.info("  - Completed prompts: %d", final_stats["execution_summary"]["completed_prompts"])
+                logger.info("  - Completion rate: %.1f%%", final_stats["execution_summary"]["completion_rate"])
+                logger.info("  - Total generations: %d", final_stats["generation_statistics"]["total_generations"])
+                logger.info("  - Average generations per prompt: %.1f", final_stats["generation_statistics"]["average_generations_per_prompt"])
+                logger.info("  - Best average score: %.4f", final_stats["score_statistics"]["best_average_score"])
+                logger.info("  - Max score achieved: %.4f", final_stats["score_statistics"]["max_score"])
+                logger.info("  - Total variants created: %d", final_stats["variant_statistics"]["total_variants_created"])
+                logger.info("  - Average variants per generation: %.1f", final_stats["variant_statistics"]["average_variants_per_generation"])
+                
+            else:
+                # Fallback to basic statistics if tracker doesn't exist
+                logger.warning("Evolution tracker not found, using basic statistics")
+                final_stats = {
+                    "total_genomes": len(population),
+                    "successful_genomes": len([g for g in population if g is not None and g.get("status") == "complete"]),
+                    "average_score": sum([(g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0) 
+                                        for g in population if g is not None]) / max(len([g for g in population if g is not None]), 1),
+                    "execution_time_seconds": total_time,
+                    "generations_completed": generation_count
+                }
+                
+                logger.info("Basic Final Statistics:")
+                logger.info("  - Total genomes: %d", final_stats['total_genomes'])
+                logger.info("  - Successful genomes: %d", final_stats['successful_genomes'])
+                logger.info("  - Average %s score: %.4f", north_star_metric, final_stats['average_score'])
             
             with open("outputs/final_statistics.json", "w") as f:
                 json.dump(final_stats, f, indent=2)
                 
-            logger.info("Final Statistics:")
-            logger.info("  - Total genomes: %d", final_stats['total_genomes'])
-            logger.info("  - Successful genomes: %d", final_stats['successful_genomes'])
-            logger.info("  - Average %s score: %.4f", north_star_metric, final_stats['average_score'])
-            
         except Exception as e:
             logger.error("Failed to generate final statistics: %s", e, exc_info=True)
 
@@ -239,12 +287,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evolutionary Text Generation and Safety Analysis Framework")
     parser.add_argument("--generations", type=int, default=None, 
                        help="Maximum number of evolution generations. If not set, runs until north star metric is achieved.")
+    parser.add_argument("--threshold", type=float, default=0.95,
+                       help="North star metric threshold for stopping evolution (default: 0.95)")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     args = parser.parse_args()
     
     try:
-        main(model_names=args.model_names, max_generations=args.generations)
+        main(model_names=args.model_names, max_generations=args.generations, north_star_threshold=args.threshold)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")
         sys.exit(1)

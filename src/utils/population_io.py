@@ -1,6 +1,17 @@
-from typing import List, Dict, Any, Optional
+"""
+Comprehensive Population I/O Utility
+
+This module provides unified population loading, saving, and management functionality
+that automatically handles both monolithic and split file formats for optimal memory efficiency.
+"""
+
+from typing import List, Dict, Any, Optional, Union
 import os
 import json
+from pathlib import Path
+from collections import defaultdict
+import pandas as pd
+import time
 from utils.custom_logging import get_logger, PerformanceLogger
 
 
@@ -34,9 +45,189 @@ def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file:
     return cleaned_population
 
 
-def load_population(pop_path: str, *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Load population JSON with uniform logging & error handling.
+# ============================================================================
+# Split File Management Functions
+# ============================================================================
 
+def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
+    """Get information about available population generation files"""
+    
+    # Always scan for actual generation files to ensure accuracy
+    gen_files = {}
+    gen_counts = {}
+    total_genomes = 0
+    
+    base_path = Path(base_dir)
+    for file_path in base_path.glob("population_gen*.json"):
+        gen_num = int(file_path.stem.replace("population_gen", ""))
+        gen_files[gen_num] = file_path.name
+        
+        # Quick count
+        with open(file_path, 'r', encoding='utf-8') as f:
+            genomes = json.load(f)
+            gen_counts[gen_num] = len(genomes)
+            total_genomes += len(genomes)
+    
+    info = {
+        "total_generations": len(gen_files),
+        "total_genomes": total_genomes,
+        "generation_files": gen_files,
+        "generation_counts": gen_counts
+    }
+    
+    # Update the index file with current information
+    index_file = Path(base_dir) / "population_index.json"
+    with open(index_file, 'w', encoding='utf-8') as f:
+        json.dump(info, f, indent=2)
+    
+    return info
+
+
+def load_population_generation(generation: int, base_dir: str = "outputs", 
+                              *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Load a specific generation from split files"""
+    
+    _logger = logger or get_logger("population_io", log_file)
+    
+    gen_file = Path(base_dir) / f"population_gen{generation}.json"
+    
+    with PerformanceLogger(_logger, f"Load Generation {generation}", file_path=str(gen_file)):
+        if not gen_file.exists():
+            _logger.warning(f"Generation {generation} file not found: {gen_file}")
+            return []
+        
+        try:
+            with open(gen_file, 'r', encoding='utf-8') as f:
+                genomes = json.load(f)
+            
+            _logger.info(f"Loaded generation {generation}: {len(genomes)} genomes")
+            return genomes
+            
+        except Exception as e:
+            _logger.error(f"Failed to load generation {generation}: {e}", exc_info=True)
+            raise
+
+
+def load_population_range(start_gen: int, end_gen: int, base_dir: str = "outputs",
+                         *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Load multiple generations at once (memory-efficient for specific ranges)"""
+    
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, f"Load Generations {start_gen}-{end_gen}"):
+        all_genomes = []
+        for gen in range(start_gen, end_gen + 1):
+            genomes = load_population_generation(gen, base_dir, logger=_logger, log_file=log_file)
+            all_genomes.extend(genomes)
+        
+        _logger.info(f"Loaded generations {start_gen}-{end_gen}: {len(all_genomes)} total genomes")
+        return all_genomes
+
+
+def load_population_lazy(base_dir: str = "outputs", max_gens: Optional[int] = None,
+                        *, logger=None, log_file: Optional[str] = None):
+    """Generator that yields genomes one generation at a time (memory-efficient)"""
+    
+    _logger = logger or get_logger("population_io", log_file)
+    
+    info = get_population_files_info(base_dir)
+    generations = sorted(info["generation_files"].keys())
+    
+    if max_gens:
+        generations = generations[:max_gens]
+    
+    _logger.info(f"Lazy loading {len(generations)} generations")
+    
+    for gen in generations:
+        genomes = load_population_generation(gen, base_dir, logger=_logger, log_file=log_file)
+        for genome in genomes:
+            yield genome
+
+
+def save_population_generation(genomes: List[Dict[str, Any]], generation: int, 
+                              base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None):
+    """Save genomes to a specific generation file"""
+    
+    _logger = logger or get_logger("population_io", log_file)
+    
+    gen_file = Path(base_dir) / f"population_gen{generation}.json"
+    
+    with PerformanceLogger(_logger, f"Save Generation {generation}", file_path=str(gen_file)):
+        try:
+            # Ensure directory exists
+            gen_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            with open(gen_file, 'w', encoding='utf-8') as f:
+                json.dump(genomes, f, indent=2, ensure_ascii=False)
+            
+            size_mb = gen_file.stat().st_size / (1024 * 1024)
+            _logger.info(f"Saved generation {generation}: {len(genomes)} genomes, {size_mb:.2f}MB")
+            
+            # Update index
+            update_population_index(base_dir, logger=_logger, log_file=log_file)
+            
+        except Exception as e:
+            _logger.error(f"Failed to save generation {generation}: {e}", exc_info=True)
+            raise
+
+
+def update_population_index(base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None):
+    """Update the population index file after changes"""
+    
+    _logger = logger or get_logger("population_io", log_file)
+    
+    info = get_population_files_info(base_dir)
+    index_file = Path(base_dir) / "population_index.json"
+    
+    with open(index_file, 'w', encoding='utf-8') as f:
+        json.dump(info, f, indent=2)
+    
+    _logger.debug(f"Updated population index: {info['total_generations']} generations, {info['total_genomes']} genomes")
+
+
+def get_latest_generation(base_dir: str = "outputs") -> int:
+    """Get the highest generation number available"""
+    info = get_population_files_info(base_dir)
+    return max(info["generation_files"].keys()) if info["generation_files"] else 0
+
+
+def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = None, 
+                                 base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Get genomes with specific status across all generations (memory-efficient)"""
+    
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, f"Find genomes with status '{status}'"):
+        pending_genomes = []
+        info = get_population_files_info(base_dir)
+        generations = sorted(info["generation_files"].keys())
+        
+        if max_generations:
+            generations = generations[:max_generations]
+        
+        for gen in generations:
+            genomes = load_population_generation(gen, base_dir, logger=_logger, log_file=log_file)
+            gen_pending = [g for g in genomes if g.get("status") == status]
+            pending_genomes.extend(gen_pending)
+            
+            if gen_pending:
+                _logger.debug(f"Generation {gen}: {len(gen_pending)} genomes with status '{status}'")
+        
+        _logger.info(f"Found {len(pending_genomes)} genomes with status '{status}' across {len(generations)} generations")
+        return pending_genomes
+
+
+# ============================================================================
+# Main Population I/O Functions (Unified API)
+# ============================================================================
+
+def load_population(pop_path: str = "outputs/Population.json", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Load population with automatic detection of split vs monolithic format
+    
+    If pop_path points to Population.json and split files exist, use split files.
+    Otherwise, fall back to original behavior.
+    
     Parameters
     ----------
     pop_path : str
@@ -55,18 +246,40 @@ def load_population(pop_path: str, *, logger=None, log_file: Optional[str] = Non
 
     with PerformanceLogger(_logger, "Load Population", file_path=pop_path):
         try:
-            if not os.path.exists(pop_path):
-                _logger.error("Population file not found: %s", pop_path)
-                raise FileNotFoundError(f"Population file not found: {pop_path}")
+            # Check if we should use split files
+            base_dir = Path(pop_path).parent
+            if base_dir.name == "":
+                base_dir = Path("outputs")
+            
+            info = get_population_files_info(str(base_dir))
+            
+            if info["generation_files"]:
+                _logger.info("Using split population files (memory-efficient mode)")
+                # Load all generations (but this is still memory-intensive for large populations)
+                all_genomes = []
+                for gen in sorted(info["generation_files"].keys()):
+                    genomes = load_population_generation(gen, str(base_dir), logger=_logger, log_file=log_file)
+                    all_genomes.extend(genomes)
+                
+                # Clean the population to remove None genomes
+                all_genomes = clean_population(all_genomes, logger=_logger, log_file=log_file)
+                _logger.info("Successfully loaded population with %d genomes from split files", len(all_genomes))
+                return all_genomes
+            else:
+                # Fall back to original monolithic file
+                _logger.info("Using monolithic Population.json file")
+                if not os.path.exists(pop_path):
+                    _logger.error("Population file not found: %s", pop_path)
+                    raise FileNotFoundError(f"Population file not found: {pop_path}")
 
-            with open(pop_path, "r", encoding="utf-8") as f:
-                population = json.load(f)
+                with open(pop_path, "r", encoding="utf-8") as f:
+                    population = json.load(f)
 
-            # Clean the population to remove None genomes
-            population = clean_population(population, logger=_logger, log_file=log_file)
-
-            _logger.info("Successfully loaded population with %d genomes", len(population))
-            return population
+                # Clean the population to remove None genomes
+                population = clean_population(population, logger=_logger, log_file=log_file)
+                _logger.info("Successfully loaded population with %d genomes from monolithic file", len(population))
+                return population
+                
         except json.JSONDecodeError as e:
             _logger.error("Failed to parse population JSON: %s", e, exc_info=True)
             raise
@@ -75,8 +288,24 @@ def load_population(pop_path: str, *, logger=None, log_file: Optional[str] = Non
             raise
 
 
-def save_population(population: List[Dict[str, Any]], pop_path: str, *, logger=None, log_file: Optional[str] = None) -> None:
-    """Save population JSON with uniform logging & error handling."""
+def save_population(population: List[Dict[str, Any]], pop_path: str = "outputs/Population.json", 
+                   *, logger=None, log_file: Optional[str] = None) -> None:
+    """
+    Save population using split files by generation (memory-efficient mode)
+    
+    Automatically splits by generation and saves each generation to separate files.
+    
+    Parameters
+    ----------
+    population : List[Dict[str, Any]]
+        Population to save.
+    pop_path : str
+        Path where to save the population (used to determine base directory).
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created.
+    log_file : str | None
+        Optional log-file path when a new logger is created.
+    """
     _logger = logger or get_logger("population_io", log_file)
 
     with PerformanceLogger(_logger, "Save Population", file_path=pop_path, genome_count=len(population)):
@@ -84,24 +313,29 @@ def save_population(population: List[Dict[str, Any]], pop_path: str, *, logger=N
             # Clean the population before saving
             cleaned_population = clean_population(population, logger=_logger, log_file=log_file)
             
-            os.makedirs(os.path.dirname(pop_path), exist_ok=True)
-            with open(pop_path, "w", encoding="utf-8") as f:
-                json.dump(cleaned_population, f, indent=2, ensure_ascii=False)
-            _logger.info("Successfully saved population with %d genomes to %s", len(cleaned_population), pop_path)
+            base_dir = Path(pop_path).parent
+            
+            # Group by generation
+            generations = defaultdict(list)
+            for genome in cleaned_population:
+                gen = genome.get('generation', 0)
+                generations[gen].append(genome)
+            
+            # Save each generation
+            for gen, genomes in generations.items():
+                save_population_generation(genomes, gen, str(base_dir), logger=_logger, log_file=log_file)
+            
+            _logger.info("Successfully saved population using split files: %d generations, %d total genomes", 
+                        len(generations), len(cleaned_population))
+                        
         except Exception as e:
             _logger.error("Failed to save population: %s", e, exc_info=True)
             raise
 
 
-# ---------------------------------------------------------------------------
-# Higher-level helpers (migrated from initialize_population.py)
-# ---------------------------------------------------------------------------
-
-from pathlib import Path
-import pandas as pd
-import time
-from typing import Union
-
+# ============================================================================
+# Population Initialization and Management
+# ============================================================================
 
 def load_and_initialize_population(
     input_path: str,
@@ -275,9 +509,18 @@ def sort_population_json(
         def _sort_key(genome):
             out = []
             for i, key in enumerate(sort_keys):
-                value = key(genome) if callable(key) else genome.get(key)
-                if reverse_flags[i] and isinstance(value, (int, float)):
-                    value = -value if value is not None else float("-inf")
+                if callable(key):
+                    value = key(genome)
+                else:
+                    # Handle string keys safely
+                    value = genome.get(key) if genome is not None else None
+                
+                # Handle None values consistently
+                if value is None:
+                    value = float("-inf") if reverse_flags[i] else float("inf")
+                # For reverse sorting, negate numeric values to achieve descending order
+                elif reverse_flags[i] and isinstance(value, (int, float)):
+                    value = -value
                 out.append(value)
             return tuple(out)
 
@@ -290,14 +533,135 @@ def sort_population_json(
 
         return pop_list
 
-# ---------------------------------------------------------------------------
-# Backwards-compat: re-export names expected from utils.initialize_population
-# ---------------------------------------------------------------------------
+
+def load_genome_by_id(genome_id: str, generation: int, base_dir: str = "outputs", 
+                      *, logger=None, log_file: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Load a specific genome by ID from a specific generation file
+    
+    Parameters
+    ----------
+    genome_id : str
+        The ID of the genome to load
+    generation : int
+        The generation number where the genome is stored
+    base_dir : str
+        Base directory containing generation files
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    Dict[str, Any] | None
+        The genome if found, None otherwise
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, f"Load Genome by ID", genome_id=genome_id, generation=generation):
+        try:
+            # Load the specific generation file
+            genomes = load_population_generation(generation, base_dir, logger=_logger, log_file=log_file)
+            
+            # Find the specific genome
+            for genome in genomes:
+                if genome.get("id") == genome_id:
+                    _logger.info(f"Found genome {genome_id} in generation {generation}")
+                    return genome
+            
+            _logger.warning(f"Genome {genome_id} not found in generation {generation}")
+            return None
+            
+        except Exception as e:
+            _logger.error(f"Failed to load genome {genome_id} from generation {generation}: {e}", exc_info=True)
+            return None
+
+
+def load_genomes_by_ids(genome_ids: List[str], generations: List[int], base_dir: str = "outputs",
+                        *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Load multiple genomes by their IDs and generation numbers
+    
+    Parameters
+    ----------
+    genome_ids : List[str]
+        List of genome IDs to load
+    generations : List[int]
+        List of generation numbers corresponding to each genome ID
+    base_dir : str
+        Base directory containing generation files
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of found genomes (may be shorter than input if some not found)
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, f"Load Genomes by IDs", count=len(genome_ids)):
+        try:
+            # Group by generation for efficiency
+            generation_groups = {}
+            for genome_id, generation in zip(genome_ids, generations):
+                if generation not in generation_groups:
+                    generation_groups[generation] = []
+                generation_groups[generation].append(genome_id)
+            
+            found_genomes = []
+            
+            # Load each generation once and extract needed genomes
+            for generation, ids_in_gen in generation_groups.items():
+                genomes = load_population_generation(generation, base_dir, logger=_logger, log_file=log_file)
+                
+                # Create lookup for efficiency
+                genome_lookup = {g.get("id"): g for g in genomes}
+                
+                # Extract requested genomes
+                for genome_id in ids_in_gen:
+                    if genome_id in genome_lookup:
+                        found_genomes.append(genome_lookup[genome_id])
+                    else:
+                        _logger.warning(f"Genome {genome_id} not found in generation {generation}")
+            
+            _logger.info(f"Loaded {len(found_genomes)} out of {len(genome_ids)} requested genomes")
+            return found_genomes
+            
+        except Exception as e:
+            _logger.error(f"Failed to load genomes by IDs: {e}", exc_info=True)
+            return []
+
+
+# ============================================================================
+# Module Exports
+# ============================================================================
 
 __all__ = [
+    # Main I/O functions
     "load_population",
     "save_population",
+    
+    # Split file management
+    "get_population_files_info",
+    "load_population_generation",
+    "load_population_range", 
+    "load_population_lazy",
+    "save_population_generation",
+    "update_population_index",
+    "get_latest_generation",
+    "get_pending_genomes_by_status",
+    
+    # Genome-specific loading
+    "load_genome_by_id",
+    "load_genomes_by_ids",
+    
+    # Population management
     "load_and_initialize_population",
     "validate_population_file",
     "sort_population_json",
+    "clean_population",
 ] 

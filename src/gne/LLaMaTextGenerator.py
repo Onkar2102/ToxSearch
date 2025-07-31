@@ -2,13 +2,10 @@ import os
 import json
 import torch
 import yaml
-import random
-import numpy as np
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from utils.custom_logging import get_logger, PerformanceLogger
 from typing import List, Dict, Any, Optional
 import time
-import asyncio
 from openai import AsyncOpenAI
 from utils.population_io import load_population, save_population
 
@@ -307,9 +304,8 @@ class LlaMaTextGenerator:
                         updated = True
 
             if updated:
-                with open(pop_path, "w") as f:
-                    json.dump(population, f, indent=2)
-                self.logger.info("Updated population with input/output tokens.")
+                save_population(population, pop_path, logger=self.logger)
+                self.logger.info("Updated population with input/output tokens using split format.")
             else:
                 self.logger.info("No genomes required token conversion.")
         except Exception as e:

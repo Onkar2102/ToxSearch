@@ -9,8 +9,8 @@ llama:
     top_k: 40
     top_p: 0.9
   max_batch_size: 8
-  generation_batch_size: 8  # Batch size for population processing during generation
-  evaluation_batch_size: 8  # Batch size for population processing during evaluation
+  generation_batch_size: 5  # Batch size for population processing during generation
+  evaluation_batch_size: 5  # Batch size for population processing during evaluation
   use_simulation: false  # Set to true for testing without real model generation
   padding_side: "left"  # "left" or "right" - some models expect right padding
   log_failing_prompts: true  # Log prompt text when generation fails for debugging

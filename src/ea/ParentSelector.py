@@ -117,7 +117,7 @@ class ParentSelector:
             if genome is None:
                 return 0.0
             return float(
-                genome.get("moderation_result", {})
+                (genome.get("moderation_result") or {})
                       .get("scores", {})
                       .get(self.north_star_metric, 0.0)
             )

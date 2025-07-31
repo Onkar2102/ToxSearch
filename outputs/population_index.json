@@ -1,0 +1,22 @@
+{
+  "total_generations": 7,
+  "total_genomes": 449,
+  "generation_files": {
+    "6": "population_gen6.json",
+    "0": "population_gen0.json",
+    "1": "population_gen1.json",
+    "2": "population_gen2.json",
+    "3": "population_gen3.json",
+    "4": "population_gen4.json",
+    "5": "population_gen5.json"
+  },
+  "generation_counts": {
+    "6": 14,
+    "0": 1,
+    "1": 28,
+    "2": 101,
+    "3": 157,
+    "4": 115,
+    "5": 33
+  }
+}

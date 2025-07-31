@@ -70,16 +70,8 @@ save_population(population, "outputs/Population_new.json", logger=logger)
 
 ### Evolution Tracking
 ```python
-from utils.evolution_utils import append_parents_by_generation_entry
-
-# Track parent selection for evolution
-append_parents_by_generation_entry(
-    prompt_id=1,
-    generation=2,
-    parent_ids=["genome_1", "genome_3"],
-    parent_type="crossover",
-    logger=logger
-)
+# Note: ParentsByGenerationTracker functionality has been removed
+# Evolution tracking is now handled through EvolutionTracker.json only
 ```
 
 ### Performance Optimization
