@@ -27,4 +27,7 @@ llama:
   task_type: text-generation
   # Memory management settings
   enable_memory_cleanup: true  # Enable automatic memory cleanup
-  max_memory_usage_gb: 4.0  # Maximum memory usage in GB
+  max_memory_usage_gb: 12.0  # Maximum memory usage in GB (increased from 4.0)
+  adaptive_batch_sizing: true  # Enable dynamic batch size adjustment based on memory
+  min_batch_size: 1  # Minimum batch size when memory is critical
+  max_batch_size_memory: 4  # Maximum batch size when memory is good

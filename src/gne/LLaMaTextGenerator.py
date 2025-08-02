@@ -28,7 +28,10 @@ class LlaMaTextGenerator:
 
         # Memory management settings
         self.enable_memory_cleanup = self.model_cfg.get("enable_memory_cleanup", True)
-        self.max_memory_usage_gb = self.model_cfg.get("max_memory_usage_gb", 4.0)
+        self.max_memory_usage_gb = self.model_cfg.get("max_memory_usage_gb", 12.0)  # Increased to 12GB
+        self.adaptive_batch_sizing = self.model_cfg.get("adaptive_batch_sizing", True)
+        self.min_batch_size = self.model_cfg.get("min_batch_size", 1)
+        self.max_batch_size_memory = self.model_cfg.get("max_batch_size_memory", 4)
         
         model_name = self.model_cfg["name"]
         if model_name not in self._MODEL_CACHE:
@@ -182,12 +185,12 @@ class LlaMaTextGenerator:
         
         self.logger.debug(f"Memory usage: {memory_usage}")
         
-        # Enhanced memory threshold checking
-        memory_warning_threshold = self.max_memory_usage_gb * 0.8  # Warning at 80%
-        memory_critical_threshold = self.max_memory_usage_gb * 0.95  # Critical at 95%
+        # Enhanced memory threshold checking with 12GB limit
+        memory_warning_threshold = self.max_memory_usage_gb * 0.75  # Warning at 75% (9GB)
+        memory_critical_threshold = self.max_memory_usage_gb * 0.90  # Critical at 90% (10.8GB)
         
         # Check system memory availability
-        if memory_usage["available_system_gb"] < 1.0:  # Less than 1GB available
+        if memory_usage["available_system_gb"] < 2.0:  # Less than 2GB available
             self.logger.warning(f"System memory critically low: {memory_usage['available_system_gb']:.2f}GB available")
             if self.enable_memory_cleanup:
                 self._cleanup_memory(aggressive=True)
@@ -213,6 +216,10 @@ class LlaMaTextGenerator:
         """Enhanced memory cleanup with multiple strategies"""
         self.logger.info(f"Performing {'aggressive' if aggressive else 'standard'} memory cleanup...")
         
+        # Store memory before cleanup for comparison
+        memory_before = self._get_memory_usage()
+        self._last_memory_before_cleanup = memory_before["total_memory_gb"]
+        
         # Clear PyTorch cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -224,13 +231,27 @@ class LlaMaTextGenerator:
         # Force garbage collection
         gc.collect()
         
+        # Always clear model cache after each generation
+        if hasattr(self, '_MODEL_CACHE') and self._MODEL_CACHE:
+            self.logger.info("Clearing model cache after generation")
+            self._MODEL_CACHE.clear()
+        
+        # Clear any cached tensors in the model
+        if hasattr(self, 'model') and self.model is not None:
+            try:
+                # Clear model's internal cache
+                if hasattr(self.model, 'clear_cache'):
+                    self.model.clear_cache()
+                # Clear any cached attention states
+                if hasattr(self.model, 'config') and hasattr(self.model.config, 'use_cache'):
+                    self.model.config.use_cache = False
+                    # Re-enable after clearing
+                    self.model.config.use_cache = True
+            except Exception as e:
+                self.logger.warning(f"Error clearing model cache: {e}")
+        
         # Additional cleanup for aggressive mode
         if aggressive:
-            # Clear model cache
-            if hasattr(self, '_MODEL_CACHE') and self._MODEL_CACHE:
-                self.logger.info("Clearing model cache for aggressive cleanup")
-                self._MODEL_CACHE.clear()
-            
             # Force another garbage collection
             gc.collect()
             
@@ -239,20 +260,37 @@ class LlaMaTextGenerator:
                 torch.cuda.empty_cache()
         
         # Check memory after cleanup
-        memory_usage = self._get_memory_usage()
-        cleanup_reduction = memory_usage["total_memory_gb"]
+        memory_after = self._get_memory_usage()
+        cleanup_reduction = memory_after["total_memory_gb"]
+        
+        # Calculate actual reduction
+        reduction = self._last_memory_before_cleanup - cleanup_reduction
         
         self.logger.info(f"Memory cleanup completed. Current usage: {cleanup_reduction:.2f}GB")
+        self.logger.info(f"Memory reduction: {reduction:.2f}GB")
         
-        # Log cleanup effectiveness
-        if hasattr(self, '_last_memory_before_cleanup'):
-            reduction = self._last_memory_before_cleanup - cleanup_reduction
-            self.logger.info(f"Memory reduction: {reduction:.2f}GB")
-        
-        return memory_usage
+        return memory_after
+
+    def get_current_memory_stats(self) -> Dict[str, float]:
+        """Get current memory statistics for monitoring"""
+        memory_usage = self._get_memory_usage()
+        return {
+            'total_memory_gb': memory_usage['total_memory_gb'],
+            'cpu_memory_gb': memory_usage['cpu_memory_gb'],
+            'gpu_memory_gb': memory_usage['gpu_memory_gb'],
+            'available_system_gb': memory_usage['available_system_gb'],
+            'system_memory_percent': memory_usage['system_memory_percent'],
+            'max_memory_limit_gb': self.max_memory_usage_gb,
+            'memory_usage_percent': (memory_usage['total_memory_gb'] / self.max_memory_usage_gb) * 100,
+            'memory_cleanup_enabled': self.enable_memory_cleanup,
+            'adaptive_batch_sizing': self.adaptive_batch_sizing
+        }
 
     def _adaptive_batch_size(self, prompts: List[str]) -> int:
         """Enhanced adaptive batch sizing based on real-time memory monitoring"""
+        if not self.adaptive_batch_sizing:
+            return min(self.max_batch_size, len(prompts))
+        
         memory_usage = self._get_memory_usage()
         
         # Calculate available memory
@@ -262,21 +300,31 @@ class LlaMaTextGenerator:
         # Use the more conservative available memory
         effective_available = min(available_memory, system_available)
         
-        # Estimate memory per prompt based on model size and sequence length
-        max_tokens = self.generation_args.get("max_new_tokens", 1024)
-        estimated_memory_per_prompt = (max_tokens * 0.0001) + 0.1  # Rough estimate
+        # Calculate memory usage percentage
+        memory_usage_percent = (memory_usage["total_memory_gb"] / self.max_memory_usage_gb) * 100
         
-        # Calculate optimal batch size
-        if effective_available < 0.5:  # Critical memory situation
-            self.logger.warning(f"Critical memory situation: {effective_available:.2f}GB available")
-            return 1
-        elif effective_available < 1.0:  # Low memory
-            optimal_batch = max(1, int(effective_available / estimated_memory_per_prompt))
+        # Estimate memory per prompt based on model size and sequence length
+        max_tokens = self.generation_args.get("max_new_tokens", 4096)
+        estimated_memory_per_prompt = (max_tokens * 0.0001) + 0.2  # More conservative estimate
+        
+        # Dynamic batch sizing based on memory pressure
+        if memory_usage_percent > 90:  # Critical memory situation
+            self.logger.warning(f"Critical memory situation: {memory_usage_percent:.1f}% used, {effective_available:.2f}GB available")
+            return self.min_batch_size
+        elif memory_usage_percent > 80:  # High memory pressure
+            self.logger.warning(f"High memory pressure: {memory_usage_percent:.1f}% used")
+            optimal_batch = max(self.min_batch_size, int(effective_available / estimated_memory_per_prompt))
             return min(optimal_batch, len(prompts), 2)
-        elif effective_available < 2.0:  # Moderate memory
-            optimal_batch = max(1, int(effective_available / estimated_memory_per_prompt))
-            return min(optimal_batch, len(prompts), self.max_batch_size)
-        else:  # Good memory availability
+        elif memory_usage_percent > 70:  # Moderate memory pressure
+            self.logger.info(f"Moderate memory pressure: {memory_usage_percent:.1f}% used")
+            optimal_batch = max(self.min_batch_size, int(effective_available / estimated_memory_per_prompt))
+            return min(optimal_batch, len(prompts), self.max_batch_size_memory)
+        elif memory_usage_percent > 50:  # Good memory availability
+            self.logger.info(f"Good memory availability: {memory_usage_percent:.1f}% used")
+            optimal_batch = int(effective_available / estimated_memory_per_prompt)
+            return min(optimal_batch, len(prompts), self.max_batch_size_memory)
+        else:  # Excellent memory availability
+            self.logger.info(f"Excellent memory availability: {memory_usage_percent:.1f}% used")
             optimal_batch = int(effective_available / estimated_memory_per_prompt)
             return min(optimal_batch, len(prompts), self.max_batch_size)
 
@@ -340,6 +388,11 @@ class LlaMaTextGenerator:
                 cleanup_result = self._check_memory_and_cleanup(force=True)
                 if not cleanup_result:
                     self.logger.warning(f"Memory cleanup failed after batch {batch_count}")
+        
+        # Force memory cleanup after all batches are processed
+        if self.enable_memory_cleanup:
+            self.logger.info("Performing final memory cleanup after generation")
+            self._cleanup_memory(aggressive=True)
         
         # Final memory report
         final_memory = self._get_memory_usage()
