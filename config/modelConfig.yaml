@@ -25,3 +25,6 @@ llama:
   provider: huggingface
   strategy: local
   task_type: text-generation
+  # Memory management settings
+  enable_memory_cleanup: true  # Enable automatic memory cleanup
+  max_memory_usage_gb: 4.0  # Maximum memory usage in GB

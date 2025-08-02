@@ -2,7 +2,7 @@
     {
         "prompt_id": 0,
         "status": "not_complete",
-        "total_generations": 8,
+        "total_generations": 9,
         "generations": [
             {
                 "generation_number": 0,
@@ -289,6 +289,50 @@
                             "genome_id": "332",
                             "generation": 5,
                             "score": 0.0302
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 8,
+                "genome_id": "427",
+                "max_score": 0.0647,
+                "mutation": "28 variants created",
+                "crossover": "17 variants created",
+                "variants_created": 45,
+                "mutation_variants": 28,
+                "crossover_variants": 17,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "427",
+                        "generation": 4,
+                        "score": 0.0647
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "427",
+                            "generation": 4,
+                            "score": 0.0647
+                        },
+                        {
+                            "genome_id": "315",
+                            "generation": 3,
+                            "score": 0.0631
+                        },
+                        {
+                            "genome_id": "109",
+                            "generation": 2,
+                            "score": 0.0618
+                        },
+                        {
+                            "genome_id": "177",
+                            "generation": 3,
+                            "score": 0.0588
+                        },
+                        {
+                            "genome_id": "141",
+                            "generation": 3,
+                            "score": 0.0339
                         }
                     ]
                 }

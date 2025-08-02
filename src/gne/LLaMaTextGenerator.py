@@ -2,11 +2,12 @@ import os
 import json
 import torch
 import yaml
+import gc
+import psutil
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from utils.custom_logging import get_logger, PerformanceLogger
 from typing import List, Dict, Any, Optional
 import time
-from openai import AsyncOpenAI
 from utils.population_io import load_population, save_population
 
 class LlaMaTextGenerator:
@@ -25,6 +26,10 @@ class LlaMaTextGenerator:
             raise ValueError(f"Model '{model_key}' not found in configuration.")
         self.model_cfg = config[model_key]
 
+        # Memory management settings
+        self.enable_memory_cleanup = self.model_cfg.get("enable_memory_cleanup", True)
+        self.max_memory_usage_gb = self.model_cfg.get("max_memory_usage_gb", 4.0)
+        
         model_name = self.model_cfg["name"]
         if model_name not in self._MODEL_CACHE:
             self.logger.info(f"Loading LLaMA model: {model_name}")
@@ -49,6 +54,10 @@ class LlaMaTextGenerator:
         self.generation_count = 0
         self.total_tokens_generated = 0
         self.total_generation_time = 0.0
+        
+        # Memory monitoring
+        self.last_memory_check = time.time()
+        self.memory_check_interval = 60  # Check memory every 60 seconds
 
     def _get_optimal_device(self):
         """Get the best available device for M3 Mac"""
@@ -129,6 +138,148 @@ class LlaMaTextGenerator:
         
         self._MODEL_CACHE[model_name] = (tokenizer, model, device)
 
+    def _get_memory_usage(self) -> Dict[str, float]:
+        """Get current memory usage in GB with enhanced monitoring"""
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        virtual_memory = psutil.virtual_memory()
+        
+        # Enhanced GPU memory monitoring
+        if self.device == "cuda" and torch.cuda.is_available():
+            gpu_memory = torch.cuda.memory_allocated() / (1024**3)
+            gpu_memory_reserved = torch.cuda.memory_reserved() / (1024**3)
+            gpu_memory_max = torch.cuda.max_memory_allocated() / (1024**3)
+        elif self.device == "mps":
+            # MPS doesn't provide detailed memory info, use system memory
+            gpu_memory = 0.0
+            gpu_memory_reserved = 0.0
+            gpu_memory_max = 0.0
+        else:
+            gpu_memory = 0.0
+            gpu_memory_reserved = 0.0
+            gpu_memory_max = 0.0
+            
+        return {
+            "cpu_memory_gb": memory_info.rss / (1024**3),
+            "gpu_memory_gb": gpu_memory,
+            "gpu_memory_reserved_gb": gpu_memory_reserved,
+            "gpu_memory_max_gb": gpu_memory_max,
+            "total_memory_gb": memory_info.rss / (1024**3) + gpu_memory,
+            "available_system_gb": virtual_memory.available / (1024**3),
+            "system_memory_percent": virtual_memory.percent
+        }
+
+    def _check_memory_and_cleanup(self, force: bool = False) -> bool:
+        """Enhanced memory usage check and cleanup with real-time monitoring"""
+        current_time = time.time()
+        
+        # Only check periodically unless forced
+        if not force and (current_time - self.last_memory_check) < self.memory_check_interval:
+            return True
+            
+        self.last_memory_check = current_time
+        memory_usage = self._get_memory_usage()
+        
+        self.logger.debug(f"Memory usage: {memory_usage}")
+        
+        # Enhanced memory threshold checking
+        memory_warning_threshold = self.max_memory_usage_gb * 0.8  # Warning at 80%
+        memory_critical_threshold = self.max_memory_usage_gb * 0.95  # Critical at 95%
+        
+        # Check system memory availability
+        if memory_usage["available_system_gb"] < 1.0:  # Less than 1GB available
+            self.logger.warning(f"System memory critically low: {memory_usage['available_system_gb']:.2f}GB available")
+            if self.enable_memory_cleanup:
+                self._cleanup_memory(aggressive=True)
+                return True
+        
+        # Check total memory usage
+        if memory_usage["total_memory_gb"] > memory_critical_threshold:
+            self.logger.error(f"CRITICAL: Memory usage ({memory_usage['total_memory_gb']:.2f}GB) exceeds critical threshold ({memory_critical_threshold:.2f}GB)")
+            if self.enable_memory_cleanup:
+                self._cleanup_memory(aggressive=True)
+                return True
+            else:
+                return False
+        elif memory_usage["total_memory_gb"] > memory_warning_threshold:
+            self.logger.warning(f"Memory usage ({memory_usage['total_memory_gb']:.2f}GB) exceeds warning threshold ({memory_warning_threshold:.2f}GB)")
+            if self.enable_memory_cleanup:
+                self._cleanup_memory()
+                return True
+                
+        return True
+
+    def _cleanup_memory(self, aggressive: bool = False):
+        """Enhanced memory cleanup with multiple strategies"""
+        self.logger.info(f"Performing {'aggressive' if aggressive else 'standard'} memory cleanup...")
+        
+        # Clear PyTorch cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            if aggressive:
+                # Reset peak memory stats
+                torch.cuda.reset_peak_memory_stats()
+        
+        # Force garbage collection
+        gc.collect()
+        
+        # Additional cleanup for aggressive mode
+        if aggressive:
+            # Clear model cache
+            if hasattr(self, '_MODEL_CACHE') and self._MODEL_CACHE:
+                self.logger.info("Clearing model cache for aggressive cleanup")
+                self._MODEL_CACHE.clear()
+            
+            # Force another garbage collection
+            gc.collect()
+            
+            # Clear any cached tensors
+            if hasattr(torch, 'cuda') and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        
+        # Check memory after cleanup
+        memory_usage = self._get_memory_usage()
+        cleanup_reduction = memory_usage["total_memory_gb"]
+        
+        self.logger.info(f"Memory cleanup completed. Current usage: {cleanup_reduction:.2f}GB")
+        
+        # Log cleanup effectiveness
+        if hasattr(self, '_last_memory_before_cleanup'):
+            reduction = self._last_memory_before_cleanup - cleanup_reduction
+            self.logger.info(f"Memory reduction: {reduction:.2f}GB")
+        
+        return memory_usage
+
+    def _adaptive_batch_size(self, prompts: List[str]) -> int:
+        """Enhanced adaptive batch sizing based on real-time memory monitoring"""
+        memory_usage = self._get_memory_usage()
+        
+        # Calculate available memory
+        available_memory = self.max_memory_usage_gb - memory_usage["total_memory_gb"]
+        system_available = memory_usage["available_system_gb"]
+        
+        # Use the more conservative available memory
+        effective_available = min(available_memory, system_available)
+        
+        # Estimate memory per prompt based on model size and sequence length
+        max_tokens = self.generation_args.get("max_new_tokens", 1024)
+        estimated_memory_per_prompt = (max_tokens * 0.0001) + 0.1  # Rough estimate
+        
+        # Calculate optimal batch size
+        if effective_available < 0.5:  # Critical memory situation
+            self.logger.warning(f"Critical memory situation: {effective_available:.2f}GB available")
+            return 1
+        elif effective_available < 1.0:  # Low memory
+            optimal_batch = max(1, int(effective_available / estimated_memory_per_prompt))
+            return min(optimal_batch, len(prompts), 2)
+        elif effective_available < 2.0:  # Moderate memory
+            optimal_batch = max(1, int(effective_available / estimated_memory_per_prompt))
+            return min(optimal_batch, len(prompts), self.max_batch_size)
+        else:  # Good memory availability
+            optimal_batch = int(effective_available / estimated_memory_per_prompt)
+            return min(optimal_batch, len(prompts), self.max_batch_size)
+
     def format_prompt(self, raw_prompt: str) -> str:
         return (
             self.prompt_format
@@ -138,56 +289,141 @@ class LlaMaTextGenerator:
         )
 
     def generate_response_batch(self, prompts: List[str]) -> List[str]:
-        """Generate responses for multiple prompts in a single batch"""
+        """Enhanced batch generation with real-time memory monitoring and adaptive sizing"""
         if not prompts:
             return []
         
+        # Store initial memory state for tracking
+        initial_memory = self._get_memory_usage()
+        self.logger.info(f"Starting batch generation. Initial memory: {initial_memory['total_memory_gb']:.2f}GB")
+        
+        # Check memory and cleanup if necessary
+        if not self._check_memory_and_cleanup():
+            self.logger.error("Memory usage too high, cannot proceed with generation")
+            return ["[MEMORY_ERROR]" for _ in prompts]
+        
+        # Use enhanced adaptive batch size
+        adaptive_batch_size = self._adaptive_batch_size(prompts)
+        if adaptive_batch_size < len(prompts):
+            self.logger.info(f"Adaptive batch sizing: reduced from {len(prompts)} to {adaptive_batch_size} prompts")
+        
+        # Process in smaller batches with enhanced monitoring
+        all_responses = []
+        batch_count = 0
+        
+        for i in range(0, len(prompts), adaptive_batch_size):
+            batch_count += 1
+            batch_prompts = prompts[i:i + adaptive_batch_size]
+            
+            # Log batch start
+            self.logger.debug(f"Processing batch {batch_count}/{len(prompts)//adaptive_batch_size + 1} with {len(batch_prompts)} prompts")
+            
+            # Store memory before batch
+            self._last_memory_before_cleanup = self._get_memory_usage()["total_memory_gb"]
+            
+            try:
+                batch_responses = self._generate_single_batch(batch_prompts)
+                all_responses.extend(batch_responses)
+                
+                # Log batch completion
+                current_memory = self._get_memory_usage()
+                memory_increase = current_memory["total_memory_gb"] - self._last_memory_before_cleanup
+                self.logger.debug(f"Batch {batch_count} completed. Memory change: {memory_increase:+.2f}GB")
+                
+            except Exception as e:
+                self.logger.error(f"Error in batch {batch_count}: {e}")
+                # Add error responses for failed batch
+                all_responses.extend([f"[GENERATION_ERROR: {str(e)}]" for _ in batch_prompts])
+            
+            # Enhanced cleanup after each batch
+            if self.enable_memory_cleanup:
+                cleanup_result = self._check_memory_and_cleanup(force=True)
+                if not cleanup_result:
+                    self.logger.warning(f"Memory cleanup failed after batch {batch_count}")
+        
+        # Final memory report
+        final_memory = self._get_memory_usage()
+        total_memory_change = final_memory["total_memory_gb"] - initial_memory["total_memory_gb"]
+        self.logger.info(f"Batch generation completed. Total memory change: {total_memory_change:+.2f}GB")
+        
+        return all_responses
+
+    def _generate_single_batch(self, prompts: List[str]) -> List[str]:
+        """Enhanced single batch generation with comprehensive error handling"""
         formatted_prompts = [self.format_prompt(prompt) for prompt in prompts]
         
-        # Tokenize with padding for batch processing
-        inputs = self.tokenizer(
-            formatted_prompts, 
-            return_tensors="pt", 
-            padding=True, 
-            truncation=True,
-            max_length=2048  # Reasonable limit for prompts
-        ).to(self.device)
+        # Pre-generation memory check
+        pre_gen_memory = self._get_memory_usage()
+        self.logger.debug(f"Pre-generation memory: {pre_gen_memory['total_memory_gb']:.2f}GB")
         
-        # Generate with optimized settings
-        generation_kwargs = {
-            **self.generation_args,
-            "pad_token_id": self.tokenizer.eos_token_id,
-            "use_cache": True,  # Enable KV cache for efficiency
-            "do_sample": self.generation_args.get("do_sample", False)
-        }
-        
-        with torch.no_grad():
-            # Autocast (mixed-precision) is only valid on CUDA or MPS.  Using it
-            # on CPU raises a RuntimeError, so we enable it conditionally.
-            if self.device in ("cuda", "mps"):
-                with torch.autocast(device_type=self.device, enabled=True):
+        try:
+            # Tokenize with padding for batch processing
+            inputs = self.tokenizer(
+                formatted_prompts, 
+                return_tensors="pt", 
+                padding=True, 
+                truncation=True,
+                max_length=2048  # Reasonable limit for prompts
+            ).to(self.device)
+            
+            # Generate with optimized settings
+            generation_kwargs = {
+                **self.generation_args,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "use_cache": True,  # Enable KV cache for efficiency
+                "do_sample": self.generation_args.get("do_sample", False)
+            }
+            
+            with torch.no_grad():
+                # Autocast (mixed-precision) is only valid on CUDA or MPS.  Using it
+                # on CPU raises a RuntimeError, so we enable it conditionally.
+                if self.device in ("cuda", "mps"):
+                    with torch.autocast(device_type=self.device, enabled=True):
+                        outputs = self.model.generate(**inputs, **generation_kwargs)
+                else:
                     outputs = self.model.generate(**inputs, **generation_kwargs)
-            else:
-                outputs = self.model.generate(**inputs, **generation_kwargs)
-        
-        # Decode responses
-        responses = []
-        for i, output in enumerate(outputs):
-            decoded = self.tokenizer.decode(output, skip_special_tokens=True).strip()
-            # Extract only the generated part
-            formatted_prompt = formatted_prompts[i]
-            if decoded.startswith(formatted_prompt):
-                response = decoded[len(formatted_prompt):].strip()
-            else:
-                response = decoded
             
-            # Clean up response
-            if 'Adult 2:' in response:
-                response = response.split('Adult 2:')[-1].strip()
+            # Decode responses
+            responses = []
+            for i, output in enumerate(outputs):
+                decoded = self.tokenizer.decode(output, skip_special_tokens=True).strip()
+                # Extract only the generated part
+                formatted_prompt = formatted_prompts[i]
+                if decoded.startswith(formatted_prompt):
+                    response = decoded[len(formatted_prompt):].strip()
+                else:
+                    response = decoded
+                
+                # Clean up response
+                if 'Adult 2:' in response:
+                    response = response.split('Adult 2:')[-1].strip()
+                
+                responses.append(response)
             
-            responses.append(response)
-        
-        return responses
+            # Post-generation memory check
+            post_gen_memory = self._get_memory_usage()
+            memory_used = post_gen_memory["total_memory_gb"] - pre_gen_memory["total_memory_gb"]
+            self.logger.debug(f"Generation completed. Memory used: {memory_used:+.2f}GB")
+            
+            return responses
+            
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                self.logger.error(f"Out of memory error during generation: {e}")
+                # Aggressive cleanup after OOM
+                self._cleanup_memory(aggressive=True)
+                return ["[OOM_ERROR]" for _ in prompts]
+            elif "cuda" in str(e).lower() and "memory" in str(e).lower():
+                self.logger.error(f"CUDA memory error: {e}")
+                self._cleanup_memory(aggressive=True)
+                return ["[CUDA_MEMORY_ERROR]" for _ in prompts]
+            else:
+                self.logger.error(f"Runtime error during generation: {e}")
+                return ["[RUNTIME_ERROR]" for _ in prompts]
+                
+        except Exception as e:
+            self.logger.error(f"Unexpected error during generation: {e}")
+            return ["[GENERATION_ERROR]" for _ in prompts]
 
     def generate_response(self, prompt: str) -> str:
         """Single prompt generation (backwards compatibility)"""
@@ -278,65 +514,7 @@ class LlaMaTextGenerator:
                 self.logger.error("Population processing failed: %s", e, exc_info=True)
                 raise
 
-    def convert_text_to_tokens(self, text: str) -> List[int]:
-        """Convert input text to its token IDs using the model's tokenizer."""
-        inputs = self.tokenizer(text, return_tensors="pt", padding=True, truncation=True)
-        input_ids = inputs["input_ids"][0].tolist()
-        return input_ids
 
-    def convert_population_texts_to_tokens(self, pop_path="outputs/Population.json"):
-        """Convert prompts and generated texts to token IDs for genomes
-        with status 'pending_evolution' or 'complete'."""
-        self.logger.info("Converting prompt and generated text to token IDs...")
-
-        try:
-            with open(pop_path, "r") as f:
-                population = json.load(f)
-
-            updated = False
-            for genome in population:
-                if genome.get("status") in ["pending_evolution", "complete"]:
-                    prompt = genome.get("prompt", "")
-                    response = genome.get("generated_text", "")
-                    if prompt and response:
-                        genome["input_tokens"] = self.convert_text_to_tokens(prompt)
-                        genome["output_tokens"] = self.convert_text_to_tokens(response)
-                        updated = True
-
-            if updated:
-                save_population(population, pop_path, logger=self.logger)
-                self.logger.info("Updated population with input/output tokens using split format.")
-            else:
-                self.logger.info("No genomes required token conversion.")
-        except Exception as e:
-            self.logger.error(f"Failed to convert texts to tokens: {e}")
-
-    def paraphrase_text(self, text: str, num_variants: int = 2) -> List[str]:
-        """Generate at most `num_variants` paraphrased versions of the input text."""
-        self.logger.info("Generating up to %d paraphrased variants for input text", num_variants)
-
-        instruction = f"Paraphrase the following statement in different ways, keeping the meaning intact:\n{text}"
-        self.logger.debug("Received Instruction - %s", instruction)
-        
-        # Use batch generation for efficiency
-        instructions = [instruction] * (num_variants * 2)  # Generate extra for uniqueness
-        paraphrases = set()
-
-        try:
-            generated = self.generate_response_batch(instructions)
-            for response in generated:
-                if response.lower() != text.lower() and response.strip():
-                    paraphrases.add(response.strip())
-                    # Stop if we have enough unique paraphrases
-                    if len(paraphrases) >= num_variants:
-                        break
-        except Exception as e:
-            self.logger.error("Batch paraphrasing failed: %s", e, exc_info=True)
-            return [text]
-
-        paraphrase_list = list(paraphrases)[:num_variants]  # Limit to requested number
-        self.logger.info("Generated %d unique paraphrased variants", len(paraphrase_list))
-        return paraphrase_list if paraphrase_list else [text]
 
     def _load_population(self, pop_path: str) -> List[Dict[str, Any]]:
         return load_population(pop_path, logger=self.logger)
@@ -344,35 +522,7 @@ class LlaMaTextGenerator:
     def _save_population(self, population: List[Dict[str, Any]], pop_path: str) -> None:
         save_population(population, pop_path, logger=self.logger)
 
-    def _generate_text_simulation(self, prompt: str, genome_id: str) -> str:
-        """Simulate text generation with detailed logging"""
-        with PerformanceLogger(self.logger, "Text Generation", genome_id=genome_id, prompt_length=len(prompt)):
-            try:
-                # Simulate generation time
-                generation_time = 0.1 + (len(prompt) * 0.001)  # Simulate realistic timing
-                time.sleep(generation_time)
-                
-                # Simulate different response patterns based on prompt content
-                if "violence" in prompt.lower():
-                    response = f"Simulated response for genome {genome_id}: I cannot and will not provide information about violence or harmful activities."
-                elif "harmful" in prompt.lower():
-                    response = f"Simulated response for genome {genome_id}: I'm designed to help, not harm. Let me assist you with something constructive."
-                else:
-                    response = f"Simulated response for genome {genome_id}: Here's a helpful and safe response to your query."
-                
-                # Update performance metrics
-                self.generation_count += 1
-                self.total_tokens_generated += len(response.split())
-                self.total_generation_time += generation_time
-                
-                self.logger.debug("Generated response for genome %s: %d tokens in %.3f seconds", 
-                                genome_id, len(response.split()), generation_time)
-                
-                return response
-                
-            except Exception as e:
-                self.logger.error("Text generation failed for genome %s: %s", genome_id, e, exc_info=True)
-                return f"Error generating response for genome {genome_id}: {str(e)}"
+
     
     def _process_genome(self, genome: Dict[str, Any]) -> Dict[str, Any]:
         """Process a single genome with comprehensive logging"""
@@ -397,35 +547,27 @@ class LlaMaTextGenerator:
                 
                 self.logger.debug("Generating text for genome %s with prompt length: %d", genome_id, len(prompt))
                 
-                # Check if simulation mode is enabled
-                use_simulation = self.model_cfg.get("use_simulation", False)
-                
-                if use_simulation:
-                    # Use simulation for testing
-                    self.logger.info("Using simulation mode for genome %s", genome_id)
-                    generated_text = self._generate_text_simulation(prompt, genome_id)
-                else:
-                    # Use real model generation
-                    self.logger.info("Using real model generation for genome %s", genome_id)
-                    try:
-                        generated_text = self.generate_response(prompt)
-                        # Update performance metrics for real generation
-                        self.generation_count += 1
-                        self.total_tokens_generated += len(generated_text.split())
-                        # Note: generation time is tracked in generate_response_batch
-                    except Exception as e:
-                        # Enhanced error logging with prompt text
-                        log_failing_prompts = self.model_cfg.get("log_failing_prompts", True)
-                        if log_failing_prompts:
-                            prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
-                            self.logger.error("Generation failed for genome %s. Prompt preview: %s. Error: %s", 
-                                            genome_id, prompt_preview, str(e), exc_info=True)
-                        else:
-                            self.logger.error("Generation failed for genome %s. Error: %s", 
-                                            genome_id, str(e), exc_info=True)
-                        genome['status'] = 'error'
-                        genome['error'] = f"Generation failed: {str(e)}"
-                        return genome
+                # Use real model generation
+                self.logger.info("Using real model generation for genome %s", genome_id)
+                try:
+                    generated_text = self.generate_response(prompt)
+                    # Update performance metrics for real generation
+                    self.generation_count += 1
+                    self.total_tokens_generated += len(generated_text.split())
+                    # Note: generation time is tracked in generate_response_batch
+                except Exception as e:
+                    # Enhanced error logging with prompt text
+                    log_failing_prompts = self.model_cfg.get("log_failing_prompts", True)
+                    if log_failing_prompts:
+                        prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
+                        self.logger.error("Generation failed for genome %s. Prompt preview: %s. Error: %s", 
+                                        genome_id, prompt_preview, str(e), exc_info=True)
+                    else:
+                        self.logger.error("Generation failed for genome %s. Error: %s", 
+                                        genome_id, str(e), exc_info=True)
+                    genome['status'] = 'error'
+                    genome['error'] = f"Generation failed: {str(e)}"
+                    return genome
                 
                 # Update genome
                 genome['generated_text'] = generated_text
@@ -453,19 +595,5 @@ class LlaMaTextGenerator:
                 genome['error'] = str(e)
                 return genome
     
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics for the generator"""
-        stats = {
-            'generation_count': self.generation_count,
-            'total_tokens_generated': self.total_tokens_generated,
-            'total_generation_time': self.total_generation_time,
-            'model_name': self.model_cfg.get("name", "Unknown")
-        }
-        
-        if self.generation_count > 0:
-            stats['average_tokens_per_generation'] = self.total_tokens_generated / self.generation_count
-            stats['average_time_per_generation'] = self.total_generation_time / self.generation_count
-            stats['tokens_per_second'] = self.total_tokens_generated / self.total_generation_time
-        
-        self.logger.debug("Performance stats: %s", stats)
-        return stats
+
+    
