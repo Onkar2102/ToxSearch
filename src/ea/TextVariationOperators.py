@@ -162,7 +162,10 @@ class LLMBasedParaphrasingOperator(VariationOperator):
         self.north_star_metric = north_star_metric
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name} with north_star_metric: {self.north_star_metric}")
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # Ensure your API key is set in the environment
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=10.0  # Add timeout to prevent connection hangs
+        )  # Ensure your API key is set in the environment
 
     def apply(self, text: str) -> List[str]:
         variants = set()
@@ -177,7 +180,8 @@ class LLMBasedParaphrasingOperator(VariationOperator):
                         {"role": "user", "content": instruction}
                     ],
                     temperature=0.9,
-                    max_tokens=4096
+                    max_tokens=4096,
+                    timeout=10.0  # Add timeout to prevent hanging
                 )
                 paraphrase = response.choices[0].message.content.strip()
                 if paraphrase and paraphrase.lower() != text.lower():
@@ -185,6 +189,7 @@ class LLMBasedParaphrasingOperator(VariationOperator):
                     self.logger.debug(f"{self.name}: Generated variant '{paraphrase}'")
             except Exception as e:
                 self.logger.error(f"{self.name}: Failed to generate variant: {e}")
+                continue  # Continue to next iteration instead of stopping
 
         result_variants = list(variants) if variants else [text]
         
@@ -198,33 +203,55 @@ class BackTranslationOperator(VariationOperator):
         super().__init__("BackTranslation", "mutation", "Performs EN→HI→EN back-translation.")
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
-        for model_id in ("Helsinki-NLP/opus-mt-en-hi", "Helsinki-NLP/opus-mt-hi-en"):
-            try:
-                snapshot_download(model_id, local_files_only=True)
-            except Exception:
-                self.logger.info(f"Model {model_id} not found in cache. Downloading...")
-                snapshot_download(model_id, local_files_only=False, resume_download=True)
-        en_hi_model = AutoModelForSeq2SeqLM.from_pretrained(
-            "Helsinki-NLP/opus-mt-en-hi", local_files_only=True
-        )
-        en_hi_tokenizer = AutoTokenizer.from_pretrained(
-            "Helsinki-NLP/opus-mt-en-hi", local_files_only=True
-        )
-        self.en_hi = pipeline(
-            "translation_en_to_hi", model=en_hi_model, tokenizer=en_hi_tokenizer
-        )
+        
+        # Initialize models with error handling
+        self.en_hi = None
+        self.hi_en = None
+        
+        try:
+            for model_id in ("Helsinki-NLP/opus-mt-en-hi", "Helsinki-NLP/opus-mt-hi-en"):
+                try:
+                    snapshot_download(model_id, local_files_only=True)
+                except Exception:
+                    self.logger.info(f"Model {model_id} not found in cache. Downloading...")
+                    try:
+                        snapshot_download(model_id, local_files_only=False, resume_download=True, timeout=60)
+                    except Exception as e:
+                        self.logger.error(f"Failed to download model {model_id}: {e}")
+                        raise
+            
+            en_hi_model = AutoModelForSeq2SeqLM.from_pretrained(
+                "Helsinki-NLP/opus-mt-en-hi", local_files_only=True
+            )
+            en_hi_tokenizer = AutoTokenizer.from_pretrained(
+                "Helsinki-NLP/opus-mt-en-hi", local_files_only=True
+            )
+            self.en_hi = pipeline(
+                "translation_en_to_hi", model=en_hi_model, tokenizer=en_hi_tokenizer
+            )
 
-        hi_en_model = AutoModelForSeq2SeqLM.from_pretrained(
-            "Helsinki-NLP/opus-mt-hi-en", local_files_only=True
-        )
-        hi_en_tokenizer = AutoTokenizer.from_pretrained(
-            "Helsinki-NLP/opus-mt-hi-en", local_files_only=True
-        )
-        self.hi_en = pipeline(
-            "translation_hi_to_en", model=hi_en_model, tokenizer=hi_en_tokenizer
-        )
+            hi_en_model = AutoModelForSeq2SeqLM.from_pretrained(
+                "Helsinki-NLP/opus-mt-hi-en", local_files_only=True
+            )
+            hi_en_tokenizer = AutoTokenizer.from_pretrained(
+                "Helsinki-NLP/opus-mt-hi-en", local_files_only=True
+            )
+            self.hi_en = pipeline(
+                "translation_hi_to_en", model=hi_en_model, tokenizer=hi_en_tokenizer
+            )
+            
+            self.logger.info(f"Successfully initialized {self.name} with translation models")
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize {self.name}: {e}. Operator will be disabled.")
+            self.en_hi = None
+            self.hi_en = None
 
     def apply(self, text: str) -> List[str]:
+        # Check if models are available
+        if self.en_hi is None or self.hi_en is None:
+            self.logger.warning(f"{self.name}: Translation models not available, returning original text")
+            return [text]
+            
         variants = set()
         attempts = 0
         original_normalized = text.strip().lower()

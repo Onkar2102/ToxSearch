@@ -8,14 +8,15 @@ from itertools import combinations
 
 class EvolutionEngine:
 
-    def __init__(self, north_star_metric, log_file):
+    def __init__(self, north_star_metric, log_file, current_cycle=None):
         self.genomes: List[Dict] = []
         self.next_id = 0
         self.north_star_metric = north_star_metric
         self.log_file = log_file
+        self.current_cycle = current_cycle  # Current evolution cycle number
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file)
-        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}")
+        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}")
 
     def update_next_id(self):
         if self.genomes:
@@ -27,7 +28,7 @@ class EvolutionEngine:
         self.logger.debug(f"Updated next_id to {self.next_id}")
     
     def generate_variants(self, prompt_id: int) -> Dict[str, Any]:
-        self.logger.debug(f"Generating variants for prompt_id={prompt_id}")
+        self.logger.debug(f"Generating variants for prompt_id={prompt_id} (evolution cycle {self.current_cycle})")
 
         # Ensure ``next_id`` is always in sync with the current population each
         # time we start a new generation cycle.  This prevents reused IDs when
@@ -69,6 +70,7 @@ class EvolutionEngine:
 
         offspring = []
         generation_data = {
+            "generation_number": self.current_cycle,  # Add generation number
             "parents": [],
             "variants_created": 0,
             "mutation_variants": 0,
@@ -98,6 +100,7 @@ class EvolutionEngine:
             })
             # Mutation parent tracking has been removed
 
+        # For crossover, use the top 3 genomes as parents
         if crossover_parents:
             for parent in crossover_parents:
                 generation_data["parents"].append({
@@ -108,41 +111,45 @@ class EvolutionEngine:
                 })
             # Crossover parent tracking has been removed
 
-        mutation_operators = get_applicable_operators(1, self.north_star_metric, self.log_file)
-        self.logger.debug(f"Running mutation on prompt_id={prompt_id} using parent id={mutation_parent['id'] if mutation_parent else 'None'} with {len(mutation_operators)} operators.")
-        for op in mutation_operators:
-            if op.operator_type != "mutation":
-                continue
-            try:
-                variants = op.apply(mutation_parent["prompt"])
-                for vp in variants:
-                    norm_vp = vp.strip().lower()
-                    if norm_vp in existing_prompts:
-                        continue
-                    existing_prompts.add(norm_vp)
-                    child = {
-                        "id": str(self.next_id),
-                        "prompt_id": prompt_id,
-                        "prompt": vp,
-                        "model_provider": None,
-                        "model_name": None,
-                        "moderation_result": None,
-                        "operator": op.name,
-                        "parents": [mutation_parent["id"]],
-                        "generation": mutation_parent["generation"] + 1,
-                        "status": "pending_generation",
-                        "creation_info": {
-                            "type": "mutation",
+        # --- Mutation phase -------------------------------------------------
+        if mutation_parent:
+            mutation_operators = get_applicable_operators(1, self.north_star_metric, self.log_file)
+            self.logger.debug(f"Running mutation on prompt_id={prompt_id} with {len(mutation_operators)} operators.")
+            for op in mutation_operators:
+                if op.operator_type != "mutation":
+                    continue
+
+                try:
+                    variants = op.apply(mutation_parent["prompt"])
+                    for vp in variants:
+                        norm_vp = vp.strip().lower()
+                        if norm_vp in existing_prompts:
+                            continue
+                        existing_prompts.add(norm_vp)
+                        child = {
+                            "id": str(self.next_id),
+                            "prompt_id": prompt_id,
+                            "prompt": vp,
+                            "model_provider": None,
+                            "model_name": None,
+                            "moderation_result": None,
                             "operator": op.name,
-                            "source_generation": mutation_parent["generation"]
+                            "parents": [mutation_parent["id"]],
+                            "generation": self.current_cycle,  # Use current evolution cycle instead of parent + 1
+                            "status": "pending_generation",
+                            "creation_info": {
+                                "type": "mutation",
+                                "operator": op.name,
+                                "source_generation": mutation_parent["generation"],
+                                "evolution_cycle": self.current_cycle  # Track which evolution cycle created this
+                            }
                         }
-                    }
-                    self.next_id += 1
-                    self.logger.debug(f"Created mutation variant id={child['id']} for prompt_id={prompt_id}")
-                    self.logger.debug(f"Mutation variant prompt: '{vp[:60]}...'")
-                    offspring.append(child)
-            except Exception as e:
-                self.logger.error(f"[Mutation Error] {op.name}: {e}")
+                        self.next_id += 1
+                        self.logger.debug(f"Created mutation variant id={child['id']} for prompt_id={prompt_id} (evolution cycle {self.current_cycle})")
+                        self.logger.debug(f"Mutation variant prompt: '{vp[:60]}...'")
+                        offspring.append(child)
+                except Exception as e:
+                    self.logger.error(f"[Mutation Error] {op.name}: {e}")
 
         # --- Crossover phase -------------------------------------------------
         if crossover_parents:
@@ -170,16 +177,17 @@ class EvolutionEngine:
                                 "moderation_result": None,
                                 "operator": op.name,
                                 "parents": [p["id"] for p in parent_pair],
-                                "generation": max(p["generation"] for p in parent_pair) + 1,
+                                "generation": self.current_cycle,  # Use current evolution cycle instead of max parent + 1
                                 "status": "pending_generation",
                                 "creation_info": {
                                     "type": "crossover",
                                     "operator": op.name,
-                                    "source_generation": max(p["generation"] for p in parent_pair)
+                                    "source_generation": max(p["generation"] for p in parent_pair),
+                                    "evolution_cycle": self.current_cycle  # Track which evolution cycle created this
                                 }
                             }
                             self.next_id += 1
-                            self.logger.debug(f"Created crossover variant id={child['id']} for prompt_id={prompt_id}")
+                            self.logger.debug(f"Created crossover variant id={child['id']} for prompt_id={prompt_id} (evolution cycle {self.current_cycle})")
                             self.logger.debug(f"Crossover variant prompt: '{vp[:60]}...'")
                             offspring.append(child)
                     except Exception as e:
@@ -206,15 +214,39 @@ class EvolutionEngine:
         )
         generation_data["variants_created"] = len(unique_offspring)
 
+        # Create new generation file for the new variants
+        if unique_offspring:
+            self._create_new_generation_file(unique_offspring.values(), self.current_cycle)
+
         self.genomes.extend(unique_offspring.values())
         self.logger.debug(
-            "Saved %d unique variants to the population (mutation: %d, crossover: %d).",
+            "Saved %d unique variants to the population (mutation: %d, crossover: %d) for evolution cycle %d.",
             generation_data["variants_created"],
             generation_data["mutation_variants"],
             generation_data["crossover_variants"],
+            self.current_cycle
         )
         
         return generation_data
+
+    def _create_new_generation_file(self, new_variants, generation_number):
+        """Create a new generation file for the new variants"""
+        from pathlib import Path
+        import json
+        
+        generation_file_path = Path("outputs") / f"gen{generation_number}.json"
+        
+        # Save new variants to generation file
+        variants_list = list(new_variants)
+        
+        try:
+            with open(generation_file_path, 'w', encoding='utf-8') as f:
+                json.dump(variants_list, f, indent=4, ensure_ascii=False)
+            
+            self.logger.info(f"Created new generation file: {generation_file_path} with {len(variants_list)} variants")
+        except Exception as e:
+            self.logger.error(f"Failed to create generation file {generation_file_path}: {e}")
+            raise
 
     def load_parents_from_tracker(self, prompt_id: int, generation_number: int, evolution_tracker: List[dict]) -> List[Dict[str, Any]]:
         """

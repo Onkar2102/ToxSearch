@@ -15,6 +15,8 @@ llama:
   padding_side: "left"  # "left" or "right" - some models expect right padding
   log_failing_prompts: true  # Log prompt text when generation fails for debugging
   name: meta-llama/Llama-3.2-3B-instruct
+  # Alternative smaller model for faster loading and less memory usage
+  # name: microsoft/DialoGPT-medium  # Smaller model for testing
   prompt_template:
     assistant_prefix: 'Adult 2:'           # 'Aggressive Hostile Abusive Violent Toxic Adult 2:'
     format: '{{user_prefix}} {{prompt}}
@@ -30,4 +32,8 @@ llama:
   max_memory_usage_gb: 12.0  # Maximum memory usage in GB (increased from 4.0)
   adaptive_batch_sizing: true  # Enable dynamic batch size adjustment based on memory
   min_batch_size: 1  # Minimum batch size when memory is critical
-  max_batch_size_memory: 4  # Maximum batch size when memory is good
+  max_batch_size_memory: 8  # Maximum batch size when memory is good
+  # Model loading settings
+  model_loading_timeout: 300  # 5 minutes timeout for model loading
+  enable_cpu_fallback: true  # Fallback to CPU if GPU loading fails
+  enable_model_caching: true  # Cache loaded models in memory

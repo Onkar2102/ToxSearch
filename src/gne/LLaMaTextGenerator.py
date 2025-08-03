@@ -79,18 +79,23 @@ class LlaMaTextGenerator:
         return self._DEVICE_CACHE
 
     def _load_model_optimized(self, model_name: str):
-        """Load model with M3 Mac optimizations"""
+        """Load model with M3 Mac optimizations and timeout protection"""
         device = self._get_optimal_device()
         
         # Load tokenizer with optimizations
         self.logger.info("Loading tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name, 
-            legacy=False,
-            use_fast=True,  # Use fast tokenizer for better performance
-            padding_side=self.model_cfg.get("padding_side", "left")  # Configurable padding direction
-        )
-        tokenizer.pad_token = tokenizer.eos_token
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_name, 
+                legacy=False,
+                use_fast=True,  # Use fast tokenizer for better performance
+                padding_side=self.model_cfg.get("padding_side", "left"),  # Configurable padding direction
+                timeout=60  # Add timeout to prevent hanging
+            )
+            tokenizer.pad_token = tokenizer.eos_token
+        except Exception as e:
+            self.logger.error(f"Failed to load tokenizer: {e}")
+            raise
         
         # Configure model loading for M3 Mac
         model_kwargs = {
@@ -119,11 +124,49 @@ class LlaMaTextGenerator:
                 self.logger.warning(f"Quantization not available: {e}")
         
         self.logger.info("Loading model...")
-        model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+        
+        # Add timeout protection for model loading
+        import signal
+        import threading
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Model loading timed out after 300 seconds")
+        
+        # Set up timeout
+        original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(300)  # 5 minute timeout
+        
+        try:
+            model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+            signal.alarm(0)  # Cancel timeout
+        except TimeoutError:
+            signal.alarm(0)  # Cancel timeout
+            self.logger.error("Model loading timed out. Trying with CPU fallback...")
+            # Fallback to CPU if MPS hangs
+            if device == "mps":
+                self.logger.info("Falling back to CPU for model loading")
+                model_kwargs["torch_dtype"] = torch.float32  # Use float32 for CPU
+                model = AutoModelForCausalLM.from_pretrained(model_name, **model_kwargs)
+                device = "cpu"
+                self._DEVICE_CACHE = "cpu"
+            else:
+                raise
+        except Exception as e:
+            signal.alarm(0)  # Cancel timeout
+            self.logger.error(f"Failed to load model: {e}")
+            raise
+        finally:
+            signal.signal(signal.SIGALRM, original_handler)
         
         # Move to device and optimize
         if device != "cpu":
-            model = model.to(device)
+            try:
+                model = model.to(device)
+            except Exception as e:
+                self.logger.warning(f"Failed to move model to {device}, using CPU: {e}")
+                device = "cpu"
+                self._DEVICE_CACHE = "cpu"
+        
         model.eval()
         
         # Enable optimizations

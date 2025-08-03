@@ -23,6 +23,28 @@ logger = get_logger("openai_moderation", get_log_filename())
 _moderation_cache = {}
 _cache_lock = threading.Lock()
 
+# Global thread pool for async operations
+_thread_pool = None
+
+def _get_thread_pool():
+    """Get or create thread pool for async operations"""
+    global _thread_pool
+    if _thread_pool is None:
+        # Test different values:
+        # 4 = Conservative (current)
+        # 8 = Moderate (recommended)
+        # 16 = Aggressive (matches CPU cores)
+        # 32 = Very aggressive (2x CPU cores)
+        _thread_pool = ThreadPoolExecutor(max_workers=8)  # Changed from 4 to 8
+    return _thread_pool
+
+def _cleanup_thread_pool():
+    """Clean up thread pool to prevent resource leaks"""
+    global _thread_pool
+    if _thread_pool is not None:
+        _thread_pool.shutdown(wait=True)
+        _thread_pool = None
+
 def _get_text_hash(text: str) -> str:
     """Generate a hash for text to use as cache key"""
     return hashlib.md5(text.encode('utf-8')).hexdigest()
@@ -534,6 +556,9 @@ def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None,
             # Run evaluation
             asyncio.run(evaluator.evaluate_population_async(pop_path, north_star_metric))
             
+            # Update EvolutionTracker with best genomes after evaluation
+            update_evolution_tracker_after_evaluation(pop_path, north_star_metric, logger)
+            
             # Log final statistics
             stats = evaluator.get_performance_stats()
             logger.info("Moderation evaluation completed successfully")
@@ -542,6 +567,74 @@ def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None,
         except Exception as e:
             logger.error("Moderation evaluation failed: %s", e, exc_info=True)
             raise
+
+def update_evolution_tracker_after_evaluation(pop_path: str, north_star_metric: str, logger):
+    """Update EvolutionTracker with best genome for each generation after evaluation"""
+    from pathlib import Path
+    import json
+    from ea.RunEvolution import evolution_tracker_path
+    
+    try:
+        # Load population
+        population = load_population(pop_path, logger=logger)
+        
+        # Load EvolutionTracker
+        if not evolution_tracker_path.exists():
+            logger.warning("EvolutionTracker not found, skipping update")
+            return
+            
+        with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+            evolution_tracker = json.load(f)
+        
+        # Group genomes by prompt_id and generation
+        genomes_by_prompt_gen = {}
+        for genome in population:
+            prompt_id = genome.get("prompt_id")
+            generation = genome.get("generation")
+            if prompt_id is not None and generation is not None:
+                key = (prompt_id, generation)
+                if key not in genomes_by_prompt_gen:
+                    genomes_by_prompt_gen[key] = []
+                genomes_by_prompt_gen[key].append(genome)
+        
+        # Update EvolutionTracker with best genomes
+        updated_count = 0
+        for entry in evolution_tracker:
+            prompt_id = entry["prompt_id"]
+            
+            for gen in entry["generations"]:
+                gen_number = gen["generation_number"]
+                key = (prompt_id, gen_number)
+                
+                if key in genomes_by_prompt_gen:
+                    # Find best genome for this generation
+                    genomes = genomes_by_prompt_gen[key]
+                    best_genome = None
+                    best_score = 0.0
+                    
+                    for genome in genomes:
+                        if genome.get("moderation_result"):
+                            score = (genome["moderation_result"].get("scores", {}).get(north_star_metric, 0.0))
+                            if score > best_score:
+                                best_score = score
+                                best_genome = genome
+                    
+                    if best_genome:
+                        # Update EvolutionTracker with best genome info
+                        gen["genome_id"] = best_genome["id"]
+                        gen["max_score"] = best_score
+                        updated_count += 1
+                        logger.debug(f"Updated generation {gen_number} for prompt_id {prompt_id}: genome_id={best_genome['id']}, score={best_score}")
+        
+        # Save updated EvolutionTracker
+        with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+            json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
+        
+        logger.info(f"Updated EvolutionTracker with {updated_count} best genomes after evaluation")
+        
+    except Exception as e:
+        logger.error(f"Failed to update EvolutionTracker after evaluation: {e}", exc_info=True)
+        # Don't raise - this is not critical for the main evaluation process
 
 # Batch processing utilities for efficient moderation
 def batch_moderate_texts(texts: List[str], batch_size: int = 100) -> List[Optional[Dict]]:

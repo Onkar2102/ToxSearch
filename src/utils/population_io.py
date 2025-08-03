@@ -58,8 +58,8 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
     total_genomes = 0
     
     base_path = Path(base_dir)
-    for file_path in base_path.glob("population_gen*.json"):
-        gen_num = int(file_path.stem.replace("population_gen", ""))
+    for file_path in base_path.glob("gen*.json"):
+        gen_num = int(file_path.stem.replace("gen", ""))
         gen_files[gen_num] = file_path.name
         
         # Quick count
@@ -89,7 +89,7 @@ def load_population_generation(generation: int, base_dir: str = "outputs",
     
     _logger = logger or get_logger("population_io", log_file)
     
-    gen_file = Path(base_dir) / f"population_gen{generation}.json"
+    gen_file = Path(base_dir) / f"gen{generation}.json"
     
     with PerformanceLogger(_logger, f"Load Generation {generation}", file_path=str(gen_file)):
         if not gen_file.exists():
@@ -150,7 +150,7 @@ def save_population_generation(genomes: List[Dict[str, Any]], generation: int,
     
     _logger = logger or get_logger("population_io", log_file)
     
-    gen_file = Path(base_dir) / f"population_gen{generation}.json"
+    gen_file = Path(base_dir) / f"gen{generation}.json"
     
     with PerformanceLogger(_logger, f"Save Generation {generation}", file_path=str(gen_file)):
         try:
@@ -416,8 +416,66 @@ def load_and_initialize_population(
 
             logger.info("Created %d genomes", len(population))
 
-            # ----------------------------- Save ----------------------------
+            # ----------------------------- Save Population ----------------------------
             save_population(population, output_path, logger=logger)
+
+            # ----------------------------- Save Initial Generation File ----------------------------
+            with PerformanceLogger(logger, "Save Initial Generation File"):
+                gen0_path = Path("outputs/gen0.json")
+                gen0_path.parent.mkdir(exist_ok=True)
+                with open(gen0_path, 'w', encoding='utf-8') as f:
+                    json.dump(population, f, indent=2)
+                
+                logger.info("Saved initial generation file: %s", gen0_path)
+
+            # ----------------------------- Initialize EvolutionTracker ----------------------------
+            with PerformanceLogger(logger, "Initialize EvolutionTracker"):
+                evolution_tracker = []
+                for i, prompt in enumerate(prompts):
+                    tracker_entry = {
+                        "prompt_id": i,
+                        "status": "not_complete",
+                        "total_generations": 0,
+                        "generations": [
+                            {
+                                "generation_number": 0,
+                                "genome_id": str(i + 1),
+                                "max_score": 0.0,
+                                "mutation": None,
+                                "crossover": None
+                            }
+                        ]
+                    }
+                    evolution_tracker.append(tracker_entry)
+                
+                # Save EvolutionTracker
+                evolution_tracker_path = Path("outputs/EvolutionTracker.json")
+                evolution_tracker_path.parent.mkdir(exist_ok=True)
+                with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                    json.dump(evolution_tracker, f, indent=2)
+                
+                logger.info("Initialized EvolutionTracker with %d prompt entries", len(evolution_tracker))
+
+            # ----------------------------- Initialize Population Index ----------------------------
+            with PerformanceLogger(logger, "Initialize Population Index"):
+                population_index = {
+                    "total_generations": 1,  # Generation 0
+                    "total_genomes": len(population),
+                    "generation_files": {
+                        "0": "gen0.json"
+                    },
+                    "generation_counts": {
+                        "0": len(population)
+                    }
+                }
+                
+                # Save population index
+                index_path = Path("outputs/population_index.json")
+                index_path.parent.mkdir(exist_ok=True)
+                with open(index_path, 'w', encoding='utf-8') as f:
+                    json.dump(population_index, f, indent=2)
+                
+                logger.info("Initialized population index with %d genomes in generation 0", len(population))
 
         except Exception:
             logger.exception("Population initialization failed")

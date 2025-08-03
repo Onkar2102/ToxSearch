@@ -1,22 +1,32 @@
 {
-  "total_generations": 7,
-  "total_genomes": 494,
+  "total_generations": 12,
+  "total_genomes": 1219,
   "generation_files": {
-    "6": "population_gen6.json",
-    "0": "population_gen0.json",
-    "1": "population_gen1.json",
-    "2": "population_gen2.json",
-    "3": "population_gen3.json",
-    "4": "population_gen4.json",
-    "5": "population_gen5.json"
+    "5": "gen5.json",
+    "9": "gen9.json",
+    "8": "gen8.json",
+    "4": "gen4.json",
+    "3": "gen3.json",
+    "2": "gen2.json",
+    "1": "gen1.json",
+    "0": "gen0.json",
+    "7": "gen7.json",
+    "11": "gen11.json",
+    "10": "gen10.json",
+    "6": "gen6.json"
   },
   "generation_counts": {
-    "6": 14,
-    "0": 1,
-    "1": 28,
-    "2": 101,
-    "3": 157,
-    "4": 121,
-    "5": 72
+    "5": 96,
+    "9": 82,
+    "8": 79,
+    "4": 97,
+    "3": 175,
+    "2": 194,
+    "1": 155,
+    "0": 3,
+    "7": 83,
+    "11": 83,
+    "10": 84,
+    "6": 88
   }
 }

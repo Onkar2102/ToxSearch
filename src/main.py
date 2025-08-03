@@ -1,16 +1,110 @@
 import sys
 import time
 import json
+import multiprocessing
+import atexit
+import signal
 from utils.custom_logging import get_logger, get_log_filename, log_system_info, PerformanceLogger
 import os
 from typing import Optional
 from pathlib import Path
+import psutil
+
+# Global variables for restart mechanism
+MAX_RUNTIME_SECONDS = 1800  # 30 minutes
+HEARTBEAT_INTERVAL = 60  # Check every minute
+last_heartbeat = time.time()
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    print(f"\nReceived signal {signum}. Cleaning up...")
+    cleanup_multiprocessing()
+    sys.exit(0)
+
+def cleanup_multiprocessing():
+    """Clean up multiprocessing resources to prevent semaphore leaks"""
+    try:
+        # Clean up any remaining multiprocessing resources
+        multiprocessing.current_process()._cleanup()
+        
+        # Clean up thread pools from OpenAI moderation
+        from gne.openai_moderation import _cleanup_thread_pool
+        _cleanup_thread_pool()
+    except Exception:
+        pass
+
+def check_process_health():
+    """Check if the current process is healthy and not stuck"""
+    global last_heartbeat
+    
+    current_time = time.time()
+    runtime = current_time - last_heartbeat
+    
+    # Check if process has been running too long
+    if runtime > MAX_RUNTIME_SECONDS:
+        return False, f"Process running too long: {runtime:.1f}s"
+    
+    # Check memory usage
+    try:
+        process = psutil.Process()
+        memory_gb = process.memory_info().rss / (1024**3)
+        if memory_gb > 20:  # More than 20GB memory usage
+            return False, f"Memory usage too high: {memory_gb:.1f}GB"
+    except Exception as e:
+        print(f"Warning: Could not check memory usage: {e}")
+    
+    # Check CPU usage - if it's been 0% for too long, it might be stuck
+    try:
+        cpu_percent = process.cpu_percent(interval=1)
+        if cpu_percent < 1 and runtime > 300:  # Less than 1% CPU for 5+ minutes
+            return False, f"Process appears stuck (CPU: {cpu_percent}%, runtime: {runtime:.1f}s)"
+    except Exception as e:
+        print(f"Warning: Could not check CPU usage: {e}")
+    
+    last_heartbeat = current_time
+    return True, "Process healthy"
+
+def restart_process():
+    """Restart the current process"""
+    logger = get_logger("main")
+    logger.warning("Restarting process due to health check failure")
+    
+    # Save current state if needed
+    try:
+        # You can add state saving logic here
+        pass
+    except Exception as e:
+        logger.error(f"Failed to save state before restart: {e}")
+    
+    # Restart the process
+    os.execv(sys.executable, ['python'] + sys.argv)
 
 def main(model_names=None, max_generations=None, north_star_threshold=0.95):
     """Main execution pipeline for evolutionary text generation and safety analysis"""
+    # Register cleanup function
+    atexit.register(cleanup_multiprocessing)
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     log_file = get_log_filename()
     print(f"DEBUG: log_file path resolved to: {log_file}")
     logger = get_logger("main", log_file)
+    
+    # Start health check thread
+    import threading
+    def health_check_thread():
+        while True:
+            time.sleep(HEARTBEAT_INTERVAL)
+            is_healthy, message = check_process_health()
+            if not is_healthy:
+                logger.error(f"Health check failed: {message}")
+                restart_process()
+    
+    health_thread = threading.Thread(target=health_check_thread, daemon=True)
+    health_thread.start()
+    logger.info("Automatic restart mechanism enabled")
     
     # Log system information at startup
     log_system_info(logger)
@@ -62,6 +156,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.95):
             logger.info("Text generation completed and population updated.")
         except Exception as e:
             logger.error("Generation failed: %s", e, exc_info=True)
+            return
 
     # Phase 3: Evaluation (Optimized with async batch processing)
     with PerformanceLogger(logger, "Evaluation Phase"):
@@ -76,6 +171,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.95):
             logger.info("Evaluation completed and population updated with moderation scores.")
         except Exception as e:
             logger.error("Evaluation failed: %s", e, exc_info=True)
+            return
 
     while True:
         generation_count += 1
@@ -113,7 +209,8 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.95):
                 run_evolution(
                     north_star_metric=north_star_metric,
                     log_file=log_file,
-                    threshold=north_star_threshold
+                    threshold=north_star_threshold,
+                    current_cycle=generation_count  # Pass current evolution cycle
                 )
                 logger.info("Evolution process completed and population updated.")
             except Exception as e:
@@ -190,18 +287,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.95):
                 logger.info("  - Pending evolution: %d", pending_evolution)
                 logger.info("  - Max %s score: %.4f", north_star_metric, max_score)
                 
-                # Update evolution status file
-                evolution_status = {
-                    "current_generation": generation_count,
-                    "total_genomes": total_genomes,
-                    "completed_genomes": completed,
-                    "pending_evolution": pending_evolution,
-                    "max_north_star_score": max_score,
-                    "last_updated": time.time()
-                }
-                
-                with open("outputs/EvolutionStatus.json", "w") as f:
-                    json.dump(evolution_status, f, indent=2)
+                # Evolution status is now tracked in EvolutionTracker.json
                     
             except Exception as e:
                 logger.error("Failed to generate generation summary: %s", e, exc_info=True)
@@ -297,7 +383,9 @@ if __name__ == "__main__":
         main(model_names=args.model_names, max_generations=args.generations, north_star_threshold=args.threshold)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")
+        cleanup_multiprocessing()
         sys.exit(1)
     except Exception as e:
         print(f"Fatal error: {e}")
+        cleanup_multiprocessing()
         sys.exit(1)

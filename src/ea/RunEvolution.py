@@ -184,33 +184,23 @@ def update_evolution_tracker_with_generation(prompt_id, generation_data, evoluti
                 entry = {
                     "prompt_id": prompt_id,
                     "status": "not_complete",
-                    "total_generations": 1,
+                    "total_generations": 0,
                     "generations": []
                 }
                 evolution_tracker.append(entry)
             
-            # Add new generation with correct data structure
-            gen_number = entry["total_generations"]
+            # Use generation number from evolution cycle
+            gen_number = generation_data.get("generation_number", entry["total_generations"])
             
-            # Find the best genome for this generation (highest score)
+            # Determine best parent for this generation
             best_genome_id = None
-            best_score = None
+            best_score = 0.0
+            
             if generation_data.get("parents"):
-                # Find the parent with the highest score
                 best_parent = max(generation_data["parents"], 
                                 key=lambda p: p.get("north_star_score", 0.0))
                 best_genome_id = best_parent["id"]
                 best_score = best_parent["north_star_score"]
-            
-            # Determine mutation and crossover info
-            mutation_info = None
-            crossover_info = None
-            
-            if generation_data.get("mutation_variants", 0) > 0:
-                mutation_info = f"{generation_data['mutation_variants']} variants created"
-            
-            if generation_data.get("crossover_variants", 0) > 0:
-                crossover_info = f"{generation_data['crossover_variants']} variants created"
             
             # Enhanced parent tracking with generation information
             parents_info = None
@@ -239,16 +229,31 @@ def update_evolution_tracker_with_generation(prompt_id, generation_data, evoluti
                 "generation_number": gen_number,
                 "genome_id": best_genome_id,
                 "max_score": best_score,
-                "mutation": mutation_info,
-                "crossover": crossover_info,
                 "variants_created": generation_data.get("variants_created", 0),
                 "mutation_variants": generation_data.get("mutation_variants", 0),
                 "crossover_variants": generation_data.get("crossover_variants", 0),
                 "parents": parents_info
             }
             
-            entry["generations"].append(new_gen)
-            entry["total_generations"] += 1
+            # Check if this generation already exists
+            existing_gen = None
+            for gen in entry["generations"]:
+                if gen["generation_number"] == gen_number:
+                    existing_gen = gen
+                    break
+            
+            if existing_gen:
+                # Update existing generation
+                existing_gen.update(new_gen)
+                logger.info("Updated existing generation %d for prompt_id %d", gen_number, prompt_id)
+            else:
+                # Add new generation
+                entry["generations"].append(new_gen)
+                entry["total_generations"] = max(entry["total_generations"], gen_number + 1)
+                logger.info("Added new generation %d for prompt_id %d", gen_number, prompt_id)
+            
+            # Sort generations by generation number
+            entry["generations"].sort(key=lambda x: x["generation_number"])
             
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
@@ -488,7 +493,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
-def run_evolution(north_star_metric, log_file=None, threshold=0.95):
+def run_evolution(north_star_metric, log_file=None, threshold=0.95, current_cycle=None):
     """Run one evolution generation with comprehensive logging"""
     with PerformanceLogger(get_logger("RunEvolution", log_file), "Run Evolution", 
                           north_star_metric=north_star_metric, population_path=str(population_path)):
@@ -496,6 +501,8 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.95):
         logger = get_logger("RunEvolution", log_file)
         logger.info("Starting evolution run using population file: %s", population_path)
         logger.info("North star metric: %s", north_star_metric)
+        if current_cycle is not None:
+            logger.info("Evolution cycle: %d", current_cycle)
 
         # Check for population files (either split files or monolithic file)
         from utils.population_io import get_population_files_info
@@ -527,7 +534,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.95):
         # Phase 5: Initialize evolution engine
         with PerformanceLogger(logger, "Initialize Evolution Engine"):
             try:
-                engine = EvolutionEngine(north_star_metric, log_file)
+                engine = EvolutionEngine(north_star_metric, log_file, current_cycle=current_cycle)
                 engine.genomes = population
                 engine.update_next_id()
                 logger.debug("EvolutionEngine next_id set to %d", engine.next_id)

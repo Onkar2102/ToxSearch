@@ -66,11 +66,12 @@ class ParentSelector:
             prompt_id (int): The prompt ID being processed
             
         Returns:
-            Tuple[Dict, List[Dict]]: Best genome as mutation parent, all genomes as crossover parents
+            Tuple[Dict, List[Dict]]: Best genome as mutation parent, top 3 genomes as crossover parents
         """
         sorted_genomes = self._sort_by_fitness(prompt_genomes)
         mutation_parent = sorted_genomes[0]
-        crossover_parents = sorted_genomes
+        # Use top 3 for crossover (or all if less than 3)
+        crossover_parents = sorted_genomes[:3] if len(sorted_genomes) >= 3 else sorted_genomes
         
         self.logger.debug(f"Small population selection for prompt_id={prompt_id}: "
                          f"mutation_parent={mutation_parent['id']}, "
@@ -92,8 +93,8 @@ class ParentSelector:
         # Since sorted_genomes is already sorted by fitness descending:
         # Mutation parent: topmost genome
         mutation_parent = sorted_genomes[0] if sorted_genomes else None
-        # Crossover parents: top 5 genomes
-        crossover_parents = sorted_genomes[:5] if len(sorted_genomes) >= 5 else sorted_genomes[:]
+        # Crossover parents: top 3 genomes (changed from 5)
+        crossover_parents = sorted_genomes[:3] if len(sorted_genomes) >= 3 else sorted_genomes[:]
         if not mutation_parent or not crossover_parents:
             self.logger.warning(f"No valid parents for prompt_id={prompt_id}. Skipping parent selection.")
             return None, None
