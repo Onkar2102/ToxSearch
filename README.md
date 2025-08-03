@@ -5,6 +5,23 @@ A research framework for AI safety analysis through evolutionary text generation
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [app.py Command Line Arguments](#appy-command-line-arguments)
+- [Safety Features](#safety-features)
+- [Documentation](#documentation)
+  - [Architecture Overview](ARCHITECTURE.md)
+  - [Evolutionary Algorithms](src/ea/README.md)
+  - [Generation & Evaluation](#generation--evaluation)
+  - [Utilities](#utilities)
+- [Usage Examples](#usage-examples)
+- [Configuration](#configuration)
+- [Monitoring & Recovery](#monitoring--recovery)
+- [Output Structure](#output-structure)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Quick Start
 
 ```bash
@@ -21,29 +38,6 @@ python app.py --generations 25
 python src/main.py --generations 25
 ```
 
-## Process Monitoring & Recovery
-
-The framework includes **automatic process monitoring** to handle common issues:
-
-### **Built-in Monitoring** (in main.py)
-- **Runtime monitoring**: Maximum 30 minutes per generation
-- **Memory monitoring**: Automatic cleanup when usage exceeds 20GB
-- **CPU monitoring**: Detects stuck processes (< 1% CPU for 5+ minutes)
-- **Automatic restart**: Self-healing with up to 5 restart attempts
-
-### **External Process Monitor** (app.py)
-```bash
-# Basic usage
-python app.py --generations 25
-
-# Custom monitoring parameters
-python app.py \
-  --generations 10 \
-  --max-runtime 900 \
-  --check-interval 30 \
-  --memory-threshold 15.0 \
-  --max-restarts 3
-```
 
 ### **Monitoring Features**
 - **Timeout Protection**: 5-minute timeout for model loading
@@ -52,36 +46,6 @@ python app.py \
 - **Stuck Process Detection**: Identifies and restarts stuck processes
 - **Graceful Recovery**: Saves state before restarting
 
-## Configuration
-
-### Model Configuration (`config/modelConfig.yaml`)
-```yaml
-llama:
-  name: meta-llama/Llama-3.2-3B-instruct
-  # Alternative smaller model for faster testing
-  # name: microsoft/DialoGPT-medium
-  
-  # Memory management settings
-  enable_memory_cleanup: true
-  max_memory_usage_gb: 12.0
-  adaptive_batch_sizing: true
-  
-  # Model loading settings
-  model_loading_timeout: 300  # 5 minutes timeout
-  enable_cpu_fallback: true   # Fallback to CPU if GPU fails
-  enable_model_caching: true  # Cache loaded models
-```
-
-### Process Monitor Configuration
-```bash
-# Monitor with custom settings
-python app.py \
-  --generations 25 \
-  --max-runtime 1800 \
-  --check-interval 60 \
-  --memory-threshold 20.0 \
-  --max-restarts 5
-```
 
 ## app.py Command Line Arguments
 
@@ -106,6 +70,24 @@ python app.py \
 - **Timeout Protection**: Prevents infinite hanging
 - **State Preservation**: Saves progress before restarting
 - **Comprehensive Logging**: Detailed monitoring and debugging information
+
+## Documentation
+
+### **[Architecture Overview](ARCHITECTURE.md)**
+Comprehensive system architecture, component interactions, and data flow diagrams.
+
+### **[Evolutionary Algorithms](src/ea/README.md)**
+Complete guide to genetic algorithms, variation operators, and evolution strategies.
+
+### **Generation & Evaluation** (`src/gne/`)
+- `LLaMaTextGenerator.py` - LLaMA model integration with memory management
+- `openai_moderation.py` - OpenAI moderation API for safety evaluation
+
+### **Utilities** (`src/utils/`)
+- `population_io.py` - Population data management with EvolutionTracker
+- `custom_logging.py` - Performance and memory logging
+- `m3_optimizer.py` - M3 Mac optimization utilities
+- `config.py` - Configuration management
 
 
 ## License
