@@ -1,0 +1,62 @@
+[
+    {
+        "prompt_id": 0,
+        "status": "not_complete",
+        "total_generations": 2,
+        "generations": [
+            {
+                "generation_number": 0,
+                "genome_id": "1",
+                "max_score": 0.0001,
+                "mutation": null,
+                "crossover": null
+            },
+            {
+                "generation_number": 1,
+                "genome_id": "1",
+                "max_score": 0.0001,
+                "variants_created": 27,
+                "mutation_variants": 27,
+                "crossover_variants": 0,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "1",
+                        "generation": 0,
+                        "score": 0.0001
+                    },
+                    "crossover_parents": []
+                }
+            }
+        ]
+    },
+    {
+        "prompt_id": 1,
+        "status": "not_complete",
+        "total_generations": 2,
+        "generations": [
+            {
+                "generation_number": 0,
+                "genome_id": "2",
+                "max_score": 0.0002,
+                "mutation": null,
+                "crossover": null
+            },
+            {
+                "generation_number": 1,
+                "genome_id": "2",
+                "max_score": 0.0002,
+                "variants_created": 27,
+                "mutation_variants": 27,
+                "crossover_variants": 0,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "2",
+                        "generation": 0,
+                        "score": 0.0002
+                    },
+                    "crossover_parents": []
+                }
+            }
+        ]
+    }
+]

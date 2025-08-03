@@ -1,0 +1,12 @@
+{
+  "total_generations": 2,
+  "total_genomes": 55,
+  "generation_files": {
+    "1": "gen1.json",
+    "0": "gen0.json"
+  },
+  "generation_counts": {
+    "1": 53,
+    "0": 2
+  }
+}
