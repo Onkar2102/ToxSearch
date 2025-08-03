@@ -83,41 +83,21 @@ python app.py \
   --max-restarts 5
 ```
 
-## Usage Examples
+## app.py Command Line Arguments
 
-### Environment Setup
-```bash
-python app.py --setup
-```
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--generations` | int | `None` | Maximum number of evolution generations. If not set, runs until north star metric is achieved |
+| `--threshold` | float | `0.95` | North star metric threshold for stopping evolution |
+| `model_names` | list | `[]` | Model names to use (currently not used) |
+| `--check-interval` | int | `1800` | Health check interval in seconds (30 minutes) |
+| `--stuck-threshold` | int | `7200` | Stuck detection threshold in seconds (2 hours) |
+| `--memory-threshold` | float | `20.0` | Memory threshold in GB |
+| `--max-restarts` | int | `5` | Maximum restart attempts |
+| `--interactive` | flag | `False` | Run in interactive mode with setup and monitoring |
+| `--setup` | flag | `False` | Run full environment setup (install requirements, optimize config) |
+| `--no-monitor` | flag | `False` | Run without process monitoring |
 
-### Interactive Mode (RECOMMENDED)
-```bash
-python app.py --interactive
-```
-
-### Basic Evolution Run
-```bash
-python app.py --generations 25
-```
-
-### Custom Monitoring
-```bash
-python app.py \
-  --generations 10 \
-  --check-interval 30 \
-  --memory-threshold 15.0
-```
-
-### Direct Pipeline Execution
-```bash
-python src/main.py --generations 25
-```
-
-### Smaller Model for Testing
-Edit `config/modelConfig.yaml`:
-```yaml
-name: microsoft/DialoGPT-medium  # Smaller model for faster testing
-```
 
 ## Safety Features
 
