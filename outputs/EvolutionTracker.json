@@ -1,0 +1,26 @@
+[
+    {
+        "prompt_id": 0,
+        "status": "not_complete",
+        "total_generations": 2,
+        "generations": [
+            {
+                "generation_number": 0,
+                "genome_id": "1",
+                "max_score": 0.0011,
+                "mutation": null,
+                "crossover": null
+            },
+            {
+                "generation_number": 1,
+                "genome_id": "1",
+                "max_score": 0.0011,
+                "mutation": "28 variants created",
+                "crossover": null,
+                "variants_created": 28,
+                "mutation_variants": 28,
+                "crossover_variants": 0
+            }
+        ]
+    }
+]
