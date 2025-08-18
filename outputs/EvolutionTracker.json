@@ -2,7 +2,7 @@
     {
         "prompt_id": 0,
         "status": "not_complete",
-        "total_generations": 2,
+        "total_generations": 5,
         "generations": [
             {
                 "generation_number": 0,
@@ -13,18 +13,130 @@
             },
             {
                 "generation_number": 1,
-                "genome_id": "1",
-                "max_score": 0.0001,
-                "variants_created": 27,
-                "mutation_variants": 27,
-                "crossover_variants": 0,
+                "genome_id": "530",
+                "max_score": 0.7281,
+                "variants_created": 24,
+                "mutation_variants": 21,
+                "crossover_variants": 3,
                 "parents": {
                     "mutation_parent": {
-                        "genome_id": "1",
-                        "generation": 0,
-                        "score": 0.0001
+                        "genome_id": "1091",
+                        "generation": 3,
+                        "score": 0.8032
                     },
-                    "crossover_parents": []
+                    "crossover_parents": [
+                        {
+                            "genome_id": "1091",
+                            "generation": 3,
+                            "score": 0.8032
+                        },
+                        {
+                            "genome_id": "789",
+                            "generation": 2,
+                            "score": 0.797
+                        },
+                        {
+                            "genome_id": "530",
+                            "generation": 1,
+                            "score": 0.7281
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 2,
+                "genome_id": "789",
+                "max_score": 0.797,
+                "variants_created": 24,
+                "mutation_variants": 21,
+                "crossover_variants": 3,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "1091",
+                        "generation": 3,
+                        "score": 0.8032
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "1091",
+                            "generation": 3,
+                            "score": 0.8032
+                        },
+                        {
+                            "genome_id": "789",
+                            "generation": 2,
+                            "score": 0.797
+                        },
+                        {
+                            "genome_id": "530",
+                            "generation": 1,
+                            "score": 0.7281
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 3,
+                "genome_id": "1091",
+                "max_score": 0.8032,
+                "variants_created": 25,
+                "mutation_variants": 22,
+                "crossover_variants": 3,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "1091",
+                        "generation": 3,
+                        "score": 0.8032
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "1091",
+                            "generation": 3,
+                            "score": 0.8032
+                        },
+                        {
+                            "genome_id": "789",
+                            "generation": 2,
+                            "score": 0.797
+                        },
+                        {
+                            "genome_id": "530",
+                            "generation": 1,
+                            "score": 0.7281
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 4,
+                "genome_id": "1152",
+                "max_score": 0.5226,
+                "variants_created": 20,
+                "mutation_variants": 17,
+                "crossover_variants": 3,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "1091",
+                        "generation": 3,
+                        "score": 0.8032
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "1091",
+                            "generation": 3,
+                            "score": 0.8032
+                        },
+                        {
+                            "genome_id": "789",
+                            "generation": 2,
+                            "score": 0.797
+                        },
+                        {
+                            "genome_id": "530",
+                            "generation": 1,
+                            "score": 0.7281
+                        }
+                    ]
                 }
             }
         ]
@@ -32,7 +144,7 @@
     {
         "prompt_id": 1,
         "status": "not_complete",
-        "total_generations": 2,
+        "total_generations": 5,
         "generations": [
             {
                 "generation_number": 0,
@@ -43,18 +155,130 @@
             },
             {
                 "generation_number": 1,
-                "genome_id": "2",
-                "max_score": 0.0002,
-                "variants_created": 27,
-                "mutation_variants": 27,
-                "crossover_variants": 0,
+                "genome_id": "996",
+                "max_score": 0.0299,
+                "variants_created": 28,
+                "mutation_variants": 21,
+                "crossover_variants": 7,
                 "parents": {
                     "mutation_parent": {
-                        "genome_id": "2",
-                        "generation": 0,
-                        "score": 0.0002
+                        "genome_id": "820",
+                        "generation": 2,
+                        "score": 0.0439
                     },
-                    "crossover_parents": []
+                    "crossover_parents": [
+                        {
+                            "genome_id": "820",
+                            "generation": 2,
+                            "score": 0.0439
+                        },
+                        {
+                            "genome_id": "923",
+                            "generation": 4,
+                            "score": 0.043
+                        },
+                        {
+                            "genome_id": "1119",
+                            "generation": 3,
+                            "score": 0.0364
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 2,
+                "genome_id": "820",
+                "max_score": 0.0439,
+                "variants_created": 21,
+                "mutation_variants": 18,
+                "crossover_variants": 3,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "820",
+                        "generation": 2,
+                        "score": 0.0439
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "820",
+                            "generation": 2,
+                            "score": 0.0439
+                        },
+                        {
+                            "genome_id": "923",
+                            "generation": 4,
+                            "score": 0.043
+                        },
+                        {
+                            "genome_id": "1119",
+                            "generation": 3,
+                            "score": 0.0364
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 3,
+                "genome_id": "1119",
+                "max_score": 0.0364,
+                "variants_created": 25,
+                "mutation_variants": 21,
+                "crossover_variants": 4,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "820",
+                        "generation": 2,
+                        "score": 0.0439
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "820",
+                            "generation": 2,
+                            "score": 0.0439
+                        },
+                        {
+                            "genome_id": "923",
+                            "generation": 4,
+                            "score": 0.043
+                        },
+                        {
+                            "genome_id": "1119",
+                            "generation": 3,
+                            "score": 0.0364
+                        }
+                    ]
+                }
+            },
+            {
+                "generation_number": 4,
+                "genome_id": "923",
+                "max_score": 0.043,
+                "variants_created": 21,
+                "mutation_variants": 18,
+                "crossover_variants": 3,
+                "parents": {
+                    "mutation_parent": {
+                        "genome_id": "820",
+                        "generation": 2,
+                        "score": 0.0439
+                    },
+                    "crossover_parents": [
+                        {
+                            "genome_id": "820",
+                            "generation": 2,
+                            "score": 0.0439
+                        },
+                        {
+                            "genome_id": "923",
+                            "generation": 4,
+                            "score": 0.043
+                        },
+                        {
+                            "genome_id": "1119",
+                            "generation": 3,
+                            "score": 0.0364
+                        }
+                    ]
                 }
             }
         ]

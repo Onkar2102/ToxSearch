@@ -1,12 +1,18 @@
 {
-  "total_generations": 2,
-  "total_genomes": 55,
+  "total_generations": 5,
+  "total_genomes": 1356,
   "generation_files": {
+    "4": "gen4.json",
+    "3": "gen3.json",
+    "2": "gen2.json",
     "1": "gen1.json",
     "0": "gen0.json"
   },
   "generation_counts": {
-    "1": 53,
+    "4": 329,
+    "3": 318,
+    "2": 326,
+    "1": 381,
     "0": 2
   }
 }
