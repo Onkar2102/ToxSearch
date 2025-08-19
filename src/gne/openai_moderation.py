@@ -295,6 +295,26 @@ class OpenAIModerationEvaluator:
                             self.total_evaluation_time += response_time
                             
                             return moderation_result
+                        else:
+                            # Non-200 response handling to avoid returning None
+                            try:
+                                error_text = await response.text()
+                            except Exception:
+                                error_text = f"HTTP {response.status} with unreadable body"
+                            self.logger.error(
+                                "Moderation API returned non-200 for genome %s: %s - %s",
+                                genome_id,
+                                response.status,
+                                error_text,
+                            )
+                            self.evaluation_count += 1
+                            self.failed_evaluations += 1
+                            return {
+                                "genome_id": genome_id,
+                                "status": "error",
+                                "error": f"HTTP {response.status}: {error_text}",
+                                "evaluation_timestamp": time.time(),
+                            }
                             
             except Exception as e:
                 self.logger.error("Unexpected error evaluating genome %s: %s", genome_id, e, exc_info=True)
@@ -443,6 +463,12 @@ class OpenAIModerationEvaluator:
                     for genome, task in tasks:
                         try:
                             evaluation_result = await evaluate_with_semaphore(genome, task)
+                            # Guard against None results
+                            if not evaluation_result:
+                                genome["status"] = "error"
+                                genome["error"] = "No result returned from moderation API"
+                                batch_errors += 1
+                                continue
                             if evaluation_result.get('status') == 'complete':
                                 genome['moderation_result'] = evaluation_result
                                 north_star_score = evaluation_result.get('scores', {}).get(north_star_metric, 0)
