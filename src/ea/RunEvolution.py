@@ -37,7 +37,7 @@ def find_tracker_entry(evolution_tracker: List[dict], prompt_id: int) -> Optiona
             return entry
     return None
 
-def check_threshold_and_update_tracker(population, north_star_metric, logger, log_file=None, threshold=0.95):
+def check_threshold_and_update_tracker(population, north_star_metric, logger, log_file=None, threshold=0.99):
     """Check threshold achievement and update evolution tracker (flat list version)"""
     with PerformanceLogger(logger, "Check Threshold and Update Tracker"):
         try:
@@ -493,7 +493,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
-def run_evolution(north_star_metric, log_file=None, threshold=0.95, current_cycle=None):
+def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None):
     """Run one evolution generation with comprehensive logging"""
     with PerformanceLogger(get_logger("RunEvolution", log_file), "Run Evolution", 
                           north_star_metric=north_star_metric, population_path=str(population_path)):
