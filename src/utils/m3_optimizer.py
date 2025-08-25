@@ -87,7 +87,8 @@ def estimate_optimal_batch_size(model_name: str = "meta-llama/Llama-3.2-3B-instr
 def benchmark_generation_speed(batch_sizes: list = [1, 2, 4, 8]) -> Dict:
     """Benchmark text generation speed with different batch sizes"""
     try:
-        from gne.LLaMaTextGenerator import LlaMaTextGenerator
+        from gne import get_LLaMaTextGenerator
+        LlaMaTextGenerator = get_LLaMaTextGenerator()
     except ImportError as e:
         print(f"Warning: Could not import LLaMaTextGenerator: {e}")
         print("Skipping benchmark - this requires the full project setup")
@@ -103,7 +104,7 @@ def benchmark_generation_speed(batch_sizes: list = [1, 2, 4, 8]) -> Dict:
         
         try:
             # Update config temporarily
-            config_path = "config/modelConfig.yaml"
+            config_path = "../config/modelConfig.yaml"
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
             
@@ -115,7 +116,7 @@ def benchmark_generation_speed(batch_sizes: list = [1, 2, 4, 8]) -> Dict:
                 yaml.dump(config, f)
             
             # Initialize generator
-            generator = LlaMaTextGenerator()
+            generator = LlaMaTextGenerator(config_path="../config/modelConfig.yaml")
             
             # Benchmark
             start_time = time.time()
@@ -283,7 +284,7 @@ def main():
         print("2. Optimizing Configuration:")
         print("=" * 50)
         config = optimize_config_for_m3()
-        config_path = Path("config/modelConfig.yaml")
+        config_path = Path("../config/modelConfig.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
@@ -343,7 +344,7 @@ def main():
         config = optimize_config_for_m3()
         
         # Save optimized config
-        config_path = Path("config/modelConfig.yaml")
+        config_path = Path("../config/modelConfig.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         

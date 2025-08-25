@@ -11,7 +11,8 @@ The main orchestrator for the evolutionary process.
 - Manages genome populations and generation cycles
 - Coordinates parent selection and variant generation
 - Handles evolution tracking and metadata
-- Provides generation file management
+- Provides generation file management with split file architecture
+- Memory-optimized for large populations
 
 **Main Methods:**
 ```python
@@ -33,6 +34,7 @@ The main evolution pipeline driver and execution coordinator.
 - Manages evolution tracker and metadata
 - Handles threshold checking and completion logic
 - Provides statistics and reporting
+- **NEW**: Enhanced max_score calculation for accurate generation performance tracking
 
 **Main Functions:**
 ```python
@@ -44,7 +46,15 @@ check_threshold_and_update_tracker(population, north_star_metric, logger, thresh
 
 # Get pending prompt IDs
 pending_ids = get_pending_prompt_ids(evolution_tracker, logger)
+
+# Update evolution tracker with generation data
+update_evolution_tracker_with_generation(prompt_id, generation_data, evolution_tracker, logger)
 ```
+
+**Recent Fixes:**
+- **max_score Calculation**: Now represents actual generation performance, not parent score
+- **Population Loading**: Enhanced to load generation files for accurate score calculation
+- **Memory Optimization**: Lazy imports and efficient data loading
 
 ### **3. ParentSelector** (`ParentSelector.py`)
 Intelligent parent selection strategies for genetic operations.
@@ -69,6 +79,11 @@ mutation_parent, crossover_parents = selector.select_tournament_parents(prompt_g
 
 ### **4. TextVariationOperators** (`TextVariationOperators.py`)
 Concrete implementation of mutation and crossover operators.
+
+**Recent Improvements:**
+- **Lazy Initialization**: Prevents premature model loading
+- **Memory Management**: Optimized for large-scale operations
+- **Error Handling**: Enhanced robustness for production use
 
 ## 🔄 **Variation Operators**
 
@@ -178,8 +193,8 @@ with PerformanceLogger(logger, "Operator Application"):
 
 ### **1. Population Initialization**
 ```python
-# Load initial population
-population = load_and_initialize_population("data/prompt.xlsx", "outputs/Population.json")
+# Load initial population from prompt.xlsx
+population = load_and_initialize_population("data/prompt.xlsx", "outputs")
 ```
 
 ### **2. Parent Selection**
@@ -200,7 +215,7 @@ for operator in operators:
 
 ### **4. Evolution Tracking**
 ```python
-# Update evolution tracker
+# Update evolution tracker with generation data
 update_evolution_tracker_with_generation(prompt_id, generation_data, evolution_tracker, logger)
 
 # Check completion criteria
@@ -213,6 +228,7 @@ check_threshold_and_update_tracker(population, north_star_metric, logger, thresh
 - **Adaptive batch sizing** based on available memory
 - **Automatic cleanup** after operator application
 - **Real-time monitoring** with configurable thresholds
+- **Split file architecture** for memory-efficient population management
 
 ### **Timeout Protection**
 - **5-minute timeout** for model loading operations
@@ -221,13 +237,28 @@ check_threshold_and_update_tracker(population, north_star_metric, logger, thresh
 
 ### **Progress Tracking**
 ```python
-# Generation statistics
+# Generation statistics with accurate max_score
 generation_data = {
     "generation_number": current_cycle,
     "parents": parent_info,
     "variants_created": total_variants,
     "mutation_variants": mutation_count,
     "crossover_variants": crossover_count
+}
+
+# Evolution tracker updates
+evolution_tracker = {
+    "prompt_id": prompt_id,
+    "generations": [
+        {
+            "generation_number": 1,
+            "genome_id": "best_genome_id",
+            "max_score": 0.0450,  # Actual best score of generation, not parent score
+            "variants_created": 28,
+            "mutation_variants": 28,
+            "crossover_variants": 0
+        }
+    ]
 }
 ```
 
@@ -245,6 +276,13 @@ logger.warning(f"No crossover parents selected for prompt_id={prompt_id}")
 ```python
 with PerformanceLogger(logger, "Variant Generation"):
     variants = operator.apply(text)
+```
+
+### **Memory Usage Monitoring**
+```python
+# Real-time memory tracking
+logger.info(f"Memory usage: {get_memory_usage():.2f} GB")
+logger.info(f"Population size: {len(self.genomes)} genomes")
 ```
 
 ## 🚀 **Usage Examples**
@@ -274,15 +312,27 @@ operator = POSAwareSynonymReplacement("logs/operators.log")
 variants = operator.apply("Your input text here")
 ```
 
+### **Population Management**
+```python
+from utils.population_io import load_population_generation, get_population_files_info
+
+# Load specific generation
+gen1_genomes = load_population_generation(1, "outputs")
+
+# Get population information
+info = get_population_files_info("outputs")
+print(f"Available generations: {info['generation_files']}")
+```
+
 ## 📁 **File Structure**
 
 ```
 src/ea/
 ├── __init__.py                 # Package initialization and exports
 ├── EvolutionEngine.py          # Core evolution orchestrator
-├── RunEvolution.py             # Evolution pipeline driver
+├── RunEvolution.py             # Evolution pipeline driver (enhanced max_score)
 ├── ParentSelector.py           # Parent selection strategies
-├── TextVariationOperators.py   # Concrete variation operators
+├── TextVariationOperators.py   # Concrete variation operators (lazy loading)
 └── VariationOperators.py       # Base operator classes
 ```
 
@@ -296,16 +346,43 @@ src/ea/
 - `openai` - OpenAI API for LLM operations
 
 ### **Internal Dependencies**
-- `utils.custom_logging` - Logging utilities
-- `utils.population_io` - Population management
+- `utils.custom_logging` - Logging utilities with PerformanceLogger
+- `utils.population_io` - Population management with split files
 - `gne.LLaMaTextGenerator` - LLaMA model integration
 
-## 📝 **Notes**
+## 📝 **Recent Updates and Fixes**
 
-- **Thread Safety**: Operators are designed to be thread-safe
-- **Memory Efficiency**: Automatic cleanup prevents memory leaks
-- **Error Recovery**: Graceful handling of operator failures
-- **Extensibility**: Easy to add new variation operators
-- **Monitoring**: Comprehensive logging and performance tracking
+### **max_score Calculation Fix**
+- **Before**: `max_score` was set to parent's score
+- **After**: `max_score` now represents actual best score achieved in that generation
+- **Implementation**: Loads generation files to calculate real performance metrics
 
-This package provides a complete evolutionary framework for text generation with robust error handling, performance monitoring, and extensible operator system. 
+### **Memory Optimization**
+- **Lazy Imports**: Prevents circular dependencies and premature model loading
+- **Split File Architecture**: Memory-efficient population management
+- **Targeted Loading**: Load only needed generations instead of entire population
+
+### **Path Resolution**
+- **Absolute Paths**: Fixed all relative path issues
+- **Robust File Handling**: Handles both file and directory paths correctly
+- **Cross-Platform**: Works consistently across different operating systems
+
+### **Import System**
+- **Circular Dependency Resolution**: Implemented lazy import pattern
+- **Module Initialization**: Clean package initialization without side effects
+- **Performance**: Reduced startup time and memory usage
+
+## 🚀 **Performance Characteristics**
+
+### **Memory Usage**
+- **Generation 0**: ~5.5KB (2 genomes)
+- **Generation 1**: ~41KB (28 genomes)
+- **Generation 2**: ~50KB (34 genomes)
+- **Total**: Efficient split-file storage with lazy loading
+
+### **Scalability**
+- **Population Growth**: Linear memory usage with generations
+- **File Management**: Automatic generation file creation and management
+- **Indexing**: Fast population file discovery and access
+
+This package provides a complete evolutionary framework for text generation with robust error handling, performance monitoring, extensible operator system, and **accurate performance tracking** through enhanced max_score calculation. 

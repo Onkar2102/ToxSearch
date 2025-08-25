@@ -1,7 +1,7 @@
 import json
 import random
 from typing import List, Dict, Any, Optional
-from utils.custom_logging import get_logger
+from utils import get_custom_logging
 from ea.TextVariationOperators import get_applicable_operators
 from ea.ParentSelector import ParentSelector
 from itertools import combinations
@@ -14,9 +14,41 @@ class EvolutionEngine:
         self.north_star_metric = north_star_metric
         self.log_file = log_file
         self.current_cycle = current_cycle  # Current evolution cycle number
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file)
         self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}")
+
+    def _extract_north_star_score(self, genome: Dict) -> float:
+        """Extract the north star metric score from a genome using the configured metric."""
+        if not genome or not genome.get("moderation_result"):
+            return 0.0
+        
+        moderation_result = genome["moderation_result"]
+        
+        # Try Google API scores first (most comprehensive)
+        if "moderation_results" in moderation_result:
+            google_scores = moderation_result["moderation_results"].get("google", {})
+            if "scores" in google_scores:
+                score = google_scores["scores"].get(self.north_star_metric, 0.0)
+                if score > 0:
+                    return float(score)
+        
+        # Try OpenAI API scores as fallback
+        if "moderation_results" in moderation_result:
+            openai_scores = moderation_result["moderation_results"].get("openai", {})
+            if "scores" in openai_scores:
+                score = openai_scores["scores"].get(self.north_star_metric, 0.0)
+                if score > 0:
+                    return float(score)
+        
+        # Fallback to direct scores if available
+        if "scores" in moderation_result:
+            score = moderation_result["scores"].get(self.north_star_metric, 0.0)
+            if score > 0:
+                return float(score)
+        
+        return 0.0
 
     def update_next_id(self):
         if self.genomes:
@@ -48,7 +80,7 @@ class EvolutionEngine:
         self.logger.info(f"Prompt {prompt_id} genome breakdown: {len(completed_genomes)} completed, {len(pending_genomes)} pending_evolution, {len(other_genomes)} other")
         
         if completed_genomes:
-            max_score = max([(g.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0) for g in completed_genomes])
+            max_score = max([self._extract_north_star_score(g) for g in completed_genomes])
             self.logger.info(f"Best completed genome score for prompt {prompt_id}: {max_score}")
         else:
             self.logger.warning(f"No completed genomes found for prompt {prompt_id}")
@@ -59,7 +91,8 @@ class EvolutionEngine:
         if mutation_parent is None:
             self.logger.warning(f"No mutation parent selected for prompt_id={prompt_id}")
         else:
-            self.logger.info(f"Selected mutation parent for prompt {prompt_id}: genome_id={mutation_parent['id']}, score={(mutation_parent.get('moderation_result') or {}).get('scores', {}).get(self.north_star_metric, 0.0)}")
+            score = self._extract_north_star_score(mutation_parent)
+            self.logger.info(f"Selected mutation parent for prompt {prompt_id}: genome_id={mutation_parent['id']}, score={score}")
         
         if crossover_parents is None:
             self.logger.warning(f"No crossover parents selected for prompt_id={prompt_id}")
@@ -81,7 +114,7 @@ class EvolutionEngine:
         def get_parent_info(parent):
             return {
                 "id": parent["id"],
-                "score": (parent.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                "score": self._extract_north_star_score(parent),
                 "parents_id": parent.get("parents", None)
             }
 
@@ -94,7 +127,7 @@ class EvolutionEngine:
         if mutation_parent:
             generation_data["parents"].append({
                 "id": mutation_parent["id"],
-                "north_star_score": (mutation_parent.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                "north_star_score": self._extract_north_star_score(mutation_parent),
                 "generation": mutation_parent["generation"],
                 "type": "mutation_parent"
             })
@@ -105,7 +138,7 @@ class EvolutionEngine:
             for parent in crossover_parents:
                 generation_data["parents"].append({
                     "id": parent["id"],
-                    "north_star_score": (parent.get("moderation_result") or {}).get("scores", {}).get(self.north_star_metric, 0.0),
+                    "north_star_score": self._extract_north_star_score(parent),
                     "generation": parent["generation"],
                     "type": "crossover_parent"
                 })
@@ -214,13 +247,10 @@ class EvolutionEngine:
         )
         generation_data["variants_created"] = len(unique_offspring)
 
-        # Create new generation file for the new variants
-        if unique_offspring:
-            self._create_new_generation_file(unique_offspring.values(), self.current_cycle)
-
+        # Add new variants to the in-memory population (no separate generation files)
         self.genomes.extend(unique_offspring.values())
-        self.logger.debug(
-            "Saved %d unique variants to the population (mutation: %d, crossover: %d) for evolution cycle %d.",
+        self.logger.info(
+            "Added %d unique variants to the population (mutation: %d, crossover: %d) for evolution cycle %d.",
             generation_data["variants_created"],
             generation_data["mutation_variants"],
             generation_data["crossover_variants"],
@@ -229,24 +259,7 @@ class EvolutionEngine:
         
         return generation_data
 
-    def _create_new_generation_file(self, new_variants, generation_number):
-        """Create a new generation file for the new variants"""
-        from pathlib import Path
-        import json
-        
-        generation_file_path = Path("outputs") / f"gen{generation_number}.json"
-        
-        # Save new variants to generation file
-        variants_list = list(new_variants)
-        
-        try:
-            with open(generation_file_path, 'w', encoding='utf-8') as f:
-                json.dump(variants_list, f, indent=4, ensure_ascii=False)
-            
-            self.logger.info(f"Created new generation file: {generation_file_path} with {len(variants_list)} variants")
-        except Exception as e:
-            self.logger.error(f"Failed to create generation file {generation_file_path}: {e}")
-            raise
+
 
     def load_parents_from_tracker(self, prompt_id: int, generation_number: int, evolution_tracker: List[dict]) -> List[Dict[str, Any]]:
         """

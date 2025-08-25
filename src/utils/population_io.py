@@ -10,9 +10,19 @@ import os
 import json
 from pathlib import Path
 from collections import defaultdict
-import pandas as pd
 import time
-from utils.custom_logging import get_logger, PerformanceLogger
+from utils import get_custom_logging
+
+# Only import pandas when needed for initialization
+def _get_pandas():
+    try:
+        import pandas as pd
+        return pd
+    except ImportError:
+        raise ImportError("pandas is required for Excel file loading. Install with: pip install pandas")
+
+# Get the functions at module level to avoid repeated calls
+get_logger, _, _, PerformanceLogger = get_custom_logging()
 
 
 def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -50,171 +60,193 @@ def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file:
 # ============================================================================
 
 def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
-    """Get information about available population generation files"""
+    """Get information about the single Population.json file"""
     
-    # Always scan for actual generation files to ensure accuracy
-    gen_files = {}
-    gen_counts = {}
-    total_genomes = 0
-    
-    base_path = Path(base_dir)
-    for file_path in base_path.glob("gen*.json"):
-        gen_num = int(file_path.stem.replace("gen", ""))
-        gen_files[gen_num] = file_path.name
-        
-        # Quick count
-        with open(file_path, 'r', encoding='utf-8') as f:
-            genomes = json.load(f)
-            gen_counts[gen_num] = len(genomes)
-            total_genomes += len(genomes)
+    base_path = Path(base_dir).resolve()
+    population_file = base_path / "Population.json"
     
     info = {
-        "total_generations": len(gen_files),
-        "total_genomes": total_genomes,
-        "generation_files": gen_files,
-        "generation_counts": gen_counts
+        "total_generations": 0,
+        "total_genomes": 0,
+        "generation_files": {},
+        "generation_counts": {},
+        "single_file_mode": True,
+        "population_file": "Population.json"
     }
     
-    # Update the index file with current information
-    index_file = Path(base_dir) / "population_index.json"
-    with open(index_file, 'w', encoding='utf-8') as f:
-        json.dump(info, f, indent=2)
+    if population_file.exists():
+        try:
+            with open(population_file, 'r', encoding='utf-8') as f:
+                population = json.load(f)
+            
+            # Calculate statistics from the single file
+            info["total_genomes"] = len(population)
+            
+            # Count genomes by generation
+            generation_counts = {}
+            for genome in population:
+                if genome and "generation" in genome:
+                    gen_num = genome["generation"]
+                    generation_counts[gen_num] = generation_counts.get(gen_num, 0) + 1
+            
+            info["total_generations"] = max(generation_counts.keys()) + 1 if generation_counts else 0
+            info["generation_counts"] = generation_counts
+            
+            # For backward compatibility, create generation_files dict
+            for gen_num in range(info["total_generations"]):
+                info["generation_files"][gen_num] = f"Population.json (gen{gen_num})"
+            
+        except Exception as e:
+            # Silently fail if we can't read the file
+            pass
     
     return info
 
 
+def update_population_index_single_file(base_dir: str, total_genomes: int, *, logger=None, log_file: Optional[str] = None):
+    """Update the population index file for single file mode"""
+    
+    _logger = logger or get_logger("update_population_index", log_file)
+    
+    try:
+        base_dir = str(Path(base_dir).resolve())
+        info = get_population_files_info(base_dir)
+        index_file = Path(base_dir) / "population_index.json"
+        
+        with open(index_file, 'w', encoding='utf-8') as f:
+            json.dump(info, f, indent=2)
+        
+        _logger.debug(f"Updated population index: single file mode, {total_genomes} genomes")
+        
+    except Exception as e:
+        _logger.warning(f"Failed to update population index: {e}")
+
+
 def load_population_generation(generation: int, base_dir: str = "outputs", 
                               *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Load a specific generation from split files"""
+    """Load genomes for a specific generation from the single Population.json file"""
     
     _logger = logger or get_logger("population_io", log_file)
     
-    gen_file = Path(base_dir) / f"gen{generation}.json"
-    
-    with PerformanceLogger(_logger, f"Load Generation {generation}", file_path=str(gen_file)):
-        if not gen_file.exists():
-            _logger.warning(f"Generation {generation} file not found: {gen_file}")
-            return []
-        
+    with PerformanceLogger(_logger, f"Load Generation {generation} from Single File"):
         try:
-            with open(gen_file, 'r', encoding='utf-8') as f:
-                genomes = json.load(f)
+            # Load entire population
+            all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
             
-            _logger.info(f"Loaded generation {generation}: {len(genomes)} genomes")
-            return genomes
+            # Filter by generation
+            generation_genomes = [g for g in all_genomes if g and g.get("generation") == generation]
+            
+            _logger.info(f"Loaded generation {generation}: {len(generation_genomes)} genomes from Population.json")
+            return generation_genomes
             
         except Exception as e:
             _logger.error(f"Failed to load generation {generation}: {e}", exc_info=True)
-            raise
+            return []
 
 
 def load_population_range(start_gen: int, end_gen: int, base_dir: str = "outputs",
                          *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Load multiple generations at once (memory-efficient for specific ranges)"""
+    """Load multiple generations from the single Population.json file"""
     
     _logger = logger or get_logger("population_io", log_file)
     
-    with PerformanceLogger(_logger, f"Load Generations {start_gen}-{end_gen}"):
-        all_genomes = []
-        for gen in range(start_gen, end_gen + 1):
-            genomes = load_population_generation(gen, base_dir, logger=_logger, log_file=log_file)
-            all_genomes.extend(genomes)
-        
-        _logger.info(f"Loaded generations {start_gen}-{end_gen}: {len(all_genomes)} total genomes")
-        return all_genomes
+    with PerformanceLogger(_logger, f"Load Generations {start_gen}-{end_gen} from Single File"):
+        try:
+            # Load entire population
+            all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
+            
+            # Filter by generation range
+            range_genomes = [g for g in all_genomes if g and start_gen <= g.get("generation", 0) <= end_gen]
+            
+            _logger.info(f"Loaded generations {start_gen}-{end_gen}: {len(range_genomes)} genomes from Population.json")
+            return range_genomes
+            
+        except Exception as e:
+            _logger.error(f"Failed to load generation range: {e}", exc_info=True)
+            return []
 
 
 def load_population_lazy(base_dir: str = "outputs", max_gens: Optional[int] = None,
                         *, logger=None, log_file: Optional[str] = None):
-    """Generator that yields genomes one generation at a time (memory-efficient)"""
+    """Generator that yields genomes from the single Population.json file"""
     
     _logger = logger or get_logger("population_io", log_file)
     
-    info = get_population_files_info(base_dir)
-    generations = sorted(info["generation_files"].keys())
-    
-    if max_gens:
-        generations = generations[:max_gens]
-    
-    _logger.info(f"Lazy loading {len(generations)} generations")
-    
-    for gen in generations:
-        genomes = load_population_generation(gen, base_dir, logger=_logger, log_file=log_file)
-        for genome in genomes:
+    try:
+        # Load entire population
+        all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
+        
+        # Apply generation limit if specified
+        if max_gens is not None:
+            all_genomes = [g for g in all_genomes if g and g.get("generation", 0) < max_gens]
+        
+        _logger.info(f"Lazy loading {len(all_genomes)} genomes from Population.json")
+        
+        for genome in all_genomes:
             yield genome
+            
+    except Exception as e:
+        _logger.error(f"Failed to load population lazily: {e}", exc_info=True)
+        return
 
 
 def save_population_generation(genomes: List[Dict[str, Any]], generation: int, 
                               base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None):
-    """Save genomes to a specific generation file"""
+    """Save genomes to the single Population.json file (updates the single file)"""
     
     _logger = logger or get_logger("population_io", log_file)
     
-    gen_file = Path(base_dir) / f"gen{generation}.json"
-    
-    with PerformanceLogger(_logger, f"Save Generation {generation}", file_path=str(gen_file)):
+    with PerformanceLogger(_logger, f"Save Generation {generation} to Single File"):
         try:
-            # Ensure directory exists
-            gen_file.parent.mkdir(parents=True, exist_ok=True)
+            # Load existing population
+            existing_population = load_population(base_dir, logger=_logger, log_file=log_file)
             
-            with open(gen_file, 'w', encoding='utf-8') as f:
-                json.dump(genomes, f, indent=2, ensure_ascii=False)
+            # Remove existing genomes for this generation
+            filtered_population = [g for g in existing_population if g and g.get("generation") != generation]
             
-            size_mb = gen_file.stat().st_size / (1024 * 1024)
-            _logger.info(f"Saved generation {generation}: {len(genomes)} genomes, {size_mb:.2f}MB")
+            # Add new genomes
+            filtered_population.extend(genomes)
             
-            # Update index
-            update_population_index(base_dir, logger=_logger, log_file=log_file)
+            # Save updated population
+            save_population(filtered_population, base_dir, logger=_logger, log_file=log_file)
+            
+            _logger.info(f"Updated Population.json with generation {generation}: {len(genomes)} genomes")
             
         except Exception as e:
             _logger.error(f"Failed to save generation {generation}: {e}", exc_info=True)
             raise
 
 
-def update_population_index(base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None):
-    """Update the population index file after changes"""
-    
-    _logger = logger or get_logger("population_io", log_file)
-    
-    info = get_population_files_info(base_dir)
-    index_file = Path(base_dir) / "population_index.json"
-    
-    with open(index_file, 'w', encoding='utf-8') as f:
-        json.dump(info, f, indent=2)
-    
-    _logger.debug(f"Updated population index: {info['total_generations']} generations, {info['total_genomes']} genomes")
-
-
 def get_latest_generation(base_dir: str = "outputs") -> int:
-    """Get the highest generation number available"""
+    """Get the highest generation number available from the single Population.json file"""
     info = get_population_files_info(base_dir)
-    return max(info["generation_files"].keys()) if info["generation_files"] else 0
+    return info["total_generations"] - 1 if info["total_generations"] > 0 else 0
 
 
 def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = None, 
                                  base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get genomes with specific status across all generations (memory-efficient)"""
+    """Get genomes with specific status from the single Population.json file"""
     
     _logger = logger or get_logger("population_io", log_file)
     
     with PerformanceLogger(_logger, f"Find genomes with status '{status}'"):
-        pending_genomes = []
-        info = get_population_files_info(base_dir)
-        generations = sorted(info["generation_files"].keys())
-        
-        if max_generations:
-            generations = generations[:max_generations]
-        
-        for gen in generations:
-            genomes = load_population_generation(gen, base_dir, logger=_logger, log_file=log_file)
-            gen_pending = [g for g in genomes if g.get("status") == status]
-            pending_genomes.extend(gen_pending)
+        try:
+            # Load entire population
+            all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
             
-            if gen_pending:
-                _logger.debug(f"Generation {gen}: {len(gen_pending)} genomes with status '{status}'")
-        
-        _logger.info(f"Found {len(pending_genomes)} genomes with status '{status}' across {len(generations)} generations")
-        return pending_genomes
+            # Filter by status
+            pending_genomes = [g for g in all_genomes if g and g.get("status") == status]
+            
+            # Apply generation limit if specified
+            if max_generations is not None:
+                pending_genomes = [g for g in pending_genomes if g.get("generation", 0) < max_generations]
+            
+            _logger.info(f"Found {len(pending_genomes)} genomes with status '{status}' from Population.json")
+            return pending_genomes
+            
+        except Exception as e:
+            _logger.error(f"Failed to get pending genomes: {e}", exc_info=True)
+            return []
 
 
 # ============================================================================
@@ -225,17 +257,17 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
     """
     Load population with automatic detection of split vs monolithic format
     
-    If pop_path points to Population.json and split files exist, use split files.
-    Otherwise, fall back to original behavior.
+    If pop_path points to Population.json and it exists, use it directly.
+    Otherwise, fall back to split files if they exist.
     
     Parameters
     ----------
     pop_path : str
         Path to the population file.
     logger : logging.Logger | None
-        Existing logger to reuse; if *None* a new one is created.
+        Existing logger to reuse; if *None* a new one is created
     log_file : str | None
-        Optional log-file path when a new logger is created.
+        Optional log-file path when a new logger is created
 
     Returns
     -------
@@ -247,14 +279,37 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
     with PerformanceLogger(_logger, "Load Population", file_path=pop_path):
         try:
             # Check if we should use split files
-            base_dir = Path(pop_path).parent
-            if base_dir.name == "":
-                base_dir = Path("outputs")
+            pop_path_obj = Path(pop_path)
             
+            # If pop_path is a directory, use it directly
+            if pop_path_obj.is_dir():
+                base_dir = pop_path_obj
+            else:
+                # If it's a file, use its parent directory
+                base_dir = pop_path_obj.parent
+                if base_dir.name == "":
+                    base_dir = Path("outputs")
+            
+            # First, check if Population.json exists (preferred)
+            population_file = base_dir / "Population.json"
+            if population_file.exists():
+                _logger.info("Using monolithic Population.json file (preferred)")
+                try:
+                    with open(population_file, "r", encoding="utf-8") as f:
+                        population = json.load(f)
+
+                    # Clean the population to remove None genomes
+                    population = clean_population(population, logger=_logger, log_file=log_file)
+                    _logger.info("Successfully loaded population with %d genomes from Population.json", len(population))
+                    return population
+                except Exception as e:
+                    _logger.warning("Failed to load Population.json: %s, falling back to split files", e)
+            
+            # Fall back to split files if Population.json doesn't exist or fails
             info = get_population_files_info(str(base_dir))
             
             if info["generation_files"]:
-                _logger.info("Using split population files (memory-efficient mode)")
+                _logger.info("Using split population files (fallback mode)")
                 # Load all generations (but this is still memory-intensive for large populations)
                 all_genomes = []
                 for gen in sorted(info["generation_files"].keys()):
@@ -266,41 +321,37 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
                 _logger.info("Successfully loaded population with %d genomes from split files", len(all_genomes))
                 return all_genomes
             else:
-                # Fall back to original monolithic file
-                _logger.info("Using monolithic Population.json file")
+                # No split files either
                 if not os.path.exists(pop_path):
-                    _logger.error("Population file not found: %s", pop_path)
-                    raise FileNotFoundError(f"Population file not found: {pop_path}")
+                    _logger.error("No population files found: neither Population.json nor split files exist")
+                    raise FileNotFoundError(f"No population files found in {base_dir}")
+                else:
+                    # Try the original pop_path as fallback
+                    _logger.info("Using fallback population file: %s", pop_path)
+                    with open(pop_path, "r", encoding="utf-8") as f:
+                        population = json.load(f)
 
-                with open(pop_path, "r", encoding="utf-8") as f:
-                    population = json.load(f)
+                    # Clean the population to remove None genomes
+                    population = clean_population(population, logger=_logger, log_file=log_file)
+                    _logger.info("Successfully loaded population with %d genomes from fallback file", len(population))
+                    return population
 
-                # Clean the population to remove None genomes
-                population = clean_population(population, logger=_logger, log_file=log_file)
-                _logger.info("Successfully loaded population with %d genomes from monolithic file", len(population))
-                return population
-                
-        except json.JSONDecodeError as e:
-            _logger.error("Failed to parse population JSON: %s", e, exc_info=True)
-            raise
         except Exception as e:
-            _logger.error("Unexpected error loading population: %s", e, exc_info=True)
+            _logger.error("Failed to load population: %s", e, exc_info=True)
             raise
 
 
 def save_population(population: List[Dict[str, Any]], pop_path: str = "outputs/Population.json", 
                    *, logger=None, log_file: Optional[str] = None) -> None:
     """
-    Save population using split files by generation (memory-efficient mode)
-    
-    Automatically splits by generation and saves each generation to separate files.
+    Save entire population to single Population.json file
     
     Parameters
     ----------
     population : List[Dict[str, Any]]
         Population to save.
     pop_path : str
-        Path where to save the population (used to determine base directory).
+        Path where to save the population (can be file or directory path).
     logger : logging.Logger | None
         Existing logger to reuse; if *None* a new one is created.
     log_file : str | None
@@ -313,20 +364,35 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "outputs/P
             # Clean the population before saving
             cleaned_population = clean_population(population, logger=_logger, log_file=log_file)
             
-            base_dir = Path(pop_path).parent
+            # Resolve the path
+            pop_path_obj = Path(pop_path)
             
-            # Group by generation
-            generations = defaultdict(list)
-            for genome in cleaned_population:
-                gen = genome.get('generation', 0)
-                generations[gen].append(genome)
+            # If pop_path is a directory, save as Population.json in it
+            if pop_path_obj.is_dir():
+                output_file = pop_path_obj / "Population.json"
+            else:
+                output_file = pop_path_obj
             
-            # Save each generation
-            for gen, genomes in generations.items():
-                save_population_generation(genomes, gen, str(base_dir), logger=_logger, log_file=log_file)
+            # Ensure directory exists
+            output_file.parent.mkdir(parents=True, exist_ok=True)
             
-            _logger.info("Successfully saved population using split files: %d generations, %d total genomes", 
-                        len(generations), len(cleaned_population))
+            # Sort population by prompt_id, generation, and id for consistency
+            cleaned_population.sort(key=lambda g: (
+                g.get("prompt_id", 0),
+                g.get("generation", 0),
+                g.get("id", "0")
+            ))
+            
+            # Save to single file
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(cleaned_population, f, indent=2, ensure_ascii=False)
+            
+            size_mb = output_file.stat().st_size / (1024 * 1024)
+            _logger.info("Successfully saved population to %s: %d genomes, %.2f MB", 
+                        output_file.name, len(cleaned_population), size_mb)
+            
+            # Update population index to reflect single file mode
+            update_population_index_single_file(str(output_file.parent), len(cleaned_population), logger=_logger, log_file=log_file)
                         
         except Exception as e:
             _logger.error("Failed to save population: %s", e, exc_info=True)
@@ -343,13 +409,9 @@ def load_and_initialize_population(
     *,
     log_file: Optional[str] = None,
 ) -> None:
-    """Read prompts from *input_path* (Excel) and create an initial population.
+    """Load prompts from Excel file and initialize population as single Population.json file"""
 
-    This function was previously located in *utils.initialize_population* and is
-    kept verbatim to maintain behaviour while consolidating population
-    utilities into a single module.
-    """
-
+    get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("initialize_population", log_file)
 
     with PerformanceLogger(
@@ -358,11 +420,14 @@ def load_and_initialize_population(
         try:
             logger.info("Starting population initialization")
             logger.info("Input file: %s", input_path)
-            logger.info("Output file: %s", output_path)
+            logger.info("Output directory: %s", output_path)
 
             if not os.path.exists(input_path):
                 logger.error("Input file not found: %s", input_path)
                 raise FileNotFoundError(f"Input file not found: {input_path}")
+
+            # Load pandas only when needed
+            pd = _get_pandas()
 
             # ---------------------------- Load Excel -----------------------
             with PerformanceLogger(logger, "Load Excel File"):
@@ -406,9 +471,20 @@ def load_and_initialize_population(
                         "id": str(i + 1),
                         "prompt_id": i,
                         "prompt": prompt,
+                        "model_provider": None,
+                        "model_name": None,
+                        "moderation_result": None,
+                        "operator": None,
+                        "parents": [],
                         "generation": 0,
                         "status": "pending_generation",
-                        "created_timestamp": time.time(),
+                        "creation_info": {
+                            "type": "initial",
+                            "operator": "excel_import",
+                            "source_generation": 0,
+                            "evolution_cycle": 0
+                        },
+                        "generation_timestamp": time.time(),
                         "source_file": input_path,
                         "source_column": prompt_column,
                     }
@@ -416,17 +492,9 @@ def load_and_initialize_population(
 
             logger.info("Created %d genomes", len(population))
 
-            # ----------------------------- Save Population ----------------------------
-            save_population(population, output_path, logger=logger)
-
-            # ----------------------------- Save Initial Generation File ----------------------------
-            with PerformanceLogger(logger, "Save Initial Generation File"):
-                gen0_path = Path("outputs/gen0.json")
-                gen0_path.parent.mkdir(exist_ok=True)
-                with open(gen0_path, 'w', encoding='utf-8') as f:
-                    json.dump(population, f, indent=2)
-                
-                logger.info("Saved initial generation file: %s", gen0_path)
+            # ----------------------------- Save Population to single file ----------------------------
+            save_population(population, output_path, logger=logger, log_file=log_file)
+            logger.info("Saved population to single Population.json file")
 
             # ----------------------------- Initialize EvolutionTracker ----------------------------
             with PerformanceLogger(logger, "Initialize EvolutionTracker"):
@@ -435,7 +503,7 @@ def load_and_initialize_population(
                     tracker_entry = {
                         "prompt_id": i,
                         "status": "not_complete",
-                        "total_generations": 0,
+                        "total_generations": 1,  # Generation 0 exists
                         "generations": [
                             {
                                 "generation_number": 0,
@@ -449,33 +517,15 @@ def load_and_initialize_population(
                     evolution_tracker.append(tracker_entry)
                 
                 # Save EvolutionTracker
-                evolution_tracker_path = Path("outputs/EvolutionTracker.json")
+                base_dir = Path(output_path).resolve()
+                evolution_tracker_path = base_dir / "EvolutionTracker.json"
                 evolution_tracker_path.parent.mkdir(exist_ok=True)
                 with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                     json.dump(evolution_tracker, f, indent=2)
                 
                 logger.info("Initialized EvolutionTracker with %d prompt entries", len(evolution_tracker))
 
-            # ----------------------------- Initialize Population Index ----------------------------
-            with PerformanceLogger(logger, "Initialize Population Index"):
-                population_index = {
-                    "total_generations": 1,  # Generation 0
-                    "total_genomes": len(population),
-                    "generation_files": {
-                        "0": "gen0.json"
-                    },
-                    "generation_counts": {
-                        "0": len(population)
-                    }
-                }
-                
-                # Save population index
-                index_path = Path("outputs/population_index.json")
-                index_path.parent.mkdir(exist_ok=True)
-                with open(index_path, 'w', encoding='utf-8') as f:
-                    json.dump(population_index, f, indent=2)
-                
-                logger.info("Initialized population index with %d genomes in generation 0", len(population))
+            logger.info("Population initialization completed successfully")
 
         except Exception:
             logger.exception("Population initialization failed")
@@ -485,6 +535,7 @@ def load_and_initialize_population(
 def validate_population_file(population_path: str, *, log_file: Optional[str] = None) -> Dict[str, Any]:
     """Run sanity checks on a population JSON and return aggregate statistics."""
 
+    get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("validate_population", log_file)
 
     with PerformanceLogger(logger, "Validate Population File", file_path=population_path):
@@ -547,6 +598,7 @@ def sort_population_json(
 
     import collections.abc as _abc
 
+    get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("sort_population", log_file)
 
     with PerformanceLogger(logger, "Sort Population JSON"):
@@ -692,6 +744,191 @@ def load_genomes_by_ids(genome_ids: List[str], generations: List[int], base_dir:
         except Exception as e:
             _logger.error(f"Failed to load genomes by IDs: {e}", exc_info=True)
             return []
+
+
+def consolidate_generations_to_single_file(base_dir: str = "outputs", 
+                                         output_file: str = "Population.json",
+                                         *, logger=None, log_file: Optional[str] = None) -> bool:
+    """
+    Consolidate all split generation files back into a single Population.json file.
+    
+    This function merges all gen*.json files into a single Population.json file,
+    effectively reverting from the split file architecture back to the monolithic approach.
+    
+    Parameters
+    ----------
+    base_dir : str
+        Base directory containing generation files
+    output_file : str
+        Name of the output Population.json file
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    bool
+        True if consolidation was successful, False otherwise
+    """
+    _logger = logger or get_logger("consolidate_generations", log_file)
+    
+    with PerformanceLogger(_logger, "Consolidate Generations to Single File"):
+        try:
+            base_path = Path(base_dir).resolve()
+            output_path = base_path / output_file
+            
+            # Get information about available generation files
+            info = get_population_files_info(str(base_path))
+            
+            if not info["generation_files"]:
+                _logger.warning("No generation files found to consolidate")
+                return False
+            
+            _logger.info(f"Found {len(info['generation_files'])} generation files to consolidate")
+            _logger.info(f"Total genomes across all generations: {info['total_genomes']}")
+            
+            # Load all genomes from all generations
+            all_genomes = []
+            generation_order = sorted(info["generation_files"].keys())
+            
+            for gen_num in generation_order:
+                gen_file = base_path / f"gen{gen_num}.json"
+                if gen_file.exists():
+                    try:
+                        with open(gen_file, 'r', encoding='utf-8') as f:
+                            generation_genomes = json.load(f)
+                        
+                        _logger.info(f"Loaded generation {gen_num}: {len(generation_genomes)} genomes")
+                        all_genomes.extend(generation_genomes)
+                        
+                    except Exception as e:
+                        _logger.error(f"Failed to load generation {gen_num}: {e}")
+                        continue
+            
+            if not all_genomes:
+                _logger.error("No genomes loaded from any generation files")
+                return False
+            
+            # Clean the population (remove None genomes)
+            all_genomes = clean_population(all_genomes, logger=_logger, log_file=log_file)
+            
+            # Sort the population by prompt_id, generation, and id
+            all_genomes.sort(key=lambda g: (
+                g.get("prompt_id", 0),
+                g.get("generation", 0),
+                g.get("id", "0")
+            ))
+            
+            # Save as single Population.json file
+            try:
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(all_genomes, f, indent=2, ensure_ascii=False)
+                
+                size_mb = output_path.stat().st_size / (1024 * 1024)
+                _logger.info(f"Successfully consolidated {len(all_genomes)} genomes into {output_file}")
+                _logger.info(f"File size: {size_mb:.2f} MB")
+                
+                # Create a backup of the original generation files
+                backup_dir = base_path / "generations_backup"
+                backup_dir.mkdir(exist_ok=True)
+                
+                for gen_num in generation_order:
+                    gen_file = base_path / f"gen{gen_num}.json"
+                    if gen_file.exists():
+                        backup_file = backup_dir / f"gen{gen_num}.json"
+                        import shutil
+                        shutil.copy2(gen_file, backup_file)
+                
+                _logger.info(f"Backed up original generation files to {backup_dir}")
+                
+                return True
+                
+            except Exception as e:
+                _logger.error(f"Failed to save consolidated Population.json: {e}")
+                return False
+                
+        except Exception as e:
+            _logger.error(f"Failed to consolidate generations: {e}", exc_info=True)
+            return False
+
+
+def migrate_from_split_to_single(base_dir: str = "outputs", 
+                                *, logger=None, log_file: Optional[str] = None) -> bool:
+    """
+    Complete migration from split file architecture back to single Population.json.
+    
+    This function:
+    1. Consolidates all generation files into Population.json
+    2. Updates the population loading logic to use the single file
+    3. Provides a clean migration path
+    
+    Parameters
+    ----------
+    base_dir : str
+        Base directory containing generation files
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    bool
+        True if migration was successful, False otherwise
+    """
+    _logger = logger or get_logger("migrate_to_single", log_file)
+    
+    with PerformanceLogger(_logger, "Migrate from Split to Single File"):
+        try:
+            # Step 1: Consolidate all generations
+            if not consolidate_generations_to_single_file(base_dir, "Population.json", logger=_logger, log_file=log_file):
+                _logger.error("Failed to consolidate generation files")
+                return False
+            
+            # Step 2: Update population index to reflect single file
+            base_path = Path(base_dir).resolve()
+            index_file = base_path / "population_index.json"
+            
+            if index_file.exists():
+                # Update index to show single file
+                updated_info = {
+                    "total_generations": 1,
+                    "total_genomes": 0,  # Will be calculated from Population.json
+                    "generation_files": {"0": "Population.json"},
+                    "generation_counts": {"0": 0},  # Will be calculated
+                    "migration_note": "Migrated from split files to single Population.json"
+                }
+                
+                try:
+                    with open(index_file, 'w', encoding='utf-8') as f:
+                        json.dump(updated_info, f, indent=2)
+                    _logger.info("Updated population index for single file architecture")
+                except Exception as e:
+                    _logger.warning(f"Failed to update population index: {e}")
+            
+            # Step 3: Verify the consolidated file
+            population_file = base_path / "Population.json"
+            if population_file.exists():
+                try:
+                    with open(population_file, 'r', encoding='utf-8') as f:
+                        consolidated_genomes = json.load(f)
+                    
+                    _logger.info(f"Migration successful! Population.json contains {len(consolidated_genomes)} genomes")
+                    _logger.info("You can now use the single file approach")
+                    
+                    return True
+                    
+                except Exception as e:
+                    _logger.error(f"Failed to verify consolidated file: {e}")
+                    return False
+            else:
+                _logger.error("Population.json was not created during consolidation")
+                return False
+                
+        except Exception as e:
+            _logger.error(f"Migration failed: {e}", exc_info=True)
+            return False
 
 
 # ============================================================================

@@ -5,16 +5,18 @@ import yaml
 import gc
 import psutil
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from utils.custom_logging import get_logger, PerformanceLogger
+from utils import get_custom_logging, get_population_io
 from typing import List, Dict, Any, Optional
 import time
-from utils.population_io import load_population, save_population
+
+# Get the functions at module level to avoid repeated calls
+get_logger, _, _, PerformanceLogger = get_custom_logging()
 
 class LlaMaTextGenerator:
     _MODEL_CACHE = {}
     _DEVICE_CACHE = None
     
-    def __init__(self, model_key="llama", config_path="config/modelConfig.yaml", log_file: Optional[str] = None):
+    def __init__(self, model_key="llama", config_path="../config/modelConfig.yaml", log_file: Optional[str] = None):
         self.log_file = log_file
         self.logger = get_logger("LLaMaTextGenerator", self.log_file)
         self.logger.debug(f"Logger correctly initialized with log_file: {self.log_file}")
@@ -613,9 +615,11 @@ class LlaMaTextGenerator:
 
 
     def _load_population(self, pop_path: str) -> List[Dict[str, Any]]:
+        _, _, load_population, _, _, _, _, _ = get_population_io()
         return load_population(pop_path, logger=self.logger)
-
+    
     def _save_population(self, population: List[Dict[str, Any]], pop_path: str) -> None:
+        _, _, _, save_population, _, _, _, _ = get_population_io()
         save_population(population, pop_path, logger=self.logger)
 
 
@@ -624,6 +628,7 @@ class LlaMaTextGenerator:
         """Process a single genome with comprehensive logging"""
         genome_id = genome.get('id', 'unknown')
         
+        get_logger, _, _, PerformanceLogger = get_custom_logging()
         with PerformanceLogger(self.logger, "Process Genome", genome_id=genome_id):
             try:
                 # Check if genome needs generation

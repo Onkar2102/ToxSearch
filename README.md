@@ -8,11 +8,13 @@ A research framework for AI safety analysis through evolutionary text generation
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Recent Updates](#recent-updates)
 - [app.py Command Line Arguments](#appy-command-line-arguments)
 - [Safety Features](#safety-features)
 - [Documentation](#documentation)
   - [Architecture Overview](ARCHITECTURE.md)
   - [Evolutionary Algorithms](src/ea/README.md)
+  - [Genome Structure](GENOME_STRUCTURE.md)
   - [Generation & Evaluation](#generation--evaluation)
   - [Utilities](#utilities)
 - [Usage Examples](#usage-examples)
@@ -38,7 +40,6 @@ python app.py --generations 25
 python src/main.py --generations 25
 ```
 
-
 ### **Monitoring Features**
 - **Timeout Protection**: 5-minute timeout for model loading
 - **CPU Fallback**: Automatic fallback to CPU if MPS hangs
@@ -46,6 +47,20 @@ python src/main.py --generations 25
 - **Stuck Process Detection**: Identifies and restarts stuck processes
 - **Graceful Recovery**: Saves state before restarting
 
+## Recent Updates
+
+### **Latest Fixes (Latest Session)**
+- **Fixed `max_score` Calculation**: `max_score` now represents the actual best score achieved in each generation, not the parent's score
+- **Memory Optimization**: Implemented lazy imports and optimized memory usage for large populations
+- **Path Resolution**: Fixed all relative path issues with absolute path resolution
+- **Import Optimization**: Resolved circular dependency issues with lazy import pattern
+- **Evolution Tracker**: Enhanced tracking to properly record generation performance
+
+### **Key Improvements**
+- **Population Management**: Split file architecture for memory efficiency (gen0.json, gen1.json, etc.)
+- **Evolution Tracking**: Comprehensive tracking with `EvolutionTracker.json` and `population_index.json`
+- **Hybrid Moderation**: Google Perspective API + OpenAI moderation for comprehensive safety evaluation
+- **M3 Mac Optimization**: Specialized optimizations for Apple Silicon performance
 
 ## app.py Command Line Arguments
 
@@ -62,7 +77,6 @@ python src/main.py --generations 25
 | `--setup` | flag | `False` | Run full environment setup (install requirements, optimize config) |
 | `--no-monitor` | flag | `False` | Run without process monitoring |
 
-
 ## Safety Features
 
 - **Automatic Restart**: Detects and recovers from stuck processes
@@ -70,6 +84,7 @@ python src/main.py --generations 25
 - **Timeout Protection**: Prevents infinite hanging
 - **State Preservation**: Saves progress before restarting
 - **Comprehensive Logging**: Detailed monitoring and debugging information
+- **Hybrid Moderation**: Dual API approach for robust safety evaluation
 
 ## Documentation
 
@@ -79,16 +94,73 @@ Comprehensive system architecture, component interactions, and data flow diagram
 ### **[Evolutionary Algorithms](src/ea/README.md)**
 Complete guide to genetic algorithms, variation operators, and evolution strategies.
 
+### **[Genome Structure](GENOME_STRUCTURE.md)**
+Detailed documentation of genome data structure, fields, and lifecycle management.
+
 ### **Generation & Evaluation** (`src/gne/`)
 - `LLaMaTextGenerator.py` - LLaMA model integration with memory management
-- `openai_moderation.py` - OpenAI moderation API for safety evaluation
+- `hybrid_moderation.py` - Hybrid moderation using Google Perspective API + OpenAI
 
 ### **Utilities** (`src/utils/`)
-- `population_io.py` - Population data management with EvolutionTracker
+- `population_io.py` - Population data management with split files and EvolutionTracker
 - `custom_logging.py` - Performance and memory logging
 - `m3_optimizer.py` - M3 Mac optimization utilities
 - `config.py` - Configuration management
 
+## Usage Examples
+
+### **Basic Evolution Run**
+```bash
+# Run evolution until threshold is reached
+python src/main.py --threshold 0.99
+
+# Run for specific number of generations
+python src/main.py --generations 10
+```
+
+### **Population Management**
+```bash
+# Initialize population from prompt.xlsx
+python -c "from src.utils.population_io import load_and_initialize_population; load_and_initialize_population('data/prompt.xlsx', 'outputs')"
+
+# Load specific generation
+python -c "from src.utils.population_io import load_population_generation; genomes = load_population_generation(1, 'outputs')"
+```
+
+## Configuration
+
+The system uses `config/modelConfig.yaml` for:
+- Model parameters (LLaMA 3.2 3B Instruct)
+- Memory optimization settings
+- Batch processing configuration
+- API keys and endpoints
+
+## Monitoring & Recovery
+
+- **Real-time Monitoring**: Memory usage, process health, execution time
+- **Automatic Recovery**: Detects stuck processes and restarts automatically
+- **Progress Tracking**: EvolutionTracker.json for comprehensive progress monitoring
+- **Performance Logging**: Detailed timing and resource usage metrics
+
+## Output Structure
+
+```
+outputs/
+├── gen0.json              # Generation 0 (initial population)
+├── gen1.json              # Generation 1 variants
+├── gen2.json              # Generation 2 variants
+├── population_index.json  # Population file index
+├── EvolutionTracker.json  # Evolution progress tracking
+└── final_statistics.json  # Final analysis results
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## License
 

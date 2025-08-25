@@ -1,28 +1,75 @@
 import os
 import json
 import time
+import hashlib
+import threading
 from typing import List, Dict, Optional, Any
 from dotenv import load_dotenv
-from utils.custom_logging import get_logger, get_log_filename, PerformanceLogger
-from utils.population_io import load_population, save_population
+from utils import get_custom_logging, get_population_io
+from concurrent.futures import ThreadPoolExecutor
 
 # Load environment variables
 load_dotenv()
 
 # Placeholder for module-level logger
+get_logger, get_log_filename, _, _ = get_custom_logging()
 logger = get_logger("hybrid_moderation", get_log_filename())
+
+# Simple in-memory cache for moderation results
+_moderation_cache = {}
+_cache_lock = threading.Lock()
+
+# Global thread pool for async operations
+_thread_pool = None
+
+def _get_thread_pool():
+    """Get or create thread pool for async operations"""
+    global _thread_pool
+    if _thread_pool is None:
+        _thread_pool = ThreadPoolExecutor(max_workers=8)
+    return _thread_pool
+
+def _cleanup_thread_pool():
+    """Clean up thread pool to prevent resource leaks"""
+    global _thread_pool
+    if _thread_pool is not None:
+        _thread_pool.shutdown(wait=True)
+        _thread_pool = None
+
+def _get_text_hash(text: str, api_name: str = "") -> str:
+    """Generate a hash for text and API to use as cache key"""
+    # Include API name in hash to prevent cross-API cache conflicts
+    cache_key = f"{api_name}:{text}"
+    return hashlib.md5(cache_key.encode('utf-8')).hexdigest()
+
+def _get_cached_result(text: str, api_name: str = "") -> Optional[Dict]:
+    """Get cached moderation result if available for specific API"""
+    text_hash = _get_text_hash(text, api_name)
+    with _cache_lock:
+        return _moderation_cache.get(text_hash)
+
+def _cache_result(text: str, result: Dict, api_name: str = ""):
+    """Cache moderation result for specific API"""
+    text_hash = _get_text_hash(text, api_name)
+    with _cache_lock:
+        _moderation_cache[text_hash] = result
 
 class HybridModerationEvaluator:
     """Hybrid moderation evaluator using both Google Perspective API and OpenAI moderation"""
     
-    def __init__(self, log_file: Optional[str] = None, config_path: str = "config/modelConfig.yaml"):
+    def __init__(self, log_file: Optional[str] = None, config_path: str = None):
         """Initialize the hybrid moderation evaluator"""
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("HybridModerationEvaluator", log_file)
         self.logger.info("Initializing Hybrid Moderation Evaluator")
 
         # Load model config for batch size settings
         try:
             import yaml
+            if config_path is None:
+                from pathlib import Path
+                project_root = Path(__file__).resolve().parents[2]
+                config_path = project_root / "config" / "modelConfig.yaml"
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
             model_key = list(config.keys())[0] if config else "llama"
@@ -84,6 +131,12 @@ class HybridModerationEvaluator:
     
     def _evaluate_with_google(self, text: str, genome_id: str) -> Optional[Dict[str, Any]]:
         """Evaluate text using Google Perspective API"""
+        # Check cache first
+        cached = _get_cached_result(text, "google")
+        if cached:
+            self.logger.debug("Using cached Google result for genome %s", genome_id)
+            return cached
+            
         try:
             analyze_request = {
                 'comment': {
@@ -116,7 +169,7 @@ class HybridModerationEvaluator:
             # Determine if flagged
             flagged = normalized_scores.get("toxicity", 0.0) > 0.5
             
-            return {
+            result = {
                 "genome_id": genome_id,
                 "status": "complete",
                 "flagged": flagged,
@@ -126,12 +179,22 @@ class HybridModerationEvaluator:
                 "model": "perspective-api"
             }
             
+            # Cache the result
+            _cache_result(text, result, "google")
+            return result
+            
         except Exception as e:
             self.logger.error("Google API evaluation failed for genome %s: %s", genome_id, e)
             return None
     
     def _evaluate_with_openai(self, text: str, genome_id: str) -> Optional[Dict[str, Any]]:
         """Evaluate text using OpenAI moderation API"""
+        # Check cache first
+        cached = _get_cached_result(text, "openai")
+        if cached:
+            self.logger.debug("Using cached OpenAI result for genome %s", genome_id)
+            return cached
+            
         try:
             response = self.openai_client.moderations.create(
                 model="text-moderation-latest",
@@ -151,7 +214,7 @@ class HybridModerationEvaluator:
             # Determine if flagged
             flagged = result["results"][0].get("flagged", False)
             
-            return {
+            result = {
                 "genome_id": genome_id,
                 "status": "complete",
                 "flagged": flagged,
@@ -160,6 +223,10 @@ class HybridModerationEvaluator:
                 "api_version": "openai",
                 "model": "text-moderation-latest"
             }
+            
+            # Cache the result
+            _cache_result(text, result, "openai")
+            return result
             
         except Exception as e:
             self.logger.error("OpenAI API evaluation failed for genome %s: %s", genome_id, e)
@@ -194,6 +261,7 @@ class HybridModerationEvaluator:
     
     def _evaluate_text_hybrid(self, text: str, genome_id: str) -> Dict[str, Any]:
         """Evaluate text using both available APIs"""
+        get_logger, _, _, PerformanceLogger = get_custom_logging()
         with PerformanceLogger(self.logger, "Evaluate Text Hybrid", genome_id=genome_id, text_length=len(text)):
             try:
                 self.logger.debug("Evaluating text for genome %s: %d characters", genome_id, len(text))
@@ -258,6 +326,7 @@ class HybridModerationEvaluator:
         if batch_size is None:
             batch_size = self.model_cfg.get("evaluation_batch_size", 10)
         
+        get_logger, _, _, PerformanceLogger = get_custom_logging()
         with PerformanceLogger(self.logger, "Evaluate Population Hybrid", 
                              population_size=len(population), north_star_metric=north_star_metric, batch_size=batch_size):
             try:
@@ -333,6 +402,7 @@ class HybridModerationEvaluator:
                         self.logger.info("Saving population after evaluation batch %d: %d processed, %d errors", 
                                        batch_count, batch_processed, batch_errors)
                         if pop_path:
+                            _, _, _, save_population, _, _, _, _ = get_population_io()
                             save_population(population, pop_path, logger=self.logger)
                             self.logger.debug("Population saved after batch %d", batch_count)
                     
@@ -383,17 +453,20 @@ class HybridModerationEvaluator:
     
     def evaluate_population_sync(self, pop_path: str, north_star_metric: str = "toxicity") -> None:
         """Main sync method to evaluate population with hybrid moderation"""
+        get_logger, _, _, PerformanceLogger = get_custom_logging()
         with PerformanceLogger(self.logger, "Evaluate Population Hybrid", pop_path=pop_path, north_star_metric=north_star_metric):
             try:
                 self.logger.info("Starting hybrid population evaluation pipeline")
                 
                 # Load population
+                _, _, load_population, _, _, _, _, _ = get_population_io()
                 population = load_population(pop_path, logger=self.logger)
                 
                 # Evaluate population with hybrid moderation
                 updated_population = self._evaluate_population_sync(population, north_star_metric, pop_path=pop_path)
                 
                 # Final save
+                _, _, _, save_population, _, _, _, _ = get_population_io()
                 save_population(updated_population, pop_path, logger=self.logger)
                 
                 self.logger.info("Hybrid population evaluation completed successfully")
@@ -405,6 +478,7 @@ class HybridModerationEvaluator:
 def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None, 
                                north_star_metric: str = "toxicity") -> None:
     """Convenience function to run hybrid moderation on population"""
+    get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("run_moderation", log_file)
     
     with PerformanceLogger(logger, "Run Hybrid Moderation on Population", 
@@ -412,8 +486,11 @@ def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None,
         try:
             logger.info("Starting hybrid moderation evaluation for population")
             
-            # Create evaluator
-            evaluator = HybridModerationEvaluator(log_file=log_file)
+            # Create evaluator with absolute path
+            from pathlib import Path
+            project_root = Path(__file__).resolve().parents[2]
+            config_path = project_root / "config" / "modelConfig.yaml"
+            evaluator = HybridModerationEvaluator(config_path=str(config_path), log_file=log_file)
             
             # Run evaluation
             evaluator.evaluate_population_sync(pop_path, north_star_metric)

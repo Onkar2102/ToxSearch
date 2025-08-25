@@ -1,6 +1,6 @@
 import random
 from typing import List, Dict, Any, Optional, Tuple
-from utils.custom_logging import get_logger
+from utils import get_custom_logging
 
 class ParentSelector:
     """
@@ -17,8 +17,40 @@ class ParentSelector:
             log_file (Optional[str]): Log file path for logging
         """
         self.north_star_metric = north_star_metric
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("ParentSelector", log_file)
         self.logger.debug(f"ParentSelector initialized with north_star_metric={north_star_metric}")
+    
+    def _extract_tournament_score(self, genome: Dict) -> float:
+        """Extract score for tournament selection using the configured north star metric."""
+        if not genome or not genome.get("moderation_result"):
+            return 0.0
+        
+        moderation_result = genome["moderation_result"]
+        
+        # Try Google API scores first (most comprehensive)
+        if "moderation_results" in moderation_result:
+            google_scores = moderation_result["moderation_results"].get("google", {})
+            if "scores" in google_scores:
+                score = google_scores["scores"].get(self.north_star_metric, 0.0)
+                if score > 0:
+                    return float(score)
+        
+        # Try OpenAI API scores as fallback
+        if "moderation_results" in moderation_result:
+            openai_scores = moderation_result["moderation_results"].get("openai", {})
+            if "scores" in openai_scores:
+                score = openai_scores["scores"].get(self.north_star_metric, 0.0)
+                if score > 0:
+                    return float(score)
+        
+        # Fallback to direct scores if available
+        if "scores" in moderation_result:
+            score = moderation_result["scores"].get(self.north_star_metric, 0.0)
+            if score > 0:
+                return float(score)
+        
+        return 0.0
     
     def select_parents(self, prompt_genomes: List[Dict[str, Any]], prompt_id: int) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
         """
@@ -99,7 +131,7 @@ class ParentSelector:
             self.logger.warning(f"No valid parents for prompt_id={prompt_id}. Skipping parent selection.")
             return None, None
         self.logger.debug(f"Large population selection for prompt_id={prompt_id}: "
-                         f"mutation_parent={mutation_parent['id']} (score={mutation_parent.get(self.north_star_metric, 0.0)}), "
+                         f"mutation_parent={mutation_parent['id']} (score={self._extract_tournament_score(mutation_parent)}), "
                          f"crossover_parents={[g['id'] for g in crossover_parents]}")
         return mutation_parent, crossover_parents
     
@@ -117,11 +149,35 @@ class ParentSelector:
             """Safely extract the north-star fitness score from a genome."""
             if genome is None:
                 return 0.0
-            return float(
-                (genome.get("moderation_result") or {})
-                      .get("scores", {})
-                      .get(self.north_star_metric, 0.0)
-            )
+            
+            # Handle different moderation result structures
+            moderation_result = genome.get("moderation_result")
+            if not moderation_result:
+                return 0.0
+            
+            # Try Google API scores first (most comprehensive)
+            if "moderation_results" in moderation_result:
+                google_scores = moderation_result["moderation_results"].get("google", {})
+                if "scores" in google_scores:
+                    score = google_scores["scores"].get(self.north_star_metric, 0.0)
+                    if score > 0:
+                        return float(score)
+            
+            # Try OpenAI API scores as fallback
+            if "moderation_results" in moderation_result:
+                openai_scores = moderation_result["moderation_results"].get("openai", {})
+                if "scores" in openai_scores:
+                    score = openai_scores["scores"].get(self.north_star_metric, 0.0)
+                    if score > 0:
+                        return float(score)
+            
+            # Fallback to direct scores if available
+            if "scores" in moderation_result:
+                score = moderation_result["scores"].get(self.north_star_metric, 0.0)
+                if score > 0:
+                    return float(score)
+            
+            return 0.0
 
         # Sort in descending order of fitness
         return sorted(genomes, key=lambda g: -_fitness(g))
@@ -142,7 +198,7 @@ class ParentSelector:
         
         # Tournament selection for mutation parent
         tournament = random.sample(prompt_genomes, tournament_size)
-        mutation_parent = max(tournament, key=lambda g: g.get(self.north_star_metric, 0.0))
+        mutation_parent = max(tournament, key=lambda g: self._extract_tournament_score(g))
         
         # Select crossover parents from remaining genomes
         remaining_genomes = [g for g in prompt_genomes if g != mutation_parent]
@@ -166,7 +222,7 @@ class ParentSelector:
             return None, None
         
         # Calculate fitness values and total fitness
-        fitness_values = [max(0.001, g.get(self.north_star_metric, 0.0)) for g in prompt_genomes]
+        fitness_values = [max(0.001, self._extract_tournament_score(g)) for g in prompt_genomes]
         total_fitness = sum(fitness_values)
         
         if total_fitness == 0:

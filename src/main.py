@@ -4,11 +4,21 @@ import json
 import multiprocessing
 import atexit
 import signal
-from utils.custom_logging import get_logger, get_log_filename, log_system_info, PerformanceLogger
+from utils import get_custom_logging
 import os
 from typing import Optional
 from pathlib import Path
-import psutil
+# Optional import for health monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    print("Warning: psutil not available. Health monitoring will be limited.")
+
+# ============================================================================
+# SECTION 1: SYSTEM CONFIGURATION AND HEALTH MONITORING
+# ============================================================================
 
 # Updated to use hybrid moderation system (Google Perspective API + OpenAI Moderation)
 # This provides redundancy and comprehensive content evaluation
@@ -37,10 +47,11 @@ def cleanup_multiprocessing():
         
         # Clean up thread pools from moderation systems
         try:
-            from gne.openai_moderation import _cleanup_thread_pool
+            from gne import get_hybrid_moderation_cleanup
+            _cleanup_thread_pool = get_hybrid_moderation_cleanup()
             _cleanup_thread_pool()
         except ImportError:
-            pass  # OpenAI moderation not available
+            pass  # Hybrid moderation not available
     except Exception:
         pass
 
@@ -56,21 +67,28 @@ def check_process_health():
         return False, f"Process running too long: {runtime:.1f}s"
     
     # Check memory usage
-    try:
-        process = psutil.Process()
-        memory_gb = process.memory_info().rss / (1024**3)
-        if memory_gb > 20:  # More than 20GB memory usage
-            return False, f"Memory usage too high: {memory_gb:.1f}GB"
-    except Exception as e:
-        print(f"Warning: Could not check memory usage: {e}")
+    if PSUTIL_AVAILABLE:
+        try:
+            process = psutil.Process()
+            memory_gb = process.memory_info().rss / (1024**3)
+            if memory_gb > 20:  # More than 20GB memory usage
+                return False, f"Memory usage too high: {memory_gb:.1f}GB"
+        except Exception as e:
+            print(f"Warning: Could not check memory usage: {e}")
+    else:
+        print("Warning: psutil not available - skipping memory check")
     
     # Check CPU usage - if it's been 0% for too long, it might be stuck
-    try:
-        cpu_percent = process.cpu_percent(interval=1)
-        if cpu_percent < 1 and runtime > 300:  # Less than 1% CPU for 5+ minutes
-            return False, f"Process appears stuck (CPU: {cpu_percent}%, runtime: {runtime:.1f}s)"
-    except Exception as e:
-        print(f"Warning: Could not check CPU usage: {e}")
+    if PSUTIL_AVAILABLE:
+        try:
+            process = psutil.Process()
+            cpu_percent = process.cpu_percent(interval=1)
+            if cpu_percent < 1 and runtime > 300:  # Less than 1% CPU for 5+ minutes
+                return False, f"Process appears stuck (CPU: {cpu_percent}%, runtime: {runtime:.1f}s)"
+        except Exception as e:
+            print(f"Warning: Could not check CPU usage: {e}")
+    else:
+        print("Warning: psutil not available - skipping CPU check")
     
     last_heartbeat = current_time
     return True, "Process healthy"
@@ -90,20 +108,63 @@ def restart_process():
     # Restart the process
     os.execv(sys.executable, ['python'] + sys.argv)
 
-def main(model_names=None, max_generations=None, north_star_threshold=0.99):
-    """Main execution pipeline for evolutionary text generation and safety analysis"""
-    # Register cleanup function
-    atexit.register(cleanup_multiprocessing)
+# ============================================================================
+# SECTION 2: UTILITY FUNCTIONS
+# ============================================================================
+
+def get_project_root():
+    """Get the absolute path to the project root directory"""
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    # Go up one level to get to the project root
+    project_root = script_dir.parent
+    return project_root.resolve()
+
+def get_config_path():
+    """Get the absolute path to the config directory"""
+    return get_project_root() / "config" / "modelConfig.yaml"
+
+def get_data_path():
+    """Get the absolute path to the data directory"""
+    return get_project_root() / "data" / "prompt.xlsx"
+
+def get_outputs_path():
+    """Get the absolute path to the outputs directory"""
+    return get_project_root() / "outputs"
+
+def _extract_north_star_score(genome, metric):
+    """Extract the north star metric score from a genome using the configured metric."""
+    if not genome or not genome.get("moderation_result"):
+        return 0.0
     
-    # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    moderation_result = genome["moderation_result"]
     
-    log_file = get_log_filename()
-    print(f"DEBUG: log_file path resolved to: {log_file}")
-    logger = get_logger("main", log_file)
+    # Try Google API scores first (most comprehensive)
+    if "moderation_results" in moderation_result:
+        google_scores = moderation_result["moderation_results"].get("google", {})
+        if "scores" in google_scores:
+            score = google_scores["scores"].get(metric, 0.0)
+            if score > 0:
+                return float(score)
     
-    # Start health check thread
+    # Try OpenAI API scores as fallback
+    if "moderation_results" in moderation_result:
+        openai_scores = moderation_result["moderation_results"].get("openai", {})
+        if "scores" in openai_scores:
+            score = openai_scores["scores"].get(metric, 0.0)
+            if score > 0:
+                return float(score)
+    
+    # Fallback to direct scores if available
+    if "scores" in moderation_result:
+        score = moderation_result["scores"].get(metric, 0.0)
+        if score > 0:
+            return float(score)
+    
+    return 0.0
+
+def setup_health_monitoring(logger):
+    """Setup health monitoring thread"""
     import threading
     def health_check_thread():
         while True:
@@ -116,6 +177,77 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     health_thread = threading.Thread(target=health_check_thread, daemon=True)
     health_thread.start()
     logger.info("Automatic restart mechanism enabled")
+
+# ============================================================================
+# SECTION 3: INITIALIZATION AND GEN0 CREATION
+# ============================================================================
+
+def initialize_system(logger, log_file):
+    """Initialize the system components and create gen0 if needed"""
+    logger.info("Initializing optimized pipeline for M3 Mac...")
+    
+    # Import required modules
+    from utils import get_population_io
+    from gne import get_LLaMaTextGenerator
+    
+    # Make these functions available globally in this function
+    global load_population, save_population, sort_population_json
+    
+    # Get population IO functions
+    load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, _, _ = get_population_io()
+    
+    # Initialize LLaMA generator
+    LlaMaTextGenerator = get_LLaMaTextGenerator()
+    generator = LlaMaTextGenerator(config_path=str(get_config_path()), log_file=log_file)
+    
+    # Check if population already exists
+    population_file = get_outputs_path() / "Population.json"
+    
+    if not population_file.exists():
+        try:
+            logger.info("No population file found. Initializing population from prompt.xlsx...")
+            load_and_initialize_population(
+                input_path=str(get_data_path()),
+                output_path=str(get_outputs_path()),
+                log_file=log_file
+            )
+            logger.info("Population successfully initialized and saved.")
+        except Exception as e:
+            logger.error("Failed to initialize population: %s", e, exc_info=True)
+            raise
+    else:
+        logger.info("Existing population file found. Skipping initialization.")
+        # Get basic info about the population
+        try:
+            population = load_population(str(get_outputs_path()), logger=logger)
+            generations = set(g.get("generation", 0) for g in population if g)
+            logger.info("Available generations: %s", sorted(generations))
+        except Exception as e:
+            logger.warning("Could not read existing population info: %s", e)
+    
+    return generator
+
+# ============================================================================
+# SECTION 4: MAIN EXECUTION PIPELINE
+# ============================================================================
+
+def main(model_names=None, max_generations=None, north_star_threshold=0.99):
+    """Main execution pipeline for evolutionary text generation and safety analysis"""
+    # Register cleanup function
+    atexit.register(cleanup_multiprocessing)
+    
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Setup logging
+    get_logger, get_log_filename, log_system_info, PerformanceLogger = get_custom_logging()
+    log_file = get_log_filename()
+    print(f"DEBUG: log_file path resolved to: {log_file}")
+    logger = get_logger("main", log_file)
+    
+    # Setup health monitoring
+    setup_health_monitoring(logger)
     
     # Log system information at startup
     log_system_info(logger)
@@ -129,41 +261,18 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     logger.info("North star threshold for stopping: %.4f (challenging target)", north_star_threshold)
     logger.info("Maximum generations allowed for evolution: %s", max_generations)
 
-    logger.info("Initializing optimized pipeline for M3 Mac...")
-
-    from utils.population_io import load_and_initialize_population, sort_population_json
-    from gne.LLaMaTextGenerator import LlaMaTextGenerator
-    generator = LlaMaTextGenerator(log_file=log_file)
-
-    # Phase 1: Population Initialization
-    with PerformanceLogger(logger, "Population Initialization"):
-        from utils.population_io import get_population_files_info, load_population
-        population_info = get_population_files_info("outputs")
-        
-        if not population_info["generation_files"]:
-            try:
-                logger.info("No population files found. Initializing population from prompt.xlsx...")
-                load_and_initialize_population(
-                    input_path="data/prompt.xlsx",
-                    output_path="outputs/Population.json",
-                    log_file=log_file
-                )
-                logger.info("Population successfully initialized and saved.")
-            except Exception as e:
-                logger.error("Failed to initialize population: %s", e, exc_info=True)
-                return
-        else:
-            logger.info("Existing population files found. Skipping initialization.")
-            logger.info("Available generations: %s", sorted(population_info["generation_files"].keys()))
-
-    # Main evolution loop with optimized processing
-    generation_count = 0
+    # Phase 1:Initialize system and create gen0 if needed
+    try:
+        generator = initialize_system(logger, log_file)
+    except Exception as e:
+        logger.error("System initialization failed: %s", e, exc_info=True)
+        return
 
     # Phase 2: Text Generation (Optimized with batching)
     with PerformanceLogger(logger, "Text Generation Phase"):
         try:
             logger.info("Generating responses using optimized LLaMA model...")
-            generator.process_population()
+            generator.process_population(pop_path=str(get_outputs_path()))
             logger.info("Text generation completed and population updated.")
         except Exception as e:
             logger.error("Generation failed: %s", e, exc_info=True)
@@ -172,67 +281,30 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     # Phase 3: Evaluation (Hybrid moderation using Google + OpenAI APIs)
     with PerformanceLogger(logger, "Evaluation Phase"):
         try:
-            from gne.hybrid_moderation import run_moderation_on_population
+            from gne import get_run_moderation_on_population
+            run_moderation_on_population = get_run_moderation_on_population()
             logger.info("Evaluating generated responses using hybrid moderation (Google + OpenAI)...")
             run_moderation_on_population(
-                pop_path="outputs/Population.json",
+                pop_path=str(get_outputs_path()),
                 log_file=log_file,
-                north_star_metric=north_star_metric
+                north_star_metric=north_star_threshold
             )
             logger.info("Evaluation completed and population updated with moderation scores.")
         except Exception as e:
             logger.error("Evaluation failed: %s", e, exc_info=True)
             return
 
+    # Main evolution loop
+    generation_count = 0
     while True:
         generation_count += 1
         logger.info("=== Starting Generation %d ===", generation_count)
         
-        # Check stopping conditions before evolution
-        with PerformanceLogger(logger, "Stopping Conditions Check"):
-            try:
-                # Check generation limit - should stop BEFORE starting generation N+1
-                if max_generations is not None and generation_count >= max_generations:
-                    logger.info("Maximum generation limit (%d) reached. Stopping pipeline.", max_generations)
-                    break
-                    
-                # Check if ALL prompts have reached the threshold (not just any single prompt)
-                from utils.population_io import load_population
-                population = load_population("outputs/Population.json", logger=logger)
-                
-                # Get all unique prompt IDs
-                all_prompt_ids = set(g.get("prompt_id") for g in population if g is not None)
-                
-                # Get completed prompt IDs (those with status "complete")
-                completed_prompt_ids = set(g.get("prompt_id") for g in population 
-                                        if g is not None and g.get("status") == "complete")
-                
-                # Get the highest score achieved across all prompts for logging
-                max_score = max([
-                    (g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0) 
-                    for g in population if g is not None
-                ], default=0)
-                
-                logger.info("Progress check - Completed prompts: %d/%d, Max %s score: %.4f", 
-                           len(completed_prompt_ids), len(all_prompt_ids), north_star_metric, max_score)
-                
-                # Only stop when ALL prompts are complete
-                if completed_prompt_ids == all_prompt_ids and len(all_prompt_ids) > 0:
-                    logger.info("🎉 ALL prompts (%d) have achieved the threshold! Stopping pipeline.", len(all_prompt_ids))
-                    logger.info("Final max %s score: %.4f", north_star_metric, max_score)
-                    break
-                elif len(completed_prompt_ids) > 0:
-                    logger.info("✅ %d/%d prompts completed. Continuing evolution for remaining prompts...", 
-                               len(completed_prompt_ids), len(all_prompt_ids))
-                    
-            except Exception as e:
-                logger.error("Failed to check stopping conditions: %s", e, exc_info=True)
-                break
-
         # Phase 4: Evolution (Now enabled and optimized)
         with PerformanceLogger(logger, "Evolution Phase"):
             try:
-                from ea.RunEvolution import run_evolution
+                from ea import get_run_evolution
+                run_evolution = get_run_evolution()
                 logger.info("Running optimized evolution on population...")
                 run_evolution(
                     north_star_metric=north_star_metric,
@@ -251,8 +323,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 logger.info("Processing new variants post-evolution...")
                 
                 # Reload population to get new variants
-                from utils.population_io import load_population
-                population = load_population("outputs/Population.json", logger=logger)
+                population = load_population(str(get_outputs_path()), logger=logger)
 
                 # Check for pending genomes
                 pending_generation = [g for g in population if g.get("status") == "pending_generation"]
@@ -265,28 +336,67 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 if pending_generation:
                     logger.info("Generating responses for new variants...")
                     # Use dynamic batch size from generator's config
-                    generator.process_population()  # Will use config batch size automatically
+                    generator.process_population(pop_path=str(get_outputs_path()))  # Will use config batch size automatically
                     
                     # Process pending evaluation
                     logger.info("Evaluating new responses...")
                     run_moderation_on_population(
-                        pop_path="outputs/Population.json",
+                        pop_path=str(get_outputs_path()),
                         log_file=log_file,
-                        north_star_metric=north_star_metric
+                        north_star_metric=north_star_threshold
                     )
                 
             except Exception as e:
                 logger.error("Post-evolution processing failed: %s", e, exc_info=True)
 
-        # Phase 6: Sort Population After Evaluation (now outside Phase 5)
+        # Check stopping conditions AFTER evolution
+        with PerformanceLogger(logger, "Stopping Conditions Check"):
+            try:
+                # Check generation limit - should stop AFTER completing generation N
+                if max_generations is not None and generation_count >= max_generations:
+                    logger.info("Maximum generation limit (%d) reached. Stopping pipeline.", max_generations)
+                    break
+                    
+                # Check if ALL prompts have reached the threshold (not just any single prompt)
+                population = load_population(str(get_outputs_path()), logger=logger)
+                
+                # Get all unique prompt IDs
+                all_prompt_ids = set(g.get("prompt_id") for g in population if g is not None)
+                
+                # Get completed prompt IDs (those with status "complete")
+                completed_prompt_ids = set(g.get("prompt_id") for g in population 
+                                        if g is not None and g.get("status") == "complete")
+                
+                # Get the highest score achieved across all prompts for logging
+                max_score = max([
+                    _extract_north_star_score(g, north_star_metric) 
+                    for g in population if g is not None
+                ], default=0)
+                
+                logger.info("Progress check - Completed prompts: %d/%d, Max %s score: %.4f", 
+                           len(completed_prompt_ids), len(all_prompt_ids), north_star_metric, max_score)
+                
+                # Only stop when ALL prompts are complete
+                if completed_prompt_ids == all_prompt_ids and len(all_prompt_ids) > 0:
+                    logger.info("🎉 ALL prompts (%d) have achieved the threshold! Stopping pipeline.", len(all_prompt_ids))
+                    logger.info("Final max %s score: %.4f", north_star_metric, max_score)
+                    break
+                elif len(completed_prompt_ids) > 0:
+                    logger.info("✅ %d/%d prompts completed. Continuing evolution for remaining prompts...", 
+                               len(completed_prompt_ids), len(all_prompt_ids))
+                    
+            except Exception as e:
+                logger.error("Failed to check stopping conditions: %s", e, exc_info=True)
+
+        # Phase 5: Sort Population After Evaluation (now outside Phase 4)
         with PerformanceLogger(logger, "Sort Population After Evaluation"):
             try:
                 logger.info("Sorting population after evaluation by prompt_id ASC, %s DESC, id DESC...", north_star_metric)
                 sort_population_json(
-                    "outputs/Population.json",
+                    str(get_outputs_path()),
                     sort_keys=[
                         "prompt_id",
-                        lambda g: (g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0.0) if g is not None else 0.0,
+                        lambda g: _extract_north_star_score(g, north_star_metric) if g is not None else 0.0,
                         lambda g: g.get("id", "0") if g is not None else "0",
                     ],
                     reverse_flags=[False, True, True],
@@ -298,8 +408,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
         # Generation summary
         with PerformanceLogger(logger, "Generation Summary"):
             try:
-                from utils.population_io import load_population
-                population = load_population("outputs/Population.json", logger=logger)
+                population = load_population(str(get_outputs_path()), logger=logger)
                 
                 total_genomes = len(population)
                 completed = len([g for g in population if g is not None and g.get("status") == "complete"])
@@ -311,7 +420,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                                         if g is not None and g.get("status") == "complete")
                 
                 max_score = max([
-                    (g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0) 
+                    _extract_north_star_score(g, north_star_metric) 
                     for g in population if g is not None
                 ], default=0)
                 
@@ -345,6 +454,10 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
             logger.info("Continuing evolution with %d pending genomes.", pending_evolution)
             continue
 
+    # ============================================================================
+    # SECTION 5: PIPELINE COMPLETION AND FINAL ANALYSIS
+    # ============================================================================
+    
     total_time = time.time() - start_time
     logger.info("=== Pipeline Completed ===")
     logger.info("Total execution time: %.2f seconds", total_time)
@@ -354,14 +467,13 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     # Final population analysis
     with PerformanceLogger(logger, "Final Analysis"):
         try:
-            from utils.population_io import load_population
-            from ea.RunEvolution import create_final_statistics_with_tracker
+            from ea import create_final_statistics_with_tracker
             
             # Load population for basic stats
-            population = load_population("outputs/Population.json", logger=logger)
+            population = load_population(str(get_outputs_path()), logger=logger)
             
             # Load evolution tracker for comprehensive stats
-            evolution_tracker_path = Path("outputs/EvolutionTracker.json")
+            evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
             if evolution_tracker_path.exists():
                 with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
                     evolution_tracker = json.load(f)
@@ -392,8 +504,8 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 final_stats = {
                     "total_genomes": len(population),
                     "successful_genomes": len([g for g in population if g is not None and g.get("status") == "complete"]),
-                    "average_score": sum([(g.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0) 
-                                        for g in population if g is not None]) / max(len([g for g in population if g is not None]), 1),
+                                    "average_score": sum([_extract_north_star_score(g, north_star_metric) 
+                                    for g in population if g is not None]) / max(len([g for g in population if g is not None]), 1),
                     "execution_time_seconds": total_time,
                     "generations_completed": generation_count
                 }
@@ -403,11 +515,15 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 logger.info("  - Successful genomes: %d", final_stats['successful_genomes'])
                 logger.info("  - Average %s score: %.4f", north_star_metric, final_stats['average_score'])
             
-            with open("outputs/final_statistics.json", "w") as f:
+            with open(get_outputs_path() / "final_statistics.json", "w") as f:
                 json.dump(final_stats, f, indent=2)
                 
         except Exception as e:
             logger.error("Failed to generate final statistics: %s", e, exc_info=True)
+
+# ============================================================================
+# SECTION 6: MAIN ENTRY POINT
+# ============================================================================
 
 if __name__ == "__main__":
     import argparse

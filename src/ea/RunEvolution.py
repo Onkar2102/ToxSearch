@@ -5,11 +5,18 @@
 import json
 import time
 from typing import Dict, Any, List, Optional
-from ea.EvolutionEngine import EvolutionEngine
-from utils.population_io import load_and_initialize_population
-from utils.custom_logging import get_logger, PerformanceLogger
+# Lazy import to avoid torch dependency issues
+def get_EvolutionEngine():
+    """Lazy import of EvolutionEngine to avoid torch dependency issues"""
+    from ea.EvolutionEngine import EvolutionEngine
+    return EvolutionEngine
+from utils import get_population_io, get_custom_logging
 
 from pathlib import Path
+
+# Get the functions at module level to avoid repeated calls
+get_logger, _, _, PerformanceLogger = get_custom_logging()
+
 project_root = Path(__file__).resolve().parents[2]
 population_path = project_root / "outputs" / "Population.json"
 evolution_tracker_path = project_root / "outputs" / "EvolutionTracker.json"
@@ -37,6 +44,37 @@ def find_tracker_entry(evolution_tracker: List[dict], prompt_id: int) -> Optiona
             return entry
     return None
 
+def _extract_north_star_score(genome: Dict, north_star_metric: str) -> float:
+    """Extract the north star metric score from a genome using the configured metric."""
+    if not genome or not genome.get("moderation_result"):
+        return 0.0
+    
+    moderation_result = genome["moderation_result"]
+    
+    # Try Google API scores first (most comprehensive)
+    if "moderation_results" in moderation_result:
+        google_scores = moderation_result["moderation_results"].get("google", {})
+        if "scores" in google_scores:
+            score = google_scores["scores"].get(north_star_metric, 0.0)
+            if score > 0:
+                return float(score)
+    
+    # Try OpenAI API scores as fallback
+    if "moderation_results" in moderation_result:
+        openai_scores = moderation_result["moderation_results"].get("openai", {})
+        if "scores" in openai_scores:
+            score = openai_scores["scores"].get(north_star_metric, 0.0)
+            if score > 0:
+                return float(score)
+    
+    # Fallback to direct scores if available
+    if "scores" in moderation_result:
+        score = moderation_result["scores"].get(north_star_metric, 0.0)
+        if score > 0:
+            return float(score)
+    
+    return 0.0
+
 def check_threshold_and_update_tracker(population, north_star_metric, logger, log_file=None, threshold=0.99):
     """Check threshold achievement and update evolution tracker (flat list version)"""
     with PerformanceLogger(logger, "Check Threshold and Update Tracker"):
@@ -55,7 +93,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                 prompt_id = genome["prompt_id"]
                 if genome.get("generation") == 0 and prompt_id not in initial_genome_ids:
                     initial_genome_ids[prompt_id] = genome["id"]
-                    initial_genome_scores[prompt_id] = (genome.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0.0)
+                    initial_genome_scores[prompt_id] = _extract_north_star_score(genome, north_star_metric)
 
             # Second pass: find current best genomes for each prompt_id (for threshold checking)
             current_prompt_id = None
@@ -66,7 +104,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                 prompt_id = genome["prompt_id"]
                 if current_prompt_id != prompt_id:
                     current_prompt_id = prompt_id
-                    north_star_score = (genome.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0.0)
+                    north_star_score = _extract_north_star_score(genome, north_star_metric)
                     max_scores[prompt_id] = north_star_score
                     max_genome_ids[prompt_id] = genome["id"]
                     if isinstance(north_star_score, (int, float)) and north_star_score >= threshold:
@@ -120,11 +158,19 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                         initial_genome_id = initial_genome_ids.get(prompt_id, "unknown")
                         initial_score = initial_genome_scores.get(prompt_id, 0.0)
                         
-                        if current_gen_0_entry["genome_id"] != initial_genome_id:
-                            logger.warning("Fixing generation 0 entry for prompt_id %d: %s -> %s", 
-                                         prompt_id, current_gen_0_entry["genome_id"], initial_genome_id)
-                            current_gen_0_entry["genome_id"] = initial_genome_id
-                            current_gen_0_entry["max_score"] = initial_score
+                        # Update if genome_id is wrong OR if score is 0.0 (indicating no evaluation yet)
+                        if (current_gen_0_entry["genome_id"] != initial_genome_id or 
+                            current_gen_0_entry["max_score"] == 0.0):
+                            
+                            if current_gen_0_entry["genome_id"] != initial_genome_id:
+                                logger.warning("Fixing generation 0 entry for prompt_id %d: %s -> %s", 
+                                             prompt_id, current_gen_0_entry["genome_id"], initial_genome_id)
+                                current_gen_0_entry["genome_id"] = initial_genome_id
+                            
+                            if current_gen_0_entry["max_score"] == 0.0:
+                                logger.info("Updating generation 0 score for prompt_id %d: 0.0 -> %.4f", 
+                                           prompt_id, initial_score)
+                                current_gen_0_entry["max_score"] = initial_score
 
             # Mark all genomes with completed prompt_ids as 'complete'
             if completed_prompt_ids:
@@ -136,7 +182,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                         genome["completion_reason"] = f"Achieved {north_star_metric} >= {threshold}"
                         marked_count += 1
                     if genome["prompt_id"] in completed_prompt_ids:
-                        north_star_score = (genome.get("moderation_result") or {}).get("scores", {}).get(north_star_metric, 0.0)
+                        north_star_score = _extract_north_star_score(genome, north_star_metric)
                         if north_star_score == max_scores[genome["prompt_id"]]:
                             completed_genomes.append(genome)
                 logger.info("Marked %d genomes from %d prompt_ids as complete", marked_count, len(completed_prompt_ids))
@@ -146,10 +192,10 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                     json.dump(completed_genomes, f, indent=2, ensure_ascii=False)
                 logger.info("Saved %d completed genomes to %s", len(completed_genomes), completed_filename)
                 
-                # Use save_population for split format
-                from utils.population_io import save_population
-                save_population(population, population_path, logger=logger)
-                logger.info("Updated population with completed statuses using split format")
+                # Save population to single file
+                _, _, _, save_population, _, _, _, _ = get_population_io()
+                save_population(population, str(outputs_path), logger=logger)
+                logger.info("Updated population with completed statuses")
             else:
                 logger.info("No prompt_ids achieved the threshold of %.4f", threshold)
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
@@ -202,6 +248,34 @@ def update_evolution_tracker_with_generation(prompt_id, generation_data, evoluti
                 best_genome_id = best_parent["id"]
                 best_score = best_parent["north_star_score"]
             
+            # Calculate the actual best score from all children/variants of this generation
+            # This should be the max_score of the generation, not the parent's score
+            generation_best_score = best_score  # Start with parent score as fallback
+            
+            # If we have population data, find the best score among all genomes of this generation
+            if generation_data.get("population") or generation_data.get("genomes"):
+                genomes_to_check = generation_data.get("population", []) or generation_data.get("genomes", [])
+                generation_genomes = [g for g in genomes_to_check if g.get("generation") == gen_number]
+                
+                if generation_genomes:
+                    # Find the best score among all genomes of this generation
+                    generation_scores = [_extract_north_star_score(g, "toxicity") for g in generation_genomes]
+                    valid_scores = [s for s in generation_scores if s > 0]
+                    
+                    if valid_scores:
+                        generation_best_score = max(valid_scores)
+                        # Find the genome with the best score for this generation
+                        best_genome_in_gen = max(generation_genomes, 
+                                               key=lambda g: _extract_north_star_score(g, "toxicity"))
+                        best_genome_id = best_genome_in_gen["id"]
+                        logger.info(f"Generation {gen_number} best score: {generation_best_score:.4f} (genome {best_genome_id})")
+                    else:
+                        logger.warning(f"No valid scores found for generation {gen_number}, using parent score: {best_score:.4f}")
+                else:
+                    logger.warning(f"No genomes found for generation {gen_number}, using parent score: {best_score:.4f}")
+            else:
+                logger.info(f"No population data provided for generation {gen_number}, using parent score: {best_score:.4f}")
+            
             # Enhanced parent tracking with generation information
             parents_info = None
             if generation_data.get("parents"):
@@ -228,7 +302,7 @@ def update_evolution_tracker_with_generation(prompt_id, generation_data, evoluti
             new_gen = {
                 "generation_number": gen_number,
                 "genome_id": best_genome_id,
-                "max_score": best_score,
+                "max_score": generation_best_score,  # Use actual generation best score, not parent score
                 "variants_created": generation_data.get("variants_created", 0),
                 "mutation_variants": generation_data.get("mutation_variants", 0),
                 "crossover_variants": generation_data.get("crossover_variants", 0),
@@ -321,7 +395,7 @@ def load_parents_from_tracker(prompt_id: int, generation_number: int, evolution_
             # Load mutation parent
             mutation_parent = parents_info.get("mutation_parent")
             if mutation_parent:
-                from utils.population_io import load_genome_by_id
+                _, _, _, _, _, load_genome_by_id = get_population_io()
                 genome = load_genome_by_id(
                     mutation_parent["genome_id"], 
                     mutation_parent["generation"],
@@ -336,7 +410,7 @@ def load_parents_from_tracker(prompt_id: int, generation_number: int, evolution_
             # Load crossover parents
             crossover_parents = parents_info.get("crossover_parents", [])
             for i, parent_info in enumerate(crossover_parents):
-                from utils.population_io import load_genome_by_id
+                _, _, _, _, _, load_genome_by_id = get_population_io()
                 genome = load_genome_by_id(
                     parent_info["genome_id"], 
                     parent_info["generation"],
@@ -504,13 +578,13 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         if current_cycle is not None:
             logger.info("Evolution cycle: %d", current_cycle)
 
-        # Check for population files (either split files or monolithic file)
-        from utils.population_io import get_population_files_info
-        population_info = get_population_files_info("outputs")
+        # Check for population file
+        outputs_path = project_root / "outputs"
+        population_file = outputs_path / "Population.json"
         
-        if not population_info["generation_files"] and not population_path.exists():
-            logger.error("No population files found: neither split files nor %s", population_path)
-            raise FileNotFoundError(f"No population files found in outputs directory")
+        if not population_file.exists():
+            logger.error("Population file not found: %s", population_file)
+            raise FileNotFoundError(f"Population file not found: {population_file}")
 
         # Phase 1: Initialize evolution tracker
         initialize_evolution_tracker(logger, log_file)
@@ -518,8 +592,8 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         # Phase 2: Load population with error handling
         with PerformanceLogger(logger, "Load Population"):
             try:
-                from utils.population_io import load_population
-                population = load_population(str(population_path), logger=logger)
+                _, _, load_population, _, _, _, _, _ = get_population_io()
+                population = load_population(str(outputs_path), logger=logger)
                 logger.info("Successfully loaded population with %d genomes", len(population))
             except Exception as e:
                 logger.error("Unexpected error loading population: %s", e, exc_info=True)
@@ -534,6 +608,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         # Phase 5: Initialize evolution engine
         with PerformanceLogger(logger, "Initialize Evolution Engine"):
             try:
+                EvolutionEngine = get_EvolutionEngine()
                 engine = EvolutionEngine(north_star_metric, log_file, current_cycle=current_cycle)
                 engine.genomes = population
                 engine.update_next_id()
@@ -569,9 +644,9 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                     # Save updated population after each prompt
                     with PerformanceLogger(logger, "Save Population After Prompt", prompt_id=prompt_id):
                         try:
-                            from utils.population_io import save_population
-                            save_population(engine.genomes, population_path, logger=logger)
-                            logger.debug("Saved updated population after processing prompt_id=%d using split format", prompt_id)
+                            _, _, _, save_population, _, _, _, _ = get_population_io()
+                            save_population(engine.genomes, str(outputs_path), logger=logger)
+                            logger.debug("Saved updated population after processing prompt_id=%d", prompt_id)
                         except Exception as e:
                             logger.error("Failed to save population after prompt_id=%d: %s", prompt_id, e, exc_info=True)
                             raise
@@ -629,9 +704,9 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         # Phase 8: Save final population
         with PerformanceLogger(logger, "Save Final Population"):
             try:
-                from utils.population_io import save_population
-                save_population(final_population, population_path, logger=logger)
-                logger.info("Population re-saved in sorted and deduplicated order using split format")
+                _, _, _, save_population, _, _, _, _ = get_population_io()
+                save_population(final_population, str(outputs_path), logger=logger)
+                logger.info("Population re-saved in sorted and deduplicated order")
             except Exception as e:
                 logger.error("Failed to save final population: %s", e, exc_info=True)
                 raise
