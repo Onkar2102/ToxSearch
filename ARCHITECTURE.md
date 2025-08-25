@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    EVOLUTIONARY TEXT GENERATION FRAMEWORK                  │
-│                           (Enhanced with Split Files & Accurate Tracking)  │
+│                       (Single Population.json & Accurate Tracking)         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -26,20 +26,20 @@
 
 ## Recent Architecture Improvements
 
-### **Split File Architecture**
-- **Before**: Single `Population.json` file (memory-intensive)
-- **After**: Split generation files (`gen0.json`, `gen1.json`, etc.)
-- **Benefits**: Memory-efficient loading, better scalability, faster access
+### **Single-File Population**
+- Before: Split generation files (`gen0.json`, `gen1.json`, ...)
+- After: Consolidated into a single `outputs/Population.json`
+- Benefits: Simpler I/O, fewer file handles, consistent view across generations
 
 ### **Enhanced Evolution Tracking**
-- **EvolutionTracker.json**: Comprehensive generation performance tracking
-- **population_index.json**: Fast population file discovery
-- **Accurate max_score**: Represents actual generation performance, not parent scores
+- `EvolutionTracker.json`: Comprehensive generation performance tracking
+- `population_index.json`: Fast population metadata and counts
+- Accurate max_score: Represents actual generation performance, not parent scores
 
 ### **Memory Optimization**
-- **Lazy Imports**: Prevents circular dependencies and premature model loading
-- **Targeted Loading**: Load only needed generations instead of entire population
-- **Absolute Paths**: Robust cross-platform file handling
+- Lazy Imports: Prevents circular dependencies and premature model loading
+- Targeted Loading: Filter in memory by generation/prompt as needed
+- Absolute Paths: Robust cross-platform file handling
 
 ## Detailed Component Architecture
 
@@ -54,7 +54,7 @@
 │  │ • Create        │  │ • Memory Mgmt   │  │ • Google +      │           │
 │  │   genomes       │  │ • Batch Proc    │  │   OpenAI        │           │
 │  │ • Set status    │  │ • Error Handle  │  │ • Toxicity      │           │
-│  │ • Split files   │  │ • Lazy loading  │  │   Scoring       │           │
+│  │ • Single file   │  │ • Lazy loading  │  │   Scoring       │           │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘           │
 │           │                   │                   │                       │
 │           ▼                   ▼                   ▼                       │
@@ -62,7 +62,7 @@
 │  │   Evolution     │  │   Population    │  │   Analysis      │           │
 │  │   Engine        │  │   Management    │  │   & Logging     │           │
 │  │                 │  │                 │  │                 │           │
-│  │ • Genetic Algo  │  │ • Split Files   │  │ • Performance   │           │
+│  │ • Genetic Algo  │  │ • Single File   │  │ • Performance   │           │
 │  │ • Mutation      │  │ • Status Track  │  │   Monitoring    │           │
 │  │ • Crossover     │  │ • Lineage       │  │ • Memory Stats  │           │
 │  │ • Selection     │  │ • Deduplication │  │ • Error Logs    │           │
@@ -77,7 +77,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                        MEMORY MANAGEMENT SYSTEM                           │
-│                           (Enhanced with Split Files)                     │
+│                        (Applies to Single-File Population)                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐
@@ -92,9 +92,9 @@
 │• Threshold  │    │  batch size  │    │  batches     │    │  cache      │
 │  alerts     │    │• Memory      │    │• Memory      │    │• Force GC   │
 │• System     │    │  available   │    │  efficient   │    │• Model      │
-│  memory     │    │• Conservative │    │• Error       │    │  cache      │
-│• Split file │    │• Lazy loading│    │• Targeted    │    │• Generation │
-│  loading    │    │• Generation  │    │  loading     │    │  file mgmt  │
+│  memory     │    │• Lazy loading│    │• Targeted    │    │  cache      │
+│• Single file│    │• Generation  │    │  loading     │    │  mgmt       │
+│  loading    │    │              │    │              │    │             │
 └─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘
 ```
 
@@ -103,7 +103,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              DATA FLOW                                    │
-│                           (Enhanced with Split Files)                     │
+│                                (Single File)                              │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 INPUT LAYER
@@ -118,128 +118,12 @@ PROCESSING LAYER
 │Phase        │    │Phase         │    │Phase         │
 └─────────────┘    └──────────────┘    └──────────────┘
 
-STORAGE LAYER (Split File Architecture)
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐
-│outputs/     │    │outputs/      │    │outputs/      │    │logs/        │
-│gen0.json    │    │gen1.json     │    │gen2.json     │    │Status.json  │
-│(Initial)    │    │(Variants)    │    │(Variants)    │    │              │
-└─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘
-       │                   │                   │                   │
-       ▼                   ▼                   ▼                   ▼
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌─────────────┐
-│outputs/     │    │outputs/      │    │outputs/      │    │outputs/     │
-│population_  │    │Evolution     │    │final_        │    │*.log        │
-│index.json   │    │Tracker.json  │    │statistics.   │    │files        │
-│(File Index) │    │(Progress)    │    │json          │    │(Logs)       │
-└─────────────┘    └──────────────┘    └──────────────┘    └─────────────┘
-```
-
-## Component Interaction Diagram
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        COMPONENT INTERACTIONS                             │
-│                           (Enhanced with Lazy Imports)                    │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌─────────────┐         ┌──────────────┐         ┌─────────────┐
-│   main.py   │◄────────┤  LLaMaText   │◄────────┤  Evolution  │
-│             │         │  Generator   │         │  Engine     │
-│• Orchestrates│         │              │         │              │
-│• Controls   │         │• Model Load  │         │• Genetic    │
-│  flow       │         │• Generation  │         │  Algorithms │
-│• Error      │         │• Memory Mgmt │         │• Selection  │
-│  handling   │         │• Batch Proc  │         │• Variation  │
-│• Absolute   │         │• Lazy loading│         │• Accurate   │
-│  paths      │         │• M3 optimize │         │  tracking   │
-└─────────────┘         └──────────────┘         └─────────────┘
-       │                       │                       │
-       ▼                       ▼                       ▼
-┌─────────────┐         ┌──────────────┐         ┌─────────────┐
-│  Hybrid     │         │  Population  │         │  Text       │
-│  Moderation │         │  I/O         │         │  Variation  │
-│             │         │              │         │  Operators  │
-│• Google API │         │• Split Files │         │• Mutation   │
-│• OpenAI API │         │• JSON Load   │         │• Crossover  │
-│• Safety     │         │• JSON Save   │         │• Selection  │
-│  Scoring    │         │• Status Mgmt │         │• Diversity  │
-│• Dual API   │         │• Deduplication│        │• Lazy init  │
-│• Fallback   │         │• Index Mgmt  │         │• Memory opt │
-└─────────────┘         └──────────────┘         └─────────────┘
-```
-
-## Memory Management Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        MEMORY MANAGEMENT FLOW                             │
-│                           (Enhanced with Split Files)                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-START GENERATION
-       │
-       ▼
-┌─────────────┐
-│ Check       │ ──▶ Memory Usage Below Threshold?
-│ Memory      │
-└─────────────┘
-       │
-       ▼
-┌─────────────┐         ┌──────────────┐
-│ Calculate   │◄────────┤  Adaptive    │
-│ Batch Size  │         │  Algorithm   │
-└─────────────┘         └──────────────┘
-       │
-       ▼
-┌─────────────┐
-│ Process     │ ──▶ Batch Complete?
-│ Batch       │
-└─────────────┘
-       │
-       ▼
-┌─────────────┐
-│ Cleanup     │ ──▶ Memory Still High?
-│ Memory      │
-└─────────────┘
-       │
-       ▼
-┌─────────────┐
-│ Continue    │ ──▶ More Batches?
-│ or Stop     │
-└─────────────┘
-```
-
-## Split File Architecture Details
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        SPLIT FILE ARCHITECTURE                            │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-GENERATION FILES
+STORAGE LAYER (Single File)
 ┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-│gen0.json    │    │gen1.json     │    │gen2.json     │
-│(Initial)    │    │(Variants)    │    │(Variants)    │
-│• 2 genomes  │    │• 28 genomes  │    │• 34 genomes  │
-│• 5.5KB      │    │• 41KB        │    │• 50KB        │
-└─────────────┘    └──────────────┘    └──────────────┘
-
-INDEX FILES
-┌─────────────┐    ┌──────────────┐
-│population_  │    │Evolution     │
-│index.json   │    │Tracker.json  │
-│• File list  │    │• Progress    │
-│• Counts     │    │• Scores      │
-│• Metadata   │    │• Lineage     │
-└─────────────┘    └──────────────┘
-
-LOADING STRATEGIES
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-│load_population│  │load_population│  │load_population│
-│(All gens)   │  │_generation()  │  │_lazy()       │
-│• Full pop   │  │• Single gen   │  │• One at time │
-│• Memory     │  │• Memory       │  │• Minimal     │
-│  intensive  │  │  efficient    │  │  memory      │
+│outputs/     │    │outputs/      │    │outputs/      │
+│Population.  │    │Evolution     │    │population_   │
+│json         │    │Tracker.json  │    │index.json    │
+│(All gens)   │    │(Progress)    │    │(Index/meta)  │
 └─────────────┘    └──────────────┘    └──────────────┘
 ```
 
@@ -260,37 +144,28 @@ TRACKER STRUCTURE
 │   └── generations: [                                                     │
 │       ├── generation_number: 0                                          │
 │       │   ├── genome_id: "1"                                            │
-│       │   └── max_score: 0.0395  ← Original genome score                │
+│       │   └── max_score: 0.0395                                         │
 │       └── generation_number: 1                                          │
 │           ├── genome_id: "15"                                           │
-│           ├── max_score: 0.0450  ← Best score in generation 1           │
-│           ├── variants_created: 28                                      │
-│           ├── mutation_variants: 28                                     │
+│           ├── max_score: 0.0450                                         │
+│           ├── variants_created: 20                                      │
+│           ├── mutation_variants: 20                                     │
 │           └── crossover_variants: 0                                     │
 │   ]                                                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
-
-SCORE CALCULATION
-┌─────────────┐    ┌──────────────┐    ┌──────────────┐
-│Load Gen     │───▶│Extract       │───▶│Find Best     │
-│File         │    │Scores        │    │Score         │
-│• genX.json  │    │• Google API  │    │• Max score   │
-│• Filter by  │    │• OpenAI API  │    │• Genome ID   │
-│  prompt_id  │    │• Fallback    │    │• Update      │
-└─────────────┘    └──────────────┘    └──────────────┘
 ```
 
 ## File Structure Architecture
 
 ```
-eost-cam-llm/
+EOST-CAM-LLM/
 ├── app.py                        # Main entry point with setup and monitoring
 ├── config/
 │   └── modelConfig.yaml          # Model and memory settings
 ├── data/
 │   └── prompt.xlsx               # Input prompts
 ├── src/
-│   ├── main.py                   # Core evolution pipeline (enhanced)
+│   ├── main.py                   # Core evolution pipeline
 │   ├── gne/                      # Generation & Evaluation
 │   │   ├── LLaMaTextGenerator.py # LLaMA integration with memory management
 │   │   ├── hybrid_moderation.py  # Hybrid safety evaluation (Google + OpenAI)
@@ -299,22 +174,19 @@ eost-cam-llm/
 │   │   ├── EvolutionEngine.py    # Genetic algorithm core
 │   │   ├── TextVariationOperators.py # Mutation/crossover (lazy loading)
 │   │   ├── ParentSelector.py     # Selection strategies
-│   │   ├── RunEvolution.py       # Evolution pipeline (enhanced max_score)
-│   │   ├── VariationOperators.py # Base variation operators
+│   │   ├── RunEvolution.py       # Evolution pipeline
 │   │   └── __init__.py           # Package exports
 │   └── utils/                    # Utilities
-│       ├── population_io.py      # Data management with split files
+│       ├── population_io.py      # Single-file population management
 │       ├── custom_logging.py     # Performance tracking
 │       ├── m3_optimizer.py       # M3 Mac optimization
 │       ├── config.py             # Configuration utilities
 │       └── __init__.py           # Lazy import functions
-├── outputs/                      # Generated data (split file architecture)
-│   ├── gen0.json                # Generation 0 (initial population)
-│   ├── gen1.json                # Generation 1 variants
-│   ├── gen2.json                # Generation 2 variants
-│   ├── population_index.json    # Population file index
-│   ├── EvolutionTracker.json    # Evolution progress tracking
-│   └── final_statistics.json    # Final analysis results
+├── outputs/
+│   ├── Population.json           # Unified population store
+│   ├── population_index.json     # Population metadata/index
+│   ├── EvolutionTracker.json     # Evolution progress tracking
+│   └── final_statistics.json     # Final analysis results (optional)
 ├── logs/                         # Log files
 ├── GENOME_STRUCTURE.md           # Genome data structure documentation
 └── ARCHITECTURE.md               # This architecture document

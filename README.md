@@ -49,17 +49,17 @@ python src/main.py --generations 25
 
 ## Recent Updates
 
-### **Latest Fixes (Latest Session)**
-- **Fixed `max_score` Calculation**: `max_score` now represents the actual best score achieved in each generation, not the parent's score
-- **Memory Optimization**: Implemented lazy imports and optimized memory usage for large populations
-- **Path Resolution**: Fixed all relative path issues with absolute path resolution
-- **Import Optimization**: Resolved circular dependency issues with lazy import pattern
-- **Evolution Tracker**: Enhanced tracking to properly record generation performance
+### **Latest Fixes (Current Architecture)**
+- **Single Population File**: Consolidated all generations into a single `outputs/Population.json` (deprecated split file mode)
+- **Accurate `max_score`**: Tracker now records the actual best score per generation, not the parent's score
+- **Hybrid Moderation Cache Fix**: Separated Google/OpenAI caches to prevent cross-API result contamination
+- **Variant Count Tuning**: Reduced operator `max_variants` from 10 to 5 to control population growth
+- **Memory & Imports**: Lazy imports (torch/pandas/psutil) and safer path resolution
 
 ### **Key Improvements**
-- **Population Management**: Split file architecture for memory efficiency (gen0.json, gen1.json, etc.)
-- **Evolution Tracking**: Comprehensive tracking with `EvolutionTracker.json` and `population_index.json`
-- **Hybrid Moderation**: Google Perspective API + OpenAI moderation for comprehensive safety evaluation
+- **Population Management**: Single `Population.json` with `population_index.json` for fast lookups
+- **Evolution Tracking**: `EvolutionTracker.json` records per-generation best and variant counts
+- **Hybrid Moderation**: Google Perspective API + OpenAI moderation with normalized scores
 - **M3 Mac Optimization**: Specialized optimizations for Apple Silicon performance
 
 ## app.py Command Line Arguments
@@ -102,7 +102,7 @@ Detailed documentation of genome data structure, fields, and lifecycle managemen
 - `hybrid_moderation.py` - Hybrid moderation using Google Perspective API + OpenAI
 
 ### **Utilities** (`src/utils/`)
-- `population_io.py` - Population data management with split files and EvolutionTracker
+- `population_io.py` - Single-file population management (`Population.json`) and `EvolutionTracker.json`
 - `custom_logging.py` - Performance and memory logging
 - `m3_optimizer.py` - M3 Mac optimization utilities
 - `config.py` - Configuration management
@@ -146,12 +146,10 @@ The system uses `config/modelConfig.yaml` for:
 
 ```
 outputs/
-├── gen0.json              # Generation 0 (initial population)
-├── gen1.json              # Generation 1 variants
-├── gen2.json              # Generation 2 variants
-├── population_index.json  # Population file index
-├── EvolutionTracker.json  # Evolution progress tracking
-└── final_statistics.json  # Final analysis results
+├── Population.json        # All genomes across all generations (single file)
+├── population_index.json  # Lightweight index/metadata for Population.json
+├── EvolutionTracker.json  # Evolution progress tracking (per prompt, per generation)
+└── final_statistics.json  # Final analysis results (optional)
 ```
 
 ## Contributing
