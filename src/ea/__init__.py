@@ -24,6 +24,11 @@ def get_create_final_statistics_with_tracker():
     from ea.RunEvolution import create_final_statistics_with_tracker
     return create_final_statistics_with_tracker
 
+def get_update_evolution_tracker_with_generation_global():
+    """Lazy import of update_evolution_tracker_with_generation_global to avoid torch dependency issues"""
+    from ea.RunEvolution import update_evolution_tracker_with_generation_global
+    return update_evolution_tracker_with_generation_global
+
 def get_applicable_operators():
     """Lazy import of get_applicable_operators to avoid torch dependency issues"""
     from ea.TextVariationOperators import get_applicable_operators
@@ -36,5 +41,6 @@ __all__ = [
     "get_EvolutionEngine",
     "get_run_evolution",
     "get_create_final_statistics_with_tracker",
+    "get_update_evolution_tracker_with_generation_global",
     "get_applicable_operators",
 ]

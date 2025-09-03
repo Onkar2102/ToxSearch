@@ -2,8 +2,8 @@ import json
 import random
 from typing import List, Dict, Any, Optional
 from utils import get_custom_logging
-from ea.TextVariationOperators import get_applicable_operators
-from ea.ParentSelector import ParentSelector
+from .TextVariationOperators import get_applicable_operators
+from .ParentSelector import ParentSelector
 from itertools import combinations
 
 class EvolutionEngine:
@@ -59,47 +59,48 @@ class EvolutionEngine:
             self.next_id = 1  # Start from 1 since we removed "genome_" prefix
         self.logger.debug(f"Updated next_id to {self.next_id}")
     
-    def generate_variants(self, prompt_id: int) -> Dict[str, Any]:
-        self.logger.debug(f"Generating variants for prompt_id={prompt_id} (evolution cycle {self.current_cycle})")
+    def generate_variants_global(self) -> Dict[str, Any]:
+        self.logger.debug(f"Generating variants globally for evolution cycle {self.current_cycle}")
 
         # Ensure ``next_id`` is always in sync with the current population each
         # time we start a new generation cycle.  This prevents reused IDs when
         # the engine object persists across multiple calls.
         self.update_next_id()
 
-        prompt_genomes = [g for g in self.genomes if g is not None and g["prompt_id"] == prompt_id]
-        if not prompt_genomes:
-            self.logger.error(f"No genomes found for prompt_id={prompt_id}. Exiting evolution process.")
+        # Get all genomes for global evolution
+        all_genomes = [g for g in self.genomes if g is not None]
+        if not all_genomes:
+            self.logger.error(f"No genomes found. Exiting evolution process.")
             raise SystemExit(1)
 
         # Log detailed information about available genomes
-        completed_genomes = [g for g in prompt_genomes if g.get("status") == "complete"]
-        pending_genomes = [g for g in prompt_genomes if g.get("status") == "pending_evolution"]
-        other_genomes = [g for g in prompt_genomes if g.get("status") not in ["complete", "pending_evolution"]]
+        completed_genomes = [g for g in all_genomes if g.get("status") == "complete"]
+        pending_genomes = [g for g in all_genomes if g.get("status") == "pending_evolution"]
+        other_genomes = [g for g in all_genomes if g.get("status") not in ["complete", "pending_evolution"]]
         
-        self.logger.info(f"Prompt {prompt_id} genome breakdown: {len(completed_genomes)} completed, {len(pending_genomes)} pending_evolution, {len(other_genomes)} other")
+        self.logger.info(f"Global genome breakdown: {len(completed_genomes)} completed, {len(pending_genomes)} pending_evolution, {len(other_genomes)} other")
         
         if completed_genomes:
             max_score = max([self._extract_north_star_score(g) for g in completed_genomes])
-            self.logger.info(f"Best completed genome score for prompt {prompt_id}: {max_score}")
+            self.logger.info(f"Best completed genome score globally: {max_score}")
         else:
-            self.logger.warning(f"No completed genomes found for prompt {prompt_id}")
+            self.logger.warning(f"No completed genomes found")
 
-        mutation_parent, crossover_parents = self.parent_selector.select_parents(prompt_genomes, prompt_id)
+        mutation_parent, crossover_parents = self.parent_selector.select_parents_global(all_genomes)
         
         # Log parent selection results
         if mutation_parent is None:
-            self.logger.warning(f"No mutation parent selected for prompt_id={prompt_id}")
+            self.logger.warning(f"No mutation parent selected globally")
         else:
             score = self._extract_north_star_score(mutation_parent)
-            self.logger.info(f"Selected mutation parent for prompt {prompt_id}: genome_id={mutation_parent['id']}, score={score}")
+            self.logger.info(f"Selected mutation parent globally: genome_id={mutation_parent['id']}, score={score}")
         
         if crossover_parents is None:
-            self.logger.warning(f"No crossover parents selected for prompt_id={prompt_id}")
+            self.logger.warning(f"No crossover parents selected globally")
         else:
-            self.logger.info(f"Selected {len(crossover_parents)} crossover parents for prompt {prompt_id}: {[p['id'] for p in crossover_parents]}")
+            self.logger.info(f"Selected {len(crossover_parents)} crossover parents globally: {[p['id'] for p in crossover_parents]}")
 
-        existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g is not None and g["prompt_id"] == prompt_id)
+        existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g is not None)
 
         offspring = []
         generation_data = {
@@ -119,7 +120,7 @@ class EvolutionEngine:
             }
 
         # For generation 0, parents is null
-        if all(g["generation"] == 0 for g in prompt_genomes):
+        if all(g["generation"] == 0 for g in all_genomes):
             # Parent tracking has been removed
             pass
 
@@ -147,7 +148,7 @@ class EvolutionEngine:
         # --- Mutation phase -------------------------------------------------
         if mutation_parent:
             mutation_operators = get_applicable_operators(1, self.north_star_metric, self.log_file)
-            self.logger.debug(f"Running mutation on prompt_id={prompt_id} with {len(mutation_operators)} operators.")
+            self.logger.debug(f"Running mutation globally with {len(mutation_operators)} operators.")
             for op in mutation_operators:
                 if op.operator_type != "mutation":
                     continue
@@ -161,7 +162,6 @@ class EvolutionEngine:
                         existing_prompts.add(norm_vp)
                         child = {
                             "id": str(self.next_id),
-                            "prompt_id": prompt_id,
                             "prompt": vp,
                             "model_provider": None,
                             "model_name": None,
@@ -178,7 +178,7 @@ class EvolutionEngine:
                             }
                         }
                         self.next_id += 1
-                        self.logger.debug(f"Created mutation variant id={child['id']} for prompt_id={prompt_id} (evolution cycle {self.current_cycle})")
+                        self.logger.debug(f"Created mutation variant id={child['id']} globally (evolution cycle {self.current_cycle})")
                         self.logger.debug(f"Mutation variant prompt: '{vp[:60]}...'")
                         offspring.append(child)
                 except Exception as e:
@@ -187,7 +187,7 @@ class EvolutionEngine:
         # --- Crossover phase -------------------------------------------------
         if crossover_parents:
             crossover_operators = get_applicable_operators(len(crossover_parents), self.north_star_metric, self.log_file)
-            self.logger.debug(f"Running crossover on prompt_id={prompt_id} with {len(crossover_parents)} parents and {len(crossover_operators)} operators.")
+            self.logger.debug(f"Running crossover globally with {len(crossover_parents)} parents and {len(crossover_operators)} operators.")
             for op in crossover_operators:
                 if op.operator_type != "crossover":
                     continue
@@ -203,7 +203,6 @@ class EvolutionEngine:
                             existing_prompts.add(norm_vp)
                             child = {
                                 "id": str(self.next_id),
-                                "prompt_id": prompt_id,
                                 "prompt": vp,
                                 "model_provider": None,
                                 "model_name": None,
@@ -220,7 +219,7 @@ class EvolutionEngine:
                                 }
                             }
                             self.next_id += 1
-                            self.logger.debug(f"Created crossover variant id={child['id']} for prompt_id={prompt_id} (evolution cycle {self.current_cycle})")
+                            self.logger.debug(f"Created crossover variant id={child['id']} globally (evolution cycle {self.current_cycle})")
                             self.logger.debug(f"Crossover variant prompt: '{vp[:60]}...'")
                             offspring.append(child)
                     except Exception as e:
@@ -261,28 +260,5 @@ class EvolutionEngine:
 
 
 
-    def load_parents_from_tracker(self, prompt_id: int, generation_number: int, evolution_tracker: List[dict]) -> List[Dict[str, Any]]:
-        """
-        Load parent genomes for a specific prompt_id and generation using tracker information
-        
-        This method provides an efficient way to load parents from previous generations
-        without loading the entire population.
-        
-        Parameters
-        ----------
-        prompt_id : int
-            The prompt ID to load parents for
-        generation_number : int
-            The generation number to load parents for
-        evolution_tracker : List[dict]
-            The evolution tracker containing parent information
-            
-        Returns
-        -------
-        List[Dict[str, Any]]
-            List of parent genomes found
-        """
-        from ea.RunEvolution import load_parents_from_tracker
-        return load_parents_from_tracker(prompt_id, generation_number, evolution_tracker, 
-                                       logger=self.logger, log_file=self.log_file)
+    # Method removed - no longer needed for global evolution
 

@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from collections import defaultdict
 import time
-from utils import get_custom_logging
+from . import get_custom_logging
 
 # Only import pandas when needed for initialization
 def _get_pandas():
@@ -342,7 +342,7 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
 
 
 def save_population(population: List[Dict[str, Any]], pop_path: str = "outputs/Population.json", 
-                   *, logger=None, log_file: Optional[str] = None) -> None:
+                   *, logger=None, log_file: Optional[str] = None, preserve_sort_order: bool = False) -> None:
     """
     Save entire population to single Population.json file
     
@@ -376,12 +376,13 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "outputs/P
             # Ensure directory exists
             output_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Sort population by prompt_id, generation, and id for consistency
-            cleaned_population.sort(key=lambda g: (
-                g.get("prompt_id", 0),
-                g.get("generation", 0),
-                g.get("id", "0")
-            ))
+            # Only sort by generation, id if preserve_sort_order is False (default behavior)
+            # This allows sort_population_json to maintain its custom sorting
+            if not preserve_sort_order:
+                cleaned_population.sort(key=lambda g: (
+                    g.get("generation", 0),
+                    g.get("id", "0")
+                ))
             
             # Save to single file
             with open(output_file, 'w', encoding='utf-8') as f:
@@ -469,7 +470,6 @@ def load_and_initialize_population(
                 population.append(
                     {
                         "id": str(i + 1),
-                        "prompt_id": i,
                         "prompt": prompt,
                         "model_provider": None,
                         "model_name": None,
@@ -498,23 +498,20 @@ def load_and_initialize_population(
 
             # ----------------------------- Initialize EvolutionTracker ----------------------------
             with PerformanceLogger(logger, "Initialize EvolutionTracker"):
-                evolution_tracker = []
-                for i, prompt in enumerate(prompts):
-                    tracker_entry = {
-                        "prompt_id": i,
-                        "status": "not_complete",
-                        "total_generations": 1,  # Generation 0 exists
-                        "generations": [
-                            {
-                                "generation_number": 0,
-                                "genome_id": str(i + 1),
-                                "max_score": 0.0,
-                                "mutation": None,
-                                "crossover": None
-                            }
-                        ]
-                    }
-                    evolution_tracker.append(tracker_entry)
+                evolution_tracker = {
+                    "scope": "global",
+                    "status": "not_complete",
+                    "total_generations": 1,  # Generation 0 exists
+                    "generations": [
+                        {
+                            "generation_number": 0,
+                            "genome_id": "1",  # Will be updated with actual best genome during threshold check
+                            "max_score": 0.0,  # Will be updated with actual best score during threshold check
+                            "mutation": None,
+                            "crossover": None
+                        }
+                    ]
+                }
                 
                 # Save EvolutionTracker
                 base_dir = Path(output_path).resolve()
@@ -523,7 +520,7 @@ def load_and_initialize_population(
                 with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                     json.dump(evolution_tracker, f, indent=2)
                 
-                logger.info("Initialized EvolutionTracker with %d prompt entries", len(evolution_tracker))
+                logger.info("Initialized global EvolutionTracker with %d genomes", len(prompts))
 
             logger.info("Population initialization completed successfully")
 
@@ -545,21 +542,19 @@ def validate_population_file(population_path: str, *, log_file: Optional[str] = 
             "total_genomes": len(population),
             "generations": set(),
             "statuses": {},
-            "prompt_ids": set(),
             "prompt_lengths": [],
             "errors": [],
         }
 
         for genome in population:
             # Required keys check
-            for field in ("id", "prompt_id", "prompt", "generation", "status"):
+            for field in ("id", "prompt", "generation", "status"):
                 if field not in genome:
                     stats["errors"].append(
                         f"Missing required field '{field}' in genome {genome.get('id', '?')}"
                     )
 
             stats["generations"].add(genome.get("generation", -1))
-            stats["prompt_ids"].add(genome.get("prompt_id", -1))
             status = genome.get("status", "unknown")
             stats["statuses"][status] = stats["statuses"].get(status, 0) + 1
             stats["prompt_lengths"].append(len(genome.get("prompt", "")))
@@ -573,7 +568,6 @@ def validate_population_file(population_path: str, *, log_file: Optional[str] = 
 
         # Convert sets to sorted lists for JSON serialisation
         stats["generations"] = sorted(stats["generations"])
-        stats["prompt_ids"] = sorted(stats["prompt_ids"])
 
         logger.info("Validation complete – %d genomes analysed", stats["total_genomes"])
         if stats["errors"]:
@@ -600,6 +594,8 @@ def sort_population_json(
 
     get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("sort_population", log_file)
+    # Set log level to DEBUG to see what's happening
+    logger.setLevel(10)  # DEBUG level
 
     with PerformanceLogger(logger, "Sort Population JSON"):
         if isinstance(population, str):
@@ -616,30 +612,59 @@ def sort_population_json(
         if len(reverse_flags) != len(sort_keys):
             raise ValueError("reverse_flags must match sort_keys in length")
 
-        def _sort_key(genome):
-            out = []
+        # Use a single sort with a properly constructed compound key
+        # This ensures all sorting criteria are applied correctly: North Star Score -> Generation -> Genome ID
+        def compound_sort_key(genome):
+            values = []
             for i, key in enumerate(sort_keys):
                 if callable(key):
                     value = key(genome)
                 else:
-                    # Handle string keys safely
                     value = genome.get(key) if genome is not None else None
                 
                 # Handle None values consistently
                 if value is None:
                     value = float("-inf") if reverse_flags[i] else float("inf")
-                # For reverse sorting, negate numeric values to achieve descending order
-                elif reverse_flags[i] and isinstance(value, (int, float)):
+                
+                # For reverse sorting, negate numeric values
+                if reverse_flags[i] and isinstance(value, (int, float)):
                     value = -value
-                out.append(value)
-            return tuple(out)
-
-        pop_list.sort(key=_sort_key)
+                elif reverse_flags[i] and isinstance(value, str):
+                    # For string IDs, we want higher IDs first in reverse order
+                    # Convert to int if possible, otherwise use string comparison
+                    try:
+                        int_value = int(value)
+                        value = -int_value
+                        logger.debug("Negated string ID %s -> %d", value, int_value)
+                    except ValueError:
+                        # If it's not a numeric string, we'll handle it specially
+                        # For reverse sorting of strings, we can't easily negate
+                        # So we'll use a different approach
+                        pass
+                
+                values.append(value)
+            return tuple(values)
+        
+        # Log sorting parameters for debugging
+        logger.debug("Sorting population with %d keys and reverse flags: %s", len(sort_keys), reverse_flags)
+        
+        pop_list.sort(key=compound_sort_key)
 
         # Persist if needed
-        dest = output_path or (population if isinstance(population, str) else None)
+        if output_path:
+            # If output_path is specified, use it
+            dest = output_path
+        elif isinstance(population, str):
+            # If population is a file path, save back to the same file
+            dest = population
+        else:
+            # If population is a list, don't save (no destination specified)
+            dest = None
+            
         if dest:
-            save_population(pop_list, dest, logger=logger)
+            logger.debug("Saving sorted population to: %s", dest)
+            save_population(pop_list, dest, logger=logger, preserve_sort_order=True)
+            logger.info("Successfully saved sorted population to: %s", dest)
 
         return pop_list
 
@@ -813,9 +838,8 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
             # Clean the population (remove None genomes)
             all_genomes = clean_population(all_genomes, logger=_logger, log_file=log_file)
             
-            # Sort the population by prompt_id, generation, and id
+            # Sort the population by generation, and id
             all_genomes.sort(key=lambda g: (
-                g.get("prompt_id", 0),
                 g.get("generation", 0),
                 g.get("id", "0")
             ))
@@ -946,7 +970,7 @@ __all__ = [
     "load_population_range", 
     "load_population_lazy",
     "save_population_generation",
-    "update_population_index",
+    "update_population_index_single_file",
     "get_latest_generation",
     "get_pending_genomes_by_status",
     
@@ -959,4 +983,8 @@ __all__ = [
     "validate_population_file",
     "sort_population_json",
     "clean_population",
+    
+    # Migration functions
+    "consolidate_generations_to_single_file",
+    "migrate_from_split_to_single",
 ] 

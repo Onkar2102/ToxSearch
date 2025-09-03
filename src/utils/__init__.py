@@ -11,12 +11,12 @@
 # Lazy imports to prevent circular import issues
 def get_custom_logging():
     """Lazy import of custom_logging functions"""
-    from utils.custom_logging import get_logger, get_log_filename, log_system_info, PerformanceLogger
+    from .custom_logging import get_logger, get_log_filename, log_system_info, PerformanceLogger
     return get_logger, get_log_filename, log_system_info, PerformanceLogger
 
 def get_population_io():
     """Lazy import of population_io functions to avoid circular imports"""
-    from utils.population_io import (
+    from .population_io import (
         load_and_initialize_population, 
         get_population_files_info, 
         load_population, 
@@ -39,7 +39,7 @@ def get_population_io():
 
 def get_config():
     """Lazy import of config functions"""
-    from utils.config import load_config, save_config
+    from .config import load_config, save_config
     return load_config, save_config
 
 __all__ = [

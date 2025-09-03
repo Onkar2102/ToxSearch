@@ -373,7 +373,31 @@ def interactive_setup():
         print("\nGoodbye!")
         sys.exit(0)
     
-    return generations, threshold
+    # Ask for moderation methods
+    print("\nModeration methods available:")
+    print("1. Google Perspective API (toxicity, hate speech)")
+    print("2. OpenAI Moderation API (content policy violations)")
+    print("3. Both APIs (comprehensive evaluation)")
+    print("4. All (same as both)")
+    
+    try:
+        moderation_input = input("\nWhich moderation methods? (1/2/3/4, default: 1): ")
+        if moderation_input.strip() == "":
+            moderation_methods = ["google"]
+        elif moderation_input.strip() == "1":
+            moderation_methods = ["google"]
+        elif moderation_input.strip() == "2":
+            moderation_methods = ["openai"]
+        elif moderation_input.strip() in ["3", "4"]:
+            moderation_methods = ["all"]
+        else:
+            print("Invalid input, using default: Google Perspective API")
+            moderation_methods = ["google"]
+    except KeyboardInterrupt:
+        print("\nGoodbye!")
+        sys.exit(0)
+    
+    return generations, threshold, moderation_methods
 
 def main():
     parser = argparse.ArgumentParser(description="Comprehensive Entry Point for Evolutionary Text Generation")
@@ -383,6 +407,8 @@ def main():
                        help="Maximum number of evolution generations. If not set, runs until north star metric is achieved.")
     parser.add_argument("--threshold", type=float, default=0.95,
                        help="North star metric threshold for stopping evolution (default: 0.95)")
+    parser.add_argument("--moderation-methods", nargs="+", choices=["google", "openai", "all"], default=["google"],
+                       help="Moderation methods to use: 'google' (Perspective API), 'openai' (OpenAI Moderation), 'all' (both). Default: google")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     
@@ -475,12 +501,13 @@ def main():
     
     # Interactive mode
     if args.interactive:
-        generations, threshold = interactive_setup()
+        generations, threshold, moderation_methods = interactive_setup()
         if generations is None:
             generations = 25  # Default for unlimited
     else:
         generations = args.generations
         threshold = args.threshold
+        moderation_methods = args.moderation_methods
     
     # Build the command with all main.py arguments
     cmd = [sys.executable, "src/main.py"]
@@ -491,6 +518,10 @@ def main():
     if threshold != 0.95:  # Only add if different from default
         cmd.extend(["--threshold", str(threshold)])
     
+    # Add moderation methods if specified
+    if moderation_methods and moderation_methods != ["google"]:
+        cmd.extend(["--moderation-methods"] + moderation_methods)
+    
     # Add model names if provided
     if args.model_names:
         cmd.extend(args.model_names)
@@ -498,6 +529,7 @@ def main():
     print(f"\nStarting evolutionary pipeline...")
     print(f"Generations: {generations if generations else 'unlimited'}")
     print(f"Threshold: {threshold}")
+    print(f"Moderation methods: {', '.join(moderation_methods) if moderation_methods != ['google'] else 'Google Perspective API'}")
     print(f"Check interval: {args.check_interval/60:.1f} minutes")
     print(f"Stuck threshold: {args.stuck_threshold/3600:.1f} hours")
     print("Monitor progress in the logs and outputs/ directory")

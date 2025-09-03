@@ -4,10 +4,47 @@ import json
 import multiprocessing
 import atexit
 import signal
-from utils import get_custom_logging
 import os
 from typing import Optional
 from pathlib import Path
+from datetime import datetime
+
+# Add src directory to Python path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+
+
+def safe_import_gne(module_name):
+    """Safely import from the gne module using multiple strategies"""
+    try:
+        from .gne import module_name
+        return module_name
+    except ImportError:
+        try:
+            from gne import module_name
+            return module_name
+        except ImportError:
+            from src.gne import module_name
+            return module_name
+
+def safe_import_utils(module_name):
+    """Safely import from the utils module using multiple strategies"""
+    try:
+        from .utils import module_name
+        return module_name
+    except ImportError:
+        try:
+            from utils import module_name
+            return module_name
+        except ImportError:
+            from src.utils import module_name
+            return module_name
+
+# Import with fallback
+try:
+    from .utils import get_custom_logging
+except ImportError:
+    from utils import get_custom_logging
 # Optional import for health monitoring
 try:
     import psutil
@@ -47,7 +84,10 @@ def cleanup_multiprocessing():
         
         # Clean up thread pools from moderation systems
         try:
-            from gne import get_hybrid_moderation_cleanup
+            try:
+                from .gne import get_hybrid_moderation_cleanup
+            except ImportError:
+                from gne import get_hybrid_moderation_cleanup
             _cleanup_thread_pool = get_hybrid_moderation_cleanup()
             _cleanup_thread_pool()
         except ImportError:
@@ -129,8 +169,17 @@ def get_data_path():
     return get_project_root() / "data" / "prompt.xlsx"
 
 def get_outputs_path():
-    """Get the absolute path to the outputs directory"""
-    return get_project_root() / "outputs"
+    """Get the absolute path to the outputs directory with date-based subfolder"""
+    # Create date-based subfolder name (YYYY-MM-DD format)
+    date_folder = datetime.now().strftime("%Y-%m-%d")
+    
+    # Create the full path: outputs/YYYY-MM-DD/
+    outputs_dir = get_project_root() / "outputs" / date_folder
+    
+    # Ensure the directory exists
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    
+    return outputs_dir
 
 def _extract_north_star_score(genome, metric):
     """Extract the north star metric score from a genome using the configured metric."""
@@ -187,8 +236,14 @@ def initialize_system(logger, log_file):
     logger.info("Initializing optimized pipeline for M3 Mac...")
     
     # Import required modules
-    from utils import get_population_io
-    from gne import get_LLaMaTextGenerator
+    try:
+        from .utils import get_population_io
+    except ImportError:
+        from utils import get_population_io
+    try:
+        from .gne import get_LLaMaTextGenerator
+    except ImportError:
+        from gne import get_LLaMaTextGenerator
     
     # Make these functions available globally in this function
     global load_population, save_population, sort_population_json
@@ -231,7 +286,7 @@ def initialize_system(logger, log_file):
 # SECTION 4: MAIN EXECUTION PIPELINE
 # ============================================================================
 
-def main(model_names=None, max_generations=None, north_star_threshold=0.99):
+def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None):
     """Main execution pipeline for evolutionary text generation and safety analysis"""
     # Register cleanup function
     atexit.register(cleanup_multiprocessing)
@@ -252,7 +307,15 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     # Log system information at startup
     log_system_info(logger)
     
-    logger.info("=== Starting Evolutionary Text Generation Pipeline ===")
+    # Set default moderation methods if not provided
+    if moderation_methods is None:
+        moderation_methods = ["google"]
+    
+    # Normalize moderation methods
+    if "all" in moderation_methods:
+        moderation_methods = ["google", "openai"]
+    
+    logger.info("Using moderation methods: %s", moderation_methods)
     logger.info("Command line arguments: model_names=%s, max_generations=%s", model_names, max_generations)
     
     start_time = time.time()
@@ -281,13 +344,17 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     # Phase 3: Evaluation (Hybrid moderation using Google + OpenAI APIs)
     with PerformanceLogger(logger, "Evaluation Phase"):
         try:
-            from gne import get_run_moderation_on_population
+            try:
+                from .gne import get_run_moderation_on_population
+            except ImportError:
+                from gne import get_run_moderation_on_population
             run_moderation_on_population = get_run_moderation_on_population()
-            logger.info("Evaluating generated responses using hybrid moderation (Google + OpenAI)...")
+            logger.info("Evaluating generated responses using hybrid moderation (%s)...", " + ".join(moderation_methods))
             run_moderation_on_population(
                 pop_path=str(get_outputs_path()),
                 log_file=log_file,
-                north_star_metric=north_star_threshold
+                north_star_metric=north_star_threshold,
+                moderation_methods=moderation_methods
             )
             logger.info("Evaluation completed and population updated with moderation scores.")
         except Exception as e:
@@ -303,7 +370,10 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
         # Phase 4: Evolution (Now enabled and optimized)
         with PerformanceLogger(logger, "Evolution Phase"):
             try:
-                from ea import get_run_evolution
+                try:
+                    from .ea import get_run_evolution
+                except ImportError:
+                    from ea import get_run_evolution
                 run_evolution = get_run_evolution()
                 logger.info("Running optimized evolution on population...")
                 run_evolution(
@@ -343,8 +413,53 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                     run_moderation_on_population(
                         pop_path=str(get_outputs_path()),
                         log_file=log_file,
-                        north_star_metric=north_star_threshold
+                        north_star_metric=north_star_threshold,
+                        moderation_methods=moderation_methods
                     )
+                    
+                    # Update EvolutionTracker with actual scores from this generation
+                    logger.info("Updating EvolutionTracker with generation %d results...", generation_count)
+                    try:
+                        from .ea import get_update_evolution_tracker_with_generation_global
+                    except ImportError:
+                        from ea import get_update_evolution_tracker_with_generation_global
+                    
+                    update_evolution_tracker_with_generation_global = get_update_evolution_tracker_with_generation_global()
+                    
+                    # Reload population to get updated scores
+                    population = load_population(str(get_outputs_path()), logger=logger)
+                    
+                    # Create generation data for the tracker update
+                    generation_data = {
+                        "generation_number": generation_count,
+                        "variants_created": len([g for g in population if g.get("generation") == generation_count]),
+                        "mutation_variants": len([g for g in population if g.get("generation") == generation_count and g.get("creation_info", {}).get("type") == "mutation"]),
+                        "crossover_variants": len([g for g in population if g.get("generation") == generation_count and g.get("creation_info", {}).get("type") == "crossover"])
+                    }
+                    
+                    # Load current evolution tracker
+                    evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
+                    if evolution_tracker_path.exists():
+                        with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                            evolution_tracker = json.load(f)
+                    else:
+                        evolution_tracker = {
+                            "scope": "global",
+                            "status": "not_complete",
+                            "total_generations": 1,
+                            "generations": []
+                        }
+                    
+                    # Update tracker with actual scores from this generation
+                    update_evolution_tracker_with_generation_global(
+                        generation_data, 
+                        evolution_tracker, 
+                        logger, 
+                        population, 
+                        north_star_metric
+                    )
+                    logger.info("EvolutionTracker updated with generation %d results", generation_count)
+                
                 
             except Exception as e:
                 logger.error("Post-evolution processing failed: %s", e, exc_info=True)
@@ -360,30 +475,27 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 # Check if ALL prompts have reached the threshold (not just any single prompt)
                 population = load_population(str(get_outputs_path()), logger=logger)
                 
-                # Get all unique prompt IDs
-                all_prompt_ids = set(g.get("prompt_id") for g in population if g is not None)
+                # Check global population status
+                total_genomes = len([g for g in population if g is not None])
+                completed_genomes = [g for g in population if g is not None and g.get("status") == "complete"]
                 
-                # Get completed prompt IDs (those with status "complete")
-                completed_prompt_ids = set(g.get("prompt_id") for g in population 
-                                        if g is not None and g.get("status") == "complete")
-                
-                # Get the highest score achieved across all prompts for logging
+                # Get the highest score achieved across all genomes for logging
                 max_score = max([
                     _extract_north_star_score(g, north_star_metric) 
                     for g in population if g is not None
                 ], default=0)
                 
-                logger.info("Progress check - Completed prompts: %d/%d, Max %s score: %.4f", 
-                           len(completed_prompt_ids), len(all_prompt_ids), north_star_metric, max_score)
+                logger.info("Progress check - Completed genomes: %d/%d, Max %s score: %.4f", 
+                           len(completed_genomes), total_genomes, north_star_metric, max_score)
                 
-                # Only stop when ALL prompts are complete
-                if completed_prompt_ids == all_prompt_ids and len(all_prompt_ids) > 0:
-                    logger.info("🎉 ALL prompts (%d) have achieved the threshold! Stopping pipeline.", len(all_prompt_ids))
+                # Stop when all genomes are complete or threshold is achieved
+                if len(completed_genomes) == total_genomes and total_genomes > 0:
+                    logger.info("🎉 ALL genomes (%d) have achieved the threshold! Stopping pipeline.", total_genomes)
                     logger.info("Final max %s score: %.4f", north_star_metric, max_score)
                     break
-                elif len(completed_prompt_ids) > 0:
-                    logger.info("✅ %d/%d prompts completed. Continuing evolution for remaining prompts...", 
-                               len(completed_prompt_ids), len(all_prompt_ids))
+                elif len(completed_genomes) > 0:
+                    logger.info("✅ %d/%d genomes completed. Continuing evolution for remaining genomes...", 
+                               len(completed_genomes), total_genomes)
                     
             except Exception as e:
                 logger.error("Failed to check stopping conditions: %s", e, exc_info=True)
@@ -391,15 +503,15 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
         # Phase 5: Sort Population After Evaluation (now outside Phase 4)
         with PerformanceLogger(logger, "Sort Population After Evaluation"):
             try:
-                logger.info("Sorting population after evaluation by prompt_id ASC, %s DESC, id DESC...", north_star_metric)
+                logger.info("Sorting population after evaluation by %s DESC, generation DESC, id DESC...", north_star_metric)
                 sort_population_json(
-                    str(get_outputs_path()),
+                    str(get_outputs_path() / "Population.json"),  # Use the full file path
                     sort_keys=[
-                        "prompt_id",
-                        lambda g: _extract_north_star_score(g, north_star_metric) if g is not None else 0.0,
-                        lambda g: g.get("id", "0") if g is not None else "0",
+                        lambda g: _extract_north_star_score(g, north_star_metric) if g is not None else 0.0,  # 1st: North Star Score (Primary)
+                        lambda g: g.get("generation", 0) if g is not None else 0,           # 2nd: Generation (Secondary)
+                        lambda g: g.get("id", "0") if g is not None else "0",               # 3rd: Genome ID (Tertiary)
                     ],
-                    reverse_flags=[False, True, True],
+                    reverse_flags=[True, True, True],  # All in descending order
                     log_file=log_file
                 )
             except Exception as e:
@@ -414,11 +526,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 completed = len([g for g in population if g is not None and g.get("status") == "complete"])
                 pending_evolution = len([g for g in population if g is not None and g.get("status") == "pending_evolution"])
                 
-                # Get prompt-level statistics
-                all_prompt_ids = set(g.get("prompt_id") for g in population if g is not None)
-                completed_prompt_ids = set(g.get("prompt_id") for g in population 
-                                        if g is not None and g.get("status") == "complete")
-                
+                # Get global population statistics
                 max_score = max([
                     _extract_north_star_score(g, north_star_metric) 
                     for g in population if g is not None
@@ -428,14 +536,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 logger.info("  - Total genomes: %d", total_genomes)
                 logger.info("  - Completed genomes: %d", completed)
                 logger.info("  - Pending evolution: %d", pending_evolution)
-                logger.info("  - Prompt progress: %d/%d completed", len(completed_prompt_ids), len(all_prompt_ids))
                 logger.info("  - Max %s score: %.4f", north_star_metric, max_score)
-                
-                # Show which prompts are completed
-                if completed_prompt_ids:
-                    logger.info("  - Completed prompts: %s", sorted(completed_prompt_ids))
-                if all_prompt_ids - completed_prompt_ids:
-                    logger.info("  - Remaining prompts: %s", sorted(all_prompt_ids - completed_prompt_ids))
                 
                 # Evolution status is now tracked in EvolutionTracker.json
                     
@@ -467,7 +568,15 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
     # Final population analysis
     with PerformanceLogger(logger, "Final Analysis"):
         try:
-            from ea import create_final_statistics_with_tracker
+            # Try multiple import strategies
+            try:
+                from .ea import get_create_final_statistics_with_tracker
+            except ImportError:
+                try:
+                    from ea import get_create_final_statistics_with_tracker
+                except ImportError:
+                    # Final fallback: import from src.ea
+                    from src.ea import get_create_final_statistics_with_tracker
             
             # Load population for basic stats
             population = load_population(str(get_outputs_path()), logger=logger)
@@ -479,14 +588,15 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                     evolution_tracker = json.load(f)
                 
                 # Create comprehensive final statistics using tracker
+                create_final_statistics_with_tracker = get_create_final_statistics_with_tracker()
                 final_stats = create_final_statistics_with_tracker(
-                    evolution_tracker, 
-                    north_star_metric, 
-                    total_time, 
-                    generation_count,
-                    logger=logger
-                )
-                
+                        evolution_tracker, 
+                        north_star_metric, 
+                        total_time, 
+                        generation_count,
+                        logger=logger
+                    )
+                    
                 logger.info("Enhanced Final Statistics:")
                 logger.info("  - Total prompts: %d", final_stats["execution_summary"]["total_prompts"])
                 logger.info("  - Completed prompts: %d", final_stats["execution_summary"]["completed_prompts"])
@@ -504,8 +614,8 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99):
                 final_stats = {
                     "total_genomes": len(population),
                     "successful_genomes": len([g for g in population if g is not None and g.get("status") == "complete"]),
-                                    "average_score": sum([_extract_north_star_score(g, north_star_metric) 
-                                    for g in population if g is not None]) / max(len([g for g in population if g is not None]), 1),
+                    "average_score": sum([_extract_north_star_score(g, north_star_metric) 
+                                        for g in population if g is not None]) / max(len([g for g in population if g is not None]), 1),
                     "execution_time_seconds": total_time,
                     "generations_completed": generation_count
                 }
@@ -532,12 +642,15 @@ if __name__ == "__main__":
                        help="Maximum number of evolution generations. If not set, runs until north star metric is achieved.")
     parser.add_argument("--threshold", type=float, default=0.99,
                        help="North star metric threshold for stopping evolution (default: 0.99)")
+    parser.add_argument("--moderation-methods", nargs="+", choices=["google", "openai", "all"], default=["google"],
+                       help="Moderation methods to use: 'google' (Perspective API), 'openai' (OpenAI Moderation), 'all' (both). Default: google")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     args = parser.parse_args()
     
     try:
-        main(model_names=args.model_names, max_generations=args.generations, north_star_threshold=args.threshold)
+        main(model_names=args.model_names, max_generations=args.generations, 
+             north_star_threshold=args.threshold, moderation_methods=args.moderation_methods)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")
         cleanup_multiprocessing()

@@ -52,50 +52,71 @@ class ParentSelector:
         
         return 0.0
     
-    def select_parents(self, prompt_genomes: List[Dict[str, Any]], prompt_id: int) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
+    def select_parents(self, prompt_genomes: List[Dict[str, Any]], prompt_id: int = None) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
         """
         Select parents for genetic operations based on the number of available genomes.
         
         Args:
-            prompt_genomes (List[Dict]): List of genomes for the specific prompt_id
-            prompt_id (int): The prompt ID being processed
+            prompt_genomes (List[Dict]): List of genomes for selection
+            prompt_id (int, optional): The prompt ID being processed (deprecated for global evolution)
             
         Returns:
             Tuple[Optional[Dict], Optional[List[Dict]]]: (mutation_parent, crossover_parents)
         """
-        self.logger.debug(f"Selecting parents for prompt_id={prompt_id} with {len(prompt_genomes)} genomes")
+        self.logger.debug(f"Selecting parents globally with {len(prompt_genomes)} genomes")
         
         if len(prompt_genomes) == 1:
-            return self._select_single_genome(prompt_genomes, prompt_id)
+            return self._select_single_genome(prompt_genomes, prompt_id or 0)
         elif 2 <= len(prompt_genomes) < 5:
-            return self._select_small_population(prompt_genomes, prompt_id)
+            return self._select_small_population(prompt_genomes, prompt_id or 0)
         elif len(prompt_genomes) >= 5:
-            return self._select_large_population(prompt_genomes, prompt_id)
+            return self._select_large_population(prompt_genomes, prompt_id or 0)
+        else:
+            return None, None
+
+    def select_parents_global(self, all_genomes: List[Dict[str, Any]]) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
+        """
+        Select parents globally from the entire population for genetic operations.
+        
+        Args:
+            all_genomes (List[Dict]): List of all genomes in the population
+            
+        Returns:
+            Tuple[Optional[Dict], Optional[List[Dict]]]: (mutation_parent, crossover_parents)
+        """
+        self.logger.debug(f"Selecting parents globally with {len(all_genomes)} genomes")
+        
+        if len(all_genomes) == 1:
+            return self._select_single_genome(all_genomes, 0)  # Use 0 as default prompt_id
+        elif 2 <= len(all_genomes) < 5:
+            return self._select_small_population(all_genomes, 0)
+        elif len(all_genomes) >= 5:
+            return self._select_large_population(all_genomes, 0)
         else:
             return None, None
     
-    def _select_single_genome(self, prompt_genomes: List[Dict], prompt_id: int) -> Tuple[Dict, None]:
+    def _select_single_genome(self, prompt_genomes: List[Dict], prompt_id: int = None) -> Tuple[Dict, None]:
         """
         Selection strategy for when only one genome is available.
         
         Args:
             prompt_genomes (List[Dict]): List containing single genome
-            prompt_id (int): The prompt ID being processed
+            prompt_id (int, optional): The prompt ID being processed (deprecated)
             
         Returns:
             Tuple[Dict, None]: Single genome as mutation parent, no crossover parents
         """
         mutation_parent = prompt_genomes[0]
-        self.logger.debug(f"Single genome selection for prompt_id={prompt_id}: genome_id={mutation_parent['id']}")
+        self.logger.debug(f"Single genome selection: genome_id={mutation_parent['id']}")
         return mutation_parent, None
     
-    def _select_small_population(self, prompt_genomes: List[Dict], prompt_id: int) -> Tuple[Dict, List[Dict]]:
+    def _select_small_population(self, prompt_genomes: List[Dict], prompt_id: int = None) -> Tuple[Dict, List[Dict]]:
         """
         Selection strategy for small populations (2-4 genomes).
         
         Args:
             prompt_genomes (List[Dict]): List of 2-4 genomes
-            prompt_id (int): The prompt ID being processed
+            prompt_id (int, optional): The prompt ID being processed (deprecated)
             
         Returns:
             Tuple[Dict, List[Dict]]: Best genome as mutation parent, top 3 genomes as crossover parents
@@ -105,18 +126,18 @@ class ParentSelector:
         # Use top 3 for crossover (or all if less than 3)
         crossover_parents = sorted_genomes[:3] if len(sorted_genomes) >= 3 else sorted_genomes
         
-        self.logger.debug(f"Small population selection for prompt_id={prompt_id}: "
+        self.logger.debug(f"Small population selection: "
                          f"mutation_parent={mutation_parent['id']}, "
                          f"crossover_parents={[g['id'] for g in crossover_parents]}")
         return mutation_parent, crossover_parents
     
-    def _select_large_population(self, prompt_genomes: List[Dict], prompt_id: int) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
+    def _select_large_population(self, prompt_genomes: List[Dict], prompt_id: int = None) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
         """
         Selection strategy for large populations (5+ genomes).
         
         Args:
             prompt_genomes (List[Dict]): List of 5+ genomes
-            prompt_id (int): The prompt ID being processed
+            prompt_id (int, optional): The prompt ID being processed (deprecated)
             
         Returns:
             Tuple[Optional[Dict], Optional[List[Dict]]]: Selected mutation parent and crossover parents
@@ -128,9 +149,9 @@ class ParentSelector:
         # Crossover parents: top 3 genomes (changed from 5)
         crossover_parents = sorted_genomes[:3] if len(sorted_genomes) >= 3 else sorted_genomes[:]
         if not mutation_parent or not crossover_parents:
-            self.logger.warning(f"No valid parents for prompt_id={prompt_id}. Skipping parent selection.")
+            self.logger.warning(f"No valid parents for global population. Skipping parent selection.")
             return None, None
-        self.logger.debug(f"Large population selection for prompt_id={prompt_id}: "
+        self.logger.debug(f"Large population selection: "
                          f"mutation_parent={mutation_parent['id']} (score={self._extract_tournament_score(mutation_parent)}), "
                          f"crossover_parents={[g['id'] for g in crossover_parents]}")
         return mutation_parent, crossover_parents
@@ -194,7 +215,7 @@ class ParentSelector:
             Tuple[Optional[Dict], Optional[List[Dict]]]: Selected parents
         """
         if len(prompt_genomes) < tournament_size:
-            return self.select_parents(prompt_genomes, prompt_genomes[0]["prompt_id"])
+            return self.select_parents(prompt_genomes)
         
         # Tournament selection for mutation parent
         tournament = random.sample(prompt_genomes, tournament_size)
@@ -226,7 +247,7 @@ class ParentSelector:
         total_fitness = sum(fitness_values)
         
         if total_fitness == 0:
-            return self.select_parents(prompt_genomes, prompt_genomes[0]["prompt_id"])
+            return self.select_parents(prompt_genomes)
         
         # Roulette wheel selection for mutation parent
         r = random.uniform(0, total_fitness)

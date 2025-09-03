@@ -259,28 +259,38 @@ class HybridModerationEvaluator:
         
         return normalized_scores
     
-    def _evaluate_text_hybrid(self, text: str, genome_id: str) -> Dict[str, Any]:
+    def _evaluate_text_hybrid(self, text: str, genome_id: str, moderation_methods: List[str] = None) -> Dict[str, Any]:
         """Evaluate text using both available APIs"""
         get_logger, _, _, PerformanceLogger = get_custom_logging()
         with PerformanceLogger(self.logger, "Evaluate Text Hybrid", genome_id=genome_id, text_length=len(text)):
             try:
                 self.logger.debug("Evaluating text for genome %s: %d characters", genome_id, len(text))
                 
+                # Set default moderation methods if not provided
+                if moderation_methods is None:
+                    moderation_methods = ["google", "openai"]
+                
+                self.logger.debug("Using moderation methods: %s for genome %s", moderation_methods, genome_id)
+                
                 results = {}
                 
-                # Evaluate with Google if available
-                if self.google_available:
+                # Evaluate with Google if requested and available
+                if "google" in moderation_methods and self.google_available:
                     google_result = self._evaluate_with_google(text, genome_id)
                     if google_result:
                         results["google"] = google_result
                         self.logger.debug("Google evaluation completed for genome %s", genome_id)
+                elif "google" in moderation_methods and not self.google_available:
+                    self.logger.warning("Google Perspective API requested but not available for genome %s", genome_id)
                 
-                # Evaluate with OpenAI if available
-                if self.openai_available:
+                # Evaluate with OpenAI if requested and available
+                if "openai" in moderation_methods and self.openai_available:
                     openai_result = self._evaluate_with_openai(text, genome_id)
                     if openai_result:
                         results["openai"] = openai_result
                         self.logger.debug("OpenAI evaluation completed for genome %s", genome_id)
+                elif "openai" in moderation_methods and not self.openai_available:
+                    self.logger.warning("OpenAI Moderation API requested but not available for genome %s", genome_id)
                 
                 if not results:
                     return {
@@ -320,7 +330,8 @@ class HybridModerationEvaluator:
                 }
     
     def _evaluate_population_sync(self, population: List[Dict[str, Any]], 
-                                 north_star_metric: str = "toxicity", batch_size: int = None, pop_path: str = "") -> List[Dict[str, Any]]:
+                                 north_star_metric: str = "toxicity", batch_size: int = None, 
+                                 pop_path: str = "", moderation_methods: List[str] = None) -> List[Dict[str, Any]]:
         """Evaluate entire population using hybrid moderation"""
         # Use config batch size if not provided, fallback to default
         if batch_size is None:
@@ -373,7 +384,7 @@ class HybridModerationEvaluator:
                                 continue
                             
                             # Evaluate the genome using hybrid approach
-                            evaluation_result = self._evaluate_text_hybrid(generated_text, genome_id)
+                            evaluation_result = self._evaluate_text_hybrid(generated_text, genome_id, moderation_methods=moderation_methods)
                             
                             if evaluation_result.get('status') == 'complete':
                                 # Store the hybrid result
@@ -451,7 +462,7 @@ class HybridModerationEvaluator:
         # Return 0.0 if no score found
         return 0.0
     
-    def evaluate_population_sync(self, pop_path: str, north_star_metric: str = "toxicity") -> None:
+    def evaluate_population_sync(self, pop_path: str, north_star_metric: str = "toxicity", moderation_methods: List[str] = None) -> None:
         """Main sync method to evaluate population with hybrid moderation"""
         get_logger, _, _, PerformanceLogger = get_custom_logging()
         with PerformanceLogger(self.logger, "Evaluate Population Hybrid", pop_path=pop_path, north_star_metric=north_star_metric):
@@ -462,8 +473,14 @@ class HybridModerationEvaluator:
                 _, _, load_population, _, _, _, _, _ = get_population_io()
                 population = load_population(pop_path, logger=self.logger)
                 
+                # Set default moderation methods if not provided
+                if moderation_methods is None:
+                    moderation_methods = ["google"]
+                
+                self.logger.info("Using moderation methods: %s", moderation_methods)
+                
                 # Evaluate population with hybrid moderation
-                updated_population = self._evaluate_population_sync(population, north_star_metric, pop_path=pop_path)
+                updated_population = self._evaluate_population_sync(population, north_star_metric, pop_path=pop_path, moderation_methods=moderation_methods)
                 
                 # Final save
                 _, _, _, save_population, _, _, _, _ = get_population_io()
@@ -476,7 +493,7 @@ class HybridModerationEvaluator:
                 raise
 
 def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None, 
-                               north_star_metric: str = "toxicity") -> None:
+                               north_star_metric: str = "toxicity", moderation_methods: List[str] = None) -> None:
     """Convenience function to run hybrid moderation on population"""
     get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("run_moderation", log_file)
@@ -486,14 +503,20 @@ def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None,
         try:
             logger.info("Starting hybrid moderation evaluation for population")
             
+            # Set default moderation methods if not provided
+            if moderation_methods is None:
+                moderation_methods = ["google"]
+            
+            logger.info("Using moderation methods: %s", moderation_methods)
+            
             # Create evaluator with absolute path
             from pathlib import Path
             project_root = Path(__file__).resolve().parents[2]
             config_path = project_root / "config" / "modelConfig.yaml"
             evaluator = HybridModerationEvaluator(config_path=str(config_path), log_file=log_file)
             
-            # Run evaluation
-            evaluator.evaluate_population_sync(pop_path, north_star_metric)
+            # Run evaluation with specified methods
+            evaluator.evaluate_population_sync(pop_path, north_star_metric, moderation_methods=moderation_methods)
             
             logger.info("Hybrid moderation evaluation completed successfully")
             
