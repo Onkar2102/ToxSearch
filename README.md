@@ -145,7 +145,7 @@ The system uses `config/modelConfig.yaml` for:
 ## Output Structure
 
 ```
-outputs/YYYY-MM-DD/
+outputs/
 ├── Population.json        # All genomes across all generations (single file)
 ├── population_index.json  # Lightweight index/metadata for Population.json
 ├── EvolutionTracker.json  # Evolution progress tracking (global, per generation)

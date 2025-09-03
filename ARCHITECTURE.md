@@ -28,7 +28,7 @@
 
 ### **Single-File Population**
 - Before: Split generation files (`gen0.json`, `gen1.json`, ...)
-- After: Consolidated into a single `outputs/YYYY-MM-DD/Population.json`
+- After: Consolidated into a single `outputs/Population.json`
 - Benefits: Simpler I/O, fewer file handles, consistent view across generations
 
 ### **Enhanced Evolution Tracking**
@@ -183,11 +183,10 @@ EOST-CAM-LLM/
 │       ├── config.py             # Configuration utilities
 │       └── __init__.py           # Lazy import functions
 ├── outputs/
-│   └── YYYY-MM-DD/
-│       ├── Population.json           # Unified population store
-│       ├── population_index.json     # Population metadata/index
-│       ├── EvolutionTracker.json     # Evolution progress tracking
-│       └── final_statistics.json     # Final analysis results (optional)
+│   ├── Population.json           # Unified population store
+│   ├── population_index.json     # Population metadata/index
+│   ├── EvolutionTracker.json     # Evolution progress tracking
+│   └── final_statistics.json     # Final analysis results (optional)
 ├── logs/                         # Log files
 ├── design_document.md            # Formal design specification
 └── ARCHITECTURE.md               # Architecture document
@@ -216,7 +215,7 @@ EOST-CAM-LLM/
 
 ### **1. Single File Architecture (Current Default)**
 - Problem: Split files increased complexity for most workflows
-- Solution: Single `Population.json` under date-based outputs folder
+- Solution: Single `Population.json` under outputs directory
 - Benefits: Memory-aware loading with `population_io.load_population`, simpler tooling
 
 ### **2. Enhanced Evolution Tracking**
@@ -231,7 +230,7 @@ EOST-CAM-LLM/
 
 ### **4. Path Resolution**
 - Problem: Relative path fragility
-- Solution: Absolute resolution and date-based output structure
+- Solution: Absolute resolution and consistent output structure
 - Benefits: Reliable, reproducible runs
 
 This enhanced architecture provides a robust, scalable, and memory-efficient framework for evolutionary text generation with comprehensive tracking and optimization features. 

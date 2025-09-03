@@ -33,7 +33,7 @@ flowchart LR
 
 - Users operate the system via scripts in `app.py` and `src/main.py`.
 - External services: LLM providers (LLaMA local/inference), Safety APIs (Google, OpenAI). 
-- Artifacts are stored under `outputs/YYYY-MM-DD/` per run.
+- Artifacts are stored under `outputs/` directory.
 
 ## 4. Requirements
 
@@ -48,7 +48,7 @@ flowchart LR
   - Performance: Avoid loading unnecessary data; cap variants per operator; dedup
   - Memory: Prefer single-file population; lazy imports and targeted loading
   - Observability: Structured logs with timings (PerformanceLogger); breakdowns by status
-  - Reproducibility: Date-based output directories; deterministic sorting of populations
+  - Reproducibility: Deterministic sorting of populations; consistent output structure
 
 ## 5. High‑Level Architecture
 
@@ -96,7 +96,7 @@ flowchart TD
     - `operator: str`
     - `source_generation: int`
     - `evolution_cycle: int`
-- EvolutionTracker (Per-run, date-scoped directory)
+- EvolutionTracker (Per-run directory)
   - Flat list of generation summaries (global scope)
   - For each generation: `generation_number`, `genome_id` (best), `max_score`, counts
 
@@ -126,7 +126,7 @@ flowchart TD
    - Generate variants for selected parents
    - Evaluate with hybrid moderation, persist scores
 3) Evolve
-   - Update best-of-generation (children’s evaluated scores)
+   - Update best-of-generation (children's evaluated scores)
    - Deduplicate, update population file
 4) Repeat for configured generations/cycles
 
@@ -140,7 +140,7 @@ flowchart TD
 
 ## 10. Persistence & File Layout
 
-- Outputs root: `outputs/YYYY-MM-DD/`
+- Outputs root: `outputs/`
   - `Population.json`: Single authoritative population store
   - `EvolutionTracker.json`: Generation summaries (flat list)
   - `population_index.json`: Derived metadata for convenience
@@ -199,7 +199,7 @@ flowchart TD
   - Initialize population from Excel
   - Execute `src/main.py` with desired `--generations` and metric
 - Artifacts
-  - Inspect `outputs/<date>/Population.json` and `EvolutionTracker.json`
+  - Inspect `outputs/Population.json` and `EvolutionTracker.json`
   - Review logs under `logs/`
 
 ## 17. Backward Compatibility & Migration

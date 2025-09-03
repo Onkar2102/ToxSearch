@@ -1,0 +1,12 @@
+{
+  "total_generations": 1,
+  "total_genomes": 100,
+  "generation_files": {
+    "0": "Population.json (gen0)"
+  },
+  "generation_counts": {
+    "0": 100
+  },
+  "single_file_mode": true,
+  "population_file": "Population.json"
+}

@@ -11,7 +11,7 @@ The main orchestrator for the evolutionary process.
 - Manages genome populations and evolution cycles (global evolution)
 - Coordinates parent selection and variant generation
 - Tracks variant counts and integrates deduplication
-- Single-file population persistence (`outputs/YYYY-MM-DD/Population.json`)
+- Single-file population persistence (`outputs/Population.json`)
 - Memory-optimized for large populations
 
 **Main Methods (excerpt):**

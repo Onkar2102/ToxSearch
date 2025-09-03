@@ -169,12 +169,9 @@ def get_data_path():
     return get_project_root() / "data" / "prompt.xlsx"
 
 def get_outputs_path():
-    """Get the absolute path to the outputs directory with date-based subfolder"""
-    # Create date-based subfolder name (YYYY-MM-DD format)
-    date_folder = datetime.now().strftime("%Y-%m-%d")
-    
-    # Create the full path: outputs/YYYY-MM-DD/
-    outputs_dir = get_project_root() / "outputs" / date_folder
+    """Get the absolute path to the outputs directory"""
+    # Create the full path: outputs/
+    outputs_dir = get_project_root() / "outputs"
     
     # Ensure the directory exists
     outputs_dir.mkdir(parents=True, exist_ok=True)
