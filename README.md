@@ -13,8 +13,8 @@ A research framework for AI safety analysis through evolutionary text generation
 - [Safety Features](#safety-features)
 - [Documentation](#documentation)
   - [Architecture Overview](ARCHITECTURE.md)
+  - [Design Document](design_document.md)
   - [Evolutionary Algorithms](src/ea/README.md)
-  - [Genome Structure](GENOME_STRUCTURE.md)
   - [Generation & Evaluation](#generation--evaluation)
   - [Utilities](#utilities)
 - [Usage Examples](#usage-examples)
@@ -91,11 +91,11 @@ python src/main.py --generations 25
 ### **[Architecture Overview](ARCHITECTURE.md)**
 Comprehensive system architecture, component interactions, and data flow diagrams.
 
+### **[Design Document](design_document.md)**
+Detailed, professional design specification: goals, data models, algorithms, operations.
+
 ### **[Evolutionary Algorithms](src/ea/README.md)**
 Complete guide to genetic algorithms, variation operators, and evolution strategies.
-
-### **[Genome Structure](GENOME_STRUCTURE.md)**
-Detailed documentation of genome data structure, fields, and lifecycle management.
 
 ### **Generation & Evaluation** (`src/gne/`)
 - `LLaMaTextGenerator.py` - LLaMA model integration with memory management
@@ -145,10 +145,10 @@ The system uses `config/modelConfig.yaml` for:
 ## Output Structure
 
 ```
-outputs/
+outputs/YYYY-MM-DD/
 ├── Population.json        # All genomes across all generations (single file)
 ├── population_index.json  # Lightweight index/metadata for Population.json
-├── EvolutionTracker.json  # Evolution progress tracking (per prompt, per generation)
+├── EvolutionTracker.json  # Evolution progress tracking (global, per generation)
 └── final_statistics.json  # Final analysis results (optional)
 ```
 

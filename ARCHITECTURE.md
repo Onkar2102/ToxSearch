@@ -28,7 +28,7 @@
 
 ### **Single-File Population**
 - Before: Split generation files (`gen0.json`, `gen1.json`, ...)
-- After: Consolidated into a single `outputs/Population.json`
+- After: Consolidated into a single `outputs/YYYY-MM-DD/Population.json`
 - Benefits: Simpler I/O, fewer file handles, consistent view across generations
 
 ### **Enhanced Evolution Tracking**
@@ -183,13 +183,14 @@ EOST-CAM-LLM/
 │       ├── config.py             # Configuration utilities
 │       └── __init__.py           # Lazy import functions
 ├── outputs/
-│   ├── Population.json           # Unified population store
-│   ├── population_index.json     # Population metadata/index
-│   ├── EvolutionTracker.json     # Evolution progress tracking
-│   └── final_statistics.json     # Final analysis results (optional)
+│   └── YYYY-MM-DD/
+│       ├── Population.json           # Unified population store
+│       ├── population_index.json     # Population metadata/index
+│       ├── EvolutionTracker.json     # Evolution progress tracking
+│       └── final_statistics.json     # Final analysis results (optional)
 ├── logs/                         # Log files
-├── GENOME_STRUCTURE.md           # Genome data structure documentation
-└── ARCHITECTURE.md               # This architecture document
+├── design_document.md            # Formal design specification
+└── ARCHITECTURE.md               # Architecture document
 ```
 
 ## Performance Characteristics
@@ -213,24 +214,24 @@ EOST-CAM-LLM/
 
 ## Recent Architecture Improvements
 
-### **1. Split File Architecture**
-- **Problem**: Single large Population.json file caused memory issues
-- **Solution**: Split into generation-specific files (gen0.json, gen1.json, etc.)
-- **Benefits**: Memory-efficient loading, better scalability, faster access
+### **1. Single File Architecture (Current Default)**
+- Problem: Split files increased complexity for most workflows
+- Solution: Single `Population.json` under date-based outputs folder
+- Benefits: Memory-aware loading with `population_io.load_population`, simpler tooling
 
 ### **2. Enhanced Evolution Tracking**
-- **Problem**: max_score was incorrectly set to parent's score
-- **Solution**: Load generation files to calculate actual best scores
-- **Benefits**: Accurate performance tracking, better evolution insights
+- Problem: `max_score` previously used parent score
+- Solution: Post-evaluation best-of-generation computed from children only
+- Benefits: Accurate progress signals and analysis
 
 ### **3. Memory Optimization**
-- **Problem**: Loading entire population for simple operations
-- **Solution**: Targeted loading functions and lazy imports
-- **Benefits**: Reduced memory usage, faster operations, better scalability
+- Problem: Loading heavy libs prematurely
+- Solution: Lazy imports and targeted loading helpers
+- Benefits: Lower peak memory and faster startup
 
 ### **4. Path Resolution**
-- **Problem**: Relative path issues causing file not found errors
-- **Solution**: Absolute path resolution with robust file handling
-- **Benefits**: Cross-platform compatibility, reliable file access
+- Problem: Relative path fragility
+- Solution: Absolute resolution and date-based output structure
+- Benefits: Reliable, reproducible runs
 
 This enhanced architecture provides a robust, scalable, and memory-efficient framework for evolutionary text generation with comprehensive tracking and optimization features. 

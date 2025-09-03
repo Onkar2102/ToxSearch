@@ -8,21 +8,21 @@ The Evolutionary Algorithms package provides the core genetic algorithm function
 The main orchestrator for the evolutionary process.
 
 **Key Features:**
-- Manages genome populations and generation cycles
+- Manages genome populations and evolution cycles (global evolution)
 - Coordinates parent selection and variant generation
-- Handles evolution tracking and metadata
-- Single-file population persistence (`outputs/Population.json`)
+- Tracks variant counts and integrates deduplication
+- Single-file population persistence (`outputs/YYYY-MM-DD/Population.json`)
 - Memory-optimized for large populations
 
-**Main Methods:**
+**Main Methods (excerpt):**
 ```python
 # Initialize evolution engine
 engine = EvolutionEngine(north_star_metric, log_file, current_cycle)
 
-# Generate variants for a specific prompt
-variants = engine.generate_variants(prompt_id)
+# Generate variants globally for the current cycle
+generation_data = engine.generate_variants_global()
 
-# Update genome IDs
+# Keep IDs consistent with current population
 engine.update_next_id()
 ```
 
@@ -108,7 +108,7 @@ max_variants = 5  # Reduced from 10 to control growth
 ## 📈 **Evolution Flow**
 
 1) Population Initialization → `Population.json`
-2) Parent Selection → per-prompt parents
+2) Parent Selection → global selection from population
 3) Variant Generation → capped variants, deduplicated
 4) Tracker Update → per-generation best score, counts
 
