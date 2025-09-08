@@ -409,6 +409,8 @@ def main():
                        help="North star metric threshold for stopping evolution (default: 0.95)")
     parser.add_argument("--moderation-methods", nargs="+", choices=["google", "openai", "all"], default=["google"],
                        help="Moderation methods to use: 'google' (Perspective API), 'openai' (OpenAI Moderation), 'all' (both). Default: google")
+    parser.add_argument("--steady-state", action="store_true", default=False,
+                       help="Enable steady state population management (top 100 + remaining)")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     
@@ -526,10 +528,15 @@ def main():
     if args.model_names:
         cmd.extend(args.model_names)
     
+    # Add steady state flag if enabled
+    if args.steady_state:
+        cmd.extend(["--steady-state"])
+    
     print(f"\nStarting evolutionary pipeline...")
     print(f"Generations: {generations if generations else 'unlimited'}")
     print(f"Threshold: {threshold}")
     print(f"Moderation methods: {', '.join(moderation_methods) if moderation_methods != ['google'] else 'Google Perspective API'}")
+    print(f"Steady state: {'Enabled' if args.steady_state else 'Disabled'}")
     print(f"Check interval: {args.check_interval/60:.1f} minutes")
     print(f"Stuck threshold: {args.stuck_threshold/3600:.1f} hours")
     print("Monitor progress in the logs and outputs/ directory")

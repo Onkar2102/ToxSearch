@@ -172,10 +172,11 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                         marked_count += 1
                 _logger.info("Marked %d genomes as complete (global threshold achieved)", marked_count)
                 
-                # Save population to single file
-                _, _, _, save_population, _, _, _, _ = get_population_io()
-                save_population(population, str(outputs_path), logger=_logger)
-                _logger.info("Updated population with completed statuses")
+                # Save population to elites.json (steady-state mode)
+                _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                elites_path = str(outputs_path / "elites.json")
+                save_population(population, elites_path, logger=_logger)
+                _logger.info("Updated elites with completed statuses")
             else:
                 _logger.info("Global population has not achieved the threshold of %.4f", threshold)
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
@@ -268,7 +269,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                     }
                     
                     # Other parents become crossover parents
-                    for parent in sorted_parents[1:3]:  # Take up to 2 additional parents
+                    for parent in sorted_parents[1:]:  # Take all additional parents (up to 4 for steady-state)
                         crossover_parents_info.append({
                             "genome_id": parent["id"],
                             "generation": parent.get("generation", 0),
@@ -309,6 +310,26 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             
             # Sort generations by generation number
             evolution_tracker["generations"].sort(key=lambda x: x["generation_number"])
+            
+            # Calculate and update population max toxicity at the top level
+            if population and north_star_metric:
+                all_evaluated_genomes = [g for g in population if g.get("moderation_result")]
+                if all_evaluated_genomes:
+                    population_scores = []
+                    for genome in all_evaluated_genomes:
+                        score = _extract_north_star_score(genome, north_star_metric)
+                        if score > 0:  # Only consider genomes with valid scores
+                            population_scores.append((genome["id"], score))
+                    
+                    if population_scores:
+                        population_best_genome_id, population_max_toxicity = max(population_scores, key=lambda x: x[1])
+                        evolution_tracker["population_max_toxicity"] = population_max_toxicity
+                        evolution_tracker["population_best_genome_id"] = population_best_genome_id
+                        _logger.info(f"Updated population max toxicity: {population_max_toxicity} (genome {population_best_genome_id})")
+                    else:
+                        _logger.warning(f"No valid scores found in entire population")
+                else:
+                    _logger.warning(f"No evaluated genomes found in population")
             
             # Get the dynamic path for this run
             outputs_path = get_outputs_path()
@@ -459,7 +480,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
 def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None):
-    """Run one evolution generation with comprehensive logging"""
+    """Run one evolution generation with comprehensive logging and steady state support"""
     # Set up dynamic paths for this run
     outputs_path = get_outputs_path()
     population_path = outputs_path / "Population.json"
@@ -472,6 +493,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         logger.info("Starting evolution run using population file: %s", population_path)
         logger.info("Output directory: %s", outputs_path)
         logger.info("North star metric: %s", north_star_metric)
+        logger.info("Using steady state population management")
         if current_cycle is not None:
             logger.info("Evolution cycle: %d", current_cycle)
 
@@ -486,7 +508,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         # Phase 2: Load population with error handling
         with PerformanceLogger(logger, "Load Population"):
             try:
-                _, _, load_population, _, _, _, _, _ = get_population_io()
+                _, _, load_population, _, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
                 population = load_population(str(outputs_path), logger=logger)
                 logger.info("Successfully loaded population with %d genomes", len(population))
             except Exception as e:
@@ -528,12 +550,14 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                        generation_data["mutation_variants"], 
                        generation_data["crossover_variants"])
             
-            # Save updated population after evolution
+            # Save updated population after evolution to elites.json
             with PerformanceLogger(logger, "Save Population After Evolution"):
                 try:
-                    _, _, _, save_population, _, _, _, _ = get_population_io()
-                    save_population(engine.genomes, str(outputs_path), logger=logger)
-                    logger.debug("Saved updated population after global evolution")
+                    _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                    # Save to elites.json since we're in steady-state mode
+                    elites_path = str(outputs_path / "elites.json")
+                    save_population(engine.genomes, elites_path, logger=logger)
+                    logger.debug("Saved updated elites after global evolution")
                 except Exception as e:
                     logger.error("Failed to save population after evolution: %s", e, exc_info=True)
                     raise
@@ -544,14 +568,33 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
 
         logger.info("Global evolution processing completed successfully")
 
+        # Phase 6.5: Redistribute elites to population (steady state)
+        with PerformanceLogger(logger, "Steady State Redistribution"):
+                try:
+                    from utils.population_io import redistribute_elites_to_population
+                    elites_file_path = str(outputs_path / "elites.json")
+                    population_file_path = str(outputs_path / "Population.json")
+                    from utils.constants import EvolutionConstants
+                    redistribute_elites_to_population(
+                        elites_file_path,
+                        population_file_path,
+                        top_k=EvolutionConstants.DEFAULT_TOP_K,
+                        north_star_metric=north_star_metric,
+                        log_file=log_file
+                    )
+                    logger.info("Steady state redistribution completed")
+                except Exception as e:
+                    logger.error("Failed to redistribute elites: %s", e, exc_info=True)
+                    raise
+
         # Phase 7: Deduplicate population
         with PerformanceLogger(logger, "Deduplicate Population"):
             try:
                 from collections import defaultdict
 
                 # Keep generation 0 genomes as-is
-                gen_zero = [g for g in population if g["generation"] == 0]
-                gen_gt_zero = [g for g in population if g["generation"] > 0]
+                gen_zero = [g for g in engine.genomes if g["generation"] == 0]
+                gen_gt_zero = [g for g in engine.genomes if g["generation"] > 0]
 
                 logger.debug("Generation 0 genomes: %d, Generation >0 genomes: %d", len(gen_zero), len(gen_gt_zero))
 
@@ -573,24 +616,26 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                 final_population = gen_zero + deduplicated
 
                 logger.info("Deduplicated population: %d → %d (removed %d duplicates)", 
-                           len(population), len(final_population), duplicates_removed)
+                           len(engine.genomes), len(final_population), duplicates_removed)
             except Exception as e:
                 logger.error("Failed to deduplicate population: %s", e, exc_info=True)
                 raise
 
-        # Phase 8: Save final population
+        # Phase 8: Save final population to elites.json
         with PerformanceLogger(logger, "Save Final Population"):
             try:
-                _, _, _, save_population, _, _, _, _ = get_population_io()
-                save_population(final_population, str(outputs_path), logger=logger)
-                logger.info("Population re-saved in sorted and deduplicated order")
+                _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                # Save to elites.json since we're in steady-state mode
+                elites_path = str(outputs_path / "elites.json")
+                save_population(final_population, elites_path, logger=logger)
+                logger.info("Elites re-saved in sorted and deduplicated order")
             except Exception as e:
                 logger.error("Failed to save final population: %s", e, exc_info=True)
                 raise
 
         # Log final summary
         logger.info("Evolution run completed successfully:")
-        logger.info("  - Total genomes processed: %d", len(population))
-        logger.info("  - Final population size: %d", len(final_population))
+        logger.info("  - Total genomes processed: %d", len(engine.genomes))
+        logger.info("  - Final elites size: %d", len(final_population))
         logger.info("  - Evolution tracker updated: %s", evolution_tracker_path)
 

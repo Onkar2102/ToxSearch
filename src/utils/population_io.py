@@ -284,23 +284,27 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
             # If pop_path is a directory, use it directly
             if pop_path_obj.is_dir():
                 base_dir = pop_path_obj
+                # First, check if Population.json exists (preferred)
+                population_file = base_dir / "Population.json"
             else:
-                # If it's a file, use its parent directory
+                # If it's a file, use the file directly
+                population_file = pop_path_obj
                 base_dir = pop_path_obj.parent
-                if base_dir.name == "":
-                    base_dir = Path("outputs")
-            
-            # First, check if Population.json exists (preferred)
-            population_file = base_dir / "Population.json"
             if population_file.exists():
-                _logger.info("Using monolithic Population.json file (preferred)")
+                if pop_path_obj.is_dir():
+                    _logger.info("Using monolithic Population.json file (preferred)")
+                else:
+                    _logger.info("Using specified population file: %s", pop_path)
                 try:
                     with open(population_file, "r", encoding="utf-8") as f:
                         population = json.load(f)
 
                     # Clean the population to remove None genomes
                     population = clean_population(population, logger=_logger, log_file=log_file)
-                    _logger.info("Successfully loaded population with %d genomes from Population.json", len(population))
+                    if pop_path_obj.is_dir():
+                        _logger.info("Successfully loaded population with %d genomes from Population.json", len(population))
+                    else:
+                        _logger.info("Successfully loaded population with %d genomes from %s", len(population), pop_path)
                     return population
                 except Exception as e:
                     _logger.warning("Failed to load Population.json: %s, falling back to split files", e)
@@ -492,9 +496,21 @@ def load_and_initialize_population(
 
             logger.info("Created %d genomes", len(population))
 
-            # ----------------------------- Save Population to single file ----------------------------
-            save_population(population, output_path, logger=logger, log_file=log_file)
-            logger.info("Saved population to single Population.json file")
+            # ----------------------------- Initialize elites.json (Steady State Logic) ----------------------------
+            with PerformanceLogger(logger, "Initialize elites.json"):
+                # Initial population goes to elites.json
+                elites_path = Path(output_path) / "elites.json"
+                elites_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(elites_path, 'w', encoding='utf-8') as f:
+                    json.dump(population, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized elites.json with %d genomes", len(population))
+
+            # ----------------------------- Initialize empty Population.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty Population.json"):
+                # Population.json starts empty
+                empty_population = []
+                save_population(empty_population, output_path, logger=logger, log_file=log_file)
+                logger.info("Initialized empty Population.json")
 
             # ----------------------------- Initialize EvolutionTracker ----------------------------
             with PerformanceLogger(logger, "Initialize EvolutionTracker"):
@@ -514,9 +530,8 @@ def load_and_initialize_population(
                 }
                 
                 # Save EvolutionTracker
-                base_dir = Path(output_path).resolve()
-                evolution_tracker_path = base_dir / "EvolutionTracker.json"
-                evolution_tracker_path.parent.mkdir(exist_ok=True)
+                evolution_tracker_path = Path(output_path) / "EvolutionTracker.json"
+                evolution_tracker_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                     json.dump(evolution_tracker, f, indent=2)
                 
@@ -956,6 +971,434 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
 
 
 # ============================================================================
+# Steady State Population Management
+# ============================================================================
+
+def _extract_score(genome: Dict[str, Any], north_star_metric: str = "toxicity") -> float:
+    """Extract score from genome using north star metric."""
+    if not genome or not genome.get("moderation_result"):
+        return 0.0
+    
+    moderation_result = genome["moderation_result"]
+    
+    # Try Google API scores first
+    if "moderation_results" in moderation_result:
+        google_scores = moderation_result["moderation_results"].get("google", {})
+        if "scores" in google_scores:
+            score = google_scores["scores"].get(north_star_metric, 0.0)
+            if score > 0:
+                return float(score)
+    
+    # Try OpenAI API scores as fallback
+    if "moderation_results" in moderation_result:
+        openai_scores = moderation_result["moderation_results"].get("openai", {})
+        if "scores" in openai_scores:
+            score = openai_scores["scores"].get(north_star_metric, 0.0)
+            if score > 0:
+                return float(score)
+    
+    # Fallback to direct scores
+    if "scores" in moderation_result:
+        score = moderation_result["scores"].get(north_star_metric, 0.0)
+        if score > 0:
+            return float(score)
+    
+    return 0.0
+
+
+def sort_population_by_elite_criteria(population: List[Dict[str, Any]], north_star_metric: str = "toxicity", 
+                                     *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Sort population by elite criteria: north star metric score descending, generation descending, genome id descending.
+    
+    Parameters
+    ----------
+    population : List[Dict[str, Any]]
+        Population to sort
+    north_star_metric : str
+        Metric to use for scoring (default: "toxicity")
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        Sorted population
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, "Sort Population by Elite Criteria", north_star_metric=north_star_metric):
+        def sort_key(genome: Dict[str, Any]) -> tuple:
+            score = _extract_score(genome, north_star_metric)
+            generation = genome.get("generation", 0)
+            genome_id = genome.get("id", "0")
+            # Negative for descending order
+            return (-score, -generation, -int(genome_id) if genome_id.isdigit() else genome_id)
+        
+        sorted_population = sorted(population, key=sort_key)
+        _logger.info(f"Sorted {len(sorted_population)} genomes by elite criteria")
+        return sorted_population
+
+
+from .constants import EvolutionConstants, FileConstants
+
+def redistribute_population_after_evaluation(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE, 
+                                           elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+                                           top_k: int = EvolutionConstants.DEFAULT_TOP_K, north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
+                                           *, logger=None, log_file: Optional[str] = None) -> None:
+    """
+    Redistribute population after generation and evaluation:
+    - Top 100 genomes move to elites.json
+    - If ≤100 genomes: All go to elites.json
+    - If >100 genomes: Worst performers go back to Population.json
+    
+    Parameters
+    ----------
+    population_file_path : str
+        Path to the Population.json file
+    elites_file_path : str
+        Path to the elites.json file
+    top_k : int
+        Number of top genomes to keep in elites (default: 100)
+    north_star_metric : str
+        Metric to use for scoring (default: "toxicity")
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, "Redistribute Population After Evaluation", 
+                         population_file=population_file_path, elites_file=elites_file_path, top_k=top_k):
+        
+        _logger.info(f"Redistributing population after evaluation: {population_file_path}")
+        
+        # Load current population from Population.json
+        try:
+            population = load_population(population_file_path, logger=_logger, log_file=log_file)
+        except Exception as e:
+            _logger.error(f"Failed to load population file: {e}")
+            raise
+        
+        # Filter only genomes that have been evaluated (have moderation_result)
+        evaluated_genomes = [g for g in population if g.get("moderation_result")]
+        unevaluated_genomes = [g for g in population if not g.get("moderation_result")]
+        
+        _logger.info(f"Found {len(evaluated_genomes)} evaluated genomes, {len(unevaluated_genomes)} unevaluated")
+        
+        if not evaluated_genomes:
+            _logger.warning("No evaluated genomes found, skipping redistribution")
+            return
+        
+        # Sort evaluated genomes by elite criteria
+        sorted_genomes = sort_population_by_elite_criteria(evaluated_genomes, north_star_metric, logger=_logger, log_file=log_file)
+        
+        # Determine redistribution based on count
+        if len(sorted_genomes) <= top_k:
+            # All genomes go to elites
+            new_elites = sorted_genomes
+            new_remaining = []
+            _logger.info(f"All {len(sorted_genomes)} genomes moved to elites (≤{top_k})")
+        else:
+            # Top K go to elites, rest go back to Population.json
+            new_elites = sorted_genomes[:top_k]
+            new_remaining = sorted_genomes[top_k:]
+            _logger.info(f"Top {top_k} genomes moved to elites, {len(new_remaining)} moved back to Population.json")
+        
+        # Save elites
+        elites_path = Path(elites_file_path)
+        elites_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with open(elites_path, 'w', encoding='utf-8') as f:
+                json.dump(new_elites, f, indent=2, ensure_ascii=False)
+            _logger.info(f"Saved {len(new_elites)} elites to {elites_file_path}")
+        except Exception as e:
+            _logger.error(f"Failed to save elites: {e}")
+            raise
+        
+        # Create set of elite genome IDs for efficient removal
+        elite_ids = {g.get('id') for g in new_elites}
+        
+        # Remove elite genomes from unevaluated genomes (in case there are duplicates)
+        unevaluated_genomes = [g for g in unevaluated_genomes if g.get('id') not in elite_ids]
+        
+        # Combine unevaluated genomes with remaining evaluated genomes for Population.json
+        final_population = unevaluated_genomes + new_remaining
+        
+        # Save updated Population.json
+        try:
+            save_population(final_population, population_file_path, logger=_logger, log_file=log_file)
+            _logger.info(f"Updated Population.json with {len(final_population)} genomes (removed {len(elite_ids)} elite genomes)")
+        except Exception as e:
+            _logger.error(f"Failed to save Population.json: {e}")
+            raise
+        
+        _logger.info(f"Redistribution complete: elites={len(new_elites)}, population={len(final_population)}")
+
+
+def redistribute_elites_to_population(elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+                                     population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE,
+                                     top_k: int = EvolutionConstants.DEFAULT_TOP_K, north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
+                                     *, logger=None, log_file: Optional[str] = None) -> None:
+    """
+    Redistribute elites to population when elites exceed threshold (steady state):
+    - Keep top K genomes in elites.json
+    - Move worse performing genomes to Population.json
+    
+    Parameters
+    ----------
+    elites_file_path : str
+        Path to the elites.json file
+    population_file_path : str
+        Path to the Population.json file
+    top_k : int
+        Number of top genomes to keep in elites (default: 100)
+    north_star_metric : str
+        Metric to use for scoring (default: "toxicity")
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, "Redistribute Elites to Population", 
+                         elites_file=elites_file_path, population_file=population_file_path, top_k=top_k):
+        
+        _logger.info(f"Redistributing elites to population: {elites_file_path}")
+        
+        # Load current elites
+        try:
+            elites = load_elites(elites_file_path, logger=_logger, log_file=log_file)
+        except Exception as e:
+            _logger.error(f"Failed to load elites file: {e}")
+            raise
+        
+        _logger.info(f"Loaded {len(elites)} genomes from elites.json")
+        
+        # Check if redistribution is needed
+        if len(elites) <= top_k:
+            _logger.info(f"Elites count ({len(elites)}) <= threshold ({top_k}), no redistribution needed")
+            return
+        
+        # Filter only genomes that have been evaluated (have moderation_result)
+        evaluated_genomes = [g for g in elites if g.get("moderation_result")]
+        unevaluated_genomes = [g for g in elites if not g.get("moderation_result")]
+        
+        _logger.info(f"Found {len(evaluated_genomes)} evaluated genomes, {len(unevaluated_genomes)} unevaluated")
+        
+        if not evaluated_genomes:
+            _logger.warning("No evaluated genomes found, skipping redistribution")
+            return
+        
+        # Sort evaluated genomes by elite criteria
+        sorted_genomes = sort_population_by_elite_criteria(evaluated_genomes, north_star_metric, logger=_logger, log_file=log_file)
+        
+        # Keep top K in elites, move rest to population
+        new_elites = sorted_genomes[:top_k]
+        genomes_to_move = sorted_genomes[top_k:]
+        
+        _logger.info(f"Keeping top {len(new_elites)} genomes in elites, moving {len(genomes_to_move)} to Population.json")
+        
+        # Save updated elites
+        try:
+            save_elites(new_elites, elites_file_path, logger=_logger, log_file=log_file)
+            _logger.info(f"Saved {len(new_elites)} elites to {elites_file_path}")
+        except Exception as e:
+            _logger.error(f"Failed to save elites: {e}")
+            raise
+        
+        # Load current population
+        try:
+            current_population = load_population(population_file_path, logger=_logger, log_file=log_file)
+        except Exception as e:
+            _logger.error(f"Failed to load population file: {e}")
+            current_population = []
+        
+        # Create set of elite genome IDs for efficient removal
+        elite_ids = {g.get('id') for g in new_elites}
+        
+        # Remove elite genomes from unevaluated genomes (in case there are duplicates)
+        unevaluated_genomes = [g for g in unevaluated_genomes if g.get('id') not in elite_ids]
+        
+        # Combine current population with genomes to move and unevaluated genomes
+        final_population = current_population + genomes_to_move + unevaluated_genomes
+        
+        # Save updated Population.json
+        try:
+            save_population(final_population, population_file_path, logger=_logger, log_file=log_file)
+            _logger.info(f"Updated Population.json with {len(final_population)} genomes")
+        except Exception as e:
+            _logger.error(f"Failed to save Population.json: {e}")
+            raise
+        
+        _logger.info(f"Redistribution complete: elites={len(new_elites)}, population={len(final_population)}")
+
+
+def load_elites(elites_file_path: str = "outputs/elites.json", 
+                *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Load elites from elites.json file.
+    
+    Parameters
+    ----------
+    elites_file_path : str
+        Path to the elites.json file
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    List[Dict[str, Any]]
+        List of elite genomes
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    try:
+        elites_path = Path(elites_file_path)
+        if elites_path.exists():
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites = json.load(f)
+            _logger.info(f"Loaded {len(elites)} elites from {elites_file_path}")
+            return elites
+        else:
+            _logger.info(f"Elites file not found: {elites_file_path}, returning empty list")
+            return []
+    except Exception as e:
+        _logger.error(f"Failed to load elites: {e}")
+        return []
+
+
+def save_elites(elites: List[Dict[str, Any]], elites_file_path: str = "outputs/elites.json",
+                *, logger=None, log_file: Optional[str] = None) -> None:
+    """
+    Save elites to elites.json file.
+    
+    Parameters
+    ----------
+    elites : List[Dict[str, Any]]
+        List of elite genomes to save
+    elites_file_path : str
+        Path to the elites.json file
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    try:
+        elites_path = Path(elites_file_path)
+        elites_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(elites_path, 'w', encoding='utf-8') as f:
+            json.dump(elites, f, indent=2, ensure_ascii=False)
+        
+        _logger.info(f"Saved {len(elites)} elites to {elites_file_path}")
+    except Exception as e:
+        _logger.error(f"Failed to save elites: {e}")
+        raise
+
+
+def add_variants_to_elites(variants: List[Dict[str, Any]], elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+                          top_k: int = EvolutionConstants.DEFAULT_TOP_K, north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
+                          *, logger=None, log_file: Optional[str] = None) -> None:
+    """
+    Add variants to elites and maintain top K limit.
+    
+    Parameters
+    ----------
+    variants : List[Dict[str, Any]]
+        List of variant genomes to add
+    elites_file_path : str
+        Path to the elites.json file
+    top_k : int
+        Number of top genomes to keep in elites (default: 100)
+    north_star_metric : str
+        Metric to use for scoring (default: "toxicity")
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, "Add Variants to Elites", variants_count=len(variants), top_k=top_k):
+        
+        # Load current elites
+        current_elites = load_elites(elites_file_path, logger=_logger, log_file=log_file)
+        
+        # Combine current elites with new variants
+        combined_genomes = current_elites + variants
+        
+        # Sort by elite criteria
+        sorted_genomes = sort_population_by_elite_criteria(combined_genomes, north_star_metric, logger=_logger, log_file=log_file)
+        
+        # Keep only top K
+        new_elites = sorted_genomes[:top_k]
+        
+        # Save updated elites
+        save_elites(new_elites, elites_file_path, logger=_logger, log_file=log_file)
+        
+        _logger.info(f"Added {len(variants)} variants to elites, maintained top {top_k} genomes")
+
+
+def get_population_stats_steady_state(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE,
+                                     elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+                                     *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Get population statistics for steady state mode.
+    
+    Parameters
+    ----------
+    population_file_path : str
+        Path to the Population.json file
+    elites_file_path : str
+        Path to the elites.json file
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    Dict[str, Any]
+        Population statistics
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    try:
+        # Load population
+        population = load_population(population_file_path, logger=_logger, log_file=log_file)
+        
+        # Load elites
+        elites = load_elites(elites_file_path, logger=_logger, log_file=log_file)
+        
+        return {
+            "total_genomes": len(population) + len(elites),
+            "population_count": len(population),
+            "elites_count": len(elites),
+            "steady_state_mode": True,
+            "top_k": EvolutionConstants.DEFAULT_TOP_K
+        }
+    except Exception as e:
+        _logger.error(f"Failed to get population stats: {e}")
+        return {
+            "total_genomes": 0,
+            "population_count": 0,
+            "elites_count": 0,
+            "steady_state_mode": True,
+            "top_k": EvolutionConstants.DEFAULT_TOP_K,
+            "error": str(e)
+        }
+
+
+# ============================================================================
 # Module Exports
 # ============================================================================
 
@@ -987,4 +1430,13 @@ __all__ = [
     # Migration functions
     "consolidate_generations_to_single_file",
     "migrate_from_split_to_single",
+    
+    # Steady state population management
+    "sort_population_by_elite_criteria",
+    "redistribute_population_after_evaluation",
+    "load_elites",
+    "save_elites",
+    "add_variants_to_elites",
+    "get_population_stats_steady_state",
+    "redistribute_elites_to_population",
 ] 

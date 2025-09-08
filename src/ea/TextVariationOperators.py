@@ -11,7 +11,7 @@ from transformers import (
     BertForMaskedLM,
 )
 from huggingface_hub import snapshot_download
-from ea.VariationOperators import VariationOperator
+from .VariationOperators import VariationOperator
 from dotenv import load_dotenv
 from itertools import combinations, product
 from utils import get_custom_logging
@@ -37,14 +37,14 @@ load_dotenv()
 
 nlp = spacy.load("en_core_web_sm")
 
-def limit_variants(variants: List[str], max_variants: int = 5) -> List[str]:
+def limit_variants(variants: List[str], max_variants: int = 3) -> List[str]:
     """
     Limit the number of variants to a maximum value.
     If variants exceed the limit, randomly sample max_variants from them.
     
     Args:
         variants: List of variant strings
-        max_variants: Maximum number of variants to return (default: 10)
+        max_variants: Maximum number of variants to return (default: 3)
     
     Returns:
         List of variants limited to max_variants
@@ -117,8 +117,8 @@ class POSAwareSynonymReplacement(VariationOperator):
         for original, new, pos in replacement_log:
             self.logger.debug(f"{self.name}: Replaced '{original}' with '{new}' (POS: {pos})")
         
-        # Limit variants to maximum of 5
-        limited_variants = limit_variants(result_variants, max_variants=5)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(result_variants)} variants, limited to {len(limited_variants)} using BERT synonym substitution for POS-aware replacement from: '{text[:60]}...'")
         return limited_variants
 
@@ -160,8 +160,8 @@ class BertMLMOperator(VariationOperator):
 
         result_variants = list(variants) if variants else [text]
         
-        # Limit variants to maximum of 5
-        limited_variants = limit_variants(result_variants, max_variants=5)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(result_variants)} variants, limited to {len(limited_variants)} via BERT MLM from: '{text[:60]}...'")
         return limited_variants
 
@@ -204,8 +204,8 @@ class LLMBasedParaphrasingOperator(VariationOperator):
 
         result_variants = list(variants) if variants else [text]
         
-        # Limit variants to maximum of 5
-        limited_variants = limit_variants(result_variants, max_variants=5)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Total {len(result_variants)} paraphrases generated, limited to {len(limited_variants)} via OpenAI for input: '{text[:60]}...'")
         return limited_variants
 
@@ -281,8 +281,8 @@ class BackTranslationOperator(VariationOperator):
             attempts += 1
         result_variants = list({v.strip() for v in variants}) if variants else [text]
         
-        # Limit variants to maximum of 5
-        limited_variants = limit_variants(result_variants, max_variants=5)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(result_variants)} unique back-translations, limited to {len(limited_variants)} for: '{text[:60]}...'")
         return limited_variants
 
@@ -353,8 +353,8 @@ class OnePointCrossover(VariationOperator):
                 children.append(child2)
                 self.logger.debug(f"{self.name}: Swapped {n} sentence(s) from position {start_idx} to create two variants.")
 
-        # Limit variants to maximum of 5
-        limited_children = limit_variants(children, max_variants=5)
+        # Limit variants to maximum of 3
+        limited_children = limit_variants(children, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(children)} crossover variants, limited to {len(limited_children)}")
         return limited_children
 
@@ -435,8 +435,8 @@ class InstructionPreservingCrossover(VariationOperator):
         self.logger.debug(f"{self.name}: Generated {len(variants)} OpenAI-based instruction-preserving variants.")
         self.logger.debug(f"{variants}")
         
-        # Limit variants to maximum of 5
-        limited_variants = limit_variants(variants, max_variants=5)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(variants, max_variants=3)
         self.logger.debug(f"{self.name}: Limited {len(variants)} variants to {len(limited_variants)}")
         return limited_variants if limited_variants else [parent_texts[0]]
 

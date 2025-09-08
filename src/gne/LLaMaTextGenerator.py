@@ -615,11 +615,11 @@ class LlaMaTextGenerator:
 
 
     def _load_population(self, pop_path: str) -> List[Dict[str, Any]]:
-        _, _, load_population, _, _, _, _, _ = get_population_io()
+        _, _, load_population, _, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
         return load_population(pop_path, logger=self.logger)
     
     def _save_population(self, population: List[Dict[str, Any]], pop_path: str) -> None:
-        _, _, _, save_population, _, _, _, _ = get_population_io()
+        _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
         save_population(population, pop_path, logger=self.logger)
 
 

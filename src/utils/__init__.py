@@ -24,7 +24,15 @@ def get_population_io():
         sort_population_json, 
         load_genome_by_id,
         consolidate_generations_to_single_file,
-        migrate_from_split_to_single
+        migrate_from_split_to_single,
+        # Steady state population management
+        sort_population_by_elite_criteria,
+        redistribute_population_after_evaluation,
+        redistribute_elites_to_population,
+        load_elites,
+        save_elites,
+        add_variants_to_elites,
+        get_population_stats_steady_state
     )
     return (
         load_and_initialize_population, 
@@ -34,7 +42,15 @@ def get_population_io():
         sort_population_json, 
         load_genome_by_id,
         consolidate_generations_to_single_file,
-        migrate_from_split_to_single
+        migrate_from_split_to_single,
+        # Steady state population management
+        sort_population_by_elite_criteria,
+        redistribute_population_after_evaluation,
+        redistribute_elites_to_population,
+        load_elites,
+        save_elites,
+        add_variants_to_elites,
+        get_population_stats_steady_state
     )
 
 def get_config():

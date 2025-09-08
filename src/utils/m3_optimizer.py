@@ -52,7 +52,8 @@ def get_system_info() -> Dict:
                     info['total_cores'] = line.split('Total Number of Cores:')[1].strip()
                 elif 'Memory:' in line:
                     info['system_memory'] = line.split('Memory:')[1].strip()
-    except:
+    except Exception as e:
+        # Silently ignore parsing errors for system info
         pass
     
     return info

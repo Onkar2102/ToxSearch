@@ -413,7 +413,7 @@ class HybridModerationEvaluator:
                         self.logger.info("Saving population after evaluation batch %d: %d processed, %d errors", 
                                        batch_count, batch_processed, batch_errors)
                         if pop_path:
-                            _, _, _, save_population, _, _, _, _ = get_population_io()
+                            _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
                             save_population(population, pop_path, logger=self.logger)
                             self.logger.debug("Population saved after batch %d", batch_count)
                     
@@ -470,7 +470,7 @@ class HybridModerationEvaluator:
                 self.logger.info("Starting hybrid population evaluation pipeline")
                 
                 # Load population
-                _, _, load_population, _, _, _, _, _ = get_population_io()
+                _, _, load_population, _, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
                 population = load_population(pop_path, logger=self.logger)
                 
                 # Set default moderation methods if not provided
@@ -483,7 +483,7 @@ class HybridModerationEvaluator:
                 updated_population = self._evaluate_population_sync(population, north_star_metric, pop_path=pop_path, moderation_methods=moderation_methods)
                 
                 # Final save
-                _, _, _, save_population, _, _, _, _ = get_population_io()
+                _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
                 save_population(updated_population, pop_path, logger=self.logger)
                 
                 self.logger.info("Hybrid population evaluation completed successfully")

@@ -5,6 +5,7 @@ from utils import get_custom_logging
 from .TextVariationOperators import get_applicable_operators
 from .ParentSelector import ParentSelector
 from itertools import combinations
+from pathlib import Path
 
 class EvolutionEngine:
 
@@ -14,10 +15,11 @@ class EvolutionEngine:
         self.north_star_metric = north_star_metric
         self.log_file = log_file
         self.current_cycle = current_cycle  # Current evolution cycle number
+        self.use_steady_state = True
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file)
-        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}")
+        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}, use_steady_state=True")
 
     def _extract_north_star_score(self, genome: Dict) -> float:
         """Extract the north star metric score from a genome using the configured metric."""
@@ -248,6 +250,7 @@ class EvolutionEngine:
 
         # Add new variants to the in-memory population (no separate generation files)
         self.genomes.extend(unique_offspring.values())
+        
         self.logger.info(
             "Added %d unique variants to the population (mutation: %d, crossover: %d) for evolution cycle %d.",
             generation_data["variants_created"],

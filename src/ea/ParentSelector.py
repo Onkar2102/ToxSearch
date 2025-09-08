@@ -1,6 +1,7 @@
 import random
 from typing import List, Dict, Any, Optional, Tuple
 from utils import get_custom_logging
+from utils.population_io import load_elites, load_population
 
 class ParentSelector:
     """
@@ -15,11 +16,13 @@ class ParentSelector:
         Args:
             north_star_metric (str): The primary fitness metric to use for selection
             log_file (Optional[str]): Log file path for logging
+            use_steady_state (bool): Whether to use steady state population management
         """
         self.north_star_metric = north_star_metric
+        self.use_steady_state = True
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("ParentSelector", log_file)
-        self.logger.debug(f"ParentSelector initialized with north_star_metric={north_star_metric}")
+        self.logger.debug(f"ParentSelector initialized with north_star_metric={north_star_metric}, use_steady_state=True")
     
     def _extract_tournament_score(self, genome: Dict) -> float:
         """Extract score for tournament selection using the configured north star metric."""
@@ -86,6 +89,11 @@ class ParentSelector:
         """
         self.logger.debug(f"Selecting parents globally with {len(all_genomes)} genomes")
         
+        # Use steady state selection if enabled
+        if self.use_steady_state:
+            return self.select_parents_steady_state()
+        
+        # Fallback to legacy selection for backward compatibility
         if len(all_genomes) == 1:
             return self._select_single_genome(all_genomes, 0)  # Use 0 as default prompt_id
         elif 2 <= len(all_genomes) < 5:
@@ -203,35 +211,83 @@ class ParentSelector:
         # Sort in descending order of fitness
         return sorted(genomes, key=lambda g: -_fitness(g))
     
-    def select_tournament_parents(self, prompt_genomes: List[Dict], tournament_size: int = 3) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
+    def select_parents_steady_state(self) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
         """
-        Tournament selection strategy.
+        Select parents using steady state strategy:
+        - Mutation parent: Topmost genome with highest score from elites
+        - Crossover parents: topmost genome + 1 random from elites + 3 random from population
         
-        Args:
-            prompt_genomes (List[Dict]): List of genomes to select from
-            tournament_size (int): Size of tournament for selection
-            
         Returns:
-            Tuple[Optional[Dict], Optional[List[Dict]]]: Selected parents
+            Tuple[Optional[Dict], Optional[List[Dict]]]: (mutation_parent, crossover_parents)
         """
-        if len(prompt_genomes) < tournament_size:
-            return self.select_parents(prompt_genomes)
+        if not self.use_steady_state:
+            self.logger.warning("Steady state not enabled, falling back to global selection")
+            return None, None
         
-        # Tournament selection for mutation parent
-        tournament = random.sample(prompt_genomes, tournament_size)
-        mutation_parent = max(tournament, key=lambda g: self._extract_tournament_score(g))
-        
-        # Select crossover parents from remaining genomes
-        remaining_genomes = [g for g in prompt_genomes if g != mutation_parent]
-        crossover_parents = random.sample(remaining_genomes, min(3, len(remaining_genomes))) if remaining_genomes else None
-        
-        self.logger.debug(f"Tournament selection: mutation_parent={mutation_parent['id']}, "
-                         f"crossover_parents={[g['id'] for g in crossover_parents] if crossover_parents else None}")
-        return mutation_parent, crossover_parents
+        try:
+            # Load elites
+            elites = load_elites(log_file=None)
+            
+            # Load population from Population.json (may be empty in steady state)
+            population = load_population(log_file=None)
+            
+            if not elites:
+                self.logger.warning("No genomes in elites, cannot select parents")
+                return None, None
+            
+            # Select mutation parent (topmost with highest score)
+            mutation_parent = elites[0] if elites else None
+            
+            # Select crossover parents
+            crossover_parents = []
+            
+            # 1. Topmost genome from elites (same as mutation parent)
+            if mutation_parent:
+                crossover_parents.append(mutation_parent)
+            
+            # 2. 1 random from elites (excluding mutation parent)
+            elites_candidates = [g for g in elites if g != mutation_parent]
+            if len(elites_candidates) >= 1:
+                crossover_parents.append(random.choice(elites_candidates))
+            
+            # 3. 3 random from population (if available)
+            if len(population) >= 3:
+                crossover_parents.extend(random.sample(population, 3))
+            elif len(population) > 0:
+                crossover_parents.extend(random.sample(population, len(population)))
+            
+            # If no population data, just use 2 from elites (topmost + 1 random)
+            # If we have population but not enough, fill remaining slots from elites
+            if len(population) == 0:
+                # Only use 2 from elites: topmost + 1 random
+                if len(crossover_parents) < 2 and len(elites_candidates) > 0:
+                    available = [g for g in elites_candidates if g not in crossover_parents]
+                    if available:
+                        crossover_parents.append(random.choice(available))
+            else:
+                # Fill remaining slots from elites if we don't have 5 total
+                while len(crossover_parents) < 5 and len(elites_candidates) > 0:
+                    available = [g for g in elites_candidates if g not in crossover_parents]
+                    if available:
+                        crossover_parents.append(random.choice(available))
+                    else:
+                        break
+            
+            self.logger.debug(f"Steady state parent selection: "
+                             f"mutation_parent={mutation_parent['id'] if mutation_parent else None}, "
+                             f"crossover_parents={[g['id'] for g in crossover_parents]} "
+                             f"(topmost_elite + 1_random_elite + 3_random_population)")
+            
+            return mutation_parent, crossover_parents if crossover_parents else None
+            
+        except Exception as e:
+            self.logger.error(f"Failed to select parents using steady state strategy: {e}")
+            return None, None
     
     def select_roulette_parents(self, prompt_genomes: List[Dict]) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
         """
         Roulette wheel selection strategy based on fitness.
+        DEPRECATED: Use steady state selection instead.
         
         Args:
             prompt_genomes (List[Dict]): List of genomes to select from
@@ -239,6 +295,8 @@ class ParentSelector:
         Returns:
             Tuple[Optional[Dict], Optional[List[Dict]]]: Selected parents
         """
+        self.logger.warning("Roulette wheel selection is deprecated. Use steady state selection instead.")
+        
         if not prompt_genomes:
             return None, None
         
