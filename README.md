@@ -8,9 +8,7 @@ A research framework for AI safety analysis through evolutionary text generation
 ## Table of Contents
 
 - [Quick Start](#quick-start)
-- [Recent Updates](#recent-updates)
 - [app.py Command Line Arguments](#appy-command-line-arguments)
-- [Safety Features](#safety-features)
 - [Documentation](#documentation)
   - [Architecture Overview](ARCHITECTURE.md)
   - [Design Document](design_document.md)
@@ -18,10 +16,7 @@ A research framework for AI safety analysis through evolutionary text generation
   - [Generation & Evaluation](#generation--evaluation)
   - [Utilities](#utilities)
 - [Usage Examples](#usage-examples)
-- [Configuration](#configuration)
-- [Monitoring & Recovery](#monitoring--recovery)
 - [Output Structure](#output-structure)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Quick Start
@@ -40,30 +35,7 @@ python app.py --generations 25
 python src/main.py --generations 25
 ```
 
-### **Monitoring Features**
-- **Timeout Protection**: 5-minute timeout for model loading
-- **CPU Fallback**: Automatic fallback to CPU if MPS hangs
-- **Memory Management**: Real-time memory monitoring and cleanup
-- **Stuck Process Detection**: Identifies and restarts stuck processes
-- **Graceful Recovery**: Saves state before restarting
-
-## Recent Updates
-
-### **Latest Features (Current Architecture)**
-- **16 Text Variation Operators**: Complete suite of mutation and crossover operators
-- **Multi-Language Back Translation**: 5 languages (Hindi, French, German, Japanese, Chinese) with both model-based and LLM-based approaches
-- **Steady-State Population Management**: Elite preservation with continuous evolution
-- **Hybrid Translation Approaches**: Helsinki-NLP models + LLaMA-based translation
-- **Enhanced LLM Integration**: Task-specific templates and generation parameters
-- **Comprehensive Operator Suite**: 13 mutation + 3 crossover operators
-
-### **Key Improvements**
-- **Dual Translation Methods**: Model-based (Helsinki-NLP) and LLM-based (LLaMA) back translation
-- **Language Coverage**: Full support for Hindi, French, German, Japanese, Chinese
-- **Steady-State Evolution**: Elite preservation with continuous population management
-- **Task-Specific Templates**: Configurable prompts for different tasks (translation, paraphrasing)
-- **Memory Optimization**: Efficient model loading and caching
-- **M3 Mac Optimization**: Specialized optimizations for Apple Silicon performance
+ 
 
 ## app.py Command Line Arguments
 
@@ -80,14 +52,7 @@ python src/main.py --generations 25
 | `--setup` | flag | `False` | Run full environment setup (install requirements, optimize config) |
 | `--no-monitor` | flag | `False` | Run without process monitoring |
 
-## Safety Features
-
-- **Automatic Restart**: Detects and recovers from stuck processes
-- **Memory Protection**: Prevents out-of-memory crashes
-- **Timeout Protection**: Prevents infinite hanging
-- **State Preservation**: Saves progress before restarting
-- **Comprehensive Logging**: Detailed monitoring and debugging information
-- **Hybrid Moderation**: Dual API approach for robust safety evaluation
+ 
 
 ## Architecture at a Glance
 
@@ -154,37 +119,9 @@ python tests/test_operators_demo.py
 python -c "from src.ea.TextVariationOperators import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
 ```
 
-## Configuration
+ 
 
-The system uses `config/modelConfig.yaml` for:
-- Model parameters (LLaMA 3.2 3B Instruct)
-- Task-specific templates (translation, paraphrasing)
-- Generation parameters per task
-- Memory optimization settings
-- Batch processing configuration
-- API keys and endpoints
-
-### **Task-Specific Configuration**
-```yaml
-task_templates:
-  translation:
-    en_to_target: "Translate the following text from English to {target_language}..."
-    target_to_en: "Translate the following text from {source_language} to English..."
-
-task_generation_args:
-  translation:
-    temperature: 0.8
-    top_p: 0.9
-    top_k: 40
-    max_new_tokens: 2048
-```
-
-## Monitoring & Recovery
-
-- **Real-time Monitoring**: Memory usage, process health, execution time
-- **Automatic Recovery**: Detects stuck processes and restarts automatically
-- **Progress Tracking**: EvolutionTracker.json for comprehensive progress monitoring
-- **Performance Logging**: Detailed timing and resource usage metrics
+ 
 
 ## Output Structure
 
@@ -219,13 +156,7 @@ outputs/
 - `SemanticSimilarityCrossover` - Semantic similarity-based crossover
 - `InstructionPreservingCrossover` - Instruction structure preservation
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+ 
 
 ## License
 
