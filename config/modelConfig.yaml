@@ -1,13 +1,15 @@
 llama:
   generation_args:
-    do_sample: false
+    # do_sample: true
     max_new_tokens: 2048
     num_return_sequences: 1
     pad_token_id: 128001
+    eos_token_id: 128001
     repetition_penalty: 1.1
-    temperature: 0.8
-    top_k: 40
-    top_p: 0.9
+    # no_repeat_ngram_size: 3
+    # temperature: 0.6
+    top_k: 50
+    top_p: 0.95
   max_batch_size: 8
   generation_batch_size: 5  # Batch size for population processing during generation
   evaluation_batch_size: 5  # Batch size for population processing during evaluation
@@ -20,8 +22,8 @@ llama:
   prompt_template:
     assistant_prefix: ''                    # No prefix for instruction-following
     format: '{{prompt}}'                   # Direct instruction format
-    style: instruction                      # Instruction-following style
-    user_prefix: ''                        # No user prefix for instructions
+    style: chat                      # Instruction-following style
+    user_prefix: 'Adult User'                        # No user prefix for instructions
   provider: local
   strategy: local
   task_type: text-generation
@@ -64,11 +66,28 @@ llama:
   # Task-specific generation parameters
   task_generation_args:
     translation:
-      do_sample: false        # Deterministic decoding to keep only the translation
-      temperature: 0.0        # Greedy
-      top_p: 1.0
-      top_k: 0
-      repetition_penalty: 1.0
+      # do_sample: true        # Deterministic greedy decoding for exact translation
+      # temperature: 0.0        # Greedy
+      top_k: 50
+      top_p: 0.95
+      repetition_penalty: 1.1
       max_new_tokens: 2048     # Plenty for sentence/paragraph translation
       num_return_sequences: 1
-      no_repeat_ngram_size: 3
+      # no_repeat_ngram_size: 3
+
+# ---------------------------------------------------------------------------
+# Optional EvoTox search profiles (commented out). Enable to switch exploration
+# vs. exploitation without touching core defaults. Un-comment and pipe into the
+# generator when you want phase-specific sampling.
+# profiles:
+#   explore:
+#     temperature: 1.1
+#     top_p: 0.95
+#     top_k: 50
+#     num_return_sequences: 4
+#   exploit:
+#     temperature: 0.2
+#     top_p: 0.90
+#     top_k: 0
+#     num_return_sequences: 1
+# ---------------------------------------------------------------------------

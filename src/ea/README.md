@@ -169,6 +169,20 @@ translation_methods = ['model_based', 'llm_based']  # Dual approaches
 3) **Variant Generation** → 16 operators, capped variants, deduplicated
 4) **Tracker Update** → Per-generation best score, counts, parent information
 
+### Steady-State Loop (Architecture)
+
+```mermaid
+flowchart LR
+  A[elites.json (working set)] --> B[Parent selection]
+  B --> C[Mutation (13) / Crossover (3)]
+  C --> D[Variants (pending_generation)]
+  D --> E[Generation (LLaMA)]
+  E --> F[Evaluation (Hybrid Moderation)]
+  F --> G[Status: complete + scores]
+  G --> H[Sort & maintain elites]
+  H --> A
+```
+
 ## 🌍 **Multi-Language Support**
 
 ### **Supported Languages**

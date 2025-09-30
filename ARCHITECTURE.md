@@ -1,11 +1,34 @@
 # Project Architecture
 
+## Architecture at a glance
+
+```mermaid
+flowchart TD
+  A[Input prompts: data/prompt.xlsx] --> B[Initialize population -> outputs/elites.json]
+  B --> C[Generation: gne.LLaMaTextGenerator.process_population]
+  C --> D[Evaluation: gne.hybrid_moderation]
+  D --> E[Evolution: ea.EvolutionEngine.generate_variants_global]
+  E --> F[Steady-state elites: outputs/elites.json]
+  F --> C
+  D --> G[Tracking: outputs/EvolutionTracker.json]
+  D --> H[Redistribution: elites ↔ Population.json]
+
+  subgraph Orchestration
+    J[main.py / app.py]
+    J --> C
+    J --> D
+    J --> E
+    J --> G
+    J --> H
+  end
+```
+
 ## System Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    EVOLUTIONARY TEXT GENERATION FRAMEWORK                  │
-│                    (Steady-State Population & 16 Operators)                 │
+│                    (Steady-State Population & 16 Operators)                │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 

@@ -89,6 +89,19 @@ python src/main.py --generations 25
 - **Comprehensive Logging**: Detailed monitoring and debugging information
 - **Hybrid Moderation**: Dual API approach for robust safety evaluation
 
+## Architecture at a Glance
+
+```mermaid
+flowchart TD
+  A[Prompts: data/prompt.xlsx] --> B[Initialize -> outputs/elites.json]
+  B --> C[Generation: LLaMaTextGenerator]
+  C --> D[Evaluation: Hybrid Moderation]
+  D --> E[Evolution: EvolutionEngine]
+  E --> B
+  D --> G[EvolutionTracker.json]
+  D --> H[Elites ↔ Population.json]
+```
+
 ## Documentation
 
 ### **[Architecture Overview](ARCHITECTURE.md)**
