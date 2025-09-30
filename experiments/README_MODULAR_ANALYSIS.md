@@ -28,10 +28,12 @@ The evolution experiment analysis has been divided into **9 focused, modular not
    - Toxicity analysis setup
 
 3. **`03_operator_analysis.ipynb`** - ⚙️ Operator Analysis
-   - Operator performance analysis
+   - Operator performance analysis (16 operators: 13 mutation + 3 crossover)
    - Usage statistics and visualizations
    - Performance tier classification
    - Generation-wise operator analysis
+   - Multi-language back-translation analysis
+   - Dual translation approach comparison
 
 4. **`04_data_quality.ipynb`** - 🧹 Data Quality Analysis
    - Detailed data inspection
@@ -126,8 +128,9 @@ SECTIONS_TO_RUN = {
 - Dependencies are clearly marked at the top of each notebook
 
 ### **Data Dependencies**
-- Primary: `../outputs/Population.json`
+- Primary: `../outputs/elites.json` (steady-state population)
 - Secondary: `../outputs/EvolutionTracker.json`
+- Optional: `../outputs/Population.json` (full population if needed)
 - All notebooks include intelligent path resolution
 
 ---

@@ -176,6 +176,6 @@ cython_debug/
 *.DS_Store
 resources/
 logs/
-my_models/
+models/
 htmlcov/
 pre-modification/

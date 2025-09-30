@@ -50,6 +50,10 @@ class LlaMaTextGenerator:
         self.prompt_format = tmpl.get("format", "{{prompt}}")
         self.user_prefix = tmpl.get("user_prefix", "")
         self.assistant_prefix = tmpl.get("assistant_prefix", "")
+        
+        # Task-specific templates and generation args
+        self.task_templates = self.model_cfg.get("task_templates", {})
+        self.task_generation_args = self.model_cfg.get("task_generation_args", {})
 
         # Optimization settings
         self.max_batch_size = self.model_cfg.get("max_batch_size", 4)
@@ -493,8 +497,8 @@ class LlaMaTextGenerator:
                     response = decoded
                 
                 # Clean up response
-                if 'Adult 2:' in response:
-                    response = response.split('Adult 2:')[-1].strip()
+                if 'System:' in response:
+                    response = response.split('System:')[-1].strip()
                 
                 responses.append(response)
             
@@ -696,5 +700,160 @@ class LlaMaTextGenerator:
                 genome['error'] = str(e)
                 return genome
     
+    def generate_raw_response(self, prompt: str, generation_kwargs: Dict[str, Any] = None) -> str:
+        """
+        Generate raw model response without any template manipulation or post-processing.
+        
+        This method gives you the pure model response exactly as the model generated it,
+        without any filtering, cleaning, or template formatting.
+        
+        Args:
+            prompt (str): Raw prompt to send to the model
+            generation_kwargs (Dict[str, Any], optional): Custom generation parameters
+            
+        Returns:
+            str: Raw model response without any manipulation
+            
+        Example:
+            >>> generator = LlaMaTextGenerator(config_path="config/modelConfig.yaml")
+            >>> raw_response = generator.generate_raw_response("What is artificial intelligence?")
+            >>> print(raw_response)  # Pure model response
+        """
+        try:
+            if generation_kwargs is None:
+                generation_kwargs = self.generation_args.copy()
+            
+            # Tokenize the raw prompt directly (no template formatting)
+            inputs = self.tokenizer(
+                prompt, 
+                return_tensors="pt", 
+                truncation=True,
+                max_length=2048
+            ).to(self.device)
+            
+            # Generate with custom args
+            generation_kwargs.update({
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "use_cache": True,
+            })
+            
+            with torch.no_grad():
+                if self.device in ("cuda", "mps"):
+                    with torch.autocast(device_type=self.device, enabled=True):
+                        outputs = self.model.generate(**inputs, **generation_kwargs)
+                else:
+                    outputs = self.model.generate(**inputs, **generation_kwargs)
+            
+            # Decode the FULL response (including the input prompt)
+            full_response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            
+            # Extract only the generated part (after the input prompt)
+            if full_response.startswith(prompt):
+                raw_response = full_response[len(prompt):].strip()
+            else:
+                raw_response = full_response.strip()
+            
+            self.logger.debug(f"Raw response for '{prompt[:50]}...': '{raw_response[:100]}...'")
+            return raw_response
+            
+        except Exception as e:
+            self.logger.error(f"Raw response generation failed: {e}")
+            return f"Error: {e}"
 
+    def translate(self, text: str, target_language: str, source_language: str = "English") -> str:
+        """High-precision translation using task templates with robust tag extraction.
+
+        - Uses deterministic generation args from config (task_generation_args.translation).
+        - Extracts exactly the content inside <trans>...</trans> (case-insensitive).
+        - Falls back conservatively if the model fails to follow the format.
+        """
+        try:
+            # 1) Pick the right template
+            templates = self.task_templates.get("translation", {})
+            if str(source_language).strip().lower() == "english":
+                template = templates.get("en_to_target")
+            else:
+                template = templates.get("target_to_en")
+
+            if not template:
+                # If templates are missing, return original text rather than crashing
+                self.logger.warning("Translation template missing; returning original text.")
+                return text
+
+            prompt = template.format(
+                text=text,
+                target_language=target_language,
+                source_language=source_language
+            )
+
+            # 2) Format with global prompt wrapper (keeps current project behavior)
+            formatted_prompt = self.format_prompt(prompt)
+
+            # 3) Tokenize
+            inputs = self.tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=2048
+            ).to(self.device)
+
+            # 4) Merge generation args (global + task-specific)
+            task_args = self.task_generation_args.get("translation", {})
+            generation_kwargs = {
+                **self.generation_args,
+                **task_args,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "eos_token_id": self.tokenizer.eos_token_id,
+                "use_cache": True,
+            }
+
+            # 5) Generate (autocast only on CUDA/MPS)
+            with torch.no_grad():
+                if self.device in ("cuda", "mps"):
+                    with torch.autocast(device_type=self.device, enabled=True):
+                        outputs = self.model.generate(**inputs, **generation_kwargs)
+                else:
+                    outputs = self.model.generate(**inputs, **generation_kwargs)
+
+            # 6) Decode full text and strip the prompt echo
+            decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            response = decoded[len(formatted_prompt):].strip() if decoded.startswith(formatted_prompt) else decoded.strip()
+
+            # 7) Extract <trans>...</trans> (robust, single capture)
+            import re
+            m = re.search(r"<\s*trans\s*>([\s\S]*?)<\s*/\s*trans\s*>", response, flags=re.IGNORECASE)
+            if m:
+                candidate = m.group(1).strip()
+                # Clean common artifacts like surrounding quotes
+                if len(candidate) >= 2 and (
+                    (candidate[0] == candidate[-1] == '"') or
+                    (candidate[0] == candidate[-1] == "'")
+                ):
+                    candidate = candidate[1:-1].strip()
+
+                # Final guardrails: if the model echoed the source unchanged during back-translation,
+                # still return it (caller may decide). Otherwise, prefer non-empty candidate.
+                return candidate if candidate else text
+
+            # 8) If tag not found, attempt a minimal fallback:
+            #    - remove any leading role-like lines the model might have added
+            #    - then return the first non-empty line
+            for line in response.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                # Skip obvious template echoes
+                if line.lower().startswith(("system:", "user:", "assistant:")):
+                    continue
+                # If the model returned raw translation without tags, accept it.
+                return line
+
+            # 9) Ultimate fallback: original text (never crash)
+            return text
+
+        except Exception as e:
+            self.logger.error(f"Translation failed: {e}", exc_info=True)
+            return text
+    
+    
     

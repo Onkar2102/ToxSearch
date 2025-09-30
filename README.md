@@ -49,17 +49,20 @@ python src/main.py --generations 25
 
 ## Recent Updates
 
-### **Latest Fixes (Current Architecture)**
-- **Single Population File**: Consolidated all generations into a single `outputs/Population.json` (deprecated split file mode)
-- **Accurate `max_score`**: Tracker now records the actual best score per generation, not the parent's score
-- **Hybrid Moderation Cache Fix**: Separated Google/OpenAI caches to prevent cross-API result contamination
-- **Variant Count Tuning**: Reduced operator `max_variants` from 10 to 5 to control population growth
-- **Memory & Imports**: Lazy imports (torch/pandas/psutil) and safer path resolution
+### **Latest Features (Current Architecture)**
+- **16 Text Variation Operators**: Complete suite of mutation and crossover operators
+- **Multi-Language Back Translation**: 5 languages (Hindi, French, German, Japanese, Chinese) with both model-based and LLM-based approaches
+- **Steady-State Population Management**: Elite preservation with continuous evolution
+- **Hybrid Translation Approaches**: Helsinki-NLP models + LLaMA-based translation
+- **Enhanced LLM Integration**: Task-specific templates and generation parameters
+- **Comprehensive Operator Suite**: 13 mutation + 3 crossover operators
 
 ### **Key Improvements**
-- **Population Management**: Single `Population.json` with `population_index.json` for fast lookups
-- **Evolution Tracking**: `EvolutionTracker.json` records per-generation best and variant counts
-- **Hybrid Moderation**: Google Perspective API + OpenAI moderation with normalized scores
+- **Dual Translation Methods**: Model-based (Helsinki-NLP) and LLM-based (LLaMA) back translation
+- **Language Coverage**: Full support for Hindi, French, German, Japanese, Chinese
+- **Steady-State Evolution**: Elite preservation with continuous population management
+- **Task-Specific Templates**: Configurable prompts for different tasks (translation, paraphrasing)
+- **Memory Optimization**: Efficient model loading and caching
 - **M3 Mac Optimization**: Specialized optimizations for Apple Silicon performance
 
 ## app.py Command Line Arguments
@@ -98,14 +101,16 @@ Detailed, professional design specification: goals, data models, algorithms, ope
 Complete guide to genetic algorithms, variation operators, and evolution strategies.
 
 ### **Generation & Evaluation** (`src/gne/`)
-- `LLaMaTextGenerator.py` - LLaMA model integration with memory management
+- `LLaMaTextGenerator.py` - LLaMA model integration with memory management and task-specific templates
 - `hybrid_moderation.py` - Hybrid moderation using Google Perspective API + OpenAI
 
 ### **Utilities** (`src/utils/`)
-- `population_io.py` - Single-file population management (`Population.json`) and `EvolutionTracker.json`
+- `population_io.py` - Steady-state population management (`elites.json`) and `EvolutionTracker.json`
 - `custom_logging.py` - Performance and memory logging
 - `m3_optimizer.py` - M3 Mac optimization utilities
 - `config.py` - Configuration management
+- `constants.py` - System constants and configuration
+- `download_models.py` - Model download utilities
 
 ## Usage Examples
 
@@ -123,17 +128,43 @@ python src/main.py --generations 10
 # Initialize population from prompt.xlsx
 python -c "from src.utils.population_io import load_and_initialize_population; load_and_initialize_population('data/prompt.xlsx', 'outputs')"
 
-# Load specific generation
-python -c "from src.utils.population_io import load_population_generation; genomes = load_population_generation(1, 'outputs')"
+# Load elites for analysis
+python -c "from src.utils.population_io import load_elites; elites = load_elites('outputs/elites.json')"
+```
+
+### **Operator Testing**
+```bash
+# Test all operators
+python tests/test_operators_demo.py
+
+# Test specific back translation
+python -c "from src.ea.TextVariationOperators import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
 ```
 
 ## Configuration
 
 The system uses `config/modelConfig.yaml` for:
 - Model parameters (LLaMA 3.2 3B Instruct)
+- Task-specific templates (translation, paraphrasing)
+- Generation parameters per task
 - Memory optimization settings
 - Batch processing configuration
 - API keys and endpoints
+
+### **Task-Specific Configuration**
+```yaml
+task_templates:
+  translation:
+    en_to_target: "Translate the following text from English to {target_language}..."
+    target_to_en: "Translate the following text from {source_language} to English..."
+
+task_generation_args:
+  translation:
+    temperature: 0.8
+    top_p: 0.9
+    top_k: 40
+    max_new_tokens: 2048
+```
 
 ## Monitoring & Recovery
 
@@ -146,11 +177,34 @@ The system uses `config/modelConfig.yaml` for:
 
 ```
 outputs/
-├── Population.json        # All genomes across all generations (single file)
-├── population_index.json  # Lightweight index/metadata for Population.json
-├── EvolutionTracker.json  # Evolution progress tracking (global, per generation)
-└── final_statistics.json  # Final analysis results (optional)
+├── elites.json              # Steady-state elite population
+├── Population.json          # Full population (if needed)
+├── population_index.json    # Population metadata
+├── EvolutionTracker.json    # Evolution progress tracking
+└── final_statistics.json   # Final analysis results (optional)
 ```
+
+## Text Variation Operators
+
+### **Mutation Operators (13)**
+- `LLM_POSAwareSynonymReplacement` - LLaMA-based synonym replacement
+- `BertMLMOperator` - BERT masked language model
+- `LLMBasedParaphrasingOperator` - OpenAI GPT-4 paraphrasing
+- `BackTranslationHIOperator` - Hindi back-translation (Helsinki-NLP)
+- `BackTranslationFROperator` - French back-translation (Helsinki-NLP)
+- `BackTranslationDEOperator` - German back-translation (Helsinki-NLP)
+- `BackTranslationJAOperator` - Japanese back-translation (Helsinki-NLP)
+- `BackTranslationZHOperator` - Chinese back-translation (Helsinki-NLP)
+- `LLMBackTranslationHIOperator` - Hindi back-translation (LLaMA)
+- `LLMBackTranslationFROperator` - French back-translation (LLaMA)
+- `LLMBackTranslationDEOperator` - German back-translation (LLaMA)
+- `LLMBackTranslationJAOperator` - Japanese back-translation (LLaMA)
+- `LLMBackTranslationZHOperator` - Chinese back-translation (LLaMA)
+
+### **Crossover Operators (3)**
+- `OnePointCrossover` - Single-point crossover
+- `SemanticSimilarityCrossover` - Semantic similarity-based crossover
+- `InstructionPreservingCrossover` - Instruction structure preservation
 
 ## Contributing
 

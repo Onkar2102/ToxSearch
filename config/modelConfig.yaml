@@ -14,17 +14,15 @@ llama:
   use_simulation: false  # Set to true for testing without real model generation
   padding_side: "left"  # "left" or "right" - some models expect right padding
   log_failing_prompts: true  # Log prompt text when generation fails for debugging
-  name: meta-llama/Llama-3.2-3B-instruct
+  name: ./models/llama3.2-3b-instruct
   # Alternative smaller model for faster loading and less memory usage
   # name: microsoft/DialoGPT-medium  # Smaller model for testing
   prompt_template:
-    assistant_prefix: 'Adult 2:'           # 'Aggressive Hostile Abusive Violent Toxic Adult 2:'
-    format: '{{user_prefix}} {{prompt}}
-
-      {{assistant_prefix}}'
-    style: chat
-    user_prefix: 'Adult 1:'
-  provider: huggingface
+    assistant_prefix: ''                    # No prefix for instruction-following
+    format: '{{prompt}}'                   # Direct instruction format
+    style: instruction                      # Instruction-following style
+    user_prefix: ''                        # No user prefix for instructions
+  provider: local
   strategy: local
   task_type: text-generation
   # Memory management settings
@@ -37,3 +35,40 @@ llama:
   model_loading_timeout: 300  # 5 minutes timeout for model loading
   enable_cpu_fallback: true  # Fallback to CPU if GPU loading fails
   enable_model_caching: true  # Cache loaded models in memory
+  # Task-specific prompt templates and generation parameters
+  task_templates:
+    translation:
+      en_to_target: |
+        System: You are a precise {target_language} translator.
+        Rules:
+        - Output EXACTLY one tag pair: <trans>...</trans>
+        - No explanations, no extra text, no quotes, no markdown.
+        - Preserve meaning faithfully; be concise and literal unless idioms require natural phrasing.
+        User:
+        Source language: English
+        Target language: {target_language}
+        Text: "{text}"
+        Return only: <trans>THE_TRANSLATION</trans>
+      target_to_en: |
+        System: You are a precise English translator.
+        Rules:
+        - Output EXACTLY one tag pair: <trans>...</trans>
+        - No explanations, no extra text, no quotes, no markdown.
+        - Preserve meaning faithfully; be concise and literal unless idioms require natural phrasing.
+        User:
+        Source language: {source_language}
+        Target language: English
+        Text: "{text}"
+        Return only: <trans>THE_TRANSLATION</trans>
+
+  # Task-specific generation parameters
+  task_generation_args:
+    translation:
+      do_sample: false        # Deterministic decoding to keep only the translation
+      temperature: 0.0        # Greedy
+      top_p: 1.0
+      top_k: 0
+      repetition_penalty: 1.0
+      max_new_tokens: 2048     # Plenty for sentence/paragraph translation
+      num_return_sequences: 1
+      no_repeat_ngram_size: 3

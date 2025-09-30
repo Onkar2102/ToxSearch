@@ -21,7 +21,7 @@ def test_imports():
     
     try:
         from ea.TextVariationOperators import (
-            POSAwareSynonymReplacement,
+            LLM_POSAwareSynonymReplacement,
             BertMLMOperator,
             LLMBasedParaphrasingOperator,
             BackTranslationOperator

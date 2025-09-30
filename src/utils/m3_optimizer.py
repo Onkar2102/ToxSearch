@@ -169,8 +169,8 @@ def optimize_config_for_m3() -> Dict:
             },
             "prompt_template": {
                 "style": "chat",
-                "user_prefix": "Adult 1:",
-                "assistant_prefix": "Aggressive Hostile Abusive Violent Toxic Adult 2:",
+                "user_prefix": "User:",
+                "assistant_prefix": "System:",
                 "format": "{{user_prefix}} {{prompt}}\n{{assistant_prefix}}"
             }
         }
