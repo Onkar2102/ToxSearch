@@ -144,6 +144,48 @@ Comprehensive implementation of mutation and crossover operators.
 
 ## 📊 **Operator Selection Logic**
 
+```mermaid
+flowchart TD
+  A[Parent Selection] --> B{Number of Parents?}
+  B -->|1 Parent| C[Single Parent Operators<br/>13 Mutation Operators]
+  B -->|2+ Parents| D[Multi-Parent Operators<br/>3 Crossover Operators]
+  
+  subgraph "Mutation Operators (13)"
+    E1[LLM_POSAwareSynonymReplacement]
+    E2[BertMLMOperator]
+    E3[LLMBasedParaphrasingOperator]
+    E4[Back-Translation Operators<br/>5 Languages × 2 Methods = 10]
+  end
+  
+  subgraph "Crossover Operators (3)"
+    F1[OnePointCrossover]
+    F2[SemanticSimilarityCrossover]
+    F3[InstructionPreservingCrossover]
+  end
+  
+  C --> E1
+  C --> E2
+  C --> E3
+  C --> E4
+  
+  D --> F1
+  D --> F2
+  D --> F3
+  
+  E1 --> G[Generate Variants<br/>Max 5 per operator]
+  E2 --> G
+  E3 --> G
+  E4 --> G
+  F1 --> G
+  F2 --> G
+  F3 --> G
+  
+  style B fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
+  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style G fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+```
+
 ```python
 def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):
     if num_parents == 1:
@@ -169,28 +211,87 @@ translation_methods = ['model_based', 'llm_based']  # Dual approaches
 3) **Variant Generation** → 16 operators, capped variants, deduplicated
 4) **Tracker Update** → Per-generation best score, counts, parent information
 
-### Steady-State Loop (Architecture)
+### Steady-State Evolution Loop
 
 ```mermaid
-flowchart LR
-  A[elites.json (working set)] --> B[Parent selection]
-  B --> C[Mutation (13) / Crossover (3)]
-  C --> D[Variants (pending_generation)]
-  D --> E[Generation (LLaMA)]
-  E --> F[Evaluation (Hybrid Moderation)]
-  F --> G[Status: complete + scores]
-  G --> H[Sort & maintain elites]
-  H --> A
+flowchart TD
+  A[elites.json<br/>Steady-State Population] --> B[Parent Selection<br/>Top Elite + Random]
+  B --> C{Number of Parents?}
+  C -->|1 Parent| D[Mutation Operators<br/>13 Total]
+  C -->|2+ Parents| E[Crossover Operators<br/>3 Total]
+  
+  D --> F[Generate Variants<br/>Max 5 per operator]
+  E --> F
+  F --> G[Text Generation<br/>LLaMA Model]
+  G --> H[Safety Evaluation<br/>Hybrid Moderation]
+  H --> I[Update Population<br/>Status: complete + scores]
+  I --> J[Sort & Maintain Elites<br/>Steady-State Management]
+  J --> K{Threshold Reached?}
+  K -->|No| A
+  K -->|Yes| L[Evolution Complete]
+  
+  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style C fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
+  style D fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style E fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style K fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
+  style L fill:#66bb6a,stroke:#388e3c,stroke-width:2px,color:#000
 ```
 
 ## 🌍 **Multi-Language Support**
 
-### **Supported Languages**
-- **Hindi (HI)**: Devanagari script support
-- **French (FR)**: Romance language variations
-- **German (DE)**: Germanic language structure
-- **Japanese (JA)**: Complex script handling
-- **Chinese (ZH)**: Character-based translation
+```mermaid
+graph TB
+  subgraph "Multi-Language Back-Translation Support"
+    A[Input Text<br/>English]
+    
+    subgraph "Supported Languages (5)"
+      B1[Hindi (HI)<br/>Devanagari script support]
+      B2[French (FR)<br/>Romance language variations]
+      B3[German (DE)<br/>Germanic language structure]
+      B4[Japanese (JA)<br/>Complex script handling]
+      B5[Chinese (ZH)<br/>Character-based translation]
+    end
+    
+    subgraph "Translation Approaches (2)"
+      C1[Model-Based<br/>Helsinki-NLP]
+      C2[LLM-Based<br/>LLaMA]
+    end
+    
+    subgraph "Translation Process"
+      D1[English → Target Language]
+      D2[Target Language → English]
+      D3[Varied Output]
+    end
+    
+    A --> B1
+    A --> B2
+    A --> B3
+    A --> B4
+    A --> B5
+    
+    B1 --> C1
+    B1 --> C2
+    B2 --> C1
+    B2 --> C2
+    B3 --> C1
+    B3 --> C2
+    B4 --> C1
+    B4 --> C2
+    B5 --> C1
+    B5 --> C2
+    
+    C1 --> D1
+    C2 --> D1
+    D1 --> D2
+    D2 --> D3
+  end
+  
+  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style C1 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style C2 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style D3 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
+```
 
 ### **Translation Approaches**
 1. **Model-Based**: Helsinki-NLP translation models
@@ -205,15 +306,41 @@ flowchart LR
 
 ## 📁 **File Structure**
 
-```
-src/ea/
-├── __init__.py
-├── EvolutionEngine.py
-├── RunEvolution.py
-├── ParentSelector.py
-├── TextVariationOperators.py
-├── VariationOperators.py
-└── README.md
+```mermaid
+graph TB
+  subgraph "src/ea/ Package Structure"
+    A[__init__.py<br/>Package exports and lazy imports]
+    B[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
+    C[RunEvolution.py<br/>Evolution pipeline driver]
+    D[ParentSelector.py<br/>Selection strategies (steady-state)]
+    E[TextVariationOperators.py<br/>16 mutation/crossover operators]
+    F[VariationOperators.py<br/>Legacy operators (deprecated)]
+    G[README.md<br/>Package documentation]
+  end
+  
+  subgraph "Key Dependencies"
+    H[utils.population_io<br/>Steady-state population management]
+    I[gne.LLaMaTextGenerator<br/>Text generation]
+    J[gne.hybrid_moderation<br/>Safety evaluation]
+    K[utils.custom_logging<br/>Performance tracking]
+  end
+  
+  B --> H
+  B --> I
+  B --> J
+  B --> K
+  C --> B
+  C --> D
+  C --> E
+  D --> H
+  E --> I
+  
+  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
+  style E fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
+  style F fill:#bdbdbd,stroke:#616161,stroke-width:2px,color:#000
 ```
 
 ## 🔗 **Dependencies**

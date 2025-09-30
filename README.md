@@ -58,13 +58,99 @@ python src/main.py --generations 25
 
 ```mermaid
 flowchart TD
-  A[Prompts: data/prompt.xlsx] --> B[Initialize -> outputs/elites.json]
-  B --> C[Generation: LLaMaTextGenerator]
-  C --> D[Evaluation: Hybrid Moderation]
-  D --> E[Evolution: EvolutionEngine]
-  E --> B
-  D --> G[EvolutionTracker.json]
-  D --> H[Elites ↔ Population.json]
+  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → outputs/elites.json]
+  B --> C[Steady-State Evolution Loop]
+  
+  subgraph "Evolution Loop"
+    C --> D[Parent Selection: Top Elite + Random]
+    D --> E[Text Generation: LLaMaTextGenerator]
+    E --> F[Safety Evaluation: Hybrid Moderation]
+    F --> G[Evolution: 16 Variation Operators]
+    G --> H[Update Elites: outputs/elites.json]
+    H --> I{Threshold Reached?}
+    I -->|No| D
+    I -->|Yes| J[Complete]
+  end
+  
+  F --> K[EvolutionTracker.json]
+  H --> L[Population.json]
+  
+  style C fill:#4fc3f7,stroke:#0277bd,stroke-width:3px,color:#000
+  style I fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
+  style J fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
+```
+
+## System Components Overview
+
+```mermaid
+graph TB
+  subgraph "Input Layer"
+    A1[data/prompt.xlsx]
+  end
+  
+  subgraph "Core Pipeline"
+    B1[Population Initialization]
+    B2[Text Generation - LLaMA]
+    B3[Safety Evaluation - Hybrid API]
+    B4[Evolution Engine - 16 Operators]
+  end
+  
+  subgraph "Storage Layer"
+    C1[outputs/elites.json<br/>Steady-State Population]
+    C2[outputs/EvolutionTracker.json<br/>Progress Tracking]
+    C3[outputs/Population.json<br/>Full Population]
+  end
+  
+  subgraph "Text Variation Operators"
+    D1[Mutation Operators<br/>13 Total]
+    D2[Crossover Operators<br/>3 Total]
+    D3[Multi-Language Support<br/>5 Languages]
+  end
+  
+  A1 --> B1
+  B1 --> B2
+  B2 --> B3
+  B3 --> B4
+  B4 --> B1
+  
+  B1 --> C1
+  B3 --> C2
+  B4 --> C3
+  
+  B4 --> D1
+  B4 --> D2
+  B4 --> D3
+  
+  style B1 fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style B2 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style B3 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style B4 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
+```
+
+## Memory Management Architecture
+
+```mermaid
+flowchart LR
+  A[Memory Monitor] --> B[Adaptive Batch Sizing]
+  B --> C[Model Caching]
+  C --> D[Lazy Loading]
+  D --> E[Memory Cleanup]
+  E --> A
+  
+  subgraph "Memory Optimization"
+    F[Real-time Tracking]
+    G[Threshold Alerts]
+    H[PyTorch Cache Clear]
+    I[Garbage Collection]
+  end
+  
+  A --> F
+  A --> G
+  E --> H
+  E --> I
+  
+  style A fill:#f48fb1,stroke:#c2185b,stroke-width:3px,color:#000
+  style E fill:#66bb6a,stroke:#388e3c,stroke-width:3px,color:#000
 ```
 
 ## Documentation
@@ -136,25 +222,73 @@ outputs/
 
 ## Text Variation Operators
 
-### **Mutation Operators (13)**
-- `LLM_POSAwareSynonymReplacement` - LLaMA-based synonym replacement
-- `BertMLMOperator` - BERT masked language model
-- `LLMBasedParaphrasingOperator` - OpenAI GPT-4 paraphrasing
-- `BackTranslationHIOperator` - Hindi back-translation (Helsinki-NLP)
-- `BackTranslationFROperator` - French back-translation (Helsinki-NLP)
-- `BackTranslationDEOperator` - German back-translation (Helsinki-NLP)
-- `BackTranslationJAOperator` - Japanese back-translation (Helsinki-NLP)
-- `BackTranslationZHOperator` - Chinese back-translation (Helsinki-NLP)
-- `LLMBackTranslationHIOperator` - Hindi back-translation (LLaMA)
-- `LLMBackTranslationFROperator` - French back-translation (LLaMA)
-- `LLMBackTranslationDEOperator` - German back-translation (LLaMA)
-- `LLMBackTranslationJAOperator` - Japanese back-translation (LLaMA)
-- `LLMBackTranslationZHOperator` - Chinese back-translation (LLaMA)
+```mermaid
+graph TB
+  subgraph "Mutation Operators (13)"
+    A1[LLM_POSAwareSynonymReplacement<br/>LLaMA-based synonym replacement]
+    A2[BertMLMOperator<br/>BERT masked language model]
+    A3[LLMBasedParaphrasingOperator<br/>OpenAI GPT-4 paraphrasing]
+    
+    subgraph "Back-Translation (10)"
+      B1[Model-Based: Helsinki-NLP]
+      B2[LLM-Based: LLaMA]
+      
+      subgraph "Languages (5)"
+        C1[Hindi (HI)]
+        C2[French (FR)]
+        C3[German (DE)]
+        C4[Japanese (JA)]
+        C5[Chinese (ZH)]
+      end
+      
+      B1 --> C1
+      B1 --> C2
+      B1 --> C3
+      B1 --> C4
+      B1 --> C5
+      
+      B2 --> C1
+      B2 --> C2
+      B2 --> C3
+      B2 --> C4
+      B2 --> C5
+    end
+  end
+  
+  subgraph "Crossover Operators (3)"
+    D1[OnePointCrossover<br/>Single-point crossover]
+    D2[SemanticSimilarityCrossover<br/>Semantic similarity-based]
+    D3[InstructionPreservingCrossover<br/>Instruction structure preservation]
+  end
+  
+  style A1 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style A2 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style A3 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style B1 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
+  style B2 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
+  style D1 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D2 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D3 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+```
 
-### **Crossover Operators (3)**
-- `OnePointCrossover` - Single-point crossover
-- `SemanticSimilarityCrossover` - Semantic similarity-based crossover
-- `InstructionPreservingCrossover` - Instruction structure preservation
+### **Operator Selection Logic**
+
+```mermaid
+flowchart TD
+  A[Parent Selection] --> B{Number of Parents?}
+  B -->|1 Parent| C[Mutation Operators<br/>13 Total]
+  B -->|2+ Parents| D[Crossover Operators<br/>3 Total]
+  
+  C --> E[Apply Selected Operator]
+  D --> E
+  E --> F[Generate Variants<br/>Max 5 per operator]
+  F --> G[Deduplication]
+  G --> H[Add to Population]
+  
+  style C fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
+```
 
  
 
