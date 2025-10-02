@@ -461,6 +461,28 @@ class BertMLMOperator(VariationOperator):
 
 
 class LLMBasedParaphrasingOperator(VariationOperator):
+    """
+    Paraphrasing operator using OpenAI's LLM.
+
+    This operator generates multiple paraphrased versions of the input text by leveraging
+    OpenAI's language model. The paraphrasing process is guided by a specified optimization
+    metric (north_star_metric) to ensure the generated variants align with desired objectives.
+
+    Attributes:
+        north_star_metric (str): The optimization metric guiding the paraphrasing process.
+        logger: Logger instance for debugging and monitoring.
+        client: OpenAI client for interacting with the language model.
+
+    Methods:
+        apply(text): Generates paraphrased variants of the input text.
+
+    Example:
+        >>> operator = LLMBasedParaphrasingOperator(north_star_metric="engagement")
+        >>> variants = operator.apply("Write a story about a brave knight")
+        >>> print(variants)
+        ['Write a tale about a courageous warrior', 'Compose a narrative about a valiant hero']
+    """
+
     def __init__(self, north_star_metric, log_file=None):
         super().__init__("LLMBasedParaphrasing", "mutation", "Uses OpenAI LLM to paraphrase input multiple times with optimization intent.")
         self.north_star_metric = north_star_metric
@@ -579,6 +601,17 @@ class _GenericBackTranslationOperator(VariationOperator):
 
 
 class BackTranslationFROperator(_GenericBackTranslationOperator):
+    """
+    French back-translation operator.
+
+    This operator performs back-translation using French as the intermediate language.
+    It translates the input text from English to French and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
     def __init__(self, log_file=None):
         super().__init__(
             name="BackTranslation_FR",
@@ -593,6 +626,17 @@ class BackTranslationFROperator(_GenericBackTranslationOperator):
 
 
 class BackTranslationDEOperator(_GenericBackTranslationOperator):
+    """
+    German back-translation operator.
+
+    This operator performs back-translation using German as the intermediate language.
+    It translates the input text from English to German and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
     def __init__(self, log_file=None):
         super().__init__(
             name="BackTranslation_DE",
@@ -607,6 +651,17 @@ class BackTranslationDEOperator(_GenericBackTranslationOperator):
 
 
 class BackTranslationJAOperator(_GenericBackTranslationOperator):
+    """
+    Japanese back-translation operator.
+
+    This operator performs back-translation using Japanese as the intermediate language.
+    It translates the input text from English to Japanese and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
     def __init__(self, log_file=None):
         super().__init__(
             name="BackTranslation_JA",
@@ -621,6 +676,17 @@ class BackTranslationJAOperator(_GenericBackTranslationOperator):
 
 
 class BackTranslationZHOperator(_GenericBackTranslationOperator):
+    """
+    Chinese back-translation operator.
+
+    This operator performs back-translation using Chinese as the intermediate language.
+    It translates the input text from English to Chinese and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
     def __init__(self, log_file=None):
         super().__init__(
             name="BackTranslation_ZH",
@@ -635,6 +701,17 @@ class BackTranslationZHOperator(_GenericBackTranslationOperator):
 
 
 class BackTranslationHIOperator(_GenericBackTranslationOperator):
+    """
+    Hindi back-translation operator.
+
+    This operator performs back-translation using Hindi as the intermediate language.
+    It translates the input text from English to Hindi and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
     def __init__(self, log_file=None):
         super().__init__(
             name="BackTranslation_HI",
@@ -971,7 +1048,7 @@ def get_applicable_operators(num_parents: int, north_star_metric, log_file=None)
     """
     if num_parents == 1:
         return get_single_parent_operators(north_star_metric, log_file=log_file)
-    return get_multi_parent_operators(log_file=log_file)    
+    return get_multi_parent_operators(log_file=log_file)
 
 
 
