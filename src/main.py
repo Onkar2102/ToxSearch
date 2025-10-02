@@ -300,7 +300,21 @@ def initialize_system(logger, log_file):
 # ============================================================================
 
 def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None):
-    """Main execution pipeline for evolutionary text generation and safety analysis with steady state support"""
+    """
+    Main execution pipeline for evolutionary text generation and safety analysis with steady state support.
+
+    Args:
+        model_names (list or None): List of model names to use for generation. Currently not used.
+        max_generations (int or None): Maximum number of evolution generations to run. If None, runs until the north star metric threshold is achieved.
+        north_star_threshold (float): The target value for the north star metric (e.g., quality or safety score) at which evolution will stop. Default is 0.99.
+        moderation_methods (list or None): Moderation methods to use for content safety checks. 
+            Can be ["google"], ["openai"], or ["all"]. 
+            "google" uses the Perspective API, "openai" uses OpenAI Moderation, and "all" uses both. Default is ["google"].
+
+    The parameters `north_star_threshold` and `moderation_methods` directly impact the system's stopping criteria and the moderation pipeline:
+        - `north_star_threshold` determines when the evolutionary process halts based on the best individual's metric.
+        - `moderation_methods` controls which external moderation APIs are used to evaluate generated text for safety.
+    """
     # Register cleanup function
     atexit.register(cleanup_multiprocessing)
     
