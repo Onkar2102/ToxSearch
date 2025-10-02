@@ -8,34 +8,39 @@
 #  - TextVariationOperators: concrete mutation operators
 #  - get_applicable_operators: helper to pick operators based on parent count
 
-from ea.EvolutionEngine import EvolutionEngine
-from ea.RunEvolution import run_evolution
-from ea.TextVariationOperators import (
-    TextVariationOperators,
-    get_applicable_operators,
-    POSAwareSynonymReplacement,
-    BertMLMOperator,
-    LLMBasedParaphrasingOperator,
-    BackTranslationOperator,
-    SentenceLevelCrossover,
-    OnePointCrossover,
-    CutAndSpliceCrossover,
-    SemanticSimilarityCrossover,
-    InstructionPreservingCrossover
-)
+# Lazy imports to avoid torch dependency issues
+def get_EvolutionEngine():
+    """Lazy import of EvolutionEngine to avoid torch dependency issues"""
+    from ea.EvolutionEngine import EvolutionEngine
+    return EvolutionEngine
+
+def get_run_evolution():
+    """Lazy import of run_evolution to avoid torch dependency issues"""
+    from ea.RunEvolution import run_evolution
+    return run_evolution
+
+def get_create_final_statistics_with_tracker():
+    """Lazy import of create_final_statistics_with_tracker to avoid torch dependency issues"""
+    from ea.RunEvolution import create_final_statistics_with_tracker
+    return create_final_statistics_with_tracker
+
+def get_update_evolution_tracker_with_generation_global():
+    """Lazy import of update_evolution_tracker_with_generation_global to avoid torch dependency issues"""
+    from ea.RunEvolution import update_evolution_tracker_with_generation_global
+    return update_evolution_tracker_with_generation_global
+
+def get_applicable_operators():
+    """Lazy import of get_applicable_operators to avoid torch dependency issues"""
+    from ea.TextVariationOperators import get_applicable_operators
+    return get_applicable_operators
 
 import logging
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "EvolutionEngine",
-    "run_evolution",
-    "RandomDeletionOperator",
-    "WordShuffleOperator",
-    "POSAwareSynonymReplacement",
-    "BertMLMOperator",
-    "BackTranslationOperator",
-    "LLMBasedParaphrasingOperator",
-    "SentenceLevelCrossover",
+    "get_EvolutionEngine",
+    "get_run_evolution",
+    "get_create_final_statistics_with_tracker",
+    "get_update_evolution_tracker_with_generation_global",
     "get_applicable_operators",
 ]

@@ -1,4 +1,37 @@
+"""
+TextVariationOperators.py
+
+This module contains all text variation operators used in the evolutionary algorithm
+for prompt engineering. It includes both mutation operators (single parent) and 
+crossover operators (multiple parents) that generate variants of input prompts.
+
+Classes:
+    LLM_POSAwareSynonymReplacement: LLaMA-based synonym replacement using POS tagging
+    BertMLMOperator: BERT-based masked language model for word replacement
+    LLMBasedParaphrasingOperator: OpenAI GPT-4 based paraphrasing with optimization
+    BackTranslationOperator: EN→HI→EN back-translation for variation
+    BackTranslationFROperator: EN→FR→EN back-translation for variation
+    BackTranslationDEOperator: EN→DE→EN back-translation for variation
+    BackTranslationJAOperator: EN→JA→EN back-translation for variation
+    BackTranslationZHOperator: EN→ZH→EN back-translation for variation
+    OnePointCrossover: Single-point crossover between two prompts
+    SemanticSimilarityCrossover: Crossover based on semantic similarity
+    InstructionPreservingCrossover: Crossover that preserves instruction structure
+
+Functions:
+    get_generator(): Returns cached LLaMA generator instance
+    limit_variants(): Limits number of variants to specified maximum
+    get_single_parent_operators(): Returns list of mutation operators
+    get_multi_parent_operators(): Returns list of crossover operators
+    get_applicable_operators(): Returns operators applicable for given parent count
+
+Author: EOST CAM LLM Team
+Version: 1.0
+"""
+
 import random
+import re
+import json
 import torch
 import spacy
 from nltk.corpus import wordnet as wn
@@ -11,34 +44,65 @@ from transformers import (
     BertForMaskedLM,
 )
 from huggingface_hub import snapshot_download
-from ea.VariationOperators import VariationOperator
+try:
+    from ea.VariationOperators import VariationOperator
+except Exception:
+    # Fallback for direct module execution without package context
+    from VariationOperators import VariationOperator
 from dotenv import load_dotenv
 from itertools import combinations, product
-from utils.custom_logging import get_logger, PerformanceLogger
+from utils import get_custom_logging
 from openai import OpenAI
 import os
-import re
-import json
-import time
-from gne.LLaMaTextGenerator import LlaMaTextGenerator
 
-# openai.api_key = os.getenv("OPENAI_API_KEY")  # Set your API key securely
+# Get the functions at module level to avoid repeated calls
+get_logger, _, _, _ = get_custom_logging()
 
+# Lazy initialization - will be created when first needed
+_generator = None
 
-generator = LlaMaTextGenerator(log_file=None)
+def get_generator():
+    """
+    Get or create the shared LLaMA text generator instance.
+    
+    This function implements lazy initialization and caching of the local LLaMA model
+    (from models/ directory) to ensure efficient memory usage across all operators that need it.
+    
+    Returns:
+        LlaMaTextGenerator: Cached instance of the LLaMA text generator
+        
+    Raises:
+        ValueError: If model configuration is not found
+        FileNotFoundError: If config file is not found
+        
+    Example:
+        >>> generator = get_generator()
+        >>> response = generator.generate_response("Hello world")
+    """
+    global _generator
+    if _generator is None:
+        # Import here to avoid module-level import issues
+        from gne import get_LLaMaTextGenerator
+        import os
+        # Get the project root directory (where config/ folder is located)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        config_path = os.path.join(project_root, "config", "modelConfig.yaml")
+        LlaMaTextGenerator = get_LLaMaTextGenerator()
+        _generator = LlaMaTextGenerator(config_path=config_path, log_file=None)
+    return _generator
 
 load_dotenv()
 
 nlp = spacy.load("en_core_web_sm")
 
-def limit_variants(variants: List[str], max_variants: int = 10) -> List[str]:
+def limit_variants(variants: List[str], max_variants: int = 3) -> List[str]:
     """
     Limit the number of variants to a maximum value.
     If variants exceed the limit, randomly sample max_variants from them.
     
     Args:
         variants: List of variant strings
-        max_variants: Maximum number of variants to return (default: 10)
+        max_variants: Maximum number of variants to return (default: 3)
     
     Returns:
         List of variants limited to max_variants
@@ -50,43 +114,185 @@ def limit_variants(variants: List[str], max_variants: int = 10) -> List[str]:
     selected_variants = random.sample(variants, max_variants)
     return selected_variants
 
-class RandomDeletionOperator(VariationOperator):
-    def __init__(self, log_file=None):
-        super().__init__("RandomDeletion", "mutation", "Deletes a random word.")
-        self.logger = get_logger(self.name, log_file)
-        self.logger.debug(f"Initialized operator: {self.name}")
-    
-    def apply(self, text: str) -> List[str]:
-        words = text.split()
-        if len(words) <= 1:
-            return [text]
-        idx = random.randint(0, len(words) - 1)
-        variant = words[:idx] + words[idx+1:]
-        self.logger.debug(f"{self.name}: Deleted word at index {idx} from: '{text[:60]}...'")
-        return [" ".join(variant)]
+  
 
-class WordShuffleOperator(VariationOperator):
-    def __init__(self, log_file=None):
-        super().__init__("WordShuffle", "mutation", "Swaps two adjacent words.")
+class LLM_POSAwareSynonymReplacement(VariationOperator):
+    """
+    LLaMA-based Adverb-focused synonym replacement operator.
+
+    This mutation operator uses LLaMA to generate contextually appropriate **adverb** (POS: ADV) synonyms
+    for adverbs in the prompt.
+
+    **The model itself identifies adverbs (no external POS tagger).**
+
+    - Only adverbs (POS == "ADV") are considered for replacement.
+    - At most `max_variants` variants are produced, each replacing exactly one adverb with a synonym.
+    - If the prompt contains ≤ `max_variants` adverbs, one variant per adverb is created.
+    - If more, then `max_variants` adverbs are randomly selected and replaced (one per variant).
+    - Each variant changes only one adverb; total variants ≤ max_variants.
+    - The original text (spacing, punctuation, casing) is preserved exactly; each variant only replaces the chosen adverb token.
+    """
+
+    def __init__(self, log_file=None, max_variants: int = 3):
+        """
+        Initialize the LLM-based adverb synonym replacement operator.
+
+        Args:
+            log_file (str, optional): Path to log file for debugging. Defaults to None.
+            max_variants (int, optional): Maximum number of variants to produce. Defaults to 3.
+        """
+        super().__init__("LLM_POSAwareSynonymReplacement", "mutation", "LLaMA-based synonym replacement based on spaCy POS (adverbs only).")
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
-    
+        # Use the shared LLaMA generator
+        self.generator = get_generator()
+        self.max_variants = max_variants
+
+    def _tokenize_with_spans(self, text: str) -> List[Tuple[str, int, int]]:
+        """
+        Regex-tokenize while preserving exact character spans for each token.
+        Tokens are words (\w+) or single non-space punctuation characters ([^\w\s]).
+        Returns: list of (token, start_idx, end_idx) with end exclusive.
+        """
+        spans: List[Tuple[str, int, int]] = []
+        for m in re.finditer(r"\w+|[^\w\s]", text, flags=re.UNICODE):
+            spans.append((m.group(0), m.start(), m.end()))
+        return spans
+
+    def _json_list(self, text: str, key: str) -> List[str]:
+        """
+        Robustly parse a JSON list from `text` under `key`. Accepts plain JSON or
+        attempts to extract a JSON object substring if the model adds extra content.
+        """
+        try:
+            obj = json.loads(text.strip())
+            val = obj.get(key, [])
+            return list(val) if isinstance(val, list) else []
+        except Exception:
+            pass
+        m = re.search(r"\{\s*\"" + re.escape(key) + r"\"\s*:\s*\[[^]]*\]\s*\}", text)
+        if m:
+            try:
+                obj = json.loads(m.group(0))
+                val = obj.get(key, [])
+                return list(val) if isinstance(val, list) else []
+            except Exception:
+                return []
+        return []
+
     def apply(self, text: str) -> List[str]:
-        words = text.split()
-        if len(words) < 2:
+        """
+        Generate variants by replacing **adverbs (ADV)** with contextually appropriate adverb synonyms.
+
+        The model itself identifies adverbs: we provide a fixed tokenization and
+        ask the LLM to return zero-based indices of tokens that are adverbs.
+
+        Rules:
+        - Tokenize with a simple regex (\w+|[^\w\s]) to keep punctuation as separate tokens.
+        - Ask the LLM to return JSON: {"adv_indices": [i, j, ...]}
+        - If #adverbs ≤ max_variants: one variant per adverb (replace exactly that one token)
+        - If #adverbs > max_variants: randomly select `max_variants` adverbs and replace one per variant
+        - Each variant changes only one adverb; total variants ≤ max_variants.
+        - The original text (spacing, punctuation, casing) is preserved exactly; each variant only replaces the chosen adverb token.
+        """
+        # 1) Tokenize and capture spans to preserve exact text
+        spans = self._tokenize_with_spans(text)
+        tokens = [tok for tok, _, _ in spans]
+        if not tokens:
             return [text]
-        variants = []
-        for i in range(len(words) - 1):
-            swapped = words[:]
-            swapped[i], swapped[i + 1] = swapped[i + 1], swapped[i]
-            variants.append(" ".join(swapped))
-        
-        # Limit variants to maximum of 10
-        limited_variants = limit_variants(variants, max_variants=10)
-        self.logger.debug(f"{self.name}: Generated {len(variants)} variants, limited to {len(limited_variants)} by adjacent swaps from: '{text[:60]}...'")
-        return limited_variants
-        
-        
+
+        # 2) Ask the model to identify adverb token indices given our tokenization
+        id_prompt = (
+            "You are a precise POS tagger. Given the tokenized sentence and the original text, "
+            "identify which tokens are adverbs (POS=ADV). "
+            "Return ONLY valid JSON (no prose, no markdown) as: {\"adv_indices\": [<zero-based indices>]}\n\n"
+            f"Original: {text}\n"
+            f"Tokens: {tokens}\n"
+        )
+        try:
+            id_response = self.generator.generate_response(id_prompt)
+        except Exception as e:
+            self.logger.warning(f"{self.name}: failed to get adverb indices from LLM: {e}")
+            return [text]
+
+        # 3) Parse indices robustly and clamp to in-range unique indices
+        adv_indices = []
+        for x in self._json_list(id_response, "adv_indices"):
+            try:
+                i = int(x)
+                if 0 <= i < len(tokens):
+                    adv_indices.append(i)
+            except Exception:
+                continue
+        adv_indices = sorted(set(adv_indices))
+        if not adv_indices:
+            self.logger.debug(f"{self.name}: No adverbs found by model; returning original text.")
+            return [text]
+
+        # 4) Choose indices per rules
+        if len(adv_indices) <= self.max_variants:
+            selected_indices = adv_indices
+        else:
+            selected_indices = random.sample(adv_indices, self.max_variants)
+
+        variants: List[str] = []
+
+        # 5) For each selected adverb token, ask for synonyms and build EXACT-slice variants
+        for idx in selected_indices:
+            original_token, start, end = spans[idx]
+
+            # Provide masked context to propose adverb synonyms as strict JSON
+            masked_tokens = tokens.copy()
+            masked_tokens[idx] = "[MASK]"
+            masked_text = " ".join(masked_tokens)
+            syn_prompt = (
+                "Return ONLY valid JSON (no prose, no markdown) in the format "
+                '{\"synonyms\": [\"adverb1\",\"adverb2\",\"adverb3\",\"adverb4\",\"adverb5\"]}. '
+                "All items MUST be single-word adverbs that fit naturally where [MASK] is.\n\n"
+                f"Original: {text}\n"
+                f"Masked: {masked_text}\n"
+                f"Target token: '{original_token}'\n"
+            )
+            try:
+                response = self.generator.generate_response(syn_prompt)
+                candidates = [c.strip() for c in self._json_list(response, "synonyms")]
+            except Exception as e:
+                self.logger.warning(f"{self.name}: synonym generation failed for '{original_token}': {e}")
+                continue
+
+            # Choose the first plausible candidate and build a single-change variant via slicing
+            replaced = False
+            for cand in candidates:
+                if not cand or not cand.isalpha() or cand.lower() == original_token.lower():
+                    continue
+                # reconstruct variant by splicing the exact original text
+                variant = text[:start] + cand + text[end:]
+                if variant.strip().lower() != text.strip().lower() and variant not in variants:
+                    variants.append(variant)
+                    self.logger.debug(
+                        f"{self.name}: Replaced adverb '{original_token}' → '{cand}' at index {idx} (span {start}:{end})"
+                    )
+                    replaced = True
+                    break
+
+            if not replaced:
+                self.logger.debug(
+                    f"{self.name}: No acceptable adverb synonym found for '{original_token}' at index {idx}"
+                )
+
+        if not variants:
+            return [text]
+
+        # 6) Trim to max_variants just in case
+        if len(variants) > self.max_variants:
+            variants = variants[: self.max_variants]
+
+        self.logger.debug(
+            f"{self.name}: Produced {len(variants)} adverb-focused variants (max {self.max_variants}) from: '{text[:60]}...'"
+        )
+        return variants
+
+
 
 class POSAwareSynonymReplacement(VariationOperator):
     def __init__(self, log_file=None):
@@ -145,20 +351,81 @@ class POSAwareSynonymReplacement(VariationOperator):
         for original, new, pos in replacement_log:
             self.logger.debug(f"{self.name}: Replaced '{original}' with '{new}' (POS: {pos})")
         
-        # Limit variants to maximum of 10
-        limited_variants = limit_variants(result_variants, max_variants=10)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(result_variants)} variants, limited to {len(limited_variants)} using BERT synonym substitution for POS-aware replacement from: '{text[:60]}...'")
         return limited_variants
 
 class BertMLMOperator(VariationOperator):
+    """
+    BERT-based Masked Language Model operator for word replacement.
+    
+    This mutation operator uses BERT's masked language model to replace words
+    in the input text. It masks each word position and uses BERT to predict
+    the most likely replacements based on context.
+    
+    Attributes:
+        name (str): Operator name "BertMLM"
+        operator_type (str): "mutation" (single parent operator)
+        description (str): Description of the operator's functionality
+        logger: Logger instance for debugging and monitoring
+        tokenizer: BERT tokenizer instance
+        model: BERT masked language model instance
+        
+    Methods:
+        apply(text): Generate variants by replacing words with BERT predictions
+        
+    Note:
+        Each instance loads its own BERT model, which may impact memory usage.
+        Consider implementing model caching for better efficiency.
+        
+    Example:
+        >>> operator = BertMLMOperator()
+        >>> variants = operator.apply("Write a story about a brave knight")
+        >>> print(variants)
+        ['Write a story about a medieval knight', 'Write a story about a brave warrior']
+    """
+    
     def __init__(self, log_file=None):
+        """
+        Initialize the BERT MLM operator.
+        
+        Args:
+            log_file (str, optional): Path to log file for debugging. Defaults to None.
+            
+        Note:
+            Loads BERT model and tokenizer from Hugging Face transformers.
+        """
         super().__init__("BertMLM", "mutation", "Uses BERT MLM to replace one word.")
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
         self.model = BertForMaskedLM.from_pretrained("bert-base-uncased")
 
     def apply(self, text: str) -> List[str]:
+        """
+        Generate variants by replacing words with BERT MLM predictions.
+        
+        This method:
+        1. Splits the input text into words
+        2. For each word position, masks the word with [MASK] token
+        3. Uses BERT to predict the most likely replacements
+        4. Creates variants by replacing original words with predictions
+        5. Returns up to 3 variants (limited by limit_variants function)
+        
+        Args:
+            text (str): Input text to generate variants from
+            
+        Returns:
+            List[str]: List of variant texts (maximum 3)
+            
+        Example:
+            >>> operator = BertMLMOperator()
+            >>> variants = operator.apply("Write a story about a brave knight")
+            >>> print(variants)
+            ['Write a story about a medieval knight', 'Write a story about a brave warrior']
+        """
         words = text.split()
         if not words:
             return [text]
@@ -187,19 +454,45 @@ class BertMLMOperator(VariationOperator):
 
         result_variants = list(variants) if variants else [text]
         
-        # Limit variants to maximum of 10
-        limited_variants = limit_variants(result_variants, max_variants=10)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(result_variants)} variants, limited to {len(limited_variants)} via BERT MLM from: '{text[:60]}...'")
         return limited_variants
 
 
 class LLMBasedParaphrasingOperator(VariationOperator):
+    """
+    Paraphrasing operator using OpenAI's LLM.
+
+    This operator generates multiple paraphrased versions of the input text by leveraging
+    OpenAI's language model. The paraphrasing process is guided by a specified optimization
+    metric (north_star_metric) to ensure the generated variants align with desired objectives.
+
+    Attributes:
+        north_star_metric (str): The optimization metric guiding the paraphrasing process.
+        logger: Logger instance for debugging and monitoring.
+        client: OpenAI client for interacting with the language model.
+
+    Methods:
+        apply(text): Generates paraphrased variants of the input text.
+
+    Example:
+        >>> operator = LLMBasedParaphrasingOperator(north_star_metric="engagement")
+        >>> variants = operator.apply("Write a story about a brave knight")
+        >>> print(variants)
+        ['Write a tale about a courageous warrior', 'Compose a narrative about a valiant hero']
+    """
+
     def __init__(self, north_star_metric, log_file=None):
         super().__init__("LLMBasedParaphrasing", "mutation", "Uses OpenAI LLM to paraphrase input multiple times with optimization intent.")
         self.north_star_metric = north_star_metric
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name} with north_star_metric: {self.north_star_metric}")
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))  # Ensure your API key is set in the environment
+        self.client = OpenAI(
+            api_key=os.getenv("OPENAI_API_KEY"),
+            timeout=10.0  # Add timeout to prevent connection hangs
+        )  # Ensure your API key is set in the environment
 
     def apply(self, text: str) -> List[str]:
         variants = set()
@@ -210,11 +503,12 @@ class LLMBasedParaphrasingOperator(VariationOperator):
                 response = self.client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
-                        {"role": "system", "content": "You are a toxic adult"},
+                        {"role": "system", "content": "You are a helpful assistant that generates engaging content"},
                         {"role": "user", "content": instruction}
                     ],
                     temperature=0.9,
-                    max_tokens=4096
+                    max_tokens=4096,
+                    timeout=10.0  # Add timeout to prevent hanging
                 )
                 paraphrase = response.choices[0].message.content.strip()
                 if paraphrase and paraphrase.lower() != text.lower():
@@ -222,114 +516,350 @@ class LLMBasedParaphrasingOperator(VariationOperator):
                     self.logger.debug(f"{self.name}: Generated variant '{paraphrase}'")
             except Exception as e:
                 self.logger.error(f"{self.name}: Failed to generate variant: {e}")
+                continue  # Continue to next iteration instead of stopping
 
         result_variants = list(variants) if variants else [text]
         
-        # Limit variants to maximum of 10
-        limited_variants = limit_variants(result_variants, max_variants=10)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Total {len(result_variants)} paraphrases generated, limited to {len(limited_variants)} via OpenAI for input: '{text[:60]}...'")
         return limited_variants
 
-class BackTranslationOperator(VariationOperator):
-    def __init__(self, log_file=None):
-        super().__init__("BackTranslation", "mutation", "Performs EN→HI→EN back-translation.")
+
+class _GenericBackTranslationOperator(VariationOperator):
+    """
+    Generic EN→XX→EN back-translation operator.
+
+    Loads translation pipelines for EN→XX and XX→EN using Helsinki-NLP models
+    with local-first behavior and logs both the intermediate translated text and
+    the final back-translation variants.
+
+    Subclasses should pass appropriate language codes and human-readable names.
+    """
+    def __init__(self, name: str, lang_code: str, en_to_lang_repo: str, lang_to_en_repo: str, pipeline_task_en_to_lang: str, pipeline_task_lang_to_en: str, description_suffix: str, log_file=None):
+        super().__init__(name, "mutation", f"Performs EN→{lang_code.upper()}→EN back-translation. {description_suffix}")
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
-        for model_id in ("Helsinki-NLP/opus-mt-en-hi", "Helsinki-NLP/opus-mt-hi-en"):
-            try:
-                snapshot_download(model_id, local_files_only=True)
-            except Exception:
-                self.logger.info(f"Model {model_id} not found in cache. Downloading...")
-                snapshot_download(model_id, local_files_only=False, resume_download=True)
-        en_hi_model = AutoModelForSeq2SeqLM.from_pretrained(
-            "Helsinki-NLP/opus-mt-en-hi", local_files_only=True
-        )
-        en_hi_tokenizer = AutoTokenizer.from_pretrained(
-            "Helsinki-NLP/opus-mt-en-hi", local_files_only=True
-        )
-        self.en_hi = pipeline(
-            "translation_en_to_hi", model=en_hi_model, tokenizer=en_hi_tokenizer
-        )
 
-        hi_en_model = AutoModelForSeq2SeqLM.from_pretrained(
-            "Helsinki-NLP/opus-mt-hi-en", local_files_only=True
-        )
-        hi_en_tokenizer = AutoTokenizer.from_pretrained(
-            "Helsinki-NLP/opus-mt-hi-en", local_files_only=True
-        )
-        self.hi_en = pipeline(
-            "translation_hi_to_en", model=hi_en_model, tokenizer=hi_en_tokenizer
-        )
+        self.en_xx = None
+        self.xx_en = None
+
+        try:
+            # Ensure models are present locally; fallback to download
+            for model_id in (en_to_lang_repo, lang_to_en_repo):
+                try:
+                    snapshot_download(model_id, local_files_only=True)
+                except Exception:
+                    self.logger.info(f"Model {model_id} not found in cache. Downloading...")
+                    snapshot_download(model_id, local_files_only=False, resume_download=True)
+
+            en_xx_model = AutoModelForSeq2SeqLM.from_pretrained(en_to_lang_repo, local_files_only=True)
+            en_xx_tokenizer = AutoTokenizer.from_pretrained(en_to_lang_repo, local_files_only=True)
+            self.en_xx = pipeline(pipeline_task_en_to_lang, model=en_xx_model, tokenizer=en_xx_tokenizer)
+
+            xx_en_model = AutoModelForSeq2SeqLM.from_pretrained(lang_to_en_repo, local_files_only=True)
+            xx_en_tokenizer = AutoTokenizer.from_pretrained(lang_to_en_repo, local_files_only=True)
+            self.xx_en = pipeline(pipeline_task_lang_to_en, model=xx_en_model, tokenizer=xx_en_tokenizer)
+
+            self.logger.info(f"Successfully initialized {self.name} with translation models")
+        except Exception as e:
+            self.logger.warning(f"Failed to initialize {self.name}: {e}. Operator will be disabled.")
+            self.en_xx = None
+            self.xx_en = None
 
     def apply(self, text: str) -> List[str]:
+        if self.en_xx is None or self.xx_en is None:
+            self.logger.warning(f"{self.name}: Translation models not available, returning original text")
+            return [text]
+
         variants = set()
         attempts = 0
         original_normalized = text.strip().lower()
         while len(variants) < 4 and attempts < 10:
             try:
-                hindi = self.en_hi(text, max_length=1024)[0]['translation_text']
-                english = self.hi_en(hindi, max_length=1024, do_sample=True, top_k=50)[0]['translation_text']
+                # Translate EN -> XX and log the intermediate text
+                lang_text = self.en_xx(text, max_length=1024)[0]['translation_text']
+                if lang_text:
+                    self.logger.debug(f"{self.name}: Intermediate translation: '{lang_text}'")
+
+                # Translate XX -> EN with sampling for diversity
+                english = self.xx_en(lang_text, max_length=1024, do_sample=True, top_k=50)[0]['translation_text']
                 cleaned = english.strip()
                 normalized = cleaned.lower()
                 if normalized and normalized != original_normalized and normalized not in variants:
                     self.logger.debug(f"{self.name}: Back-translated to '{cleaned}'")
                     variants.add(normalized)
             except Exception as e:
-                self.logger.error(f"[BackTranslation error]: {e}")
+                self.logger.error(f"[{self.name} error]: {e}")
             attempts += 1
+
         result_variants = list({v.strip() for v in variants}) if variants else [text]
-        
-        # Limit variants to maximum of 10
-        limited_variants = limit_variants(result_variants, max_variants=10)
+        limited_variants = limit_variants(result_variants, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(result_variants)} unique back-translations, limited to {len(limited_variants)} for: '{text[:60]}...'")
         return limited_variants
 
-SINGLE_PARENT_OPERATORS = [
-    POSAwareSynonymReplacement(),
-    BertMLMOperator(),
-    BackTranslationOperator()
-]
 
-def get_single_parent_operators(north_star_metric, log_file=None):
-    """Return operators that require only a single parent.
-
-    The LLMBasedParaphrasingOperator expects the *north_star_metric* as its first
-    argument.  The previous implementation accidentally passed the global
-    ``generator`` instance, resulting in a ``TypeError``.  This patch corrects
-    the call signature.
+class BackTranslationFROperator(_GenericBackTranslationOperator):
     """
-    return [
-        POSAwareSynonymReplacement(log_file=log_file),
-        BertMLMOperator(log_file=log_file),
-        LLMBasedParaphrasingOperator(north_star_metric, log_file=log_file),
-        BackTranslationOperator(log_file=log_file)
-    ]
+    French back-translation operator.
 
-class SentenceLevelCrossover(VariationOperator):
+    This operator performs back-translation using French as the intermediate language.
+    It translates the input text from English to French and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
     def __init__(self, log_file=None):
-        super().__init__("SentenceLevelCrossover", "crossover", "Combines sentences from two parent texts.")
+        super().__init__(
+            name="BackTranslation_FR",
+            lang_code="fr",
+            en_to_lang_repo="Helsinki-NLP/opus-mt-en-fr",
+            lang_to_en_repo="Helsinki-NLP/opus-mt-fr-en",
+            pipeline_task_en_to_lang="translation_en_to_fr",
+            pipeline_task_lang_to_en="translation_fr_to_en",
+            description_suffix="French back-translation.",
+            log_file=log_file,
+        )
+
+
+class BackTranslationDEOperator(_GenericBackTranslationOperator):
+    """
+    German back-translation operator.
+
+    This operator performs back-translation using German as the intermediate language.
+    It translates the input text from English to German and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="BackTranslation_DE",
+            lang_code="de",
+            en_to_lang_repo="Helsinki-NLP/opus-mt-en-de",
+            lang_to_en_repo="Helsinki-NLP/opus-mt-de-en",
+            pipeline_task_en_to_lang="translation_en_to_de",
+            pipeline_task_lang_to_en="translation_de_to_en",
+            description_suffix="German back-translation.",
+            log_file=log_file,
+        )
+
+
+class BackTranslationJAOperator(_GenericBackTranslationOperator):
+    """
+    Japanese back-translation operator.
+
+    This operator performs back-translation using Japanese as the intermediate language.
+    It translates the input text from English to Japanese and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="BackTranslation_JA",
+            lang_code="ja",
+            en_to_lang_repo="Helsinki-NLP/opus-mt-en-jap",
+            lang_to_en_repo="Helsinki-NLP/opus-mt-jap-en",
+            pipeline_task_en_to_lang="translation_en_to_ja",
+            pipeline_task_lang_to_en="translation_ja_to_en",
+            description_suffix="Japanese back-translation.",
+            log_file=log_file,
+        )
+
+
+class BackTranslationZHOperator(_GenericBackTranslationOperator):
+    """
+    Chinese back-translation operator.
+
+    This operator performs back-translation using Chinese as the intermediate language.
+    It translates the input text from English to Chinese and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="BackTranslation_ZH",
+            lang_code="zh",
+            en_to_lang_repo="Helsinki-NLP/opus-mt-en-zh",
+            lang_to_en_repo="Helsinki-NLP/opus-mt-zh-en",
+            pipeline_task_en_to_lang="translation_en_to_zh",
+            pipeline_task_lang_to_en="translation_zh_to_en",
+            description_suffix="Chinese back-translation.",
+            log_file=log_file,
+        )
+
+
+class BackTranslationHIOperator(_GenericBackTranslationOperator):
+    """
+    Hindi back-translation operator.
+
+    This operator performs back-translation using Hindi as the intermediate language.
+    It translates the input text from English to Hindi and then back to English to
+    generate diverse variants.
+
+    Attributes:
+        Inherits attributes from _GenericBackTranslationOperator.
+    """
+
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="BackTranslation_HI",
+            lang_code="hi",
+            en_to_lang_repo="Helsinki-NLP/opus-mt-en-hi",
+            lang_to_en_repo="Helsinki-NLP/opus-mt-hi-en",
+            pipeline_task_en_to_lang="translation_en_to_hi",
+            pipeline_task_lang_to_en="translation_hi_to_en",
+            description_suffix="Hindi back-translation.",
+            log_file=log_file,
+        )
+
+
+class _GenericLLMBackTranslationOperator(VariationOperator):
+    """
+    Generic LLaMA-based back-translation operator (EN → target_lang → EN).
+
+    This operator uses the cached LLaMA generator from `get_generator()` and its
+    task-specific translate() method to:
+    1) Translate English to a target language using config templates
+    2) Translate back to English with natural phrasing
+    It logs the intermediate translated text and returns up to 3 unique variants.
+
+    Subclasses should pass appropriate language names and codes.
+    """
+    def __init__(self, name: str, target_lang: str, target_lang_code: str, log_file=None):
+        super().__init__(name, "mutation", f"LLaMA-based EN→{target_lang_code.upper()}→EN back-translation.")
+        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
+        self.target_lang = target_lang
+        self.target_lang_code = target_lang_code
+        # Shared local LLaMA generator
+        self.generator = get_generator()
 
-    def apply(self, parent_texts: List[str]) -> List[str]:
-        if not isinstance(parent_texts, list) or len(parent_texts) < 2:
-            self.logger.warning(f"{self.name}: Insufficient parents for crossover.")
-            return [parent_texts[0]] if parent_texts else []
+    def apply(self, text: str) -> List[str]:
+        try:
+            # Single back-translation attempt: EN → target → EN
+            inter = self.generator.translate(text, self.target_lang, "English")
+            if inter and inter != text:
+                self.logger.debug(f"{self.name}: Intermediate {self.target_lang} translation: '{inter}'")
+                
+                # Translate back to English
+                back_en = self.generator.translate(inter, "English", self.target_lang)
+                cleaned = back_en.strip()
+                
+                if cleaned and cleaned.lower() != text.strip().lower():
+                    self.logger.debug(f"{self.name}: Back-translated to '{cleaned}'")
+                    return [cleaned]
+        except Exception as e:
+            self.logger.warning(f"{self.name}: LLaMA back-translation failed: {e}")
+        
+        # Fallback to original text if translation fails
+        return [text]
 
-        parent1_sentences = parent_texts[0].split(". ")
-        parent2_sentences = parent_texts[1].split(". ")
 
-        num_sentences_p1 = max(1, len(parent1_sentences) // 2)
-        num_sentences_p2 = max(1, len(parent2_sentences) // 2)
+class LLMBackTranslationHIOperator(_GenericLLMBackTranslationOperator):
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="LLMBackTranslation_HI",
+            target_lang="Hindi",
+            target_lang_code="hi",
+            log_file=log_file
+        )
 
-        crossover_result = parent1_sentences[:num_sentences_p1] + parent2_sentences[:num_sentences_p2]
-        result_text = ". ".join(crossover_result).strip()
 
-        if not result_text.endswith("."):
-            result_text += "."
+class LLMBackTranslationFROperator(_GenericLLMBackTranslationOperator):
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="LLMBackTranslation_FR",
+            target_lang="French",
+            target_lang_code="fr",
+            log_file=log_file
+        )
 
-        self.logger.debug(f"{self.name}: Created crossover result with {len(crossover_result)} sentences.")
-        return [result_text]
+
+class LLMBackTranslationDEOperator(_GenericLLMBackTranslationOperator):
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="LLMBackTranslation_DE",
+            target_lang="German",
+            target_lang_code="de",
+            log_file=log_file
+        )
+
+
+class LLMBackTranslationJAOperator(_GenericLLMBackTranslationOperator):
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="LLMBackTranslation_JA",
+            target_lang="Japanese",
+            target_lang_code="ja",
+            log_file=log_file
+        )
+
+
+class LLMBackTranslationZHOperator(_GenericLLMBackTranslationOperator):
+    def __init__(self, log_file=None):
+        super().__init__(
+            name="LLMBackTranslation_ZH",
+            target_lang="Chinese",
+            target_lang_code="zh",
+            log_file=log_file
+        )
+
+
+def get_single_parent_operators(north_star_metric, log_file=None):
+    """
+    Return list of mutation operators that require only a single parent.
+    
+    These operators generate variants by modifying a single input prompt.
+    They are used for mutation operations in the evolutionary algorithm.
+    
+    Args:
+        north_star_metric (str): The optimization metric for LLMBasedParaphrasingOperator
+        log_file (str, optional): Path to log file for debugging. Defaults to None.
+        
+    Returns:
+        List[VariationOperator]: List of mutation operators:
+            - LLM_POSAwareSynonymReplacement: LLaMA-based synonym replacement
+            - BertMLMOperator: BERT masked language model replacement
+            - LLMBasedParaphrasingOperator: OpenAI GPT-4 paraphrasing
+            - BackTranslationHIOperator: EN→HI→EN back-translation
+            
+    Example:
+        >>> operators = get_single_parent_operators("engagement_score", "debug.log")
+        >>> print(f"Found {len(operators)} mutation operators")
+        Found 4 mutation operators
+    """
+    return [
+        LLM_POSAwareSynonymReplacement(log_file=log_file),
+        BertMLMOperator(log_file=log_file),
+        LLMBasedParaphrasingOperator(north_star_metric, log_file=log_file),
+        # Model-based back-translation operators
+        BackTranslationHIOperator(log_file=log_file),          # EN↔HI (Helsinki-NLP)
+        BackTranslationFROperator(log_file=log_file),          # EN↔FR (Helsinki-NLP)
+        BackTranslationDEOperator(log_file=log_file),          # EN↔DE (Helsinki-NLP)
+        BackTranslationJAOperator(log_file=log_file),          # EN↔JA (Helsinki-NLP)
+        BackTranslationZHOperator(log_file=log_file),          # EN↔ZH (Helsinki-NLP)
+        # LLaMA-based back-translation operators
+        LLMBackTranslationHIOperator(log_file=log_file),       # EN↔HI (LLaMA)
+        LLMBackTranslationFROperator(log_file=log_file),       # EN↔FR (LLaMA)
+        LLMBackTranslationDEOperator(log_file=log_file),       # EN↔DE (LLaMA)
+        LLMBackTranslationJAOperator(log_file=log_file),        # EN↔JA (LLaMA)
+        LLMBackTranslationZHOperator(log_file=log_file),       # EN↔ZH (LLaMA)
+    ]
+
+
 
 class OnePointCrossover(VariationOperator):
     def __init__(self, log_file=None):
@@ -379,36 +909,12 @@ class OnePointCrossover(VariationOperator):
                 children.append(child2)
                 self.logger.debug(f"{self.name}: Swapped {n} sentence(s) from position {start_idx} to create two variants.")
 
-        # Limit variants to maximum of 10
-        limited_children = limit_variants(children, max_variants=10)
+        # Limit variants to maximum of 3
+        limited_children = limit_variants(children, max_variants=3)
         self.logger.debug(f"{self.name}: Generated {len(children)} crossover variants, limited to {len(limited_children)}")
         return limited_children
 
-class CutAndSpliceCrossover(VariationOperator):
-    def __init__(self, log_file=None):
-        super().__init__("CutAndSpliceCrossover", "crossover", "Performs cut and splice crossover with different cut points.")
-        self.logger = get_logger(self.name, log_file)
-        self.logger.debug(f"Initialized operator: {self.name}")
 
-    def apply(self, parent_texts: List[str]) -> List[str]:
-        if len(parent_texts) < 2:
-            self.logger.warning(f"{self.name}: Requires at least two parent prompts.")
-            return parent_texts
-
-        p1_words = parent_texts[0].split()
-        p2_words = parent_texts[1].split()
-        if len(p1_words) < 2 or len(p2_words) < 2:
-            return [" ".join(p1_words), " ".join(p2_words)]
-
-        cut1 = random.randint(1, len(p1_words) - 1)
-        cut2 = random.randint(1, len(p2_words) - 1)
-        child1 = p1_words[:cut1] + p2_words[cut2:]
-        child2 = p2_words[:cut2] + p1_words[cut1:]
-
-        self.logger.debug(f"{self.name}: Cut points at word indices {cut1} and {cut2}.")
-        return [" ".join(child1).strip(), " ".join(child2).strip()]
-
-import numpy as np
 from sentence_transformers import SentenceTransformer, util
 
 class SemanticSimilarityCrossover(VariationOperator):
@@ -485,13 +991,32 @@ class InstructionPreservingCrossover(VariationOperator):
         self.logger.debug(f"{self.name}: Generated {len(variants)} OpenAI-based instruction-preserving variants.")
         self.logger.debug(f"{variants}")
         
-        # Limit variants to maximum of 10
-        limited_variants = limit_variants(variants, max_variants=10)
+        # Limit variants to maximum of 3
+        limited_variants = limit_variants(variants, max_variants=3)
         self.logger.debug(f"{self.name}: Limited {len(variants)} variants to {len(limited_variants)}")
         return limited_variants if limited_variants else [parent_texts[0]]
 
 def get_multi_parent_operators(log_file=None):
-    """Return operators that require multiple parents."""
+    """
+    Return list of crossover operators that require multiple parents.
+    
+    These operators generate variants by combining multiple input prompts.
+    They are used for crossover operations in the evolutionary algorithm.
+    
+    Args:
+        log_file (str, optional): Path to log file for debugging. Defaults to None.
+        
+    Returns:
+        List[VariationOperator]: List of crossover operators:
+            - OnePointCrossover: Single-point sentence swapping
+            - SemanticSimilarityCrossover: Semantic similarity-based crossover
+            - InstructionPreservingCrossover: Instruction structure preservation
+            
+    Example:
+        >>> operators = get_multi_parent_operators("debug.log")
+        >>> print(f"Found {len(operators)} crossover operators")
+        Found 3 crossover operators
+    """
     return [
         OnePointCrossover(log_file=log_file),
         SemanticSimilarityCrossover(log_file=log_file),
@@ -499,447 +1024,32 @@ def get_multi_parent_operators(log_file=None):
     ]
 
 def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):
+    """
+    Return operators applicable for the given number of parents.
+    
+    This function selects the appropriate set of operators based on the number
+    of parent prompts available for variation.
+    
+    Args:
+        num_parents (int): Number of parent prompts available
+        north_star_metric (str): The optimization metric for LLMBasedParaphrasingOperator
+        log_file (str, optional): Path to log file for debugging. Defaults to None.
+        
+    Returns:
+        List[VariationOperator]: List of applicable operators:
+            - If num_parents == 1: Returns mutation operators (single parent)
+            - If num_parents > 1: Returns crossover operators (multiple parents)
+            
+    Example:
+        >>> single_ops = get_applicable_operators(1, "engagement_score")
+        >>> multi_ops = get_applicable_operators(2, "engagement_score")
+        >>> print(f"Single parent: {len(single_ops)}, Multi parent: {len(multi_ops)}")
+        Single parent: 4, Multi parent: 3
+    """
     if num_parents == 1:
         return get_single_parent_operators(north_star_metric, log_file=log_file)
     return get_multi_parent_operators(log_file=log_file)
 
-class TextVariationOperators:
-    """Text variation operators for evolutionary text generation with comprehensive logging"""
-    
-    def __init__(self, log_file: Optional[str] = None):
-        """Initialize text variation operators with logging"""
-        self.logger = get_logger("TextVariationOperators", log_file)
-        self.logger.info("Initializing Text Variation Operators")
-        
-        # Performance tracking
-        self.mutation_count = 0
-        self.crossover_count = 0
-        self.total_mutation_time = 0.0
-        self.total_crossover_time = 0.0
-        
-        # Operator configuration
-        self.mutation_rate = 0.3
-        self.crossover_rate = 0.7
-        self.max_mutations_per_genome = 3
-        
-        self.logger.info("Mutation rate: %.2f, Crossover rate: %.2f", self.mutation_rate, self.crossover_rate)
-        self.logger.info("Max mutations per genome: %d", self.max_mutations_per_genome)
-        self.logger.debug("Text Variation Operators initialized successfully")
-    
-    def _load_population(self, pop_path: str) -> List[Dict[str, Any]]:
-        """Load population from JSON file with error handling and logging"""
-        with PerformanceLogger(self.logger, "Load Population", file_path=pop_path):
-            try:
-                import os
-                if not os.path.exists(pop_path):
-                    self.logger.error("Population file not found: %s", pop_path)
-                    raise FileNotFoundError(f"Population file not found: {pop_path}")
-                
-                with open(pop_path, 'r', encoding='utf-8') as f:
-                    population = json.load(f)
-                
-                self.logger.info("Successfully loaded population with %d genomes", len(population))
-                self.logger.debug("Population file path: %s", pop_path)
-                
-                return population
-                
-            except json.JSONDecodeError as e:
-                self.logger.error("Failed to parse population JSON: %s", e, exc_info=True)
-                raise
-            except Exception as e:
-                self.logger.error("Unexpected error loading population: %s", e, exc_info=True)
-                raise
-    
-    def _save_population(self, population: List[Dict[str, Any]], pop_path: str) -> None:
-        """Save population to JSON file with error handling and logging"""
-        with PerformanceLogger(self.logger, "Save Population", file_path=pop_path, genome_count=len(population)):
-            try:
-                import os
-                # Ensure output directory exists
-                os.makedirs(os.path.dirname(pop_path), exist_ok=True)
-                
-                with open(pop_path, 'w', encoding='utf-8') as f:
-                    json.dump(population, f, indent=2, ensure_ascii=False)
-                
-                self.logger.info("Successfully saved population with %d genomes to %s", len(population), pop_path)
-                
-            except Exception as e:
-                self.logger.error("Failed to save population: %s", e, exc_info=True)
-                raise
-    
-    def _apply_synonym_mutation(self, text: str, genome_id: str) -> str:
-        """Apply synonym-based mutation with detailed logging"""
-        with PerformanceLogger(self.logger, "Synonym Mutation", genome_id=genome_id, text_length=len(text)):
-            try:
-                self.logger.debug("Applying synonym mutation to genome %s", genome_id)
-                
-                # Simple synonym dictionary (in practice, use a proper thesaurus)
-                synonyms = {
-                    'good': ['great', 'excellent', 'wonderful', 'fantastic'],
-                    'bad': ['terrible', 'awful', 'horrible', 'dreadful'],
-                    'big': ['large', 'huge', 'enormous', 'massive'],
-                    'small': ['tiny', 'little', 'miniature', 'petite'],
-                    'happy': ['joyful', 'cheerful', 'delighted', 'pleased'],
-                    'sad': ['unhappy', 'miserable', 'depressed', 'gloomy'],
-                    'fast': ['quick', 'rapid', 'swift', 'speedy'],
-                    'slow': ['sluggish', 'leisurely', 'gradual', 'unhurried']
-                }
-                
-                words = text.split()
-                mutated_words = []
-                mutations_applied = 0
-                
-                for word in words:
-                    clean_word = re.sub(r'[^\w]', '', word.lower())
-                    if clean_word in synonyms and random.random() < 0.3:  # 30% chance per word
-                        new_word = random.choice(synonyms[clean_word])
-                        # Preserve original case and punctuation
-                        if word[0].isupper():
-                            new_word = new_word.capitalize()
-                        mutated_words.append(new_word)
-                        mutations_applied += 1
-                        self.logger.debug("Replaced '%s' with '%s' in genome %s", word, new_word, genome_id)
-                    else:
-                        mutated_words.append(word)
-                
-                result = ' '.join(mutated_words)
-                self.logger.info("Applied %d synonym mutations to genome %s", mutations_applied, genome_id)
-                
-                return result
-                
-            except Exception as e:
-                self.logger.error("Synonym mutation failed for genome %s: %s", genome_id, e, exc_info=True)
-                return text
-    
-    def _apply_insertion_mutation(self, text: str, genome_id: str) -> str:
-        """Apply insertion mutation with detailed logging"""
-        with PerformanceLogger(self.logger, "Insertion Mutation", genome_id=genome_id, text_length=len(text)):
-            try:
-                self.logger.debug("Applying insertion mutation to genome %s", genome_id)
-                
-                # Words to potentially insert
-                insert_words = ['very', 'really', 'quite', 'extremely', 'absolutely', 'completely']
-                
-                words = text.split()
-                if len(words) < 2:
-                    self.logger.debug("Text too short for insertion mutation in genome %s", genome_id)
-                    return text
-                
-                # Insert random words at random positions
-                insertions = 0
-                for _ in range(min(2, len(words) // 3)):  # Insert up to 2 words
-                    if random.random() < 0.4:  # 40% chance per insertion
-                        insert_pos = random.randint(0, len(words))
-                        insert_word = random.choice(insert_words)
-                        words.insert(insert_pos, insert_word)
-                        insertions += 1
-                        self.logger.debug("Inserted '%s' at position %d in genome %s", insert_word, insert_pos, genome_id)
-                
-                result = ' '.join(words)
-                self.logger.info("Applied %d insertion mutations to genome %s", insertions, genome_id)
-                
-                return result
-                
-            except Exception as e:
-                self.logger.error("Insertion mutation failed for genome %s: %s", genome_id, e, exc_info=True)
-                return text
-    
-    def _apply_deletion_mutation(self, text: str, genome_id: str) -> str:
-        """Apply deletion mutation with detailed logging"""
-        with PerformanceLogger(self.logger, "Deletion Mutation", genome_id=genome_id, text_length=len(text)):
-            try:
-                self.logger.debug("Applying deletion mutation to genome %s", genome_id)
-                
-                words = text.split()
-                if len(words) < 3:
-                    self.logger.debug("Text too short for deletion mutation in genome %s", genome_id)
-                    return text
-                
-                # Delete random words
-                deletions = 0
-                words_to_delete = []
-                
-                for i, word in enumerate(words):
-                    if random.random() < 0.2:  # 20% chance per word
-                        words_to_delete.append(i)
-                        deletions += 1
-                
-                # Delete from highest index to lowest to avoid index issues
-                for i in sorted(words_to_delete, reverse=True):
-                    deleted_word = words.pop(i)
-                    self.logger.debug("Deleted '%s' at position %d in genome %s", deleted_word, i, genome_id)
-                
-                result = ' '.join(words)
-                self.logger.info("Applied %d deletion mutations to genome %s", deletions, genome_id)
-                
-                return result
-                
-            except Exception as e:
-                self.logger.error("Deletion mutation failed for genome %s: %s", genome_id, e, exc_info=True)
-                return text
-    
-    def _apply_reordering_mutation(self, text: str, genome_id: str) -> str:
-        """Apply reordering mutation with detailed logging"""
-        with PerformanceLogger(self.logger, "Reordering Mutation", genome_id=genome_id, text_length=len(text)):
-            try:
-                self.logger.debug("Applying reordering mutation to genome %s", genome_id)
-                
-                words = text.split()
-                if len(words) < 4:
-                    self.logger.debug("Text too short for reordering mutation in genome %s", genome_id)
-                    return text
-                
-                # Swap random adjacent words
-                swaps = 0
-                for _ in range(min(2, len(words) - 1)):
-                    if random.random() < 0.3:  # 30% chance per swap
-                        pos = random.randint(0, len(words) - 2)
-                        words[pos], words[pos + 1] = words[pos + 1], words[pos]
-                        swaps += 1
-                        self.logger.debug("Swapped words at positions %d and %d in genome %s", pos, pos + 1, genome_id)
-                
-                result = ' '.join(words)
-                self.logger.info("Applied %d reordering mutations to genome %s", swaps, genome_id)
-                
-                return result
-                
-            except Exception as e:
-                self.logger.error("Reordering mutation failed for genome %s: %s", genome_id, e, exc_info=True)
-                return text
-    
-    def mutate_genome(self, genome: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply mutations to a single genome with comprehensive logging"""
-        genome_id = genome.get('id', 'unknown')
-        
-        with PerformanceLogger(self.logger, "Mutate Genome", genome_id=genome_id):
-            try:
-                # Check if genome needs mutation
-                if genome.get('status') != 'pending_evolution':
-                    self.logger.debug("Skipping genome %s - status: %s", genome_id, genome.get('status'))
-                    return genome
-                
-                self.logger.info("Applying mutations to genome %s", genome_id)
-                
-                # Get original text
-                original_text = genome.get('prompt', '')
-                if not original_text:
-                    self.logger.warning("Empty prompt for genome %s", genome_id)
-                    genome['status'] = 'error'
-                    genome['error'] = 'Empty prompt'
-                    return genome
-                
-                self.logger.debug("Original text for genome %s: %d characters", genome_id, len(original_text))
-                
-                # Apply mutations
-                mutated_text = original_text
-                mutations_applied = []
-                
-                # Determine number of mutations to apply
-                num_mutations = random.randint(1, self.max_mutations_per_genome)
-                self.logger.debug("Will apply %d mutations to genome %s", num_mutations, genome_id)
-                
-                mutation_types = [
-                    ('synonym', self._apply_synonym_mutation),
-                    ('insertion', self._apply_insertion_mutation),
-                    ('deletion', self._apply_deletion_mutation),
-                    ('reordering', self._apply_reordering_mutation)
-                ]
-                
-                for i in range(num_mutations):
-                    mutation_type, mutation_func = random.choice(mutation_types)
-                    self.logger.debug("Applying %s mutation %d/%d to genome %s", 
-                                    mutation_type, i + 1, num_mutations, genome_id)
-                    
-                    mutated_text = mutation_func(mutated_text, genome_id)
-                    mutations_applied.append(mutation_type)
-                
-                # Update genome
-                genome['prompt'] = mutated_text
-                genome['status'] = 'pending_generation'
-                genome['mutation_history'] = mutations_applied
-                genome['mutation_timestamp'] = time.time()
-                
-                # Update performance metrics
-                self.mutation_count += 1
-                
-                self.logger.info("Successfully mutated genome %s: %d mutations applied", 
-                               genome_id, len(mutations_applied))
-                self.logger.debug("Mutation types applied: %s", mutations_applied)
-                
-                return genome
-                
-            except Exception as e:
-                self.logger.error("Failed to mutate genome %s: %s", genome_id, e, exc_info=True)
-                genome['status'] = 'error'
-                genome['error'] = str(e)
-                return genome
-    
-    def crossover_genomes(self, parent1: Dict[str, Any], parent2: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-        """Perform crossover between two parent genomes with comprehensive logging"""
-        parent1_id = parent1.get('id', 'unknown')
-        parent2_id = parent2.get('id', 'unknown')
-        
-        with PerformanceLogger(self.logger, "Crossover Genomes", 
-                             parent1_id=parent1_id, parent2_id=parent2_id):
-            try:
-                self.logger.info("Performing crossover between genomes %s and %s", parent1_id, parent2_id)
-                
-                # Get parent texts
-                text1 = parent1.get('prompt', '')
-                text2 = parent2.get('prompt', '')
-                
-                if not text1 or not text2:
-                    self.logger.warning("Empty prompt in parent genomes: %s, %s", parent1_id, parent2_id)
-                    return parent1, parent2
-                
-                self.logger.debug("Parent 1 text length: %d, Parent 2 text length: %d", len(text1), len(text2))
-                
-                # Split texts into words
-                words1 = text1.split()
-                words2 = text2.split()
-                
-                # Perform single-point crossover
-                if len(words1) < 2 or len(words2) < 2:
-                    self.logger.debug("Texts too short for crossover between genomes %s and %s", parent1_id, parent2_id)
-                    return parent1, parent2
-                
-                # Choose crossover points
-                point1 = random.randint(1, len(words1) - 1)
-                point2 = random.randint(1, len(words2) - 1)
-                
-                self.logger.debug("Crossover points: %d (parent1), %d (parent2)", point1, point2)
-                
-                # Create offspring
-                child1_words = words1[:point1] + words2[point2:]
-                child2_words = words2[:point2] + words1[point1:]
-                
-                child1_text = ' '.join(child1_words)
-                child2_text = ' '.join(child2_words)
-                
-                # Create child genomes
-                child1 = {
-                    'id': f"{parent1_id}_x_{parent2_id}_1",
-                    'prompt': child1_text,
-                    'status': 'pending_generation',
-                    'parent_ids': [parent1_id, parent2_id],
-                    'crossover_timestamp': time.time(),
-                    'crossover_type': 'single_point'
-                }
-                
-                child2 = {
-                    'id': f"{parent1_id}_x_{parent2_id}_2",
-                    'prompt': child2_text,
-                    'status': 'pending_generation',
-                    'parent_ids': [parent1_id, parent2_id],
-                    'crossover_timestamp': time.time(),
-                    'crossover_type': 'single_point'
-                }
-                
-                # Update performance metrics
-                self.crossover_count += 1
-                
-                self.logger.info("Successfully created offspring from genomes %s and %s", parent1_id, parent2_id)
-                self.logger.debug("Child 1 text length: %d, Child 2 text length: %d", 
-                                len(child1_text), len(child2_text))
-                
-                return child1, child2
-                
-            except Exception as e:
-                self.logger.error("Failed to perform crossover between genomes %s and %s: %s", 
-                                parent1_id, parent2_id, e, exc_info=True)
-                return parent1, parent2
-    
-    def evolve_population(self, pop_path: str = "outputs/Population.json") -> None:
-        """Evolve entire population with comprehensive logging"""
-        with PerformanceLogger(self.logger, "Evolve Population", pop_path=pop_path):
-            try:
-                self.logger.info("Starting population evolution")
-                
-                # Load population
-                population = self._load_population(pop_path)
-                
-                # Find genomes that need evolution
-                pending_genomes = [g for g in population if g.get('status') == 'pending_evolution']
-                self.logger.info("Found %d genomes pending evolution out of %d total", 
-                               len(pending_genomes), len(population))
-                
-                if not pending_genomes:
-                    self.logger.info("No genomes pending evolution. Skipping processing.")
-                    return
-                
-                # Apply mutations
-                mutated_count = 0
-                error_count = 0
-                
-                for genome in pending_genomes:
-                    if random.random() < self.mutation_rate:
-                        mutated_genome = self.mutate_genome(genome)
-                        if mutated_genome.get('status') == 'pending_generation':
-                            mutated_count += 1
-                        elif mutated_genome.get('status') == 'error':
-                            error_count += 1
-                
-                self.logger.info("Mutation phase completed: %d mutated, %d errors", mutated_count, error_count)
-                
-                # Apply crossover
-                crossover_count = 0
-                available_parents = [g for g in population if g.get('status') == 'complete']
-                
-                if len(available_parents) >= 2:
-                    num_crossovers = min(len(available_parents) // 2, len(pending_genomes))
-                    
-                    for _ in range(num_crossovers):
-                        if random.random() < self.crossover_rate:
-                            parent1, parent2 = random.sample(available_parents, 2)
-                            child1, child2 = self.crossover_genomes(parent1, parent2)
-                            
-                            # Add children to population
-                            population.extend([child1, child2])
-                            crossover_count += 2
-                
-                self.logger.info("Crossover phase completed: %d children created", crossover_count)
-                
-                # Save updated population
-                self._save_population(population, pop_path)
-                
-                # Log summary
-                self.logger.info("Population evolution completed:")
-                self.logger.info("  - Total genomes: %d", len(population))
-                self.logger.info("  - Mutations applied: %d", mutated_count)
-                self.logger.info("  - Crossovers performed: %d", crossover_count)
-                self.logger.info("  - Errors: %d", error_count)
-                
-                # Log performance metrics
-                if self.mutation_count > 0:
-                    self.logger.info("Mutation Performance:")
-                    self.logger.info("  - Total mutations: %d", self.mutation_count)
-                    self.logger.info("  - Average mutations per genome: %.2f", mutated_count / len(pending_genomes))
-                
-                if self.crossover_count > 0:
-                    self.logger.info("Crossover Performance:")
-                    self.logger.info("  - Total crossovers: %d", self.crossover_count)
-                    self.logger.info("  - Children created: %d", crossover_count)
-                
-            except Exception as e:
-                self.logger.error("Population evolution failed: %s", e, exc_info=True)
-                raise
-    
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics for the variation operators"""
-        stats = {
-            'mutation_count': self.mutation_count,
-            'crossover_count': self.crossover_count,
-            'total_mutation_time': self.total_mutation_time,
-            'total_crossover_time': self.total_crossover_time,
-            'mutation_rate': self.mutation_rate,
-            'crossover_rate': self.crossover_rate
-        }
-        
-        if self.mutation_count > 0:
-            stats['average_mutation_time'] = self.total_mutation_time / self.mutation_count
-        
-        if self.crossover_count > 0:
-            stats['average_crossover_time'] = self.total_crossover_time / self.crossover_count
-        
-        self.logger.debug("Performance stats: %s", stats)
-        return stats
+
+
+

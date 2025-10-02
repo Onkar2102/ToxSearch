@@ -117,7 +117,7 @@ def get_logger(name: str = "default_logger", log_file: Optional[str] = None) -> 
     # File handler with detailed formatting
     file_handler = RotatingFileHandler(
         log_file, 
-        maxBytes=10_000_000,  # 10MB
+        maxBytes=100_000_000,  # 100MB
         backupCount=10,
         encoding='utf-8'
     )
