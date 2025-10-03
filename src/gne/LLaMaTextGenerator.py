@@ -1,3 +1,9 @@
+"""
+LLaMaTextGenerator.py
+
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 import os
 import json
 import torch
@@ -854,6 +860,6 @@ class LlaMaTextGenerator:
         except Exception as e:
             self.logger.error(f"Translation failed: {e}", exc_info=True)
             return text
-    
-    
-    
+
+
+

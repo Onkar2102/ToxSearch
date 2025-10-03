@@ -2,6 +2,8 @@
 """
 M3 Mac Performance Optimizer for Evolutionary Text Generation
 
+Author: Onkar Shelar os9660@rit.edu
+
 This utility helps optimize performance on Apple M3 Macs by:
 1. Detecting optimal batch sizes based on available memory
 2. Monitoring GPU/CPU usage during runs

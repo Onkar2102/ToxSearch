@@ -1,3 +1,9 @@
+"""
+config.py
+
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 import yaml
 import os
 import json

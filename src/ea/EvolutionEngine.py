@@ -1,8 +1,14 @@
+"""
+EvolutionEngine.py
+
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 import json
 import random
 from typing import List, Dict, Any, Optional
 from utils import get_custom_logging
-from .TextVariationOperators import get_applicable_operators
+from .operator_helpers import get_applicable_operators
 from .ParentSelector import ParentSelector
 from itertools import combinations
 from pathlib import Path

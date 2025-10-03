@@ -1,3 +1,9 @@
+"""
+Main entry point for the evolutionary text generation system.
+
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 import sys
 import time
 import json

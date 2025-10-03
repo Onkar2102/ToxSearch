@@ -1,3 +1,9 @@
+"""
+custom_logging.py
+
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 import os
 import logging
 from logging.handlers import RotatingFileHandler

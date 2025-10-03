@@ -2,6 +2,10 @@
 # @author Onkar Shelar (os9660@rit.edu)
 # @brief Abstract base class defining the interface for all variation operators in the evolutionary pipeline.
 
+"""
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 from abc import ABC, abstractmethod
 from typing import List
 import logging

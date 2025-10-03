@@ -2,6 +2,8 @@
 """
 Comprehensive Entry Point for Evolutionary Text Generation
 
+Author: Onkar Shelar os9660@rit.edu
+
 Two ways to run:
 1. app.py --interactive (user-friendly with monitoring)
 2. src/main.py (direct execution)

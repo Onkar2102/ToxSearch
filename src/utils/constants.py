@@ -1,6 +1,8 @@
 """
 Constants for the EOST-CAM-LLM framework.
 Centralizes magic numbers and configuration values.
+
+Author: Onkar Shelar os9660@rit.edu
 """
 
 class EvolutionConstants:

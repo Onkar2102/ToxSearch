@@ -1,3 +1,9 @@
+"""
+ParentSelector.py
+
+Author: Onkar Shelar os9660@rit.edu
+"""
+
 import random
 from typing import List, Dict, Any, Optional, Tuple
 from utils import get_custom_logging
@@ -345,4 +351,4 @@ class ParentSelector:
         
         self.logger.debug(f"Roulette selection: mutation_parent={mutation_parent['id']}, "
                          f"crossover_parents={[g['id'] for g in crossover_parents]}")
-        return mutation_parent, crossover_parents if crossover_parents else None 
+        return mutation_parent, crossover_parents if crossover_parents else None
