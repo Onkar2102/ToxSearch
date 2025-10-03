@@ -1,12 +1,10 @@
 """
 bert_mlm_operator.py
 
-Author: Onkar Shelar os9660@rit.edu
 
 This module contains the BERT MLM (Masked Language Model) operator for the evolutionary algorithm.
 This mutation operator performs word replacement using BERT's masked language model predictions.
 
-Author: EOST CAM LLM Team
 Version: 1.0
 """
 

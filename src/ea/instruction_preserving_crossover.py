@@ -1,13 +1,8 @@
 """
 instruction_preserving_crossover.py
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module contains the instruction preserving crossover operator for the evolutionary algorithm.
 This crossover operator preserves instruction structure and combines prompts using OpenAI LLM.
-
-Author: EOST CAM LLM Team
-Version: 1.0
 """
 
 import os

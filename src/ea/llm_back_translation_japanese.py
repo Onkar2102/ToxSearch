@@ -1,13 +1,8 @@
 """
 llm_back_translation_japanese.py
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module contains the LLaMA-based Japanese back-translation operator for the evolutionary algorithm.
 This mutation operator performs back-translation using LLaMA and Japanese as the intermediate language.
-
-Author: EOST CAM LLM Team
-Version: 1.0
 """
 
 from .base_operators import _GenericLLMBackTranslationOperator

@@ -1,7 +1,6 @@
 """
 pos_aware_synonym_replacement.py
 
-Author: Onkar Shelar os9660@rit.edu
 
 This module contains the POS-aware synonym replacement operator for the evolutionary algorithm.
 This mutation operator performs BERT-based synonym replacement using POS (Part-of-Speech) tagging.

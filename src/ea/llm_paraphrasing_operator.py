@@ -1,12 +1,10 @@
 """
 llm_paraphrasing_operator.py
 
-Author: Onkar Shelar os9660@rit.edu
 
 This module contains the LLM-based paraphrasing operator for the evolutionary algorithm.
 This mutation operator generates paraphrased variants using OpenAI's GPT-4.
 
-Author: EOST CAM LLM Team
 Version: 1.0
 """
 

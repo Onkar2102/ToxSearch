@@ -1,5 +1,4 @@
 ## @file src/ea/__init__.py
-# @author Onkar Shelar (os9660@rit.edu)
 # @brief Evolutionary Algorithm (EA) package for LLM toxicity optimization.
 #
 # This package provides:

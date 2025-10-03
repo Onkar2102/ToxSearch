@@ -1,13 +1,8 @@
 """
 llm_back_translation_hindi.py
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module contains the LLaMA-based Hindi back-translation operator for the evolutionary algorithm.
 This mutation operator performs back-translation using LLaMA and Hindi as the intermediate language.
-
-Author: EOST CAM LLM Team
-Version: 1.0
 """
 
 from .base_operators import _GenericLLMBackTranslationOperator

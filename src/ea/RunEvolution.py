@@ -1,10 +1,5 @@
 ## @file RunEvolution.py
-# @author Onkar Shelar (os9660@rit.edu)
 # @brief Main script for evolving LLM input prompts using mutation operators.
-
-"""
-Author: Onkar Shelar os9660@rit.edu
-"""
 
 import json
 import time

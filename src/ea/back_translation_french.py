@@ -1,13 +1,8 @@
 """
 back_translation_french.py
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module contains the French back-translation operator for the evolutionary algorithm.
 This mutation operator performs back-translation using French as the intermediate language.
-
-Author: EOST CAM LLM Team
-Version: 1.0
 """
 
 from .base_operators import _GenericBackTranslationOperator

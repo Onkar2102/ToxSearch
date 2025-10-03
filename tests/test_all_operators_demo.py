@@ -28,11 +28,21 @@ def demo_mutation_operators():
         from ea.pos_aware_synonym_replacement import POSAwareSynonymReplacement
         operator = POSAwareSynonymReplacement()
         variants = operator.apply(test_prompt)
-        print(f"\n✓ POSAwareSynonymReplacement: {len(variants)} variants")
+        print(f"\n✓ POSAwareSynonymReplacement (BERT): {len(variants)} variants")
         for i, variant in enumerate(variants[:2], 1):
             print(f"  {i}. {variant[:70]}...")
     except Exception as e:
-        print(f"✗ POSAwareSynonymReplacement: {str(e)[:60]}...")
+        print(f"✗ POSAwareSynonymReplacement (BERT): {str(e)[:60]}...")
+    
+    try:
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
+        operator = LLM_POSAwareSynonymReplacement(log_file=None, max_variants=3, num_POS_tags=1)
+        variants = operator.apply(test_prompt)
+        print(f"\n✓ LLM_POSAwareSynonymReplacement: {len(variants)} variants")
+        for i, variant in enumerate(variants[:2], 1):
+            print(f"  {i}. {variant[:70]}...")
+    except Exception as e:
+        print(f"✗ LLM_POSAwareSynonymReplacement: {str(e)[:60]}...")
     
     try:
         from ea.bert_mlm_operator import BertMLMOperator

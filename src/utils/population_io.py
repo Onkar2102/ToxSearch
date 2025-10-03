@@ -1,8 +1,6 @@
 """
 Comprehensive Population I/O Utility
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module provides unified population loading, saving, and management functionality
 that automatically handles both monolithic and split file formats for optimal memory efficiency.
 """

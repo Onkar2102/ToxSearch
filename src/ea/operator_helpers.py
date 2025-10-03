@@ -1,7 +1,6 @@
 """
 operator_helpers.py
 
-Author: Onkar Shelar os9660@rit.edu
 
 This module contains helper functions and common imports used across all
 text variation operators in the evolutionary algorithm.
@@ -13,7 +12,6 @@ Functions:
     get_multi_parent_operators(): Returns list of crossover operators
     get_applicable_operators(): Returns operators applicable for given parent count
 
-Author: EOST CAM LLM Team
 Version: 1.0
 """
 
@@ -91,6 +89,7 @@ def get_single_parent_operators(north_star_metric, log_file=None):
     Return list of mutation operators that require only a single parent.
     """
     from .pos_aware_synonym_replacement import POSAwareSynonymReplacement
+    from .llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
     from .bert_mlm_operator import BertMLMOperator
     from .llm_paraphrasing_operator import LLMBasedParaphrasingOperator
     from .back_translation_hindi import BackTranslationHIOperator
@@ -106,6 +105,7 @@ def get_single_parent_operators(north_star_metric, log_file=None):
     
     return [
         POSAwareSynonymReplacement(log_file=log_file),
+        LLM_POSAwareSynonymReplacement(log_file=log_file, max_variants=3, num_POS_tags=1),
         BertMLMOperator(log_file=log_file),
         LLMBasedParaphrasingOperator(north_star_metric, log_file=log_file),
         # Model-based back-translation operators

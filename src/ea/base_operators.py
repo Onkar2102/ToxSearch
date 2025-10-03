@@ -1,7 +1,6 @@
 """
 base_operators.py
 
-Author: Onkar Shelar os9660@rit.edu
 
 This module contains base classes for generic text variation operators.
 These base classes implement common functionality for operator families.
@@ -10,7 +9,6 @@ Classes:
     _GenericBackTranslationOperator: Base class for model-based back-translation operators
     _GenericLLMBackTranslationOperator: Base class for LLaMA-based back-translation operators
 
-Author: EOST CAM LLM Team
 Version: 1.0
 """
 

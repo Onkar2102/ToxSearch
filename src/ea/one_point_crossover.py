@@ -1,13 +1,8 @@
 """
 one_point_crossover.py
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module contains the one-point crossover operator for the evolutionary algorithm.
 This crossover operator swaps matching-position sentences between two parent prompts.
-
-Author: EOST CAM LLM Team
-Version: 1.0
 """
 
 import nltk

@@ -1,7 +1,5 @@
 """
 Main entry point for the evolutionary text generation system.
-
-Author: Onkar Shelar os9660@rit.edu
 """
 
 import sys
@@ -142,17 +140,23 @@ def check_process_health():
 
 def restart_process():
     """Restart the current process"""
-    logger = get_logger("main")
-    logger.warning("Restarting process due to health check failure")
-    
-    # Save current state if needed
+    # Lazily import logging utilities to avoid circular deps
     try:
-        # You can add state saving logic here
+        from utils import get_custom_logging as _gcl
+        _get_logger, *_ = _gcl()
+        logger = _get_logger("main")
+    except Exception:
+        # Fallback to print if logging not initialized yet
+        print("[restart_process] Logging not initialized; using print fallback")
+        logger = None
+    if logger:
+        logger.warning("Restarting process due to health check failure")
+    # Save current state if needed (placeholder)
+    try:
         pass
     except Exception as e:
-        logger.error(f"Failed to save state before restart: {e}")
-    
-    # Restart the process
+        if logger:
+            logger.error(f"Failed to save state before restart: {e}")
     os.execv(sys.executable, ['python'] + sys.argv)
 
 # ============================================================================

@@ -1,13 +1,8 @@
 """
 semantic_similarity_crossover.py
 
-Author: Onkar Shelar os9660@rit.edu
-
 This module contains the semantic similarity crossover operator for the evolutionary algorithm.
 This crossover operator combines semantically similar sentences from two parent prompts.
-
-Author: EOST CAM LLM Team
-Version: 1.0
 """
 
 import torch
