@@ -256,7 +256,7 @@ graph TB
   end
   
   subgraph "Crossover Operators (3)"
-    D1[OnePointCrossover<br/>Single-point crossover]
+    D1[PointCrossover<br/>Single-point crossover]
     D2[SemanticSimilarityCrossover<br/>Semantic similarity-based]
     D3[InstructionPreservingCrossover<br/>Instruction structure preservation]
   end

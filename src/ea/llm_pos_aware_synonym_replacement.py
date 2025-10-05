@@ -199,11 +199,9 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
                         Sample words from the text: {sample_words_str}
                         Context: "{context_text[:100]}{'...' if len(context_text) > 100 else ''}"
 
-                        Please provide exactly {self.max_variants} single-word synonyms that:
+                        Please provide exactly {self.max_variants} synonyms that:
                         1. Have the same POS tag ({pos_tag})
-                        2. Are appropriate for the given context
-                        3. Can be either synonyms of the sample words OR other words with the same grammatical function
-                        4. Are common English words
+                        2. Can be either synonyms of the sample words OR other words with the same grammatical function
 
                         Return ONLY a JSON array of words, like this:
                         ["word1", "word2", "word3"]

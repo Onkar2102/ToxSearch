@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Test suite for back-translation operators.
-
-This module tests all back-translation operators (both Helsinki-NLP and LLaMA-based)
-to ensure they work correctly after the separation into individual files.
+Comprehensive pytest suite for Back-Translation and LLM-BackTranslation operators.
+Prints and saves initial, mid, and final steps for all tests.
 """
-
 import sys
 import os
+import json
+from datetime import datetime
+import pytest
 
 # Fix tokenizer parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -15,219 +15,236 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
+# Base prompts (same as MLM tests)
+_BASE_25 = (
+    "A curious graduate researcher carefully evaluates complex datasets, "
+    "builds modular prototypes, compares quantitative results, writes clear reports, "
+    "and iterates quickly to improve robustness and efficiency significantly."
+)
+
+_BASE_100 = (
+    "In practical machine learning projects, diligent engineers design modular pipelines, "
+    "clean noisy data, explore meaningful features, train competitive models, tune hyperparameters, "
+    "evaluate fairness, explain predictions, and document reproducible experiments with versioned datasets, "
+    "tracked metrics, automated tests, and readable reports while collaborating asynchronously through reviews and discussions."
+)
+
+_BASE_200 = (
+    "For production artificial intelligence systems, disciplined teams integrate data validation, schema checks, "
+    "monitoring dashboards, canary deployments, rollback strategies, streaming features, privacy safeguards, "
+    "prompt management, safety evaluation, offline experiments, online A/B testing, profiling, cost analysis, and governance reviews "
+    "to deliver reliable value to users and stakeholders across diverse scenarios and evolving requirements."
+)
+
+def _build_prompt(base_text: str, target_words: int) -> str:
+    words = base_text.split()
+    if len(words) <= target_words:
+        return base_text
+    return " ".join(words[:target_words])
+
+
+def _save_bt_test_output(test_name, operator_type, prompt, variants, mid_steps=None):
+    output_dir = os.path.join(os.path.dirname(__file__), "output")
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, "bt_all_outputs.json")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_data = {
+        "test_name": test_name,
+        "operator_type": operator_type,
+        "timestamp": timestamp,
+        "input_prompt": prompt,
+        "input_stats": {
+            "char_count": len(prompt),
+            "word_count": len(prompt.split()),
+        },
+        "variants": variants,
+        "variant_stats": [
+            {"char_count": len(v), "word_count": len(v.split())} for v in variants
+        ],
+        "mid_steps": mid_steps or {},
+    }
+    # Append to a single JSON file as a list of results
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            try:
+                all_results = json.load(f)
+                if not isinstance(all_results, list):
+                    all_results = [all_results]
+            except Exception:
+                all_results = []
+    else:
+        all_results = []
+    all_results.append(output_data)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        json.dump(all_results, f, indent=2, ensure_ascii=False)
+    print(f"[OUTPUT] Appended BT test results to: {filepath}")
+
+def _print_and_save_bt_steps(test_name, operator_type, prompt, operator, variants):
+    mid_steps = {
+        "input": getattr(operator, "_last_input", None),
+        "intermediate": getattr(operator, "_last_intermediate", None),
+        "final": getattr(operator, "_last_final", None),
+    }
+    print(f"\n[INITIAL] {mid_steps['input']}")
+    print(f"[MID] {mid_steps['intermediate']}")
+    print(f"[FINAL] {mid_steps['final']}")
+    _save_bt_test_output(test_name, operator_type, prompt, variants, mid_steps)
+
+def _assert_bt_variants_reasonable(variants):
+    assert isinstance(variants, list)
+    assert 1 <= len(variants) <= 3
+    assert all(isinstance(v, str) and v.strip() for v in variants)
+    for i, v in enumerate(variants):
+        print(f"  Variant {i+1}: {len(v.split())} words, {len(v)} chars")
+
+
+
+# Use new combined operator modules
+from ea.back_translation_operators import (
+    BackTranslationHIOperator,
+    BackTranslationFROperator,
+    BackTranslationDEOperator,
+    BackTranslationJAOperator,
+    BackTranslationZHOperator,
+)
+from ea.llm_back_translation_operators import (
+    LLMBackTranslationHIOperator,
+    LLMBackTranslationFROperator,
+    LLMBackTranslationDEOperator,
+    LLMBackTranslationJAOperator,
+    LLMBackTranslationZHOperator,
+)
+
+LANGUAGES = [
+    {"name": "hindi", "classic": BackTranslationHIOperator, "llm": LLMBackTranslationHIOperator},
+    {"name": "french", "classic": BackTranslationFROperator, "llm": LLMBackTranslationFROperator},
+    {"name": "german", "classic": BackTranslationDEOperator, "llm": LLMBackTranslationDEOperator},
+    {"name": "japanese", "classic": BackTranslationJAOperator, "llm": LLMBackTranslationJAOperator},
+    {"name": "chinese", "classic": BackTranslationZHOperator, "llm": LLMBackTranslationZHOperator},
+]
+
+PROMPTS = [
+    ("25_words", _BASE_25, 25),
+    ("100_words", _BASE_100, 46),
+    ("200_words", _BASE_200, 51),
+]
+
+import importlib
 
 class TestBackTranslationOperators:
-    """Test class for back-translation operators."""
-    
-    def setup_method(self):
-        """Setup test environment."""
-        self.test_prompt = "Write a story about a brave knight who faces adversity."
-        
-    def test_helsinki_nlp_back_translation(self):
-        """Test Helsinki-NLP model-based back-translation operators."""
-        print("\nTesting Helsinki-NLP Back-Translation Operators:")
-        print("-" * 45)
-        
-        # Test French back-translation
-        try:
-            from ea.back_translation_french import BackTranslationFROperator
-            operator = BackTranslationFROperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            assert len(variants) <= 3
-            assert all(isinstance(variant, str) for variant in variants)
-            
-            print(f"S BackTranslationFROperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ BackTranslationFROperator: Model not available - {e}")
-        
-        # Test German back-translation
-        try:
-            from ea.back_translation_german import BackTranslationDEOperator
-            operator = BackTranslationDEOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            assert len(variants) <= 3
-            assert all(isinstance(variant, str) for variant in variants)
-            
-            print(f"S BackTranslationDEOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ BackTranslationDEOperator: Model not available - {e}")
-        
-        # Test Japanese back-translation
-        try:
-            from ea.back_translation_japanese import BackTranslationJAOperator
-            operator = BackTranslationJAOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            assert len(variants) <= 3
-            assert all(isinstance(variant, str) for variant in variants)
-            
-            print(f"S BackTranslationJAOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ BackTranslationJAOperator: Model not available - {e}")
-        
-        # Test Chinese back-translation
-        try:
-            from ea.back_translation_chinese import BackTranslationZHOperator
-            operator = BackTranslationZHOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            assert len(variants) <= 3
-            assert all(isinstance(variant, str) for variant in variants)
-            
-            print(f"S BackTranslationZHOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ BackTranslationZHOperator: Model not available - {e}")
-        
-        # Test Hindi back-translation
-        try:
-            from ea.back_translation_hindi import BackTranslationHIOperator
-            operator = BackTranslationHIOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            assert len(variants) <= 3
-            assert all(isinstance(variant, str) for variant in variants)
-            
-            print(f"S BackTranslationHIOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ BackTranslationHIOperator: Model not available - {e}")
-    
-    def test_llma_back_translation(self):
-        """Test LLaMA-based back-translation operators."""
-        print("\nTesting LLaMA Back-Translation Operators:")
-        print("-" * 40)
-        
-        # Test French LLaMA back-translation
-        try:
-            from ea.llm_back_translation_french import LLMBackTranslationFROperator
-            operator = LLMBackTranslationFROperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            assert len(variants) <= 3
-            assert all(isinstance(variant, str) for variant in variants)
-            
-            print(f"S LLMBackTranslationFROperator: Generated {len(variants)} variants")
-            for i, variant in enumerate(variants, 1):
-                print(f"  {i}. {variant[:60]}...")
-        except Exception as e:
-            print(f"⚠ LLMBackTranslationFROperator: Generator not available - {e}")
-        
-        # Test German LLaMA back-translation
-        try:
-            from ea.llm_back_translation_german import LLMBackTranslationDEOperator
-            operator = LLMBackTranslationDEOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            
-            print(f"S LLMBackTranslationDEOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ LLMBackTranslationDEOperator: Generator not available - {e}")
-        
-        # Test Japanese LLaMA back-translation
-        try:
-            from ea.llm_back_translation_japanese import LLMBackTranslationJAOperator
-            operator = LLMBackTranslationJAOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            
-            print(f"S LLMBackTranslationJAOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ LLMBackTranslationJAOperator: Generator not available - {e}")
-        
-        # Test Chinese LLaMA back-translation
-        try:
-            from ea.llm_back_translation_chinese import LLMBackTranslationZHOperator
-            operator = LLMBackTranslationZHOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            
-            print(f"S LLMBackTranslationZHOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ LLMBackTranslationZHOperator: Generator not available - {e}")
-        
-        # Test Hindi LLaMA back-translation
-        try:
-            from ea.llm_back_translation_hindi import LLMBackTranslationHIOperator
-            operator = LLMBackTranslationHIOperator()
-            variants = operator.apply(self.test_prompt)
-            
-            assert isinstance(variants, list)
-            assert len(variants) >= 1
-            
-            print(f"✓ LLMBackTranslationHIOperator: Generated {len(variants)} variants")
-        except Exception as e:
-            print(f"⚠ LLMBackTranslationHIOperator: Generator not available - {e}")
-    
-    def test_operator_inheritance(self):
-        """Test that operators inherit correctly from base classes."""
-        from ea.base_operators import _GenericBackTranslationOperator, _GenericLLMBackTranslationOperator
-        
-        # Test that Helsinki-NLP operators inherit from _GenericBackTranslationOperator
-        from ea.back_translation_french import BackTranslationFROperator
-        operator = BackTranslationFROperator()
-        assert isinstance(operator, _GenericBackTranslationOperator)
-        assert hasattr(operator, 'en_xx')
-        assert hasattr(operator, 'xx_en')
-        
-        # Test that LLaMA operators inherit from _GenericLLMBackTranslationOperator
-        from ea.llm_back_translation_french import LLMBackTranslationFROperator
-        llma_operator = LLMBackTranslationFROperator()
-        assert isinstance(llma_operator, _GenericLLMBackTranslationOperator)
-        assert hasattr(llma_operator, 'generator')
-        assert hasattr(llma_operator, 'target_lang')
-        
-        print("Operator inheritance: PASSED")
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("prompt_name,base_text,word_count", PROMPTS)
+    def test_classic_backtranslation(self, lang, prompt_name, base_text, word_count):
+        Operator = lang["classic"]
+        prompt = _build_prompt(base_text, word_count)
+        operator = Operator()
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps(f"{prompt_name}", lang["name"], prompt, operator, variants)
+        _assert_bt_variants_reasonable(variants)
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("prompt_name,base_text,word_count", PROMPTS)
+    def test_llm_backtranslation(self, lang, prompt_name, base_text, word_count):
+        Operator = lang["llm"]
+        prompt = _build_prompt(base_text, word_count)
+        operator = Operator()
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps(f"{prompt_name}", f"llm_{lang['name']}", prompt, operator, variants)
+        _assert_bt_variants_reasonable(variants)
 
 
-def run_back_translation_tests():
-    """Run all back-translation operator tests and print results."""
-    print("Testing Back-Translation Operators")
-    print("=" * 50)
-    
-    test_instance = TestBackTranslationOperators()
-    test_instance.setup_method()
-    
-    tests = [
-        ("Helsinki-NLP Models", test_instance.test_helsinki_nlp_back_translation),
-        ("LLaMA Models", test_instance.test_llma_back_translation),
-        ("Inheritance", test_instance.test_operator_inheritance),
-    ]
-    
-    passed = 0
-    total = len(tests)
-    
-    for test_name, test_func in tests:
-        print(f"\nBack-Translation {test_name}:")
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    def test_empty_input(self, lang, otype):
+        Operator = lang[otype]
+        operator = Operator()
+        prompt = ""
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("empty", f"{otype}_{lang['name']}", prompt, operator, variants)
+        assert variants == [""]
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    def test_whitespace_input(self, lang, otype):
+        Operator = lang[otype]
+        operator = Operator()
+        prompt = "   \t\n   "
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("whitespace", f"{otype}_{lang['name']}", prompt, operator, variants)
+        assert all(v.strip() == "" for v in variants)
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    def test_non_english_input(self, lang, otype):
+        Operator = lang[otype]
+        operator = Operator()
+        prompt = "これは日本語のテキストです。"
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("non_english", f"{otype}_{lang['name']}", prompt, operator, variants)
+        assert isinstance(variants, list)
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    def test_repeated_words(self, lang, otype):
+        Operator = lang[otype]
+        operator = Operator()
+        prompt = "good good good good"
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("repeated", f"{otype}_{lang['name']}", prompt, operator, variants)
+        assert any("good" in v for v in variants)
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    def test_long_text(self, lang, otype):
+        Operator = lang[otype]
+        operator = Operator()
+        prompt = "This is a long text. " * 50
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("long_text", f"{otype}_{lang['name']}", prompt, operator, variants)
+        assert isinstance(variants, list)
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    def test_model_unavailable(self, lang, monkeypatch):
+        # Only applies to classic
+        Operator = lang["classic"]
+        def broken_init(self, *a, **kw):
+            self.en_xx = None
+            self.xx_en = None
+        monkeypatch.setattr(Operator, "__init__", broken_init)
+        operator = Operator()
+        prompt = "Hello world"
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("fail_model", lang["name"], prompt, operator, variants)
+        assert variants == [prompt]
+
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    def test_translation_error(self, lang, monkeypatch):
+        # Only applies to classic
+        Operator = lang["classic"]
+        operator = Operator()
+        def broken_apply(self, text):
+            raise RuntimeError("Simulated translation failure")
+        monkeypatch.setattr(operator, "apply", broken_apply.__get__(operator))
+        prompt = "Hello world"
         try:
-            test_func()
-            print(f"S {test_name}: PASSED")
-            passed += 1
+            variants = operator.apply(prompt)
         except Exception as e:
-            print(f"✗ {test_name}: FAILED - {e}")
-    
-    print(f"\nBack-Translation Tests: {passed}/{total} passed")
-    return passed == total
+            print(f"[FAILURE] Caught expected error: {e}")
+            variants = [prompt]
+        _print_and_save_bt_steps("fail_translate", lang["name"], prompt, operator, variants)
+        assert variants == [prompt]
 
-
-if __name__ == "__main__":
-    success = run_back_translation_tests()
-    sys.exit(0 if success else 1)
+    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
+    def test_llm_generator_failure(self, lang, monkeypatch):
+        # Only applies to LLM
+        Operator = lang["llm"]
+        operator = Operator()
+        # Patch generator.translate to raise error
+        class DummyGen:
+            def translate(self, *a, **k):
+                raise RuntimeError("Simulated generator failure")
+        operator.generator = DummyGen()
+        prompt = "Hello world"
+        variants = operator.apply(prompt)
+        _print_and_save_bt_steps("fail_llm_generator", f"llm_{lang['name']}", prompt, operator, variants)
+        assert variants == [prompt]

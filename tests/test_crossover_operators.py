@@ -31,11 +31,11 @@ class TestCrossoverOperators:
             "How does magic work?"
         ]
         
-    def test_one_point_crossover(self):
-        """Test one-point crossover operator."""
-        from ea.one_point_crossover import OnePointCrossover
+    def test_point_crossover(self):
+        """Test point crossover operator."""
+        from ea.point_crossover import PointCrossover
         
-        operator = OnePointCrossover()
+        operator = PointCrossover()
         
         variants = operator.apply(self.parent_prompts)
         
@@ -46,7 +46,7 @@ class TestCrossoverOperators:
         
         # Check that variants contain parts from both parents
         # (This is a basic check - more sophisticated verification would be complex)
-        print(f"OnePointCrossover: Generated {len(variants)} variants")
+        print(f"PointCrossover: Generated {len(variants)} variants")
         for i, variant in enumerate(variants, 1):
             print(f"  {i}. {variant[:80]}...")
     
@@ -84,11 +84,11 @@ class TestCrossoverOperators:
         for i, variant in enumerate(variants, 1):
             print(f"  {i}. {variant[:80]}...")
     
-    def test_one_point_crossover_simple(self):
-        """Test one-point crossover with simpler prompts."""
-        from ea.one_point_crossover import OnePointCrossover
+    def test_point_crossover_simple(self):
+        """Test point crossover with simpler prompts."""
+        from ea.point_crossover import PointCrossover
         
-        operator = OnePointCrossover()
+        operator = PointCrossover()
         
         variants = operator.apply(self.simple_prompts)
         
@@ -97,15 +97,15 @@ class TestCrossoverOperators:
         assert len(variants) <= 3  # Should be limited to 3
         assert all(isinstance(variant, str) for variant in variants)
         
-        print(f"OnePointCrossover (simple): Generated {len(variants)} variants")
+        print(f"PointCrossover (simple): Generated {len(variants)} variants")
         for i, variant in enumerate(variants, 1):
             print(f"  {i}. {variant[:80]}...")
     
     def test_operator_error_handling(self):
         """Test error handling in crossover operators."""
-        from ea.one_point_crossover import OnePointCrossover
+        from ea.point_crossover import PointCrossover
         
-        operator = OnePointCrossover()
+        operator = PointCrossover()
         
         # Test with insufficient parents
         variants = operator.apply(["Only one parent"])
@@ -132,10 +132,10 @@ def run_crossover_tests():
     test_instance.setup_method()
     
     tests = [
-        ("OnePointCrossover", test_instance.test_one_point_crossover),
+        ("PointCrossover", test_instance.test_point_crossover),
         ("SemanticSimilarityCrossover", test_instance.test_semantic_similarity_crossover),
         ("InstructionPreservingCrossover", test_instance.test_instruction_preserving_crossover),
-        ("OnePointCrossoverSimple", test_instance.test_one_point_crossover_simple),
+        ("PointCrossoverSimple", test_instance.test_point_crossover_simple),
         ("ErrorHandling", test_instance.test_operator_error_handling),
     ]
     

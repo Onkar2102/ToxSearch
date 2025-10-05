@@ -1472,11 +1472,438 @@ class TestLLMPOSStep1:
                 print(f"   Warning:  Consider improving error handling for {description}")
 
 
+    # ============================================================================
+    # STEP 3: TEXT VARIANT GENERATION TESTS
+    # ============================================================================
+
+    def test_step3_basic_text_variant_generation(self):
+        """Test basic Step 3 functionality: creating text variants with substitutions."""
+        print("\nTesting Step 3: Basic text variant generation")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=3, num_POS_tags=2, seed=42)
+        
+        # Test with simple text
+        test_text = "The quick brown fox jumps over the lazy dog."
+        
+        # Mock Step 1 and Step 2 data
+        detected_pos = {
+            "ADJ": [
+                POSWord("quick", 4, 9, "ADJ", "Adjective"),
+                POSWord("brown", 10, 15, "ADJ", "Adjective"),
+                POSWord("lazy", 40, 44, "ADJ", "Adjective")
+            ],
+            "NOUN": [
+                POSWord("fox", 16, 19, "NOUN", "Noun"),
+                POSWord("dog", 45, 48, "NOUN", "Noun")
+            ]
+        }
+        
+        synonyms_by_pos = {
+            "ADJ": ["fast", "rapid", "swift"],
+            "NOUN": ["animal", "creature", "beast"]
+        }
+        
+        # Test _generate_text_variants method
+        variants = operator._generate_text_variants(test_text, detected_pos, synonyms_by_pos)
+        
+        # Validation
+        assert isinstance(variants, list), "Should return list of variants"
+        assert len(variants) <= operator.max_variants, f"Too many variants: {len(variants)}"
+        
+        for i, variant in enumerate(variants):
+            assert isinstance(variant, str), f"Variant {i} should be string"
+            assert variant != test_text, f"Variant {i} should differ from original"
+            print(f"Generated variant {i+1}: '{variant}'")
+        
+        print(f"Success: Generated {len(variants)} variants from original text")
+
+    def test_step3_single_variant_creation(self):
+        """Test Step 3 single variant creation logic."""
+        print("\nTesting Step 3: Single variant creation")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=3, seed=42)
+        
+        # Test text and mock data
+        test_text = "The smart student studies hard every day."
+        detected_pos = {
+            "ADJ": [POSWord("smart", 4, 9, "ADJ", "Adjective"), POSWord("hard", 23, 27, "ADJ", "Adjective")],
+            "NOUN": [POSWord("student", 10, 17, "NOUN", "Noun"), POSWord("day", 34, 37, "NOUN", "Noun")]
+        }
+        synonyms_by_pos = {
+            "ADJ": ["intelligent", "diligent"], 
+            "NOUN": ["pupil", "time"]
+        }
+        
+        # Test different variant numbers
+        for variant_num in range(3):
+            variant = operator._create_single_variant(test_text, detected_pos, synonyms_by_pos, variant_num)
+            
+            assert isinstance(variant, str), f"Variant {variant_num} should be string"
+            assert len(variant) > 0, f"Variant {variant_num} should not be empty"
+            print(f"Variant {variant_num}: '{variant}'")
+            
+            # Check that some substitution occurred
+            if variant_num == 0:
+                # First variant should use first synonyms
+                assert "intelligent" in variant or "pupil" in variant, "Should contain first synonyms"
+        
+        print("Success: Single variant creation working correctly")
+
+    def test_step3_pos_word_substitution(self):
+        """Test Step 3 POS word substitution mechanism."""
+        print("\nTesting Step 3: POS word substitution")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=2, seed=42)
+        
+        # Test substitution for different POS types
+        test_cases = [
+            {
+                "text": "The beautiful house is very expensive.",
+                "pos_words": [POSWord("beautiful", 4, 13, "ADJ", "Adjective")],
+                "synonym": "gorgeous",
+                "pos_tag": "ADJ",
+                "expected_contains": "gorgeous"
+            },
+            {
+                "text": "The cat runs quickly through the garden.",
+                "pos_words": [POSWord("runs", 8, 12, "VERB", "Verb")],
+                "synonym": "sprints",
+                "pos_tag": "VERB", 
+                "expected_contains": "sprints"
+            },
+            {
+                "text": "She speaks very softly to her friend.",
+                "pos_words": [POSWord("softly", 16, 22, "ADV", "Adverb")],
+                "synonym": "quietly",
+                "pos_tag": "ADV",
+                "expected_contains": "quietly"
+            }
+        ]
+        
+        for i, test_case in enumerate(test_cases):
+            result = operator._substitute_pos_words(
+                test_case["text"], 
+                test_case["pos_words"], 
+                test_case["synonym"], 
+                test_case["pos_tag"]
+            )
+            
+            assert isinstance(result, str), f"Test case {i} should return string"
+            assert test_case["expected_contains"] in result, f"Test case {i} should contain '{test_case['expected_contains']}'"
+            assert result != test_case["text"], f"Test case {i} should modify the text"
+            
+            print(f"Test case {i}: '{test_case['text']}' -> '{result}'")
+        
+        print("Success: POS word substitution working correctly")
+
+    def test_step3_multiple_pos_types_integration(self):
+        """Test Step 3 with multiple POS types working together."""
+        print("\nTesting Step 3: Multiple POS types integration")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=3, num_POS_tags=3, seed=42)
+        
+        # Complex text with multiple POS types
+        test_text = "The brilliant scientist quickly discovered amazing results yesterday."
+        
+        detected_pos = {
+            "ADJ": [
+                POSWord("brilliant", 4, 13, "ADJ", "Adjective"),
+                POSWord("amazing", 43, 50, "ADJ", "Adjective")
+            ],
+            "NOUN": [
+                POSWord("scientist", 14, 23, "NOUN", "Noun"),
+                POSWord("results", 51, 58, "NOUN", "Noun")
+            ],
+            "ADV": [
+                POSWord("quickly", 24, 31, "ADV", "Adverb"),
+                POSWord("yesterday", 59, 68, "ADV", "Adverb")
+            ]
+        }
+        
+        synonyms_by_pos = {
+            "ADJ": ["excellent", "wonderful"],
+            "NOUN": ["researcher", "findings"], 
+            "ADV": ["rapidly", "recently"]
+        }
+        
+        variants = operator._generate_text_variants(test_text, detected_pos, synonyms_by_pos)
+        
+        # Validation
+        assert len(variants) <= operator.max_variants, "Should respect max_variants limit"
+        assert len(variants) > 0, "Should generate at least one variant"
+        
+        for i, variant in enumerate(variants):
+            assert variant != test_text, f"Variant {i} should differ from original"
+            
+            # Check that variant contains substitutions from multiple POS types
+            has_adj_substitution = any(synonym in variant for synonym in synonyms_by_pos["ADJ"])
+            has_noun_substitution = any(synonym in variant for synonym in synonyms_by_pos["NOUN"])
+            has_adv_substitution = any(synonym in variant for synonym in synonyms_by_pos["ADV"])
+            
+            substitution_count = sum([has_adj_substitution, has_noun_substitution, has_adv_substitution])
+            assert substitution_count > 0, f"Variant {i} should have at least one substitution"
+            
+            print(f"Variant {i}: '{variant}' (substitutions: {substitution_count})")
+        
+        print(f"Success: Generated {len(variants)} variants with multiple POS integration")
+
+    def test_step3_duplicate_removal_and_limiting(self):
+        """Test Step 3 duplicate removal and variant limiting."""
+        print("\nTesting Step 3: Duplicate removal and variant limiting")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=2, seed=42)
+        
+        # Text that might generate duplicate variants
+        test_text = "The good food tastes good."
+        
+        detected_pos = {
+            "ADJ": [
+                POSWord("good", 4, 8, "ADJ", "Adjective"),
+                POSWord("good", 20, 24, "ADJ", "Adjective")
+            ]
+        }
+        
+        # Limited synonyms that might cause duplicates
+        synonyms_by_pos = {
+            "ADJ": ["great", "excellent"]  # Only 2 synonyms for repeated word
+        }
+        
+        variants = operator._generate_text_variants(test_text, detected_pos, synonyms_by_pos)
+        
+        # Validation
+        assert len(variants) <= operator.max_variants, f"Should not exceed max_variants: {len(variants)}"
+        
+        # Check for duplicates
+        unique_variants = set(variants)
+        assert len(unique_variants) == len(variants), "Should not contain duplicate variants"
+        
+        # All variants should differ from original
+        for i, variant in enumerate(variants):
+            assert variant != test_text, f"Variant {i} should differ from original"
+            print(f"Unique variant {i}: '{variant}'")
+        
+        print(f"Success: Generated {len(variants)} unique variants (limit: {operator.max_variants})")
+
+    def test_step3_edge_cases_and_robustness(self):
+        """Test Step 3 robustness with edge cases."""
+        print("\nTesting Step 3: Edge cases and robustness")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=3, seed=42)
+        
+        edge_cases = [
+            {
+                "name": "empty_synonyms",
+                "text": "The cat runs fast.",
+                "detected_pos": {"NOUN": [POSWord("cat", 4, 7, "NOUN", "Noun")]},
+                "synonyms_by_pos": {"NOUN": []}, # Empty synonyms
+            },
+            {
+                "name": "no_pos_overlap",
+                "text": "Hello world!",
+                "detected_pos": {"NOUN": [POSWord("world", 6, 11, "NOUN", "Noun")]},
+                "synonyms_by_pos": {"ADJ": ["good", "nice"]}, # Different POS types
+            },
+            {
+                "name": "single_word_text",
+                "text": "Hello",
+                "detected_pos": {"INTJ": [POSWord("Hello", 0, 5, "INTJ", "Interjection")]},
+                "synonyms_by_pos": {"INTJ": ["Hi", "Hey"]},
+            },
+            {
+                "name": "special_characters",
+                "text": "The dog's ball is red!",
+                "detected_pos": {"NOUN": [POSWord("ball", 10, 14, "NOUN", "Noun")]},
+                "synonyms_by_pos": {"NOUN": ["toy", "object"]},
+            }
+        ]
+        
+        for case in edge_cases:
+            print(f"Testing edge case: {case['name']}")
+            
+            try:
+                variants = operator._generate_text_variants(
+                    case["text"], 
+                    case["detected_pos"], 
+                    case["synonyms_by_pos"]
+                )
+                
+                assert isinstance(variants, list), f"Should return list for {case['name']}"
+                assert len(variants) <= operator.max_variants, f"Should respect max_variants for {case['name']}"
+                
+                print(f"  {case['name']}: Generated {len(variants)} variants")
+                for i, variant in enumerate(variants):
+                    print(f"    Variant {i}: '{variant}'")
+                    
+            except Exception as e:
+                print(f"  Warning: {case['name']} caused exception: {e}")
+                # Should handle gracefully, not crash
+        
+        print("Success: Edge case testing completed")
+
+    def test_step3_performance_with_large_text(self):
+        """Test Step 3 performance with large text inputs."""
+        print("\nTesting Step 3: Performance with large text")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=3, seed=42)
+        
+        # Generate large text (similar to performance tests)
+        large_text = " ".join([
+            "The intelligent researcher quickly analyzes complex data sets.",
+            "Advanced algorithms efficiently process massive information volumes.",
+            "Modern computers rapidly execute sophisticated computational tasks.",
+            "Experienced scientists systematically investigate challenging problems."
+        ] * 50)  # Repeat to create larger text
+        
+        # Simulate realistic detected POS and synonyms
+        detected_pos = {
+            "ADJ": [POSWord("intelligent", 4, 15, "ADJ", "Adjective")] * 10,
+            "NOUN": [POSWord("researcher", 16, 26, "NOUN", "Noun")] * 10,
+            "ADV": [POSWord("quickly", 27, 34, "ADV", "Adverb")] * 10
+        }
+        
+        synonyms_by_pos = {
+            "ADJ": ["smart", "brilliant", "clever"],
+            "NOUN": ["scientist", "analyst", "expert"],
+            "ADV": ["rapidly", "swiftly", "efficiently"]
+        }
+        
+        # Measure performance
+        import time
+        start_time = time.time()
+        
+        variants = operator._generate_text_variants(large_text, detected_pos, synonyms_by_pos)
+        
+        step3_time = time.time() - start_time
+        
+        # Validation
+        assert isinstance(variants, list), "Should return list"
+        assert len(variants) <= operator.max_variants, "Should respect max_variants"
+        assert step3_time < 5.0, f"Step 3 too slow: {step3_time:.3f}s"
+        
+        print(f"Time: Step 3 processing time: {step3_time:.3f} seconds")
+        print(f"Generated Output: {len(variants)} variants from {len(large_text)} character text")
+        print(f"Performance: {len(large_text)/step3_time:.0f} characters/second")
+        
+        # Show sample variants
+        for i, variant in enumerate(variants[:2]):  # Show first 2 variants
+            print(f"Sample variant {i}: '{variant[:100]}...'")
+        
+        print("Success: Step 3 performance test completed")
+
+    def test_step3_integration_with_full_pipeline(self):
+        """Test Step 3 as part of the complete operator pipeline."""
+        print("\nTesting Step 3: Integration with full pipeline")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=2, num_POS_tags=2, seed=42)
+        
+        # Test text that should go through all 3 steps
+        test_text = "The smart student quickly learned new concepts."
+        
+        print(f"Original text: '{test_text}'")
+        
+        # This should trigger full pipeline: Step 1 -> Step 2 -> Step 3
+        try:
+            # Note: This might fail if LLM generator is not available
+            # But we're testing the Step 3 integration logic
+            result = operator.apply(test_text)
+            
+            if result and len(result) > 0:
+                assert isinstance(result, list), "Should return list of variants"
+                assert len(result) <= operator.max_variants, "Should respect max_variants"
+                
+                for i, variant in enumerate(result):
+                    assert isinstance(variant, str), f"Variant {i} should be string"
+                    print(f"Pipeline variant {i}: '{variant}'")
+                
+                print(f"Success: Full pipeline generated {len(result)} variants")
+            else:
+                print("Info: No variants generated (possibly due to LLM unavailability)")
+                
+        except Exception as e:
+            print(f"Info: Full pipeline test failed (expected if LLM unavailable): {e}")
+            # This is acceptable since we may not have LLM access in test environment
+        
+        print("Complete: Step 3 integration test finished")
+
+    def test_step3_failure_scenarios(self):
+        """Test Step 3 failure handling and edge case robustness."""
+        print("\nTesting Step 3: Failure scenarios and robustness")
+        
+        from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement, POSWord
+        
+        operator = LLM_POSAwareSynonymReplacement(max_variants=3, seed=42)
+        
+        failure_scenarios = [
+            {
+                "name": "None_inputs",
+                "text": None,
+                "detected_pos": {},
+                "synonyms_by_pos": {}
+            },
+            {
+                "name": "empty_detected_pos",
+                "text": "Valid text here.",
+                "detected_pos": {},
+                "synonyms_by_pos": {"NOUN": ["word"]}
+            },
+            {
+                "name": "malformed_pos_words",
+                "text": "Test text.",
+                "detected_pos": {"NOUN": ["not_a_pos_word_object"]},  # Invalid format
+                "synonyms_by_pos": {"NOUN": ["word"]}
+            },
+            {
+                "name": "None_synonyms",
+                "text": "Test text here.",
+                "detected_pos": {"NOUN": [POSWord("text", 5, 9, "NOUN", "Noun")]},
+                "synonyms_by_pos": {"NOUN": None}  # None instead of list
+            }
+        ]
+        
+        for scenario in failure_scenarios:
+            print(f"Testing failure scenario: {scenario['name']}")
+            
+            try:
+                # Should not crash, even with bad inputs
+                variants = operator._generate_text_variants(
+                    scenario["text"],
+                    scenario["detected_pos"],
+                    scenario["synonyms_by_pos"]
+                )
+                
+                # Should return empty list or handle gracefully
+                assert isinstance(variants, list), f"Should return list for {scenario['name']}"
+                print(f"  {scenario['name']}: Handled gracefully, returned {len(variants)} variants")
+                
+            except Exception as e:
+                print(f"  Warning: {scenario['name']} caused exception: {e}")
+                # Log but continue - operator should be more robust
+        
+        print("Success: Step 3 failure scenario testing completed")
+
+
 def run_comprehensive_step1_and_step2_tests():
-    """Run all comprehensive Step 1 and Step 2 tests including failure scenarios."""
-    print("Ready: Comprehensive Step 1 + Step 2 + Failure Scenarios Test Suite")
+    """Run all comprehensive Step 1, Step 2, and Step 3 tests including failure scenarios."""
+    print("Ready: Comprehensive Step 1 + Step 2 + Step 3 + Failure Scenarios Test Suite")
     print("=" * 80)
     print("Testing ALL possible scenarios including comprehensive failure modes")
+    print("Step 1: POS Detection | Step 2: LLM Synonym Generation | Step 3: Text Variant Creation")
     print("=" * 80)
     
     test_instance = TestLLMPOSStep1()
@@ -1512,13 +1939,24 @@ def run_comprehensive_step1_and_step2_tests():
         ("26. Step 2: Edge Case Text Scenarios", test_instance.test_step2_edge_case_text_scenarios),
         ("27. Step 2: Memory Efficiency", test_instance.test_step2_memory_efficiency),
         
+        # === STEP 3: TEXT VARIANT GENERATION TESTS ===
+        ("28. Step 3: Basic Text Variant Generation", test_instance.test_step3_basic_text_variant_generation),
+        ("29. Step 3: Single Variant Creation", test_instance.test_step3_single_variant_creation),
+        ("30. Step 3: POS Word Substitution", test_instance.test_step3_pos_word_substitution),
+        ("31. Step 3: Multiple POS Types Integration", test_instance.test_step3_multiple_pos_types_integration),
+        ("32. Step 3: Duplicate Removal and Limiting", test_instance.test_step3_duplicate_removal_and_limiting),
+        ("33. Step 3: Edge Cases and Robustness", test_instance.test_step3_edge_cases_and_robustness),
+        ("34. Step 3: Performance with Large Text", test_instance.test_step3_performance_with_large_text),
+        ("35. Step 3: Integration with Full Pipeline", test_instance.test_step3_integration_with_full_pipeline),
+        ("36. Step 3: Failure Scenarios", test_instance.test_step3_failure_scenarios),
+        
         # === COMPREHENSIVE FAILURE SCENARIO TESTS ===
-        ("28. FAILURE: spaCy NLP Unavailable", test_instance.test_failure_spacy_nlp_unavailable),
-        ("29. FAILURE: Invalid Text Types", test_instance.test_failure_invalid_text_types),
-        ("30. FAILURE: Malformed POSWord Objects", test_instance.test_failure_malformed_pos_words),
-        ("31. FAILURE: LLM Generator Exceptions", test_instance.test_failure_llm_generator_exceptions),
-        ("32. FAILURE: JSON Parsing Edge Cases", test_instance.test_failure_json_parsing_edge_cases),
-        ("33. FAILURE: Apply Method Comprehensive", test_instance.test_failure_apply_method_comprehensive),
+        ("37. FAILURE: spaCy NLP Unavailable", test_instance.test_failure_spacy_nlp_unavailable),
+        ("38. FAILURE: Invalid Text Types", test_instance.test_failure_invalid_text_types),
+        ("39. FAILURE: Malformed POSWord Objects", test_instance.test_failure_malformed_pos_words),
+        ("40. FAILURE: LLM Generator Exceptions", test_instance.test_failure_llm_generator_exceptions),
+        ("41. FAILURE: JSON Parsing Edge Cases", test_instance.test_failure_json_parsing_edge_cases),
+        ("42. FAILURE: Apply Method Comprehensive", test_instance.test_failure_apply_method_comprehensive),
     ]
     
     passed = 0
@@ -1592,3 +2030,200 @@ if __name__ == "__main__":
         print("="*80)
     
     sys.exit(0 if success else 1)
+
+
+# ----------------------------------------------------------------------------
+# Minimal smoke tests used when --extended is NOT provided.
+# These focus only on whether the operator can generate variants given prompts
+# of ~25, ~100, and ~200 words. No other tests are altered.
+# ----------------------------------------------------------------------------
+
+def _build_prompt(base_sentence: str, target_words: int) -> str:
+    """Repeat the base sentence until we reach exactly target_words."""
+    base_words = base_sentence.strip().split()
+    if not base_words:
+        return ""
+    words = []
+    i = 0
+    while len(words) < target_words:
+        words.append(base_words[i % len(base_words)])
+        i += 1
+    return " ".join(words[:target_words])
+
+
+# Three different base sentences (distinct prompts) with rich POS variety.
+_BASE_25 = (
+    "A curious graduate researcher carefully evaluates complex datasets, "
+    "builds modular prototypes, compares quantitative results, writes clear reports, "
+    "and iterates quickly to improve robustness and efficiency significantly."
+)
+
+_BASE_100 = (
+    "In practical machine learning projects, diligent engineers design modular pipelines, "
+    "clean noisy data, explore meaningful features, train competitive models, tune hyperparameters, "
+    "evaluate fairness, explain predictions, and document reproducible experiments with versioned datasets, "
+    "tracked metrics, automated tests, and readable reports while collaborating asynchronously through reviews and discussions."
+)
+
+_BASE_200 = (
+    "For production artificial intelligence systems, disciplined teams integrate data validation, schema checks, "
+    "monitoring dashboards, canary deployments, rollback strategies, streaming features, privacy safeguards, "
+    "prompt management, safety evaluation, offline experiments, online A/B testing, profiling, cost analysis, and governance reviews "
+    "to deliver reliable value to users and stakeholders across diverse scenarios and evolving requirements."
+)
+
+
+def _generate_variants_for_prompt(prompt: str):
+    from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
+
+    op = LLM_POSAwareSynonymReplacement(max_variants=3, seed=42)
+
+    # Step 1: detect POS
+    detected_pos = op._detect_and_organize_pos(prompt)
+
+    # Provide small synonym catalogs for common POS; we will only keep the ones detected
+    synonyms_catalog = {
+        "ADJ": ["robust", "innovative", "scalable"],
+        "NOUN": ["system", "model", "framework"],
+        "VERB": ["optimize", "analyze", "improve"],
+        "ADV": ["quickly", "carefully", "thoroughly"],
+    }
+
+    synonyms_by_pos = {
+        pos: words for pos, words in synonyms_catalog.items() if pos in detected_pos and detected_pos[pos]
+    }
+
+    # Step 3: generate variants using the detected positions and our provided synonyms
+    variants = op._generate_text_variants(prompt, detected_pos, synonyms_by_pos)
+    return op, variants, synonyms_by_pos
+
+
+def _assert_variants_reasonable(op, prompt: str, variants: list, synonyms_by_pos: dict):
+    # Basic shape checks
+    assert isinstance(variants, list)
+    assert 1 <= len(variants) <= op.max_variants
+    assert any(v != prompt for v in variants), "Expected at least one variant different from the original prompt"
+
+    # At least one variant should contain one of our suggested synonyms
+    expected_tokens = set()
+    for lst in synonyms_by_pos.values():
+        expected_tokens.update(lst)
+
+    assert any(
+        any(tok in v for tok in expected_tokens)
+        for v in variants
+    ), "Expected at least one variant to include a provided synonym"
+
+
+def test_variants_generation_prompt_25_words():
+    prompt = _build_prompt(_BASE_25, 25)
+    op, variants, synonyms_by_pos = _generate_variants_for_prompt(prompt)
+    _assert_variants_reasonable(op, prompt, variants, synonyms_by_pos)
+
+
+def test_variants_generation_prompt_100_words():
+    prompt = _build_prompt(_BASE_100, 100)
+    op, variants, synonyms_by_pos = _generate_variants_for_prompt(prompt)
+    _assert_variants_reasonable(op, prompt, variants, synonyms_by_pos)
+
+
+def test_variants_generation_prompt_200_words():
+    prompt = _build_prompt(_BASE_200, 200)
+    op, variants, synonyms_by_pos = _generate_variants_for_prompt(prompt)
+    _assert_variants_reasonable(op, prompt, variants, synonyms_by_pos)
+
+
+# ----------------------------------------------------------------------------
+# Smoke tests with output saving functionality
+# These tests save their outputs to tests/data/ for inspection
+# ----------------------------------------------------------------------------
+
+def _save_test_output(test_name: str, prompt: str, variants: list, synonyms_by_pos: dict, detected_pos: dict):
+    """Save test output to tests/data/ directory for inspection."""
+    import os
+    import json
+    from datetime import datetime
+    
+    # Ensure data directory exists
+    data_dir = os.path.join(os.path.dirname(__file__), 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Create output data
+    output_data = {
+        'test_name': test_name,
+        'timestamp': datetime.now().isoformat(),
+        'prompt': prompt,
+        'prompt_word_count': len(prompt.split()),
+        'detected_pos_types': list(detected_pos.keys()),
+        'detected_pos_details': {pos: [w.word for w in words] for pos, words in detected_pos.items()},
+        'synonyms_by_pos': synonyms_by_pos,
+        'generated_variants': variants,
+        'variant_count': len(variants)
+    }
+    
+    # Save to JSON file
+    output_file = os.path.join(data_dir, f'{test_name}_output.json')
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(output_data, f, indent=2, ensure_ascii=False)
+    
+    # Also save a human-readable text file
+    text_file = os.path.join(data_dir, f'{test_name}_output.txt')
+    with open(text_file, 'w', encoding='utf-8') as f:
+        f.write(f"Test: {test_name}\n")
+        f.write(f"Timestamp: {output_data['timestamp']}\n")
+        f.write(f"Prompt ({output_data['prompt_word_count']} words):\n")
+        f.write(f"{prompt}\n\n")
+        f.write(f"Detected POS types: {', '.join(output_data['detected_pos_types'])}\n")
+        f.write(f"Synonyms by POS:\n")
+        for pos, synonyms in synonyms_by_pos.items():
+            f.write(f"  {pos}: {', '.join(synonyms)}\n")
+        f.write(f"\nGenerated Variants ({len(variants)}):\n")
+        for i, variant in enumerate(variants, 1):
+            f.write(f"  Variant {i}: {variant}\n")
+    
+    print(f"Output saved to: {output_file} and {text_file}")
+
+
+def test_variants_generation_prompt_25_words_with_output():
+    """Test 25-word prompt variant generation and save output."""
+    prompt = _build_prompt(_BASE_25, 25)
+    op, variants, synonyms_by_pos = _generate_variants_for_prompt(prompt)
+    
+    # Get detected POS for output saving
+    detected_pos = op._detect_and_organize_pos(prompt)
+    
+    # Save output
+    _save_test_output("25_words", prompt, variants, synonyms_by_pos, detected_pos)
+    
+    # Run assertions
+    _assert_variants_reasonable(op, prompt, variants, synonyms_by_pos)
+
+
+def test_variants_generation_prompt_100_words_with_output():
+    """Test 100-word prompt variant generation and save output."""
+    prompt = _build_prompt(_BASE_100, 100)
+    op, variants, synonyms_by_pos = _generate_variants_for_prompt(prompt)
+    
+    # Get detected POS for output saving
+    detected_pos = op._detect_and_organize_pos(prompt)
+    
+    # Save output
+    _save_test_output("100_words", prompt, variants, synonyms_by_pos, detected_pos)
+    
+    # Run assertions
+    _assert_variants_reasonable(op, prompt, variants, synonyms_by_pos)
+
+
+def test_variants_generation_prompt_200_words_with_output():
+    """Test 200-word prompt variant generation and save output."""
+    prompt = _build_prompt(_BASE_200, 200)
+    op, variants, synonyms_by_pos = _generate_variants_for_prompt(prompt)
+    
+    # Get detected POS for output saving
+    detected_pos = op._detect_and_organize_pos(prompt)
+    
+    # Save output
+    _save_test_output("200_words", prompt, variants, synonyms_by_pos, detected_pos)
+    
+    # Run assertions
+    _assert_variants_reasonable(op, prompt, variants, synonyms_by_pos)

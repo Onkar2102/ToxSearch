@@ -90,23 +90,16 @@ def get_single_parent_operators(north_star_metric, log_file=None):
     """
     from .pos_aware_synonym_replacement import POSAwareSynonymReplacement
     from .llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
-    from .bert_mlm_operator import BertMLMOperator
+    from .mlm_operator import MLMOperator
     from .llm_paraphrasing_operator import LLMBasedParaphrasingOperator
-    from .back_translation_hindi import BackTranslationHIOperator
-    from .back_translation_french import BackTranslationFROperator
-    from .back_translation_german import BackTranslationDEOperator
-    from .back_translation_japanese import BackTranslationJAOperator
-    from .back_translation_chinese import BackTranslationZHOperator
-    from .llm_back_translation_hindi import LLMBackTranslationHIOperator
-    from .llm_back_translation_french import LLMBackTranslationFROperator
-    from .llm_back_translation_german import LLMBackTranslationDEOperator
-    from .llm_back_translation_japanese import LLMBackTranslationJAOperator
-    from .llm_back_translation_chinese import LLMBackTranslationZHOperator
-    
+    from .back_translation_operators import (
+        BackTranslationHIOperator, BackTranslationFROperator, BackTranslationDEOperator, BackTranslationJAOperator, BackTranslationZHOperator)
+    from .llm_back_translation_operators import (
+        LLMBackTranslationHIOperator, LLMBackTranslationFROperator, LLMBackTranslationDEOperator, LLMBackTranslationJAOperator, LLMBackTranslationZHOperator)
     return [
         POSAwareSynonymReplacement(log_file=log_file),
         LLM_POSAwareSynonymReplacement(log_file=log_file, max_variants=3, num_POS_tags=1),
-        BertMLMOperator(log_file=log_file),
+        MLMOperator(log_file=log_file),
         LLMBasedParaphrasingOperator(north_star_metric, log_file=log_file),
         # Model-based back-translation operators
         BackTranslationHIOperator(log_file=log_file),
@@ -134,7 +127,7 @@ def get_multi_parent_operators(log_file=None):
         
     Returns:
         List[VariationOperator]: List of crossover operators:
-            - OnePointCrossover: Single-point sentence swapping
+            - PointCrossover: Single-point sentence swapping
             - SemanticSimilarityCrossover: Semantic similarity-based crossover
             - InstructionPreservingCrossover: Instruction structure preservation
             
@@ -143,12 +136,12 @@ def get_multi_parent_operators(log_file=None):
         >>> print(f"Found { len(operators)} crossover operators")
         Found 3 crossover operators
     """
-    from .one_point_crossover import OnePointCrossover
+    from .point_crossover import PointCrossover
     from .semantic_similarity_crossover import SemanticSimilarityCrossover
     from .instruction_preserving_crossover import InstructionPreservingCrossover
     
     return [
-        OnePointCrossover(log_file=log_file),
+        PointCrossover(log_file=log_file),
         SemanticSimilarityCrossover(log_file=log_file),
         InstructionPreservingCrossover(log_file=log_file)
     ]

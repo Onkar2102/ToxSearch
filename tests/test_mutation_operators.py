@@ -47,11 +47,11 @@ class TestMutationOperators:
         for i, variant in enumerate(variants, 1):
             print(f"  {i}. {variant[:60]}...")
     
-    def test_bert_mlm_operator(self):
-        """Test BERT MLM operator."""
-        from ea.bert_mlm_operator import BertMLMOperator
+    def test_mlm_operator(self):
+        """Test MLM operator."""
+        from ea.mlm_operator import MLMOperator
         
-        operator = BertMLMOperator()
+        operator = MLMOperator()
         
         variants = operator.apply(self.test_prompt)
         
@@ -60,7 +60,7 @@ class TestMutationOperators:
         assert len(variants) <= 3  # Should be limited to 3
         assert all(isinstance(variant, str) for variant in variants)
         
-        print(f"BertMLMOperator: Generated {len(variants)} variants")
+        print(f"MLMOperator: Generated {len(variants)} variants")
         for i, variant in enumerate(variants, 1):
             print(f"  {i}. {variant[:60]}...")
     
@@ -158,7 +158,7 @@ def run_mutation_tests():
     
     tests = [
         ("POSAwareSynonymReplacement", test_instance.test_pos_aware_synonym_replacement),
-        ("BertMLMOperator", test_instance.test_bert_mlm_operator),
+        ("MLMOperator", test_instance.test_mlm_operator),
         ("LLMBasedParaphrasingOperator", test_instance.test_llm_paraphrasing_operator),
         ("BackTranslationHIOperator", test_instance.test_back_translation_hindi),
         ("LLMBackTranslationFROperator", test_instance.test_llm_back_translation_french),

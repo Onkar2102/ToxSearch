@@ -97,7 +97,7 @@ Comprehensive implementation of mutation and crossover operators.
   - Context-aware replacements
 
 #### **BERT-Based Operators**
-- **`BertMLMOperator`**: BERT masked language model for word replacement
+- **`MLMOperator`**: Masked language model operator for word replacement
   - Uses `bert-base-uncased` model
   - Masked language modeling for word prediction
   - Contextual word replacements
@@ -125,7 +125,7 @@ Comprehensive implementation of mutation and crossover operators.
 ### **Crossover Operators (3)**
 
 #### **Structural Crossover**
-- **`OnePointCrossover`**: Single-point crossover between two prompts
+- **`PointCrossover`**: Single-point crossover between two prompts
   - Random split point selection
   - Preserves prompt structure
   - Simple but effective
@@ -152,13 +152,13 @@ flowchart TD
   
   subgraph "Mutation Operators (13)"
     E1[LLM_POSAwareSynonymReplacement]
-    E2[BertMLMOperator]
+  E2[MLMOperator]
     E3[LLMBasedParaphrasingOperator]
     E4[Back-Translation Operators<br/>5 Languages × 2 Methods = 10]
   end
   
   subgraph "Crossover Operators (3)"
-    F1[OnePointCrossover]
+    F1[PointCrossover]
     F2[SemanticSimilarityCrossover]
     F3[InstructionPreservingCrossover]
   end

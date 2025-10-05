@@ -1,7 +1,7 @@
 """
-one_point_crossover.py
+point_crossover.py
 
-This module contains the one-point crossover operator for the evolutionary algorithm.
+This module contains the point crossover operator for the evolutionary algorithm.
 This crossover operator swaps matching-position sentences between two parent prompts.
 """
 
@@ -19,15 +19,15 @@ from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
 
 
-class OnePointCrossover(VariationOperator):
+class PointCrossover(VariationOperator):
     """
-    One-point crossover operator for prompt sentence swapping.
+    Point crossover operator for prompt sentence swapping.
     
     This crossover operator performs sentence-based crossover between two parent prompts.
     It swaps sequences of sentences at matching positions to create new variants.
     
     Attributes:
-        name (str): Operator name "OnePointCrossover"
+        name (str): Operator name "PointCrossover"
         operator_type (str): "crossover" (multiple parents required)
         description (str): Description of the operator's functionality
         logger: Logger instance for debugging and monitoring
@@ -36,7 +36,7 @@ class OnePointCrossover(VariationOperator):
         apply(parent_texts): Generate crossover variants from parent texts
         
     Example:
-        >>> operator = OnePointCrossover()
+        >>> operator = PointCrossover()
         >>> parents = ["First sentence. Second sentence.", "Third sentence. Fourth sentence."]
         >>> variants = operator.apply(parents)
         >>> print(variants)
@@ -45,7 +45,7 @@ class OnePointCrossover(VariationOperator):
     
     def __init__(self, log_file=None):
         """
-        Initialize the one-point crossover operator.
+        Initialize the point crossover operator.
         
         Args:
             log_file (str, optional): Path to log file for debugging. Defaults to None.
@@ -53,7 +53,7 @@ class OnePointCrossover(VariationOperator):
         Note:
             Uses NLTK sentence tokenization for text analysis.
         """
-        super().__init__("OnePointCrossover", "crossover", "Swaps matching-position sentences between two parents.")
+        super().__init__("PointCrossover", "crossover", "Swaps matching-position sentences between two parents.")
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
 
@@ -78,7 +78,7 @@ class OnePointCrossover(VariationOperator):
             Warning: If insufficient parents provided, logs warning and returns single parent
             
         Example:
-            >>> operator = OnePointCrossover()
+            >>> operator = PointCrossover()
             >>> parents = ["First sentence. Second sentence.", "Third sentence. Fourth sentence."]
             >>> variants = operator.apply(parents)
             >>> print(variants)
@@ -139,4 +139,3 @@ class OnePointCrossover(VariationOperator):
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")
             return parent_texts[:1] if parent_texts else []
-
