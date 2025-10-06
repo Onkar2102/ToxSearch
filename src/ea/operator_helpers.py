@@ -22,6 +22,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from dotenv import load_dotenv
 
 # Get the functions at module level to avoid repeated calls
+
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
 
@@ -48,9 +49,7 @@ def get_generator():
     """
     global _generator
     if _generator is None:
-        # Import here to avoid module-level import issues
         from gne import get_LLaMaTextGenerator
-        # Get the project root directory (where config/ folder is located)
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         config_path = os.path.join(project_root, "config", "modelConfig.yaml")
         LlaMaTextGenerator = get_LLaMaTextGenerator()
@@ -76,38 +75,28 @@ def limit_variants(variants: List[str], max_variants: int = 3) -> List[str]:
     selected_variants = random.sample(variants, max_variants)
     return selected_variants
 
-# Import operator classes for the factory functions
-try:
-    from ea.VariationOperators import VariationOperator
-except Exception:
-    # Fallback for direct module execution without package context
-    from VariationOperators import VariationOperator
+
+from .VariationOperators import VariationOperator
 
 # Import operators dynamically to avoid circular imports
 def get_single_parent_operators(north_star_metric, log_file=None):
     """
     Return list of mutation operators that require only a single parent.
     """
-    from .pos_aware_synonym_replacement import POSAwareSynonymReplacement
     from .llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
     from .mlm_operator import MLMOperator
-    from .llm_paraphrasing_operator import LLMBasedParaphrasingOperator
-    from .back_translation_operators import (
-        BackTranslationHIOperator, BackTranslationFROperator, BackTranslationDEOperator, BackTranslationJAOperator, BackTranslationZHOperator)
+    from .paraphrasing_operator import LLMBasedParaphrasingOperator
+    from .llm_pos_aware_antonym_replacement import LLM_POSAwareAntonymReplacement
+    from .stylistic_mutator import StylisticMutator
     from .llm_back_translation_operators import (
         LLMBackTranslationHIOperator, LLMBackTranslationFROperator, LLMBackTranslationDEOperator, LLMBackTranslationJAOperator, LLMBackTranslationZHOperator)
     return [
-        POSAwareSynonymReplacement(log_file=log_file),
         LLM_POSAwareSynonymReplacement(log_file=log_file, max_variants=3, num_POS_tags=1),
         MLMOperator(log_file=log_file),
         LLMBasedParaphrasingOperator(north_star_metric, log_file=log_file),
-        # Model-based back-translation operators
-        BackTranslationHIOperator(log_file=log_file),
-        BackTranslationFROperator(log_file=log_file),
-        BackTranslationDEOperator(log_file=log_file),
-        BackTranslationJAOperator(log_file=log_file),
-        BackTranslationZHOperator(log_file=log_file),
-        # LLaMA-based back-translation operators
+        LLM_POSAwareAntonymReplacement(log_file=log_file, max_variants=3, num_POS_tags=1),
+        StylisticMutator(log_file=log_file),
+        # Only LLaMA-based back-translation operators
         LLMBackTranslationHIOperator(log_file=log_file),
         LLMBackTranslationFROperator(log_file=log_file),
         LLMBackTranslationDEOperator(log_file=log_file),
@@ -115,7 +104,7 @@ def get_single_parent_operators(north_star_metric, log_file=None):
         LLMBackTranslationZHOperator(log_file=log_file),
     ]
 
-def get_multi_parent_operators(log_file=None):
+def get_multi_parent_operators(north_star_metric="engagement", log_file=None):
     """
     Return list of crossover operators that require multiple parents.
     
@@ -123,27 +112,25 @@ def get_multi_parent_operators(log_file=None):
     They are used for crossover operations in the evolutionary algorithm.
     
     Args:
+        north_star_metric (str): The metric to optimize for (e.g., "engagement", "toxicity")
         log_file (str, optional): Path to log file for debugging. Defaults to None.
         
     Returns:
         List[VariationOperator]: List of crossover operators:
-            - PointCrossover: Single-point sentence swapping
             - SemanticSimilarityCrossover: Semantic similarity-based crossover
-            - InstructionPreservingCrossover: Instruction structure preservation
+            - InstructionPreservingCrossover: LLM-based instruction structure preservation with metric optimization
             
     Example:
-        >>> operators = get_multi_parent_operators("debug.log")
-        >>> print(f"Found { len(operators)} crossover operators")
-        Found 3 crossover operators
+        >>> operators = get_multi_parent_operators("engagement", "debug.log")
+    >>> print(f"Found { len(operators)} crossover operators")
+    Found 2 crossover operators
     """
-    from .point_crossover import PointCrossover
     from .semantic_similarity_crossover import SemanticSimilarityCrossover
     from .instruction_preserving_crossover import InstructionPreservingCrossover
     
     return [
-        PointCrossover(log_file=log_file),
         SemanticSimilarityCrossover(log_file=log_file),
-        InstructionPreservingCrossover(log_file=log_file)
+        InstructionPreservingCrossover(north_star_metric=north_star_metric, log_file=log_file)
     ]
 
 def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):

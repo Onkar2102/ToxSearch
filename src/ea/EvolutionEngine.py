@@ -202,8 +202,8 @@ class EvolutionEngine:
 
                 for parent_pair in combinations(crossover_parents, 2):  # All pairs of parents
                     try:
-                        prompts = [p["prompt"] for p in parent_pair]
-                        variants = op.apply(prompts)  # Send both prompts
+                        # Pass parent genomes directly to crossover operators
+                        variants = op.apply(parent_pair)  # Send parent genomes
                         for vp in variants:
                             norm_vp = vp.strip().lower()
                             if norm_vp in existing_prompts:

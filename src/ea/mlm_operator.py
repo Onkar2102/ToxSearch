@@ -157,8 +157,17 @@ class MLMOperator(VariationOperator):
         for mask_num, original_word in mask_mapping.items():
             mask_token = f"<MASKED_{mask_num}>"
             
-            # Simple, clear prompt for one replacement
-            prompt = f"""Replace {mask_token} with one word that fits the context.
+            # Get prompt template from config
+            template = self.generator.task_templates.get("mlm_mask_filling", {}).get("single_word_replacement")
+            if template:
+                prompt = template.format(
+                    mask_token=mask_token,
+                    masked_text=masked_text,
+                    original_word=original_word
+                )
+            else:
+                # Fallback to original prompt if template not found
+                prompt = f"""Replace {mask_token} with one word that fits the context.
 
 Text: "{masked_text}"
 
@@ -169,7 +178,7 @@ Reply with just one replacement word:"""
             self.logger.debug(f"{self.name}: Asking for replacement of {mask_token} (original: '{original_word}')")
             
             try:
-                response = self.generator.generate_response(prompt)
+                response = self.generator.generate_response(prompt, task_type="mutation_crossover")
                 all_responses.append(f"{mask_token}: {response}")
                 
                 if response:

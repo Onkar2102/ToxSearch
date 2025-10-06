@@ -1,5 +1,5 @@
 """
-LLM-based POS-aware synonym replacement for text mutation.
+LLM-based POS-aware antonym replacement for text mutation.
 
 Author: Onkar Shelar (os9660@rit.edu)
 """
@@ -33,11 +33,11 @@ class POSWord:
     pos_description: str
 
 
-class LLM_POSAwareSynonymReplacement(VariationOperator):
+class LLM_POSAwareAntonymReplacement(VariationOperator):
     """
-    LLM-based synonym replacement with POS awareness.
+    LLM-based antonym replacement with POS awareness.
     
-    Detects POS tags, generates synonyms via LLM, and creates text variants.
+    Detects POS tags, generates antonyms via LLM, and creates text variants.
     """
 
     # POS inventory (excluding PUNCT, SYM, X)
@@ -60,7 +60,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
 
     def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, num_POS_tags: int = 1, seed: Optional[int] = 42):
         """
-        Initialize the LLM POS-aware synonym replacement operator.
+        Initialize the LLM POS-aware antonym replacement operator.
         
         Args:
             log_file: Path to log file (optional)
@@ -69,7 +69,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
             seed: Random seed for reproducible selection (default: 42)
         """
         super().__init__(
-            "LLM_POSAwareSynonymReplacement", 
+            "LLM_POSAwareAntonymReplacement", 
             "mutation", 
             "Step 1: POS-aware detection and validation"
         )
@@ -188,13 +188,13 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         self.logger.info(f"{self.name}: Selected {len(selected_pos)} POS types: {selected_pos}")
         return selected_pos
 
-    def _create_synonym_prompt(self, pos_tag: str, pos_description: str, sample_words: List[str], context_text: str) -> str:
-        """Create a prompt for LLM to generate synonyms using config template."""
+    def _create_antonym_prompt(self, pos_tag: str, pos_description: str, sample_words: List[str], context_text: str) -> str:
+        """Create a prompt for LLM to generate antonyms using config template."""
         
         sample_words_str = ", ".join(sample_words[:5])
         
         # Get template from config
-        template = self.generator.task_templates.get("pos_aware_synonym_replacement", {}).get("synonym_generation")
+        template = self.generator.task_templates.get("pos_aware_antonym_replacement", {}).get("antonym_generation")
         if template:
             prompt = template.format(
                 pos_tag=pos_tag,
@@ -206,60 +206,60 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
             return prompt
         
         # Fallback to original prompt if template not found
-        return f"""You are a linguistic expert. I need synonyms for words with the same grammatical function.
+        return f"""You are a linguistic expert. I need antonyms or opposites for words with the same grammatical function.
 
 POS Type: {pos_tag} ({pos_description})
 Sample words from the text: {sample_words_str}
 Context: "{context_text[:100]}{'...' if len(context_text) > 100 else ''}"
 
-Please provide exactly {self.max_variants} synonyms that:
+Please provide exactly {self.max_variants} antonyms/opposites that:
 1. Have the same POS tag ({pos_tag})
-2. Can be either synonyms of the sample words OR other words with the same grammatical function
+2. Are antonyms or opposites of the sample words OR other words with opposite meaning but same grammatical function
 
 Return ONLY a JSON array of words, like this:
 ["word1", "word2", "word3"]
 
-Synonyms for {pos_tag}:
+Antonyms for {pos_tag}:
 """
 
-    def _parse_synonyms_from_response(self, response: str, pos_tag: str) -> List[str]:
-        """Parse synonyms from LLM response."""
+    def _parse_antonyms_from_response(self, response: str, pos_tag: str) -> List[str]:
+        """Parse antonyms from LLM response."""
         try:
             # Try to parse as JSON array first
-            synonyms = json.loads(response.strip())
-            if isinstance(synonyms, list):
-                # Filter and clean synonyms
-                cleaned_synonyms = []
-                for word in synonyms:
+            antonyms = json.loads(response.strip())
+            if isinstance(antonyms, list):
+                # Filter and clean antonyms
+                cleaned_antonyms = []
+                for word in antonyms:
                     if isinstance(word, str) and word.strip():
                         cleaned_word = word.strip().lower()
                         if len(cleaned_word) > 1 and cleaned_word.isalpha():
-                            cleaned_synonyms.append(cleaned_word)
+                            cleaned_antonyms.append(cleaned_word)
                 
                 # Limit to max_variants
-                return cleaned_synonyms[:self.max_variants]
+                return cleaned_antonyms[:self.max_variants]
             
-            # Try to parse as JSON object with synonyms dict
-            elif isinstance(synonyms, dict) and "synonyms" in synonyms:
-                synonyms_dict = synonyms["synonyms"]
-                all_synonyms = []
+            # Try to parse as JSON object with antonyms dict
+            elif isinstance(antonyms, dict) and "antonyms" in antonyms:
+                antonyms_dict = antonyms["antonyms"]
+                all_antonyms = []
                 
-                # Extract all synonyms from the dictionary
-                for word, synonym_list in synonyms_dict.items():
-                    if isinstance(synonym_list, list):
-                        all_synonyms.extend(synonym_list)
-                    elif isinstance(synonym_list, str):
-                        all_synonyms.append(synonym_list)
+                # Extract all antonyms from the dictionary
+                for word, antonym_list in antonyms_dict.items():
+                    if isinstance(antonym_list, list):
+                        all_antonyms.extend(antonym_list)
+                    elif isinstance(antonym_list, str):
+                        all_antonyms.append(antonym_list)
                 
-                # Clean and validate synonyms
-                cleaned_synonyms = []
-                for synonym in all_synonyms:
-                    if isinstance(synonym, str) and synonym.strip():
-                        cleaned = synonym.strip().lower()
+                # Clean and validate antonyms
+                cleaned_antonyms = []
+                for antonym in all_antonyms:
+                    if isinstance(antonym, str) and antonym.strip():
+                        cleaned = antonym.strip().lower()
                         if len(cleaned) > 0 and cleaned.isalpha():
-                            cleaned_synonyms.append(cleaned)
+                            cleaned_antonyms.append(cleaned)
                 
-                return cleaned_synonyms[:self.max_variants]
+                return cleaned_antonyms[:self.max_variants]
             
         except Exception:
             pass
@@ -281,62 +281,12 @@ Synonyms for {pos_tag}:
             return cleaned_words[:self.max_variants]
             
         except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to parse synonyms from response: {e}")
+            self.logger.debug(f"{self.name}: Failed to parse antonyms from response: {e}")
             return []
 
-    def _safe_json_obj(self, s: str) -> Optional[Dict[str, Any]]:
+    def _ask_llm_for_antonyms(self, pos_tag: str, pos_words: List[POSWord], text_context: str) -> List[str]:
         """
-        Safely parse JSON from LLM response, handling common formatting issues.
-        
-        Args:
-            s: Raw string response from LLM
-            
-        Returns:
-            Parsed JSON object or None if parsing fails
-        """
-        try:
-            return json.loads(s.strip())
-        except Exception:
-            cleaned = s.strip()
-            self.logger.debug(f"{self.name}: Failed to parse JSON, raw response: {repr(cleaned[:200])}")
-            
-            # Remove markdown code blocks
-            if cleaned.startswith("```json"):
-                cleaned = cleaned[7:]
-            if cleaned.startswith("```"):
-                cleaned = cleaned[3:]
-            while cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-            
-            # Clean up whitespace and newlines that might break JSON
-            cleaned = re.sub(r'\n\s*', ' ', cleaned)
-            cleaned = re.sub(r'\s+', ' ', cleaned)
-            
-            # Try to extract JSON object
-            m = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
-            if m:
-                try:
-                    json_text = m.group(0)
-                    return json.loads(json_text)
-                except Exception as e:
-                    self.logger.debug(f"{self.name}: JSON extraction failed: {e}, JSON text: {repr(json_text[:100])}")
-                    try:
-                        # Remove trailing commas
-                        json_text = re.sub(r',\s*([}\]])', r'\1', json_text)
-                        return json.loads(json_text)
-                    except Exception:
-                        pass
-            
-            # Fallback: Extract words from bullet lists, quoted lists, or brackets
-            words = re.findall(r'\b[a-zA-Z]+\b', cleaned.lower())
-            if words:
-                return {"synonyms": words[:self.max_variants]}
-                
-        return None
-
-    def _ask_llm_for_synonyms(self, pos_tag: str, pos_words: List[POSWord], text_context: str) -> List[str]:
-        """
-        Generate synonyms for a POS type using LLM.
+        Generate antonyms for a POS type using LLM.
         
         Args:
             pos_tag: The POS tag (e.g., "ADJ", "VERB")
@@ -344,10 +294,10 @@ Synonyms for {pos_tag}:
             text_context: The original text for context
             
         Returns:
-            List of synonym words with the same POS tag
+            List of antonym words with the same POS tag
         """
         if not self.generator:
-            self.logger.warning(f"{self.name}: LLM generator unavailable, skipping synonym generation")
+            self.logger.warning(f"{self.name}: LLM generator unavailable, skipping antonym generation")
             return []
         
         try:
@@ -356,9 +306,9 @@ Synonyms for {pos_tag}:
             pos_description = self.POS_DESCRIPTIONS[pos_tag]
             
             # Create prompt for LLM
-            prompt = self._create_synonym_prompt(pos_tag, pos_description, unique_words, text_context)
+            prompt = self._create_antonym_prompt(pos_tag, pos_description, unique_words, text_context)
             
-            self.logger.debug(f"{self.name}: Asking LLM for {pos_tag} synonyms")
+            self.logger.debug(f"{self.name}: Asking LLM for {pos_tag} antonyms")
             self.logger.debug(f"{self.name}: Prompt: {prompt[:200]}...")
             
             # Get LLM response with unified task parameters
@@ -369,22 +319,22 @@ Synonyms for {pos_tag}:
                 return []
             
             # Parse LLM response
-            synonyms_data = self._parse_synonyms_from_response(response, pos_tag)
+            antonyms_data = self._parse_antonyms_from_response(response, pos_tag)
             
-            if synonyms_data:
-                self.logger.info(f"{self.name}: Generated synonyms for {pos_tag}: {len(synonyms_data)} words")
-                return synonyms_data
+            if antonyms_data:
+                self.logger.info(f"{self.name}: Generated antonyms for {pos_tag}: {len(antonyms_data)} words")
+                return antonyms_data
             else:
-                self.logger.warning(f"{self.name}: Failed to parse synonyms for {pos_tag}")
+                self.logger.warning(f"{self.name}: Failed to parse antonyms for {pos_tag}")
                 return []
                 
         except Exception as e:
-            self.logger.error(f"{self.name}: LLM synonym generation failed for {pos_tag}: {e}")
+            self.logger.error(f"{self.name}: LLM antonym generation failed for {pos_tag}: {e}")
             return []
 
-    def _generate_synonyms_for_selected_pos(self, detected_pos: Dict[str, List[POSWord]], selected_pos: List[str], text: str) -> Dict[str, List[str]]:
+    def _generate_antonyms_for_selected_pos(self, detected_pos: Dict[str, List[POSWord]], selected_pos: List[str], text: str) -> Dict[str, List[str]]:
         """
-        Generate synonyms for all selected POS types.
+        Generate antonyms for all selected POS types.
         
         Args:
             detected_pos: POS words organized by type
@@ -392,36 +342,36 @@ Synonyms for {pos_tag}:
             text: Original text for context
             
         Returns:
-            Dict mapping POS_tag -> List[synonyms]
+            Dict mapping POS_tag -> List[antonyms]
         """
-        synonyms_by_pos = {}
+        antonyms_by_pos = {}
         
-        self.logger.info(f"{self.name}: STEP 2 - Generating synonyms for {len(selected_pos)} POS types")
+        self.logger.info(f"{self.name}: STEP 2 - Generating antonyms for {len(selected_pos)} POS types")
         
         for pos_tag in selected_pos:
             if pos_tag in detected_pos:
                 pos_words = detected_pos[pos_tag]
-                synonyms = self._ask_llm_for_synonyms(pos_tag, pos_words, text)
+                antonyms = self._ask_llm_for_antonyms(pos_tag, pos_words, text)
                 
-                if synonyms:
-                    synonyms_by_pos[pos_tag] = synonyms
-                    self.logger.info(f"{self.name}: Generated {len(synonyms)} synonyms for {pos_tag}: {synonyms[:3]}{'...' if len(synonyms) > 3 else ''}")
+                if antonyms:
+                    antonyms_by_pos[pos_tag] = antonyms
+                    self.logger.info(f"{self.name}: Generated {len(antonyms)} antonyms for {pos_tag}: {antonyms[:3]}{'...' if len(antonyms) > 3 else ''}")
                 else:
-                    self.logger.warning(f"{self.name}: No synonyms generated for {pos_tag}")
+                    self.logger.warning(f"{self.name}: No antonyms generated for {pos_tag}")
             else:
                 self.logger.warning(f"{self.name}: POS tag {pos_tag} not found in detected POS")
         
-        self.logger.info(f"{self.name}: STEP 2 COMPLETE - Generated synonyms for {len(synonyms_by_pos)} POS types")
-        return synonyms_by_pos
+        self.logger.info(f"{self.name}: STEP 2 COMPLETE - Generated antonyms for {len(antonyms_by_pos)} POS types")
+        return antonyms_by_pos
 
-    def _generate_text_variants(self, text: str, detected_pos: Dict[str, List[POSWord]], synonyms_by_pos: Dict[str, List[str]]) -> List[str]:
+    def _generate_text_variants(self, text: str, detected_pos: Dict[str, List[POSWord]], antonyms_by_pos: Dict[str, List[str]]) -> List[str]:
         """
-        Generate text variants by substituting synonyms.
+        Generate text variants by substituting antonyms.
         
         Args:
             text: Original text
             detected_pos: POS words organized by type
-            synonyms_by_pos: Synonyms generated for each POS type
+            antonyms_by_pos: Antonyms generated for each POS type
             
         Returns:
             List of text variants with substitutions
@@ -431,13 +381,13 @@ Synonyms for {pos_tag}:
         try:
             variants = []
             for variant_num in range(self.max_variants):
-                variant = self._create_single_variant(text, detected_pos, synonyms_by_pos, variant_num)
+                variant = self._create_single_variant(text, detected_pos, antonyms_by_pos, variant_num)
                 if variant and variant != text:
                     variants.append(variant)
                     self.logger.debug(f"{self.name}: Generated variant {len(variants)}: '{variant[:30]}...'")
             
             if len(variants) < self.max_variants:
-                additional_variants = self._generate_additional_variants(text, detected_pos, synonyms_by_pos, variants)
+                additional_variants = self._generate_additional_variants(text, detected_pos, antonyms_by_pos, variants)
                 variants.extend(additional_variants)
             
             # Remove duplicates
@@ -458,14 +408,14 @@ Synonyms for {pos_tag}:
             self.logger.error(f"{self.name}: Step 3 variant generation failed: {e}")
             return []
 
-    def _create_single_variant(self, text: str, detected_pos: Dict[str, List[POSWord]], synonyms_by_pos: Dict[str, List[str]], variant_num: int) -> str:
+    def _create_single_variant(self, text: str, detected_pos: Dict[str, List[POSWord]], antonyms_by_pos: Dict[str, List[str]], variant_num: int) -> str:
         """
-        Create a single text variant by substituting synonyms.
+        Create a single text variant by substituting antonyms.
         
         Args:
             text: Original text
             detected_pos: POS words organized by type
-            synonyms_by_pos: Synonyms for each POS type
+            antonyms_by_pos: Antonyms for each POS type
             variant_num: Variant number (for different substitution strategies)
             
         Returns:
@@ -475,21 +425,21 @@ Synonyms for {pos_tag}:
             variant_text = text
             
             # Sort POS types for consistent ordering
-            pos_types = sorted(synonyms_by_pos.keys())
+            pos_types = sorted(antonyms_by_pos.keys())
             
             # Apply substitutions for each POS type
             for pos_tag in pos_types:
-                if pos_tag in detected_pos and pos_tag in synonyms_by_pos:
+                if pos_tag in detected_pos and pos_tag in antonyms_by_pos:
                     pos_words = detected_pos[pos_tag]
-                    synonyms = synonyms_by_pos[pos_tag]
+                    antonyms = antonyms_by_pos[pos_tag]
                     
-                    if synonyms:  # Only proceed if we have synonyms
-                        # Select synonym based on variant number
-                        synonym_index = variant_num % len(synonyms)
-                        selected_synonym = synonyms[synonym_index]
+                    if antonyms:  # Only proceed if we have antonyms
+                        # Select antonym based on variant number
+                        antonym_index = variant_num % len(antonyms)
+                        selected_antonym = antonyms[antonym_index]
                         
                         # Apply substitution for this POS type
-                        variant_text = self._substitute_pos_words(variant_text, pos_words, selected_synonym, pos_tag)
+                        variant_text = self._substitute_pos_words(variant_text, pos_words, selected_antonym, pos_tag)
             
             return variant_text
             
@@ -497,21 +447,21 @@ Synonyms for {pos_tag}:
             self.logger.error(f"{self.name}: Single variant creation failed: {e}")
             return text
 
-    def _substitute_pos_words(self, text: str, pos_words: List[POSWord], synonym: str, pos_tag: str) -> str:
+    def _substitute_pos_words(self, text: str, pos_words: List[POSWord], antonym: str, pos_tag: str) -> str:
         """
-        Substitute words of a specific POS type with a synonym.
+        Substitute words of a specific POS type with an antonym.
         
         Args:
             text: Current text
             pos_words: List of POSWord objects to potentially replace
-            synonym: Synonym to use for replacement
+            antonym: Antonym to use for replacement
             pos_tag: POS tag for context
             
         Returns:
             Text with substitutions applied
         """
         try:
-            if not pos_words or not synonym:
+            if not pos_words or not antonym:
                 return text
             
             # Sort words by position (reverse order to avoid position shifts)
@@ -523,8 +473,8 @@ Synonyms for {pos_tag}:
                 # Validate word boundaries
                 if self._is_valid_word_boundary(text, word_obj.start, word_obj.end):
                     # Perform substitution
-                    result_text = self._safe_substitute(result_text, word_obj.start, word_obj.end, synonym)
-                    self.logger.debug(f"{self.name}: Replaced '{word_obj.word}' with '{synonym}' at position {word_obj.start}-{word_obj.end}")
+                    result_text = self._safe_substitute(result_text, word_obj.start, word_obj.end, antonym)
+                    self.logger.debug(f"{self.name}: Replaced '{word_obj.word}' with '{antonym}' at position {word_obj.start}-{word_obj.end}")
             
             return result_text
             
@@ -593,14 +543,14 @@ Synonyms for {pos_tag}:
             self.logger.error(f"{self.name}: Safe substitution failed: {e}")
             return text
 
-    def _generate_additional_variants(self, text: str, detected_pos: Dict[str, List[POSWord]], synonyms_by_pos: Dict[str, List[str]], existing_variants: List[str]) -> List[str]:
+    def _generate_additional_variants(self, text: str, detected_pos: Dict[str, List[POSWord]], antonyms_by_pos: Dict[str, List[str]], existing_variants: List[str]) -> List[str]:
         """
         Generate additional variants using different substitution strategies.
         
         Args:
             text: Original text
             detected_pos: POS words organized by type
-            synonyms_by_pos: Synonyms for each POS type
+            antonyms_by_pos: Antonyms for each POS type
             existing_variants: Already generated variants
             
         Returns:
@@ -610,14 +560,14 @@ Synonyms for {pos_tag}:
         
         try:
             # Strategy: Substitute only one POS type per variant
-            for pos_tag in synonyms_by_pos.keys():
+            for pos_tag in antonyms_by_pos.keys():
                 if pos_tag in detected_pos:
                     pos_words = detected_pos[pos_tag]
-                    synonyms = synonyms_by_pos[pos_tag]
+                    antonyms = antonyms_by_pos[pos_tag]
                     
-                    for synonym in synonyms:
+                    for antonym in antonyms:
                         # Create variant with only this POS type substituted
-                        variant = self._substitute_pos_words(text, pos_words, synonym, pos_tag)
+                        variant = self._substitute_pos_words(text, pos_words, antonym, pos_tag)
                         
                         if variant != text and variant not in existing_variants and variant not in additional_variants:
                             additional_variants.append(variant)
@@ -637,13 +587,13 @@ Synonyms for {pos_tag}:
 
     def apply(self, text: str) -> List[str]:
         """
-        Generate text variants using POS-aware synonym replacement.
+        Generate text variants using POS-aware antonym replacement.
         
         Args:
             text: Input text to process
             
         Returns:
-            List of text variants with synonym substitutions
+            List of text variants with antonym substitutions
         """
         try:
             # Handle edge cases
@@ -666,17 +616,17 @@ Synonyms for {pos_tag}:
                 return [text]
             self.logger.info(f"{self.name}: POS analysis complete - {len(detected_pos)} types detected, {len(selected_pos)} selected")
             
-            # Generate synonyms using LLM
-            synonyms_by_pos = self._generate_synonyms_for_selected_pos(detected_pos, selected_pos, text)
+            # Generate antonyms using LLM
+            antonyms_by_pos = self._generate_antonyms_for_selected_pos(detected_pos, selected_pos, text)
             
-            if not synonyms_by_pos:
-                self.logger.warning(f"{self.name}: No synonyms generated, returning original text")
+            if not antonyms_by_pos:
+                self.logger.warning(f"{self.name}: No antonyms generated, returning original text")
                 return [text]
             
-            self.logger.info(f"{self.name}: Generated synonyms for {len(synonyms_by_pos)} POS types")
+            self.logger.info(f"{self.name}: Generated antonyms for {len(antonyms_by_pos)} POS types")
             
             # Generate text variants
-            variants = self._generate_text_variants(text, detected_pos, synonyms_by_pos)
+            variants = self._generate_text_variants(text, detected_pos, antonyms_by_pos)
             
             if not variants:
                 self.logger.warning(f"{self.name}: No variants generated, returning original text")

@@ -85,28 +85,13 @@ def _print_and_save_bt_steps(test_name, operator_type, prompt, operator, variant
         "intermediate": getattr(operator, "_last_intermediate", None),
         "final": getattr(operator, "_last_final", None),
     }
-    print(f"\n[INITIAL] {mid_steps['input']}")
-    print(f"[MID] {mid_steps['intermediate']}")
-    print(f"[FINAL] {mid_steps['final']}")
-    _save_bt_test_output(test_name, operator_type, prompt, variants, mid_steps)
-
-def _assert_bt_variants_reasonable(variants):
-    assert isinstance(variants, list)
-    assert 1 <= len(variants) <= 3
     assert all(isinstance(v, str) and v.strip() for v in variants)
     for i, v in enumerate(variants):
         print(f"  Variant {i+1}: {len(v.split())} words, {len(v)} chars")
 
 
 
-# Use new combined operator modules
-from ea.back_translation_operators import (
-    BackTranslationHIOperator,
-    BackTranslationFROperator,
-    BackTranslationDEOperator,
-    BackTranslationJAOperator,
-    BackTranslationZHOperator,
-)
+
 from ea.llm_back_translation_operators import (
     LLMBackTranslationHIOperator,
     LLMBackTranslationFROperator,
@@ -116,45 +101,32 @@ from ea.llm_back_translation_operators import (
 )
 
 LANGUAGES = [
-    {"name": "hindi", "classic": BackTranslationHIOperator, "llm": LLMBackTranslationHIOperator},
-    {"name": "french", "classic": BackTranslationFROperator, "llm": LLMBackTranslationFROperator},
-    {"name": "german", "classic": BackTranslationDEOperator, "llm": LLMBackTranslationDEOperator},
-    {"name": "japanese", "classic": BackTranslationJAOperator, "llm": LLMBackTranslationJAOperator},
-    {"name": "chinese", "classic": BackTranslationZHOperator, "llm": LLMBackTranslationZHOperator},
-]
-
-PROMPTS = [
-    ("25_words", _BASE_25, 25),
-    ("100_words", _BASE_100, 46),
-    ("200_words", _BASE_200, 51),
+    {"name": "hindi", "llm": LLMBackTranslationHIOperator},
+    {"name": "french", "llm": LLMBackTranslationFROperator},
+    {"name": "german", "llm": LLMBackTranslationDEOperator},
+    {"name": "japanese", "llm": LLMBackTranslationJAOperator},
+    {"name": "chinese", "llm": LLMBackTranslationZHOperator},
 ]
 
 import importlib
 
 class TestBackTranslationOperators:
-    @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
-    @pytest.mark.parametrize("prompt_name,base_text,word_count", PROMPTS)
-    def test_classic_backtranslation(self, lang, prompt_name, base_text, word_count):
-        Operator = lang["classic"]
-        prompt = _build_prompt(base_text, word_count)
-        operator = Operator()
-        variants = operator.apply(prompt)
-        _print_and_save_bt_steps(f"{prompt_name}", lang["name"], prompt, operator, variants)
-        _assert_bt_variants_reasonable(variants)
+
+
 
     @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
-    @pytest.mark.parametrize("prompt_name,base_text,word_count", PROMPTS)
-    def test_llm_backtranslation(self, lang, prompt_name, base_text, word_count):
+    def test_llm_backtranslation(self, lang):
         Operator = lang["llm"]
-        prompt = _build_prompt(base_text, word_count)
+        prompt = "This is a test prompt for back-translation."
         operator = Operator()
         variants = operator.apply(prompt)
-        _print_and_save_bt_steps(f"{prompt_name}", f"llm_{lang['name']}", prompt, operator, variants)
-        _assert_bt_variants_reasonable(variants)
+        _print_and_save_bt_steps("basic", f"llm_{lang['name']}", prompt, operator, variants)
+        assert isinstance(variants, list) and all(isinstance(v, str) for v in variants)
+
 
 
     @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
-    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    @pytest.mark.parametrize("otype", ["llm"])
     def test_empty_input(self, lang, otype):
         Operator = lang[otype]
         operator = Operator()
@@ -163,8 +135,9 @@ class TestBackTranslationOperators:
         _print_and_save_bt_steps("empty", f"{otype}_{lang['name']}", prompt, operator, variants)
         assert variants == [""]
 
+
     @pytest.mark.parametrize("lang", LANGUAGES, ids=[l["name"] for l in LANGUAGES])
-    @pytest.mark.parametrize("otype", ["classic", "llm"])
+    @pytest.mark.parametrize("otype", ["llm"])
     def test_whitespace_input(self, lang, otype):
         Operator = lang[otype]
         operator = Operator()

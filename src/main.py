@@ -1,3 +1,35 @@
+def check_process_health():
+    """Check if the current process is healthy and not stuck"""
+    global last_heartbeat
+    current_time = time.time()
+    runtime = current_time - last_heartbeat
+    # Check if process has been running too long
+    if runtime > MAX_RUNTIME_SECONDS:
+        return False, f"Process running too long: {runtime:.1f}s"
+    # Check memory usage
+    if PSUTIL_AVAILABLE:
+        try:
+            process = psutil.Process()
+            memory_gb = process.memory_info().rss / (1024**3)
+            if memory_gb > 20:  # More than 20GB memory usage
+                return False, f"Memory usage too high: {memory_gb:.1f}GB"
+        except Exception as e:
+            print(f"Warning: Could not check memory usage: {e}")
+    else:
+        print("Warning: psutil not available - skipping memory check")
+    # Check CPU usage - if it's been 0% for too long, it might be stuck
+    if PSUTIL_AVAILABLE:
+        try:
+            process = psutil.Process()
+            cpu_percent = process.cpu_percent(interval=1)
+            if cpu_percent < 1 and runtime > 300:  # Less than 1% CPU for 5+ minutes
+                return False, f"Process appears stuck (CPU: {cpu_percent}%, runtime: {runtime:.1f}s)"
+        except Exception as e:
+            print(f"Warning: Could not check CPU usage: {e}")
+    else:
+        print("Warning: psutil not available - skipping CPU check")
+    last_heartbeat = current_time
+    return True, "Process healthy"
 """
 Main entry point for the evolutionary text generation system.
 """
@@ -9,53 +41,14 @@ import multiprocessing
 import atexit
 import signal
 import os
+
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
 
-# Add src directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-
-
-def safe_import_gne(module_name):
-    """Safely import from the gne module using multiple strategies"""
-    try:
-        from .gne import module_name
-        return module_name
-    except ImportError:
-        try:
-            from gne import module_name
-            return module_name
-        except ImportError:
-            from src.gne import module_name
-            return module_name
-
-def safe_import_utils(module_name):
-    """Safely import from the utils module using multiple strategies"""
-    try:
-        from .utils import module_name
-        return module_name
-    except ImportError:
-        try:
-            from utils import module_name
-            return module_name
-        except ImportError:
-            from src.utils import module_name
-            return module_name
-
-# Import with fallback
-try:
-    from .utils import get_custom_logging
-except ImportError:
-    from utils import get_custom_logging
-# Optional import for health monitoring
-try:
-    import psutil
-    PSUTIL_AVAILABLE = True
-except ImportError:
-    PSUTIL_AVAILABLE = False
-    print("Warning: psutil not available. Health monitoring will be limited.")
+from utils import get_custom_logging
+import psutil
+PSUTIL_AVAILABLE = True
 
 # ============================================================================
 # SECTION 1: SYSTEM CONFIGURATION AND HEALTH MONITORING
@@ -83,60 +76,11 @@ def signal_handler(signum, frame):
 
 def cleanup_multiprocessing():
     """Clean up multiprocessing resources to prevent semaphore leaks"""
+    # Clean up any remaining multiprocessing resources
     try:
-        # Clean up any remaining multiprocessing resources
         multiprocessing.current_process()._cleanup()
-        
-        # Clean up thread pools from moderation systems
-        try:
-            try:
-                from .gne import get_hybrid_moderation_cleanup
-            except ImportError:
-                from gne import get_hybrid_moderation_cleanup
-            _cleanup_thread_pool = get_hybrid_moderation_cleanup()
-            _cleanup_thread_pool()
-        except ImportError:
-            pass  # Hybrid moderation not available
     except Exception:
         pass
-
-def check_process_health():
-    """Check if the current process is healthy and not stuck"""
-    global last_heartbeat
-    
-    current_time = time.time()
-    runtime = current_time - last_heartbeat
-    
-    # Check if process has been running too long
-    if runtime > MAX_RUNTIME_SECONDS:
-        return False, f"Process running too long: {runtime:.1f}s"
-    
-    # Check memory usage
-    if PSUTIL_AVAILABLE:
-        try:
-            process = psutil.Process()
-            memory_gb = process.memory_info().rss / (1024**3)
-            if memory_gb > 20:  # More than 20GB memory usage
-                return False, f"Memory usage too high: {memory_gb:.1f}GB"
-        except Exception as e:
-            print(f"Warning: Could not check memory usage: {e}")
-    else:
-        print("Warning: psutil not available - skipping memory check")
-    
-    # Check CPU usage - if it's been 0% for too long, it might be stuck
-    if PSUTIL_AVAILABLE:
-        try:
-            process = psutil.Process()
-            cpu_percent = process.cpu_percent(interval=1)
-            if cpu_percent < 1 and runtime > 300:  # Less than 1% CPU for 5+ minutes
-                return False, f"Process appears stuck (CPU: {cpu_percent}%, runtime: {runtime:.1f}s)"
-        except Exception as e:
-            print(f"Warning: Could not check CPU usage: {e}")
-    else:
-        print("Warning: psutil not available - skipping CPU check")
-    
-    last_heartbeat = current_time
-    return True, "Process healthy"
 
 def restart_process():
     """Restart the current process"""

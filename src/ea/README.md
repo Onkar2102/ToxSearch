@@ -91,7 +91,7 @@ Comprehensive implementation of mutation and crossover operators.
 ### **Mutation Operators (13)**
 
 #### **Core LLM Operators**
-- **`LLM_POSAwareSynonymReplacement`**: LLaMA-based synonym replacement using POS tagging
+- **`LLM_POSAwareSynonymReplacement`**: LLaMA-based synonym replacement using POS tagging (classic POS-aware operator deprecated)
   - Uses spaCy for POS analysis
   - LLaMA for intelligent synonym selection
   - Context-aware replacements
@@ -125,7 +125,7 @@ Comprehensive implementation of mutation and crossover operators.
 ### **Crossover Operators (3)**
 
 #### **Structural Crossover**
-- **`PointCrossover`**: Single-point crossover between two prompts
+<!-- PointCrossover deprecated -->
   - Random split point selection
   - Preserves prompt structure
   - Simple but effective

@@ -531,9 +531,29 @@ class LlaMaTextGenerator:
             self.logger.error(f"Unexpected error during generation: {e}")
             return ["[GENERATION_ERROR]" for _ in prompts]
 
-    def generate_response(self, prompt: str) -> str:
-        """Single prompt generation (backwards compatibility)"""
-        return self.generate_response_batch([prompt])[0]
+    def generate_response(self, prompt: str, task_type: str = None) -> str:
+        """
+        Single prompt generation with optional task-specific parameters.
+        
+        Args:
+            prompt (str): The prompt to generate a response for
+            task_type (str, optional): Task type to use specific generation parameters
+            
+        Returns:
+            str: Generated response
+        """
+        if task_type and task_type in self.task_generation_args:
+            # Use task-specific generation arguments
+            task_args = self.task_generation_args[task_type].copy()
+            # Merge with base generation args, task args take precedence
+            generation_kwargs = self.generation_args.copy()
+            generation_kwargs.update(task_args)
+            
+            # Generate with task-specific parameters
+            return self.generate_raw_response(prompt, generation_kwargs)
+        else:
+            # Use default generation arguments
+            return self.generate_response_batch([prompt])[0]
 
     def process_population(self, pop_path: str = "outputs/Population.json", batch_size: int = None) -> None:
         """Process entire population for text generation with batch saving for fault tolerance"""
@@ -857,6 +877,208 @@ class LlaMaTextGenerator:
 
         except Exception as e:
             self.logger.error(f"Translation failed: {e}", exc_info=True)
+            return text
+
+    def paraphrase(self, text: str, north_star_metric: str, generated_output: str = "", current_score: float = 0.0) -> str:
+        """High-precision paraphrasing using task templates with robust extraction.
+
+        - Uses generation args from config (task_generation_args.mutation_crossover).
+        - Extracts paraphrased content from structured response.
+        - Falls back conservatively if the model fails to follow the format.
+        """
+        try:
+            # 1) Get the paraphrasing template
+            templates = self.task_templates.get("paraphrasing", {})
+            template = templates.get("instruction_preserving")
+
+            if not template:
+                # If templates are missing, return original text rather than crashing
+                self.logger.warning("Paraphrasing template missing; returning original text.")
+                return text
+
+            prompt = template.format(
+                north_star_metric=north_star_metric,
+                original_prompt=text,
+                generated_output=generated_output,
+                current_score=current_score
+            )
+
+            # 2) Format with global prompt wrapper (keeps current project behavior)
+            formatted_prompt = self.format_prompt(prompt)
+
+            # 3) Tokenize
+            inputs = self.tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=2048
+            ).to(self.device)
+
+            # 4) Merge generation args (global + task-specific)
+            task_args = self.task_generation_args.get("mutation_crossover", {})
+            generation_kwargs = {
+                **self.generation_args,
+                **task_args,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "eos_token_id": self.tokenizer.eos_token_id,
+                "use_cache": True,
+            }
+
+            # 5) Generate (autocast only on CUDA/MPS)
+            with torch.no_grad():
+                if self.device in ("cuda", "mps"):
+                    with torch.autocast(device_type=self.device, enabled=True):
+                        outputs = self.model.generate(**inputs, **generation_kwargs)
+                else:
+                    outputs = self.model.generate(**inputs, **generation_kwargs)
+
+            # 6) Decode full text and strip the prompt echo
+            decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            response = decoded[len(formatted_prompt):].strip() if decoded.startswith(formatted_prompt) else decoded.strip()
+
+            # 7) Extract paraphrased content using multiple patterns
+            import re
+            patterns = [
+                r"Paraphrased Prompt:\s*(.+?)(?:\n\n|\n$|$)",
+                r"Paraphrased:\s*(.+?)(?:\n\n|\n$|$)",
+                r"Variant 1:\s*(.+?)(?:\n\n|\n$|$)",
+                r"1\.\s*(.+?)(?:\n\n|\n$|$)"
+            ]
+            
+            for pattern in patterns:
+                m = re.search(pattern, response, flags=re.IGNORECASE | re.DOTALL)
+                if m:
+                    candidate = m.group(1).strip()
+                    # Clean common artifacts like surrounding quotes
+                    if len(candidate) >= 2 and (
+                        (candidate[0] == candidate[-1] == '"') or
+                        (candidate[0] == candidate[-1] == "'")
+                    ):
+                        candidate = candidate[1:-1].strip()
+                    if candidate and candidate.lower() != text.lower():
+                        return candidate
+
+            # 8) Fallback: look for quoted content
+            quoted_content = re.findall(r'"([^"]+)"', response)
+            for quote in quoted_content:
+                if quote.strip() and quote.lower() != text.lower():
+                    return quote.strip()
+
+            # 9) Fallback: look for first substantial line
+            for line in response.splitlines():
+                line = line.strip()
+                if not line or len(line) < 10:
+                    continue
+                if line.lower().startswith(("system:", "user:", "assistant:", "paraphrased prompt:", "instructions:")):
+                    continue
+                if line.lower() != text.lower():
+                    return line
+
+            # 10) Ultimate fallback: original text (never crash)
+            return text
+
+        except Exception as e:
+            self.logger.error(f"Paraphrasing failed: {e}", exc_info=True)
+            return text
+
+    def stylistic_mutate(self, text: str, style_attribute: str) -> str:
+        """High-precision stylistic mutation using task templates with robust extraction.
+
+        - Uses generation args from config (task_generation_args.mutation_crossover).
+        - Extracts stylistically modified content from structured response.
+        - Falls back conservatively if the model fails to follow the format.
+        """
+        try:
+            # 1) Get the stylistic mutation template
+            templates = self.task_templates.get("stylistic_mutation", {})
+            template = templates.get("style_modification")
+
+            if not template:
+                # If templates are missing, return original text rather than crashing
+                self.logger.warning("Stylistic mutation template missing; returning original text.")
+                return text
+
+            prompt = template.format(
+                original_text=text,
+                style_attribute=style_attribute
+            )
+
+            # 2) Format with global prompt wrapper (keeps current project behavior)
+            formatted_prompt = self.format_prompt(prompt)
+
+            # 3) Tokenize
+            inputs = self.tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=2048
+            ).to(self.device)
+
+            # 4) Merge generation args (global + task-specific)
+            task_args = self.task_generation_args.get("mutation_crossover", {})
+            generation_kwargs = {
+                **self.generation_args,
+                **task_args,
+                "pad_token_id": self.tokenizer.eos_token_id,
+                "eos_token_id": self.tokenizer.eos_token_id,
+                "use_cache": True,
+            }
+
+            # 5) Generate (autocast only on CUDA/MPS)
+            with torch.no_grad():
+                if self.device in ("cuda", "mps"):
+                    with torch.autocast(device_type=self.device, enabled=True):
+                        outputs = self.model.generate(**inputs, **generation_kwargs)
+                else:
+                    outputs = self.model.generate(**inputs, **generation_kwargs)
+
+            # 6) Decode full text and strip the prompt echo
+            decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            response = decoded[len(formatted_prompt):].strip() if decoded.startswith(formatted_prompt) else decoded.strip()
+
+            # 7) Extract stylistically modified content using multiple patterns
+            import re
+            patterns = [
+                r"Modified Text:\s*(.+?)(?:\n\n|\n$|$)",
+                r"Stylistic Variant:\s*(.+?)(?:\n\n|\n$|$)",
+                r"Result:\s*(.+?)(?:\n\n|\n$|$)",
+                r"Output:\s*(.+?)(?:\n\n|\n$|$)"
+            ]
+            
+            for pattern in patterns:
+                m = re.search(pattern, response, flags=re.IGNORECASE | re.DOTALL)
+                if m:
+                    candidate = m.group(1).strip()
+                    # Clean common artifacts like surrounding quotes
+                    if len(candidate) >= 2 and (
+                        (candidate[0] == candidate[-1] == '"') or
+                        (candidate[0] == candidate[-1] == "'")
+                    ):
+                        candidate = candidate[1:-1].strip()
+                    if candidate and candidate.lower() != text.lower():
+                        return candidate
+
+            # 8) Fallback: look for quoted content
+            quoted_content = re.findall(r'"([^"]+)"', response)
+            for quote in quoted_content:
+                if quote.strip() and quote.lower() != text.lower():
+                    return quote.strip()
+
+            # 9) Fallback: look for first substantial line
+            for line in response.splitlines():
+                line = line.strip()
+                if not line or len(line) < 10:
+                    continue
+                if line.lower().startswith(("system:", "user:", "assistant:", "modified text:", "instructions:")):
+                    continue
+                if line.lower() != text.lower():
+                    return line
+
+            # 10) Ultimate fallback: original text (never crash)
+            return text
+
+        except Exception as e:
+            self.logger.error(f"Stylistic mutation failed: {e}", exc_info=True)
             return text
 
 
