@@ -11,10 +11,7 @@ import json
 import spacy
 from dataclasses import dataclass
 
-try:
-    from ea.VariationOperators import VariationOperator
-except Exception:
-    from VariationOperators import VariationOperator
+from .VariationOperators import VariationOperator
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -84,12 +81,8 @@ class LLM_POSAwareAntonymReplacement(VariationOperator):
         self.rng = random.Random(seed)
         
         # Initialize generator (for future LLM calls)
-        try:
-            from ea.operator_helpers import get_generator
-            self.generator = get_generator()
-        except Exception as e:
-            self.logger.warning(f"{self.name}: LLM generator unavailable: {e}")
-            self.generator = None
+        from .operator_helpers import get_generator
+        self.generator = get_generator()
         
         self.logger.info(f"{self.name}: Configured with max_variants={self.max_variants}, num_POS_tags={self.num_POS_tags}, seed={seed}")
 

@@ -78,9 +78,11 @@ def select_parents_steady_state(self):
 Comprehensive implementation of mutation and crossover operators.
 
 **Recent Improvements:**
-- **16 Total Operators**: 13 mutation + 3 crossover
+- **12 Total Operators**: 10 mutation + 2 crossover (consolidated and cleaned up)
 - **Multi-Language Support**: 5 languages (Hindi, French, German, Japanese, Chinese)
-- **Dual Translation Approaches**: Helsinki-NLP models + LLaMA-based translation
+- **LLM-Only Back-Translation**: Moved to LLaMA-based translation only
+- **Deprecated Legacy Operators**: Removed classic POS-aware and point crossover
+- **Standardized Imports**: Eliminated try-except import patterns
 - Lazy Initialization
 - Memory Management
 - Error Handling
@@ -88,7 +90,7 @@ Comprehensive implementation of mutation and crossover operators.
 
 ## 🔄 **Variation Operators**
 
-### **Mutation Operators (13)**
+### **Mutation Operators (10)**
 
 #### **Core LLM Operators**
 - **`LLM_POSAwareSynonymReplacement`**: LLaMA-based synonym replacement using POS tagging (classic POS-aware operator deprecated)
@@ -122,13 +124,7 @@ Comprehensive implementation of mutation and crossover operators.
 - **`LLMBackTranslationJAOperator`**: Japanese back-translation (LLaMA)
 - **`LLMBackTranslationZHOperator`**: Chinese back-translation (LLaMA)
 
-### **Crossover Operators (3)**
-
-#### **Structural Crossover**
-<!-- PointCrossover deprecated -->
-  - Random split point selection
-  - Preserves prompt structure
-  - Simple but effective
+### **Crossover Operators (2)**
 
 #### **Semantic Crossover**
 - **`SemanticSimilarityCrossover`**: Crossover based on semantic similarity
@@ -138,29 +134,40 @@ Comprehensive implementation of mutation and crossover operators.
 
 #### **Instruction-Aware Crossover**
 - **`InstructionPreservingCrossover`**: Crossover that preserves instruction structure
-  - Identifies instruction patterns
+  - Uses config-driven prompt templates
   - Preserves command/question structure
-  - Maintains semantic coherence
+  - Optimizes for north star metric
+  - Returns single variant per call
+
+### **Deprecated Operators**
+
+#### **Removed from Active Use**
+- **`POSAwareSynonymReplacement`**: Classic BERT-based POS synonym replacement (replaced by LLM version)
+- **`PointCrossover`**: Single-point sentence crossover (deprecated and commented out)
+- **`BackTranslation*Operators`**: Helsinki-NLP based back-translation (replaced by LLM versions)
+
+> **Note**: Deprecated operators are retained in codebase for reference but are not loaded or used in evolution.
 
 ## 📊 **Operator Selection Logic**
 
 ```mermaid
 flowchart TD
   A[Parent Selection] --> B{Number of Parents?}
-  B -->|1 Parent| C[Single Parent Operators<br/>13 Mutation Operators]
-  B -->|2+ Parents| D[Multi-Parent Operators<br/>3 Crossover Operators]
+  B -->|1 Parent| C[Single Parent Operators<br/>10 Mutation Operators]
+  B -->|2+ Parents| D[Multi-Parent Operators<br/>2 Crossover Operators]
   
-  subgraph "Mutation Operators (13)"
+  subgraph "Mutation Operators (10)"
     E1[LLM_POSAwareSynonymReplacement]
-  E2[MLMOperator]
+    E2[MLMOperator]
     E3[LLMBasedParaphrasingOperator]
-    E4[Back-Translation Operators<br/>5 Languages × 2 Methods = 10]
+    E4[LLM_POSAwareAntonymReplacement]
+    E5[StylisticMutator]
+    E6[LLM Back-Translation: 5 Languages]
   end
   
-  subgraph "Crossover Operators (3)"
-    F1[PointCrossover]
-    F2[SemanticSimilarityCrossover]
-    F3[InstructionPreservingCrossover]
+  subgraph "Crossover Operators (2)"
+    F1[SemanticSimilarityCrossover]
+    F2[InstructionPreservingCrossover]
   end
   
   C --> E1
@@ -189,8 +196,8 @@ flowchart TD
 ```python
 def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):
     if num_parents == 1:
-        return get_single_parent_operators(north_star_metric, log_file)  # 13 mutation operators
-    return get_multi_parent_operators(log_file)  # 3 crossover operators
+        return get_single_parent_operators(north_star_metric, log_file)  # 10 mutation operators
+    return get_multi_parent_operators(log_file)  # 2 crossover operators
 ```
 
 ## 🔧 **Configuration**

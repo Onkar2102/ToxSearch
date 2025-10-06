@@ -84,15 +84,10 @@ def cleanup_multiprocessing():
 
 def restart_process():
     """Restart the current process"""
-    # Lazily import logging utilities to avoid circular deps
-    try:
-        from utils import get_custom_logging as _gcl
-        _get_logger, *_ = _gcl()
-        logger = _get_logger("main")
-    except Exception:
-        # Fallback to print if logging not initialized yet
-        print("[restart_process] Logging not initialized; using print fallback")
-        logger = None
+    # Import logging utilities
+    from utils import get_custom_logging as _gcl
+    _get_logger, *_ = _gcl()
+    logger = _get_logger("main")
     if logger:
         logger.warning("Restarting process due to health check failure")
     # Save current state if needed (placeholder)
@@ -188,14 +183,8 @@ def initialize_system(logger, log_file):
     logger.info("Initializing optimized pipeline for M3 Mac...")
     
     # Import required modules
-    try:
-        from .utils import get_population_io
-    except ImportError:
-        from utils import get_population_io
-    try:
-        from .gne import get_LLaMaTextGenerator
-    except ImportError:
-        from gne import get_LLaMaTextGenerator
+    from utils import get_population_io
+    from gne import get_LLaMaTextGenerator
     
     # Get population IO functions
     load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, redistribute_population_after_evaluation, redistribute_elites_to_population, load_elites, save_elites, add_variants_to_elites, get_population_stats_steady_state = get_population_io()
@@ -328,10 +317,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     # Phase 3: Evaluation (Hybrid moderation using Google + OpenAI APIs)
     with PerformanceLogger(logger, "Evaluation Phase"):
         try:
-            try:
-                from .gne import get_run_moderation_on_population
-            except ImportError:
-                from gne import get_run_moderation_on_population
+            from gne import get_run_moderation_on_population
             run_moderation_on_population = get_run_moderation_on_population()
             logger.info("Evaluating generated responses using hybrid moderation (%s)...", " + ".join(moderation_methods))
             # Evaluate elites.json directly
@@ -366,17 +352,11 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
         # Phase 4: Evolution (Now enabled and optimized)
         with PerformanceLogger(logger, "Evolution Phase"):
             try:
-                try:
-                    from .ea import get_run_evolution
-                except ImportError:
-                    from ea import get_run_evolution
+                from ea import get_run_evolution
                 run_evolution = get_run_evolution()
                 logger.info("Running optimized evolution on population...")
                 # Get generation data from evolution engine
-                try:
-                    from .ea import get_EvolutionEngine
-                except ImportError:
-                    from ea import get_EvolutionEngine
+                from ea import get_EvolutionEngine
                 
                 # Load population for evolution from elites.json
                 from utils.population_io import load_elites
@@ -400,10 +380,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                 # Save updated population after evolution
                 with PerformanceLogger(logger, "Save Population After Evolution"):
                     try:
-                        try:
-                            from .utils import get_population_io
-                        except ImportError:
-                            from utils import get_population_io
+                        from utils import get_population_io
                         _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
                         # Save to elites.json
                         elites_path = str(get_outputs_path() / "elites.json")
@@ -455,10 +432,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                     
                     # Update EvolutionTracker with actual scores from this generation
                     logger.info("Updating EvolutionTracker with generation %d results...", generation_count)
-                    try:
-                        from .ea import get_update_evolution_tracker_with_generation_global
-                    except ImportError:
-                        from ea import get_update_evolution_tracker_with_generation_global
+                    from ea import get_update_evolution_tracker_with_generation_global
                     
                     update_evolution_tracker_with_generation_global = get_update_evolution_tracker_with_generation_global()
                     
@@ -622,15 +596,8 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     # Final population analysis
     with PerformanceLogger(logger, "Final Analysis"):
         try:
-            # Try multiple import strategies
-            try:
-                from .ea import get_create_final_statistics_with_tracker
-            except ImportError:
-                try:
-                    from ea import get_create_final_statistics_with_tracker
-                except ImportError:
-                    # Final fallback: import from src.ea
-                    from src.ea import get_create_final_statistics_with_tracker
+            # Import final statistics function
+            from ea import get_create_final_statistics_with_tracker
             
             # Load population for basic stats
             from utils.population_io import load_elites

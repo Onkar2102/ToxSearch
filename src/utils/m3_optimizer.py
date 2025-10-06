@@ -87,13 +87,8 @@ def estimate_optimal_batch_size(model_name: str = "meta-llama/Llama-3.2-3B-instr
 
 def benchmark_generation_speed(batch_sizes: list = [1, 2, 4, 8]) -> Dict:
     """Benchmark text generation speed with different batch sizes"""
-    try:
-        from gne import get_LLaMaTextGenerator
-        LlaMaTextGenerator = get_LLaMaTextGenerator()
-    except ImportError as e:
-        print(f"Warning: Could not import LLaMaTextGenerator: {e}")
-        print("Skipping benchmark - this requires the full project setup")
-        return {"error": "Import failed - run from project root directory"}
+    from gne import get_LLaMaTextGenerator
+    LlaMaTextGenerator = get_LLaMaTextGenerator()
     
     results = {}
     test_prompts = ["Tell me about artificial intelligence." * i for i in range(1, 6)]

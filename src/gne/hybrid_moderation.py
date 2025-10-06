@@ -68,20 +68,16 @@ class HybridModerationEvaluator:
         self.logger.info("Initializing Hybrid Moderation Evaluator")
 
         # Load model config for batch size settings
-        try:
-            import yaml
-            if config_path is None:
-                from pathlib import Path
-                project_root = Path(__file__).resolve().parents[2]
-                config_path = project_root / "config" / "modelConfig.yaml"
-            with open(config_path, "r") as f:
-                config = yaml.safe_load(f)
-            model_key = list(config.keys())[0] if config else "llama"
-            self.model_cfg = config.get(model_key, {})
-            self.logger.info("Model config loaded for batch size configuration")
-        except Exception as e:
-            self.logger.warning("Failed to load model config: %s, using defaults", e)
-            self.model_cfg = {}
+        import yaml
+        if config_path is None:
+            from pathlib import Path
+            project_root = Path(__file__).resolve().parents[2]
+            config_path = project_root / "config" / "modelConfig.yaml"
+        with open(config_path, "r") as f:
+            config = yaml.safe_load(f)
+        model_key = list(config.keys())[0] if config else "llama"
+        self.model_cfg = config.get(model_key, {})
+        self.logger.info("Model config loaded for batch size configuration")
 
         # Check API availability
         self.google_available = bool(os.getenv("PERSPECTIVE_API_KEY"))

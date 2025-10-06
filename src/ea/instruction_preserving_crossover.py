@@ -11,23 +11,9 @@ import os
 from typing import List, Optional, Dict, Any
 import traceback
 
-try:
-    from ea.VariationOperators import VariationOperator
-except Exception:
-    try:
-        from .VariationOperators import VariationOperator
-    except Exception:
-        from VariationOperators import VariationOperator
+from .VariationOperators import VariationOperator
 
-try:
-    from utils import get_custom_logging
-except Exception:
-    try:
-        from ..utils import get_custom_logging
-    except Exception:
-        import logging
-        def get_custom_logging():
-            return logging.getLogger, None, None, None
+from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()
 
@@ -76,20 +62,10 @@ class InstructionPreservingCrossover(VariationOperator):
         self.logger = get_logger(self.name, log_file)
         self.north_star_metric = north_star_metric
         
-        # Initialize generator with better error handling
-        try:
-            try:
-                from ea.operator_helpers import get_generator
-            except Exception:
-                try:
-                    from .operator_helpers import get_generator
-                except Exception:
-                    from operator_helpers import get_generator
-            self.generator = get_generator()
-            self.logger.info(f"{self.name}: LLM generator initialized successfully")
-        except Exception as e:
-            self.logger.warning(f"{self.name}: LLM generator unavailable: {e}")
-            self.generator = None
+        # Initialize generator
+        from .operator_helpers import get_generator
+        self.generator = get_generator()
+        self.logger.info(f"{self.name}: LLM generator initialized successfully")
         
         # Debug tracking attributes
         self._last_parent1 = ""

@@ -588,8 +588,8 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
 
         # Phase 7: Deduplicate population
         with PerformanceLogger(logger, "Deduplicate Population"):
+            from collections import defaultdict
             try:
-                from collections import defaultdict
 
                 # Keep generation 0 genomes as-is
                 gen_zero = [g for g in engine.genomes if g["generation"] == 0]

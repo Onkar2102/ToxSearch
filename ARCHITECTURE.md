@@ -42,9 +42,10 @@ flowchart TD
 graph TB
   subgraph "Evolutionary Text Generation Framework"
     A[Steady-State Population Management]
-    B[16 Text Variation Operators]
+    B[12 Text Variation Operators]
     C[Hybrid Safety Evaluation]
     D[Memory-Optimized Processing]
+    E[Standardized Import System]
   end
   
   style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000

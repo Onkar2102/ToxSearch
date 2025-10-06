@@ -11,15 +11,10 @@ import json
 from pathlib import Path
 from collections import defaultdict
 import time
-from . import get_custom_logging
+from utils import get_custom_logging
 
-# Only import pandas when needed for initialization
-def _get_pandas():
-    try:
-        import pandas as pd
-        return pd
-    except ImportError:
-        raise ImportError("pandas is required for Excel file loading. Install with: pip install pandas")
+# Import pandas directly - it's required for this module
+import pandas as pd
 
 # Get the functions at module level to avoid repeated calls
 get_logger, _, _, PerformanceLogger = get_custom_logging()
@@ -432,7 +427,7 @@ def load_and_initialize_population(
                 raise FileNotFoundError(f"Input file not found: {input_path}")
 
             # Load pandas only when needed
-            pd = _get_pandas()
+            # pandas is already imported at module level
 
             # ---------------------------- Load Excel -----------------------
             with PerformanceLogger(logger, "Load Excel File"):

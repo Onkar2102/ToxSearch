@@ -10,10 +10,7 @@ from sentence_transformers import SentenceTransformer, util
 from typing import List, Any
 import traceback
 
-try:
-    from ea.VariationOperators import VariationOperator
-except Exception:
-    from VariationOperators import VariationOperator
+from .VariationOperators import VariationOperator
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()

@@ -12,10 +12,7 @@ Author: Onkar Shelar (os9660@rit.edu)
 import random
 from typing import List, Optional, Dict, Any, Tuple
 
-try:
-    from ea.VariationOperators import VariationOperator
-except Exception:
-    from VariationOperators import VariationOperator
+from .VariationOperators import VariationOperator
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -40,14 +37,10 @@ class MLMOperator(VariationOperator):
         self.max_variants = self._validate_max_variants(max_variants)
         self.rng = random.Random(seed)
         
-        # Initialize generator with better error handling
-        try:
-            from ea.operator_helpers import get_generator
-            self.generator = get_generator()
-            self.logger.info(f"{self.name}: LLM generator initialized successfully")
-        except Exception as e:
-            self.logger.warning(f"{self.name}: LLM generator unavailable: {e}")
-            self.generator = None
+        # Initialize generator
+        from .operator_helpers import get_generator
+        self.generator = get_generator()
+        self.logger.info(f"{self.name}: LLM generator initialized successfully")
         
         # Debug/trace attributes for tests and observability
         self._last_mask_mapping: Dict[int, str] = {}

@@ -102,8 +102,8 @@ graph TB
   end
   
   subgraph "Text Variation Operators"
-    D1[Mutation Operators<br/>13 Total]
-    D2[Crossover Operators<br/>3 Total]
+    D1[Mutation Operators<br/>10 Total]
+    D2[Crossover Operators<br/>2 Total]
     D3[Multi-Language Support<br/>5 Languages]
   end
   
@@ -222,32 +222,38 @@ outputs/
 
 ## Text Variation Operators
 
+### Current Active Operators (12 Total)
+
+#### **Mutation Operators (10)**
+1. **LLM_POSAwareSynonymReplacement** - LLaMA-based synonym replacement using POS tagging
+2. **MLMOperator** - BERT masked language model for word replacement
+3. **LLMBasedParaphrasingOperator** - LLaMA-based paraphrasing with optimization
+4. **LLM_POSAwareAntonymReplacement** - LLaMA-based antonym replacement
+5. **StylisticMutator** - Stylistic text mutations
+6. **LLMBackTranslationHIOperator** - Hindi back-translation (LLaMA)
+7. **LLMBackTranslationFROperator** - French back-translation (LLaMA)
+8. **LLMBackTranslationDEOperator** - German back-translation (LLaMA)
+9. **LLMBackTranslationJAOperator** - Japanese back-translation (LLaMA)
+10. **LLMBackTranslationZHOperator** - Chinese back-translation (LLaMA)
+
+#### **Crossover Operators (2)**
+1. **SemanticSimilarityCrossover** - Semantic similarity-based crossover
+2. **InstructionPreservingCrossover** - LLM-based instruction structure preservation
+
+### Deprecated Operators
+- **POSAwareSynonymReplacement** - Replaced by LLM version
+- **PointCrossover** - Deprecated and commented out
+- **Classic Back-translation operators** - Replaced by LLM versions
+
 ```mermaid
 graph TB
-  subgraph "Mutation Operators (13)"
-    A1[LLM_POSAwareSynonymReplacement<br/>LLaMA-based synonym replacement]
-    A2[BertMLMOperator<br/>BERT masked language model]
-    A3[LLMBasedParaphrasingOperator<br/>OpenAI GPT-4 paraphrasing]
-    
-    subgraph "Back-Translation (10)"
-      B1[Model-Based: Helsinki-NLP]
-      B2[LLM-Based: LLaMA]
-      
-      subgraph "Languages (5)"
-        C1[Hindi (HI)]
-        C2[French (FR)]
-        C3[German (DE)]
-        C4[Japanese (JA)]
-        C5[Chinese (ZH)]
-      end
-      
-      B1 --> C1
-      B1 --> C2
-      B1 --> C3
-      B1 --> C4
-      B1 --> C5
-      
-      B2 --> C1
+  subgraph "Active Mutation Operators (10)"
+    A1[LLM_POSAwareSynonymReplacement]
+    A2[MLMOperator]
+    A3[LLMBasedParaphrasingOperator]
+    A4[LLM_POSAwareAntonymReplacement]
+    A5[StylisticMutator]
+    A6[LLM Back-Translation: 5 Languages]
       B2 --> C2
       B2 --> C3
       B2 --> C4
@@ -276,8 +282,8 @@ graph TB
 ```mermaid
 flowchart TD
   A[Parent Selection] --> B{Number of Parents?}
-  B -->|1 Parent| C[Mutation Operators<br/>13 Total]
-  B -->|2+ Parents| D[Crossover Operators<br/>3 Total]
+  B -->|1 Parent| C[Mutation Operators<br/>10 Total]
+  B -->|2+ Parents| D[Crossover Operators<br/>2 Total]
   
   C --> E[Apply Selected Operator]
   D --> E
@@ -289,6 +295,46 @@ flowchart TD
   style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
   style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
 ```
+
+## Recent Changes & Updates
+
+### Import System Refactoring (October 2025)
+- ✅ **Eliminated all try-except import patterns** for cleaner, faster imports
+- ✅ **Standardized import conventions** throughout the project
+- ✅ **Fixed relative/absolute import inconsistencies**
+- ✅ **Improved error messages** when dependencies are missing
+
+### Operator Consolidation
+- ✅ **Removed classic POS-aware synonym replacement** - now using LLM version only
+- ✅ **Deprecated point crossover operator** - commented out but retained for reference
+- ✅ **Deprecated classic back-translation** - now using LLM-based versions only
+- ✅ **Updated to 12 active operators** (10 mutation + 2 crossover)
+
+### Configuration Improvements
+- ✅ **Config-driven prompt templates** for instruction-preserving crossover
+- ✅ **Centralized system instructions** in modelConfig.yaml
+- ✅ **Single-variant behavior** for consistency across operators
+
+### Current Active Operators
+**Mutation Operators (10):**
+1. LLM_POSAwareSynonymReplacement
+2. MLMOperator
+3. LLMBasedParaphrasingOperator
+4. LLM_POSAwareAntonymReplacement
+5. StylisticMutator
+6. LLMBackTranslationHIOperator
+7. LLMBackTranslationFROperator
+8. LLMBackTranslationDEOperator
+9. LLMBackTranslationJAOperator
+10. LLMBackTranslationZHOperator
+
+**Crossover Operators (2):**
+1. SemanticSimilarityCrossover
+2. InstructionPreservingCrossover
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
  
 
