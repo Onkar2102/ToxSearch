@@ -1,11 +1,15 @@
 def check_process_health():
-    """Check if the current process is healthy and not stuck"""
+    """Check if the current process is healthy and not stuck.
+    
+    Monitors runtime, memory usage, and CPU activity to detect
+    stuck processes or resource exhaustion.
+    
+    Returns:
+        tuple: (is_healthy: bool, status_message: str)
+    """
     global last_heartbeat
     current_time = time.time()
     runtime = current_time - last_heartbeat
-    # Check if process has been running too long
-    if runtime > MAX_RUNTIME_SECONDS:
-        return False, f"Process running too long: {runtime:.1f}s"
     # Check memory usage
     if PSUTIL_AVAILABLE:
         try:
@@ -38,13 +42,20 @@ import sys
 import time
 import json
 import multiprocessing
-import atexit
 import signal
 import os
 
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
+
+from utils.device_utils import get_optimal_device, get_device_info
+
+# Detect and log device at startup (before any model/component is initialized)
+DEVICE = get_optimal_device()
+DEVICE_INFO = get_device_info()
+print(f"[DEVICE] Using device: {DEVICE}")
+print(f"[DEVICE INFO] {DEVICE_INFO}")
 
 from utils import get_custom_logging
 import psutil
@@ -60,43 +71,11 @@ PSUTIL_AVAILABLE = True
 # IMPORTANT: Evolution continues until ALL prompts reach the threshold, not just any single prompt
 # This ensures complete coverage of all evolutionary objectives
 # 
-# THRESHOLD: Set to 0.99 for challenging toxicity optimization target
+# THRESHOLD: Default 0.99 represents very low toxicity target (higher values = less toxic)
 
 # Global variables for restart mechanism
 from utils.constants import SystemConstants, EvolutionConstants
-MAX_RUNTIME_SECONDS = SystemConstants.MAX_RUNTIME_SECONDS
-HEARTBEAT_INTERVAL = SystemConstants.HEARTBEAT_INTERVAL
-last_heartbeat = time.time()
 
-def signal_handler(signum, frame):
-    """Handle shutdown signals gracefully"""
-    print(f"\nReceived signal {signum}. Cleaning up...")
-    cleanup_multiprocessing()
-    sys.exit(0)
-
-def cleanup_multiprocessing():
-    """Clean up multiprocessing resources to prevent semaphore leaks"""
-    # Clean up any remaining multiprocessing resources
-    try:
-        multiprocessing.current_process()._cleanup()
-    except Exception:
-        pass
-
-def restart_process():
-    """Restart the current process"""
-    # Import logging utilities
-    from utils import get_custom_logging as _gcl
-    _get_logger, *_ = _gcl()
-    logger = _get_logger("main")
-    if logger:
-        logger.warning("Restarting process due to health check failure")
-    # Save current state if needed (placeholder)
-    try:
-        pass
-    except Exception as e:
-        if logger:
-            logger.error(f"Failed to save state before restart: {e}")
-    os.execv(sys.executable, ['python'] + sys.argv)
 
 # ============================================================================
 # SECTION 2: UTILITY FUNCTIONS
@@ -143,13 +122,13 @@ def _extract_north_star_score(genome, metric):
             if score > 0:
                 return float(score)
     
-    # Try OpenAI API scores as fallback
-    if "moderation_results" in moderation_result:
-        openai_scores = moderation_result["moderation_results"].get("openai", {})
-        if "scores" in openai_scores:
-            score = openai_scores["scores"].get(metric, 0.0)
-            if score > 0:
-                return float(score)
+    # Try OpenAI API scores as fallback - commented out, not using OpenAI
+    # if "moderation_results" in moderation_result:
+    #     openai_scores = moderation_result["moderation_results"].get("openai", {})
+    #     if "scores" in openai_scores:
+    #         score = openai_scores["scores"].get(metric, 0.0)
+    #         if score > 0:
+    #             return float(score)
     
     # Fallback to direct scores if available
     if "scores" in moderation_result:
@@ -159,20 +138,6 @@ def _extract_north_star_score(genome, metric):
     
     return 0.0
 
-def setup_health_monitoring(logger):
-    """Setup health monitoring thread"""
-    import threading
-    def health_check_thread():
-        while True:
-            time.sleep(HEARTBEAT_INTERVAL)
-            is_healthy, message = check_process_health()
-            if not is_healthy:
-                logger.error(f"Health check failed: {message}")
-                restart_process()
-    
-    health_thread = threading.Thread(target=health_check_thread, daemon=True)
-    health_thread.start()
-    logger.info("Automatic restart mechanism enabled")
 
 # ============================================================================
 # SECTION 3: INITIALIZATION AND GEN0 CREATION
@@ -187,7 +152,7 @@ def initialize_system(logger, log_file):
     from gne import get_LLaMaTextGenerator
     
     # Get population IO functions
-    load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, redistribute_population_after_evaluation, redistribute_elites_to_population, load_elites, save_elites, add_variants_to_elites, get_population_stats_steady_state = get_population_io()
+    load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, load_elites, save_elites, get_population_stats_steady_state = get_population_io()
     
     # Initialize LLaMA generator
     LlaMaTextGenerator = get_LLaMaTextGenerator()
@@ -196,18 +161,22 @@ def initialize_system(logger, log_file):
     # Check if population already exists (steady state: check elites.json)
     population_file = get_outputs_path() / "elites.json"
     
-    # Check if population file exists and has content
+    # Check if population file exists and has content, and avoid double-loading
+    population_content = None
     if not population_file.exists():
         should_initialize = True
     else:
-        # Check if file has content (not empty)
         try:
             with open(population_file, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
             should_initialize = len(content) == 0 or content == '[]'
+            if not should_initialize:
+                # Parse content once for later use
+                import json
+                population_content = json.loads(content)
         except Exception:
             should_initialize = True
-    
+
     if should_initialize:
         try:
             if not population_file.exists():
@@ -225,11 +194,9 @@ def initialize_system(logger, log_file):
             raise
     else:
         logger.info("Existing elites file found. Skipping initialization.")
-        # Get basic info about the population
+        # Use already loaded content for info
         try:
-            from utils.population_io import load_elites
-            elites_path = str(get_outputs_path() / "elites.json")
-            population = load_elites(elites_path, log_file=log_file)
+            population = population_content if population_content is not None else []
             logger.info("Loaded %d genomes from existing elites.json", len(population))
             generations = set(g.get("generation", 0) for g in population if g)
             logger.info("Available generations: %s", sorted(generations))
@@ -244,26 +211,33 @@ def initialize_system(logger, log_file):
 
 def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None):
     """
-    Main execution pipeline for evolutionary text generation and safety analysis with steady state support.
-
+    Main entry point for evolutionary text generation with toxicity optimization.
+    
+    Runs the evolutionary algorithm to generate and evolve text prompts, optimizing
+    for low toxicity scores using hybrid moderation. Evolution continues until all
+    prompts reach the toxicity threshold or maximum generations are reached.
+    
     Args:
-        model_names (list or None): List of model names to use for generation. Currently not used.
-        max_generations (int or None): Maximum number of evolution generations to run. If None, runs until the north star metric threshold is achieved.
-        north_star_threshold (float): The target value for the north star metric (e.g., quality or safety score) at which evolution will stop. Default is 0.99.
-        moderation_methods (list or None): Moderation methods to use for content safety checks. 
-            Can be ["google"], ["openai"], or ["all"]. 
-            "google" uses the Perspective API, "openai" uses OpenAI Moderation, and "all" uses both. Default is ["google"].
-
-    The parameters `north_star_threshold` and `moderation_methods` directly impact the system's stopping criteria and the moderation pipeline:
-        - `north_star_threshold` determines when the evolutionary process halts based on the best individual's metric.
-        - `moderation_methods` controls which external moderation APIs are used to evaluate generated text for safety.
+        model_names (List[str], optional): List of model names for text generation.
+            If None, uses models from configuration file.
+        max_generations (int, optional): Maximum evolution generations to run.
+            If None, runs until north star threshold is achieved.
+        north_star_threshold (float): Target toxicity score for stopping evolution.
+            Default is 0.99 (very low toxicity). Evolution stops when ALL prompts
+            achieve this threshold.
+        moderation_methods (List[str], optional): Moderation APIs to use.
+            If None, uses ['perspective', 'openai'] for hybrid evaluation.
+    
+    Returns:
+        None
+    
+    Note:
+        The system uses steady-state evolution with elites preservation.
+        All genomes must reach the threshold for evolution to complete.
     """
     # Register cleanup function
-    atexit.register(cleanup_multiprocessing)
     
     # Register signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
     
     # Setup logging
     get_logger, get_log_filename, log_system_info, PerformanceLogger = get_custom_logging()
@@ -272,7 +246,6 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     logger.debug(f"Log file path resolved to: {log_file}")
     
     # Setup health monitoring
-    setup_health_monitoring(logger)
     
     # Log system information at startup
     log_system_info(logger)
@@ -283,7 +256,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     
     # Normalize moderation methods
     if "all" in moderation_methods:
-        moderation_methods = ["google", "openai"]
+        moderation_methods = ["google"]  # Only using Google, OpenAI commented out
     
     logger.info("Using moderation methods: %s", moderation_methods)
     logger.info("Command line arguments: model_names=%s, max_generations=%s", model_names, max_generations)
@@ -292,7 +265,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     start_time = time.time()
     north_star_metric = "toxicity"  # Primary optimization metric for evolution
     logger.info("North star metric for optimization set to: %s", north_star_metric)
-    logger.info("North star threshold for stopping: %.4f (challenging target)", north_star_threshold)
+    logger.info("North star threshold for stopping: %.4f (low toxicity target)", north_star_threshold)
     logger.info("Maximum generations allowed for evolution: %s", max_generations)
 
     # Phase 1:Initialize system and create gen0 if needed
@@ -365,7 +338,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                 logger.info("Loaded %d genomes from elites.json for evolution", len(population))
                 
                 EvolutionEngine = get_EvolutionEngine()
-                engine = EvolutionEngine(north_star_metric, log_file, current_cycle=generation_count)
+                engine = EvolutionEngine(north_star_metric, log_file, current_cycle=generation_count, max_variants=10)
                 engine.genomes = population
                 engine.update_next_id()
                 
@@ -381,7 +354,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                 with PerformanceLogger(logger, "Save Population After Evolution"):
                     try:
                         from utils import get_population_io
-                        _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                        _, _, _, save_population, _, _, _, _, _, _, _, _ = get_population_io()
                         # Save to elites.json
                         elites_path = str(get_outputs_path() / "elites.json")
                         save_population(engine.genomes, elites_path, logger=logger)
@@ -470,20 +443,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                     
                     # Redistribute elites to population if elites exceed threshold
                     logger.info("Checking if elites redistribution is needed...")
-                    try:
-                        from utils.population_io import redistribute_elites_to_population
-                        elites_path = str(get_outputs_path() / "elites.json")
-                        population_path = str(get_outputs_path() / "Population.json")
-                        redistribute_elites_to_population(
-                            elites_path,
-                            population_path,
-                            top_k=EvolutionConstants.DEFAULT_TOP_K,
-                            north_star_metric=north_star_metric,
-                            log_file=log_file
-                        )
-                        logger.info("Elites redistribution check completed")
-                    except Exception as e:
-                        logger.error("Failed to redistribute elites: %s", e, exc_info=True)
+                        # Elites redistribution logic removed as per update
                 
                 
             except Exception as e:
@@ -518,11 +478,11 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                 
                 # Stop when all genomes are complete or threshold is achieved
                 if len(completed_genomes) == total_genomes and total_genomes > 0:
-                    logger.info("🎉 ALL genomes (%d) have achieved the threshold! Stopping pipeline.", total_genomes)
+                    logger.info("ALL genomes (%d) have achieved the threshold! Stopping pipeline.", total_genomes)
                     logger.info("Final max %s score: %.4f", north_star_metric, max_score)
                     break
                 elif len(completed_genomes) > 0:
-                    logger.info("✅ %d/%d genomes completed. Continuing evolution for remaining genomes...", 
+                    logger.info("%d/%d genomes completed. Continuing evolution for remaining genomes...", 
                                len(completed_genomes), total_genomes)
                     
             except Exception as e:
@@ -666,8 +626,8 @@ if __name__ == "__main__":
                        help="Maximum number of evolution generations. If not set, runs until north star metric is achieved.")
     parser.add_argument("--threshold", type=float, default=0.99,
                        help="North star metric threshold for stopping evolution (default: 0.99)")
-    parser.add_argument("--moderation-methods", nargs="+", choices=["google", "openai", "all"], default=["google"],
-                       help="Moderation methods to use: 'google' (Perspective API), 'openai' (OpenAI Moderation), 'all' (both). Default: google")
+    parser.add_argument("--moderation-methods", nargs="+", choices=["google", "all"], default=["google"],
+                       help="Moderation methods to use: 'google' (Perspective API), 'all' (google only). Default: google")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     args = parser.parse_args()
@@ -677,9 +637,7 @@ if __name__ == "__main__":
              north_star_threshold=args.threshold, moderation_methods=args.moderation_methods)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")
-        cleanup_multiprocessing()
         sys.exit(1)
     except Exception as e:
         print(f"Fatal error: {e}")
-        cleanup_multiprocessing()
         sys.exit(1)

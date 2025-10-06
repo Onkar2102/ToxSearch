@@ -288,6 +288,239 @@ class ParentSelector:
             self.logger.error(f"Failed to select parents using steady state strategy: {e}")
             return None, None
     
+    def select_parents_adaptive_tournament(self) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
+        """
+        Select parents using adaptive tournament selection strategy:
+        - Start with 3 parents from elites
+        - If population_max_toxicity doesn't increase after 3 generations, add 4th genome from non-elites
+        - If still no improvement after adding 4th, add 5th from non-elites
+        
+        Returns enriched parent data with:
+        - prompt: Original prompt text
+        - generated_text: Generated response from the prompt
+        - scores: Moderation scores
+        - north_star_score: Primary optimization metric score
+        
+        Returns:
+            Tuple[Optional[Dict], Optional[List[Dict]]]: (mutation_parent, crossover_parents)
+        """
+        if not self.use_steady_state:
+            self.logger.warning("Steady state not enabled, falling back to global selection")
+            return None, None
+        
+        try:
+            # Load elites and population
+            elites = load_elites(log_file=None)
+            population = load_population(log_file=None)
+            
+            if not elites:
+                self.logger.warning("No genomes in elites, cannot select parents")
+                return None, None
+            
+            # Load evolution tracker to check recent performance
+            evolution_tracker = self._load_evolution_tracker()
+            num_parents = self._determine_adaptive_parent_count(evolution_tracker)
+            
+            self.logger.info(f"Adaptive tournament selection: using {num_parents} parents")
+            
+            # Select mutation parent (topmost with highest score)
+            mutation_parent = elites[0] if elites else None
+            
+            # Enrich mutation parent with required data
+            if mutation_parent:
+                mutation_parent = self._enrich_parent_data(mutation_parent)
+            
+            # Select crossover parents based on adaptive count
+            crossover_parents = []
+            
+            # Always start with topmost genome from elites
+            if mutation_parent:
+                crossover_parents.append(mutation_parent)
+            
+            # Add additional parents based on adaptive count
+            if num_parents >= 2:
+                # Add 1 more from elites (excluding mutation parent)
+                elites_candidates = [g for g in elites if g != elites[0]]  # Compare with original, not enriched
+                if len(elites_candidates) >= 1:
+                    selected_parent = random.choice(elites_candidates)
+                    enriched_parent = self._enrich_parent_data(selected_parent)
+                    crossover_parents.append(enriched_parent)
+            
+            if num_parents >= 3:
+                # Add 1 more from elites
+                elites_candidates = [g for g in elites if g not in [elites[0]] + [p.get('original_genome', {}) for p in crossover_parents[1:]]]
+                if len(elites_candidates) >= 1:
+                    selected_parent = random.choice(elites_candidates)
+                    enriched_parent = self._enrich_parent_data(selected_parent)
+                    crossover_parents.append(enriched_parent)
+            
+            if num_parents >= 4:
+                # Add 1 from non-elites (population)
+                non_elite_candidates = [g for g in population if g not in elites]
+                if len(non_elite_candidates) >= 1:
+                    selected_parent = random.choice(non_elite_candidates)
+                    enriched_parent = self._enrich_parent_data(selected_parent)
+                    crossover_parents.append(enriched_parent)
+                    self.logger.info("Added 4th parent from non-elites due to stagnation")
+            
+            if num_parents >= 5:
+                # Add 1 more from non-elites
+                non_elite_candidates = [g for g in population if g not in elites and g not in [p.get('original_genome', {}) for p in crossover_parents[3:]]]
+                if len(non_elite_candidates) >= 1:
+                    selected_parent = random.choice(non_elite_candidates)
+                    enriched_parent = self._enrich_parent_data(selected_parent)
+                    crossover_parents.append(enriched_parent)
+                    self.logger.info("Added 5th parent from non-elites due to continued stagnation")
+            
+            # Ensure we have at least 2 parents for crossover
+            if len(crossover_parents) < 2:
+                # Fill remaining slots from elites
+                elites_candidates = [g for g in elites if g not in [p.get('original_genome', {}) for p in crossover_parents]]
+                while len(crossover_parents) < 2 and elites_candidates:
+                    selected_parent = random.choice(elites_candidates)
+                    enriched_parent = self._enrich_parent_data(selected_parent)
+                    crossover_parents.append(enriched_parent)
+                    elites_candidates = [g for g in elites_candidates if g != selected_parent]
+            
+            self.logger.info(f"Selected {len(crossover_parents)} crossover parents: {[p['id'] for p in crossover_parents]}")
+            
+            return mutation_parent, crossover_parents
+            
+        except Exception as e:
+            self.logger.error(f"Error in adaptive tournament selection: {e}")
+            return None, None
+    
+    def _enrich_parent_data(self, genome: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enrich parent genome data with required fields for operators.
+        
+        Args:
+            genome: Original genome dictionary
+            
+        Returns:
+            Enriched genome dictionary with prompt, generated_text, scores, and north_star_score
+        """
+        try:
+            # Create enriched copy
+            enriched_genome = genome.copy()
+            
+            # Ensure required fields exist
+            enriched_genome['prompt'] = genome.get('prompt', '')
+            enriched_genome['generated_text'] = genome.get('generated_text', '')
+            
+            # Extract scores from moderation result
+            moderation_result = genome.get('moderation_result', {})
+            if isinstance(moderation_result, dict):
+                enriched_genome['scores'] = moderation_result.get('scores', {})
+            else:
+                enriched_genome['scores'] = {}
+            
+            # Calculate north star score
+            enriched_genome['north_star_score'] = self._extract_tournament_score(genome)
+            
+            # Store reference to original genome for comparison
+            enriched_genome['original_genome'] = genome
+            
+            return enriched_genome
+            
+        except Exception as e:
+            self.logger.warning(f"Error enriching parent data: {e}")
+            return genome
+    
+    def _load_evolution_tracker(self) -> Dict[str, Any]:
+        """Load evolution tracker to check recent performance."""
+        try:
+            import json
+            from pathlib import Path
+            
+            tracker_path = Path("outputs/EvolutionTracker.json")
+            if tracker_path.exists():
+                with open(tracker_path, 'r') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            self.logger.warning(f"Could not load evolution tracker: {e}")
+            return {}
+    
+    def _determine_adaptive_parent_count(self, evolution_tracker: Dict[str, Any]) -> int:
+        """
+        Determine the number of parents to use based on recent performance.
+        
+        Improved logic:
+        - Start with 3 parents from elites
+        - If population_max_toxicity doesn't increase for 3 consecutive generations, add 4th parent from non-elites
+        - If still no improvement for 2 more generations, add 5th parent from non-elites
+        - Reset to 3 parents if improvement is detected
+        
+        Returns:
+            int: Number of parents to use (3, 4, or 5)
+        """
+        try:
+            generations = evolution_tracker.get("generations", [])
+            if len(generations) < 3:
+                # Not enough generations to determine stagnation
+                self.logger.debug("Not enough generations (<3) for adaptive selection, using 3 parents")
+                return 3
+            
+            # Get the current population max toxicity
+            current_max_toxicity = evolution_tracker.get("population_max_toxicity", 0.0)
+            
+            # Check last 3 generations for stagnation
+            recent_generations = generations[-3:]
+            scores = [gen.get("max_score", 0.0) for gen in recent_generations]
+            
+            # Calculate improvement threshold (5% improvement to consider progress)
+            improvement_threshold = 0.05
+            
+            # Check if we've had improvement in recent generations
+            has_recent_improvement = False
+            if len(scores) >= 2:
+                # Check if the latest score is significantly better than the previous
+                if scores[-1] > scores[-2] + improvement_threshold:
+                    has_recent_improvement = True
+                    self.logger.info(f"Recent improvement detected: {scores[-2]:.4f} -> {scores[-1]:.4f}")
+            
+            # Check for stagnation (no significant improvement in last 3 generations)
+            if len(scores) >= 3 and not has_recent_improvement:
+                # Check if max score hasn't increased significantly in last 3 generations
+                max_score_in_window = max(scores)
+                min_score_in_window = min(scores)
+                score_variance = max_score_in_window - min_score_in_window
+                
+                # If variance is very low (stagnation), increase parent count
+                if score_variance < improvement_threshold:
+                    self.logger.info(f"Stagnation detected: score variance {score_variance:.4f} < threshold {improvement_threshold}")
+                    
+                    # Check how many generations we've been stagnant
+                    stagnant_generations = 0
+                    for i in range(len(scores) - 1, 0, -1):
+                        if scores[i] <= scores[i-1] + improvement_threshold:
+                            stagnant_generations += 1
+                        else:
+                            break
+                    
+                    if stagnant_generations >= 3:
+                        # Try 4 parents
+                        self.logger.info(f"Stagnant for {stagnant_generations} generations, trying 4 parents")
+                        return 4
+                    elif stagnant_generations >= 5:
+                        # Try 5 parents
+                        self.logger.info(f"Stagnant for {stagnant_generations} generations, trying 5 parents")
+                        return 5
+            
+            # If we have recent improvement, reset to 3 parents
+            if has_recent_improvement:
+                self.logger.info("Recent improvement detected, resetting to 3 parents")
+                return 3
+            
+            # Default to 3 parents
+            self.logger.debug(f"No stagnation detected, using 3 parents (scores: {scores})")
+            return 3
+            
+        except Exception as e:
+            self.logger.warning(f"Error determining adaptive parent count: {e}")
+            return 3
+    
     def select_roulette_parents(self, prompt_genomes: List[Dict]) -> Tuple[Optional[Dict], Optional[List[Dict]]]:
         """
         Roulette wheel selection strategy based on fitness.

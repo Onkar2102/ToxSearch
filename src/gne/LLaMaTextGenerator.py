@@ -9,7 +9,8 @@ import yaml
 import gc
 import psutil
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-from utils import get_custom_logging, get_population_io
+from utils import get_custom_logging
+from utils.device_utils import get_optimal_device, get_device_info, move_to_device, get_generation_kwargs
 from typing import List, Dict, Any, Optional
 import time
 
@@ -38,6 +39,11 @@ class LlaMaTextGenerator:
         self.adaptive_batch_sizing = self.model_cfg.get("adaptive_batch_sizing", True)
         self.min_batch_size = self.model_cfg.get("min_batch_size", 1)
         self.max_batch_size_memory = self.model_cfg.get("max_batch_size_memory", 4)
+
+        # Performance tracking attributes
+        self.generation_count = 0
+        self.total_tokens_generated = 0
+        self.total_generation_time = 0.0
         
         model_name = self.model_cfg["name"]
         if model_name not in self._MODEL_CACHE:
@@ -63,29 +69,53 @@ class LlaMaTextGenerator:
         self.max_batch_size = self.model_cfg.get("max_batch_size", 4)
         self.logger.info(f"Model loaded on {self.device} with batch size {self.max_batch_size}")
 
-        # Performance tracking
-        self.generation_count = 0
-        self.total_tokens_generated = 0
-        self.total_generation_time = 0.0
-        
         # Memory monitoring
         self.last_memory_check = time.time()
         self.memory_check_interval = 60  # Check memory every 60 seconds
 
+    def _check_memory_usage(self):
+        """Check memory usage and perform cleanup if needed"""
+        current_time = time.time()
+        if current_time - self.last_memory_check > self.memory_check_interval:
+            try:
+                import psutil
+                memory_percent = psutil.virtual_memory().percent
+                available_memory_gb = psutil.virtual_memory().available / (1024**3)
+                
+                self.logger.debug(f"Memory usage: {memory_percent:.1f}%, Available: {available_memory_gb:.1f}GB")
+                
+                # Perform cleanup if memory usage is high
+                if memory_percent > 85:
+                    self.logger.warning(f"High memory usage detected: {memory_percent:.1f}%")
+                    self._perform_memory_cleanup()
+                
+                self.last_memory_check = current_time
+            except ImportError:
+                self.logger.debug("psutil not available for memory monitoring")
+            except Exception as e:
+                self.logger.warning(f"Memory check failed: {e}")
+    
+    def _perform_memory_cleanup(self):
+        """Perform aggressive memory cleanup"""
+        try:
+            import gc
+            # Force garbage collection
+            gc.collect()
+            
+            # Clear CUDA cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            self.logger.info("Memory cleanup performed")
+        except Exception as e:
+            self.logger.warning(f"Memory cleanup failed: {e}")
+    
     def _get_optimal_device(self):
-        """Get the best available device for M3 Mac"""
+        """Get the best available device using centralized device manager"""
         if self._DEVICE_CACHE is not None:
             return self._DEVICE_CACHE
-            
-        if torch.backends.mps.is_available():
-            self._DEVICE_CACHE = "mps"
-            self.logger.info("Using MPS (Metal Performance Shaders) for Apple Silicon")
-        elif torch.cuda.is_available():
-            self._DEVICE_CACHE = "cuda"
-            self.logger.info("Using CUDA")
-        else:
-            self._DEVICE_CACHE = "cpu"
-            self.logger.info("Using CPU")
+        
+        self._DEVICE_CACHE = get_optimal_device()
         return self._DEVICE_CACHE
 
     def _load_model_optimized(self, model_name: str):
@@ -168,14 +198,13 @@ class LlaMaTextGenerator:
         finally:
             signal.signal(signal.SIGALRM, original_handler)
         
-        # Move to device and optimize
-        if device != "cpu":
-            try:
-                model = model.to(device)
-            except Exception as e:
-                self.logger.warning(f"Failed to move model to {device}, using CPU: {e}")
-                device = "cpu"
-                self._DEVICE_CACHE = "cpu"
+        # Move to device and optimize with centralized device management
+        try:
+            model = move_to_device(model, device)
+            self.logger.info(f"Model successfully moved to {device}")
+        except Exception as e:
+            self.logger.error(f"Failed to move model to device: {e}")
+            raise RuntimeError(f"Unable to load model on any device: {e}")
         
         model.eval()
         
@@ -399,6 +428,7 @@ class LlaMaTextGenerator:
         self.logger.info(f"Starting batch generation. Initial memory: {initial_memory['total_memory_gb']:.2f}GB")
         
         # Check memory and cleanup if necessary
+        self._check_memory_usage()
         if not self._check_memory_and_cleanup():
             self.logger.error("Memory usage too high, cannot proceed with generation")
             return ["[MEMORY_ERROR]" for _ in prompts]
@@ -643,11 +673,11 @@ class LlaMaTextGenerator:
 
 
     def _load_population(self, pop_path: str) -> List[Dict[str, Any]]:
-        _, _, load_population, _, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+        from utils.population_io import load_population
         return load_population(pop_path, logger=self.logger)
     
     def _save_population(self, population: List[Dict[str, Any]], pop_path: str) -> None:
-        _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+        from utils.population_io import save_population
         save_population(population, pop_path, logger=self.logger)
 
 
@@ -822,7 +852,8 @@ class LlaMaTextGenerator:
             ).to(self.device)
 
             # 4) Merge generation args (global + task-specific)
-            task_args = self.task_generation_args.get("translation", {})
+            # Use mutation_crossover args for all operators including translation
+            task_args = self.task_generation_args.get("mutation_crossover", {})
             generation_kwargs = {
                 **self.generation_args,
                 **task_args,
@@ -831,13 +862,21 @@ class LlaMaTextGenerator:
                 "use_cache": True,
             }
 
-            # 5) Generate (autocast only on CUDA/MPS)
+            # 5) Generate with device-specific optimizations
             with torch.no_grad():
-                if self.device in ("cuda", "mps"):
-                    with torch.autocast(device_type=self.device, enabled=True):
+                try:
+                    if self.device in ("cuda", "mps"):
+                        # Use autocast for GPU acceleration
+                        with torch.autocast(device_type=self.device, enabled=True):
+                            outputs = self.model.generate(**inputs, **generation_kwargs)
+                    else:
+                        # CPU generation without autocast
                         outputs = self.model.generate(**inputs, **generation_kwargs)
-                else:
-                    outputs = self.model.generate(**inputs, **generation_kwargs)
+                except Exception as e:
+                    self.logger.warning(f"GPU generation failed, falling back to CPU: {e}")
+                    # Fallback to CPU if GPU generation fails
+                    inputs_cpu = {k: v.to("cpu") if hasattr(v, 'to') else v for k, v in inputs.items()}
+                    outputs = self.model.to("cpu").generate(**inputs_cpu, **generation_kwargs)
 
             # 6) Decode full text and strip the prompt echo
             decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -924,13 +963,21 @@ class LlaMaTextGenerator:
                 "use_cache": True,
             }
 
-            # 5) Generate (autocast only on CUDA/MPS)
+            # 5) Generate with device-specific optimizations
             with torch.no_grad():
-                if self.device in ("cuda", "mps"):
-                    with torch.autocast(device_type=self.device, enabled=True):
+                try:
+                    if self.device in ("cuda", "mps"):
+                        # Use autocast for GPU acceleration
+                        with torch.autocast(device_type=self.device, enabled=True):
+                            outputs = self.model.generate(**inputs, **generation_kwargs)
+                    else:
+                        # CPU generation without autocast
                         outputs = self.model.generate(**inputs, **generation_kwargs)
-                else:
-                    outputs = self.model.generate(**inputs, **generation_kwargs)
+                except Exception as e:
+                    self.logger.warning(f"GPU generation failed, falling back to CPU: {e}")
+                    # Fallback to CPU if GPU generation fails
+                    inputs_cpu = {k: v.to("cpu") if hasattr(v, 'to') else v for k, v in inputs.items()}
+                    outputs = self.model.to("cpu").generate(**inputs_cpu, **generation_kwargs)
 
             # 6) Decode full text and strip the prompt echo
             decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -1024,13 +1071,21 @@ class LlaMaTextGenerator:
                 "use_cache": True,
             }
 
-            # 5) Generate (autocast only on CUDA/MPS)
+            # 5) Generate with device-specific optimizations
             with torch.no_grad():
-                if self.device in ("cuda", "mps"):
-                    with torch.autocast(device_type=self.device, enabled=True):
+                try:
+                    if self.device in ("cuda", "mps"):
+                        # Use autocast for GPU acceleration
+                        with torch.autocast(device_type=self.device, enabled=True):
+                            outputs = self.model.generate(**inputs, **generation_kwargs)
+                    else:
+                        # CPU generation without autocast
                         outputs = self.model.generate(**inputs, **generation_kwargs)
-                else:
-                    outputs = self.model.generate(**inputs, **generation_kwargs)
+                except Exception as e:
+                    self.logger.warning(f"GPU generation failed, falling back to CPU: {e}")
+                    # Fallback to CPU if GPU generation fails
+                    inputs_cpu = {k: v.to("cpu") if hasattr(v, 'to') else v for k, v in inputs.items()}
+                    outputs = self.model.to("cpu").generate(**inputs_cpu, **generation_kwargs)
 
             # 6) Decode full text and strip the prompt echo
             decoded = self.tokenizer.decode(outputs[0], skip_special_tokens=True)

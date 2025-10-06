@@ -1,18 +1,21 @@
 """
 operator_helpers.py
 
+Helper functions and factory methods for evolutionary algorithm operators.
 
-This module contains helper functions and common imports used across all
-text variation operators in the evolutionary algorithm.
+This module provides centralized access to variation operators, including
+mutation operators (single parent) and crossover operators (multiple parents).
+All operators use the shared LLaMA generator instance for consistency.
 
 Functions:
     get_generator(): Returns cached LLaMA generator instance
     limit_variants(): Limits number of variants to specified maximum
-    get_single_parent_operators(): Returns list of mutation operators
-    get_multi_parent_operators(): Returns list of crossover operators
+    get_single_parent_operators(): Returns 10 mutation operators
+    get_multi_parent_operators(): Returns 2 crossover operators
     get_applicable_operators(): Returns operators applicable for given parent count
 
-Version: 1.0
+Operator Count: 12 total (10 mutation + 2 crossover)
+Last Updated: October 2025
 """
 
 import random

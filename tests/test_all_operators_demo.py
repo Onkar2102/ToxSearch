@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 def demo_mutation_operators():
     """Demonstrate mutation operators from separated files."""
-    print("\n🧬 MUTATION OPERATORS (from separated files):")
+    print("\nMUTATION OPERATORS (from separated files):")
     print("-" * 50)
     
     test_prompt = "Write a story about a brave knight who faces adversity."
@@ -28,46 +28,46 @@ def demo_mutation_operators():
         from ea.pos_aware_synonym_replacement import POSAwareSynonymReplacement
         operator = POSAwareSynonymReplacement()
         variants = operator.apply(test_prompt)
-        print(f"\n✓ POSAwareSynonymReplacement (BERT): {len(variants)} variants")
+        print(f"\nPOSAwareSynonymReplacement (BERT): {len(variants)} variants")
         for i, variant in enumerate(variants[:2], 1):
             print(f"  {i}. {variant[:70]}...")
     except Exception as e:
-        print(f"✗ POSAwareSynonymReplacement (BERT): {str(e)[:60]}...")
+        print(f"ERROR POSAwareSynonymReplacement (BERT): {str(e)[:60]}...")
     
     try:
         from ea.llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
         operator = LLM_POSAwareSynonymReplacement(log_file=None, max_variants=3, num_POS_tags=1)
         variants = operator.apply(test_prompt)
-        print(f"\n✓ LLM_POSAwareSynonymReplacement: {len(variants)} variants")
+        print(f"\nLLM_POSAwareSynonymReplacement: {len(variants)} variants")
         for i, variant in enumerate(variants[:2], 1):
             print(f"  {i}. {variant[:70]}...")
     except Exception as e:
-        print(f"✗ LLM_POSAwareSynonymReplacement: {str(e)[:60]}...")
+        print(f"ERROR LLM_POSAwareSynonymReplacement: {str(e)[:60]}...")
     
     try:
         from ea.bert_mlm_operator import BertMLMOperator
         operator = BertMLMOperator()
         variants = operator.apply(test_prompt)
-        print(f"\n✓ BertMLMOperator: {len(variants)} variants")
+        print(f"\nBertMLMOperator: {len(variants)} variants")
         for i, variant in enumerate(variants[:2], 1):
             print(f"  {i}. {variant[:70]}...")
     except Exception as e:
-        print(f"✗ BertMLMOperator: {str(e)[:60]}...")
+        print(f"ERROR BertMLMOperator: {str(e)[:60]}...")
     
     try:
         from ea.llm_paraphrasing_operator import LLMBasedParaphrasingOperator
         operator = LLMBasedParaphrasingOperator("engagement")
         variants = operator.apply(test_prompt)
-        print(f"\n✓ LLMBasedParaphrasingOperator: {len(variants)} variants")
+        print(f"\nLLMBasedParaphrasingOperator: {len(variants)} variants")
         for i, variant in enumerate(variants[:1], 1):
             print(f"  {i}. {variant[:70]}...")
     except Exception as e:
-        print(f"✗ LLMBasedParaphrasingOperator: {str(e)[:60]}...")
+        print(f"ERROR LLMBasedParaphrasingOperator: {str(e)[:60]}...")
 
 
 def demo_back_translation_operators():
     """Demonstrate back-translation operators from separated files."""
-    print("\n🌍 BACK-TRANSLATION OPERATORS (from separated files):")
+    print("\nBACK-TRANSLATION OPERATORS (from separated files):")
     print("-" * 50)
     
     test_prompt = "Write a story about a brave knight who faces adversity."
@@ -81,16 +81,16 @@ def demo_back_translation_operators():
         ("BackTranslationHIOperator", "ea.back_translation_hindi"),
     ]
     
-    print("\n📦 Helsinki-NLP Models:")
+    print("\nHelsinki-NLP Models:")
     for op_name, module_name in helsinki_operators:
         try:
             module = __import__(module_name, fromlist=[op_name])
             operator_class = getattr(module, op_name)
             operator = operator_class()
             variants = operator.apply(test_prompt)
-            print(f"  ✓ {op_name}: {len(variants)} variants")
+            print(f"  {op_name}: {len(variants)} variants")
         except Exception as e:
-            print(f"  ✗ {op_name}: Model not available - {str(e)[:40]}...")
+            print(f"  ERROR {op_name}: Model not available - {str(e)[:40]}...")
     
     # LLaMA-based operators
     llma_operators = [
@@ -108,14 +108,14 @@ def demo_back_translation_operators():
             operator_class = getattr(module, op_name)
             operator = operator_class()
             variants = operator.apply(test_prompt)
-            print(f"  ✓ {op_name}: {len(variants)} variants")
+            print(f"  {op_name}: {len(variants)} variants")
         except Exception as e:
-            print(f"  ✗ {op_name}: Generator not available - {str(e)[:40]}...")
+            print(f"  ERROR {op_name}: Generator not available - {str(e)[:40]}...")
 
 
 def demo_crossover_operators():
     """Demonstrate crossover operators from separated files."""
-    print("\n🔄 CROSSOVER OPERATORS (from separated files):")
+    print("\nCROSSOVER OPERATORS (from separated files):")
     print("-" * 50)
     
     parent_prompts = [
@@ -135,63 +135,63 @@ def demo_crossover_operators():
             operator_class = getattr(module, op_name)
             operator = operator_class()
             variants = operator.apply(parent_prompts)
-            print(f"\n✓ {op_name}: {len(variants)} variants")
+            print(f"\n{op_name}: {len(variants)} variants")
             for i, variant in enumerate(variants[:1], 1):
                 print(f"  {i}. {variant[:70]}...")
         except Exception as e:
-            print(f"\n✗ {op_name}: {str(e)[:60]}...")
+            print(f"\nERROR {op_name}: {str(e)[:60]}...")
 
 
 def demo_helper_functions():
     """Demonstrate operator helper functions."""
-    print("\n🛠️ HELPER FUNCTIONS (from separated files):")
+    print("\nHELPER FUNCTIONS (from separated files):")
     print("-" * 50)
     
     try:
         from ea.operator_helpers import get_single_parent_operators
         mutation_ops = get_single_parent_operators("engagement")
-        print(f"✓ get_single_parent_operators: {len(mutation_ops)} operators")
+        print(f"get_single_parent_operators: {len(mutation_ops)} operators")
         for op in mutation_ops[:3]:  # Show first 3
             print(f"  - {op.name}")
     except Exception as e:
-        print(f"✗ get_single_parent_operators: {str(e)[:60]}...")
+        print(f"ERROR get_single_parent_operators: {str(e)[:60]}...")
     
     try:
         from ea.operator_helpers import get_multi_parent_operators
         crossover_ops = get_multi_parent_operators()
-        print(f"✓ get_multi_parent_operators: {len(crossover_ops)} operators")
+        print(f"get_multi_parent_operators: {len(crossover_ops)} operators")
         for op in crossover_ops:
             print(f"  - {op.name}")
     except Exception as e:
-        print(f"✗ get_multi_parent_operators: {str(e)[:60]}...")
+        print(f"ERROR get_multi_parent_operators: {str(e)[:60]}...")
     
     try:
         from ea.operator_helpers import get_applicable_operators
         applicable_single = get_applicable_operators(1, "engagement")
         applicable_multi = get_applicable_operators(2, "engagement")
-        print(f"✓ get_applicable_operators: {len(applicable_single)} single-parent, {len(applicable_multi)} multi-parent")
+        print(f"get_applicable_operators: {len(applicable_single)} single-parent, {len(applicable_multi)} multi-parent")
     except Exception as e:
-        print(f"✗ get_applicable_operators: {str(e)[:60]}...")
+        print(f"ERROR get_applicable_operators: {str(e)[:60]}...")
 
 
 def demo_comparison():
     """Compare old and new approaches."""
-    print("\n📊 COMPARISON: Old vs New Approach")
+    print("\nCOMPARISON: Old vs New Approach")
     print("-" * 50)
     
     print("OLD APPROACH (TextVariationOperators.py):")
-    print("  ❌ Single file with all operators (~1000+ lines)")
-    print("  ❌ Hard to maintain and extend")
-    print("  ❌ Difficult to test individual operators")
-    print("  ❌ Circular import risks")
-    print("  ❌ Import all dependencies even if using one operator")
+    print("  - Single file with all operators (~1000+ lines)")
+    print("  - Hard to maintain and extend")
+    print("  - Difficult to test individual operators")
+    print("  - Circular import risks")
+    print("  - Import all dependencies even if using one operator")
     
     print("\nNEW APPROACH (Separated files):")
-    print("  ✅ Each operator in its own file")
-    print("  ✅ Easy to maintain and extend")
-    print("  ✅ Individual operator testing")
-    print("  ✅ Modular imports (only import what you need)")
-    print("  ✅ Clear separation of concerns")
+    print("  + Each operator in its own file")
+    print("  + Easy to maintain and extend")
+    print("  + Individual operator testing")
+    print("  + Modular imports (only import what you need)")
+    print("  + Clear separation of concerns")
     print("  ✅ Better organization and documentation")
     
     print("\nFILES CREATED:")

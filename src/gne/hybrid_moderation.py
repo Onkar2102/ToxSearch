@@ -1,5 +1,11 @@
 """
 hybrid_moderation.py
+
+Hybrid content moderation system combining Google Perspective API and OpenAI Moderation.
+
+This module provides toxicity evaluation using multiple moderation APIs for
+robust content safety assessment. Results are cached for efficiency and
+both APIs are used in parallel for comprehensive evaluation.
 """
 
 import os
@@ -15,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 # Load environment variables
 load_dotenv()
 
-# Placeholder for module-level logger
+# Module-level logger initialization
 get_logger, get_log_filename, _, _ = get_custom_logging()
 logger = get_logger("hybrid_moderation", get_log_filename())
 
@@ -59,10 +65,27 @@ def _cache_result(text: str, result: Dict, api_name: str = ""):
         _moderation_cache[text_hash] = result
 
 class HybridModerationEvaluator:
-    """Hybrid moderation evaluator using both Google Perspective API and OpenAI moderation"""
+    """
+    Hybrid content moderation evaluator using multiple APIs.
+    
+    Combines Google Perspective API and OpenAI Moderation API to provide
+    comprehensive toxicity and safety evaluation of text content. Uses
+    caching and parallel processing for efficiency.
+    
+    Attributes:
+        logger: Logger instance for debugging and monitoring
+        model_cfg: Model configuration loaded from YAML file
+    """
     
     def __init__(self, log_file: Optional[str] = None, config_path: str = None):
-        """Initialize the hybrid moderation evaluator"""
+        """
+        Initialize the hybrid moderation evaluator.
+        
+        Args:
+            log_file (str, optional): Path to log file for debugging.
+            config_path (str, optional): Path to model configuration YAML file.
+                If None, uses default config/modelConfig.yaml.
+        """
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("HybridModerationEvaluator", log_file)
         self.logger.info("Initializing Hybrid Moderation Evaluator")
@@ -81,14 +104,13 @@ class HybridModerationEvaluator:
 
         # Check API availability
         self.google_available = bool(os.getenv("PERSPECTIVE_API_KEY"))
-        self.openai_available = bool(os.getenv("OPENAI_API_KEY"))
+        # self.openai_available = bool(os.getenv("OPENAI_API_KEY"))  # Commented out - not using OpenAI
         
-        if not self.google_available and not self.openai_available:
-            raise ValueError("Neither PERSPECTIVE_API_KEY nor OPENAI_API_KEY environment variables are set")
+        if not self.google_available:  # Removed OpenAI check
+            raise ValueError("PERSPECTIVE_API_KEY environment variable is not set")
         
-        self.logger.info("API Availability - Google: %s, OpenAI: %s", 
-                        "✅" if self.google_available else "❌",
-                        "✅" if self.openai_available else "❌")
+        self.logger.info("API Availability - Google: %s", 
+                        "OK" if self.google_available else "ERROR")
         
         # Performance tracking
         self.evaluation_count = 0
@@ -116,14 +138,15 @@ class HybridModerationEvaluator:
                 )
                 self.logger.info("Google Perspective API client initialized")
             
-            if self.openai_available:
-                from openai import OpenAI
-                self.openai_client = OpenAI(
-                    api_key=os.getenv("OPENAI_API_KEY"),
-                    organization=os.getenv("OPENAI_ORG_ID"),
-                    project=os.getenv("OPENAI_PROJECT_ID")
-                )
-                self.logger.info("OpenAI client initialized")
+            # OpenAI client initialization commented out - not using OpenAI
+            # if self.openai_available:
+            #     from openai import OpenAI
+            #     self.openai_client = OpenAI(
+            #         api_key=os.getenv("OPENAI_API_KEY"),
+            #         organization=os.getenv("OPENAI_ORG_ID"),
+            #         project=os.getenv("OPENAI_PROJECT_ID")
+            #     )
+            #     self.logger.info("OpenAI client initialized")
                 
         except Exception as e:
             self.logger.error("Failed to initialize API clients: %s", e)
@@ -187,50 +210,51 @@ class HybridModerationEvaluator:
             self.logger.error("Google API evaluation failed for genome %s: %s", genome_id, e)
             return None
     
-    def _evaluate_with_openai(self, text: str, genome_id: str) -> Optional[Dict[str, Any]]:
-        """Evaluate text using OpenAI moderation API"""
-        # Check cache first
-        cached = _get_cached_result(text, "openai")
-        if cached:
-            self.logger.debug("Using cached OpenAI result for genome %s", genome_id)
-            return cached
-            
-        try:
-            response = self.openai_client.moderations.create(
-                model="text-moderation-latest",
-                input=text
-            )
-            
-            result = response.to_dict()
-            if not result.get("results"):
-                return None
-            
-            # Extract scores from OpenAI response
-            scores = result["results"][0].get("category_scores", {})
-            
-            # Normalize scores to 0.0001-1.0000 range
-            normalized_scores = self._normalize_scores(scores)
-            
-            # Determine if flagged
-            flagged = result["results"][0].get("flagged", False)
-            
-            result = {
-                "genome_id": genome_id,
-                "status": "complete",
-                "flagged": flagged,
-                "scores": normalized_scores,
-                "evaluation_timestamp": time.time(),
-                "api_version": "openai",
-                "model": "text-moderation-latest"
-            }
-            
-            # Cache the result
-            _cache_result(text, result, "openai")
-            return result
-            
-        except Exception as e:
-            self.logger.error("OpenAI API evaluation failed for genome %s: %s", genome_id, e)
-            return None
+    # OpenAI evaluation method commented out - not using OpenAI
+    # def _evaluate_with_openai(self, text: str, genome_id: str) -> Optional[Dict[str, Any]]:
+    #     """Evaluate text using OpenAI moderation API"""
+    #     # Check cache first
+    #     cached = _get_cached_result(text, "openai")
+    #     if cached:
+    #         self.logger.debug("Using cached OpenAI result for genome %s", genome_id)
+    #         return cached
+    #         
+    #     try:
+    #         response = self.openai_client.moderations.create(
+    #             model="text-moderation-latest",
+    #             input=text
+    #         )
+    #         
+    #         result = response.to_dict()
+    #         if not result.get("results"):
+    #             return None
+    #         
+    #         # Extract scores from OpenAI response
+    #         scores = result["results"][0].get("category_scores", {})
+    #         
+    #         # Normalize scores to 0.0001-1.0000 range
+    #         normalized_scores = self._normalize_scores(scores)
+    #         
+    #         # Determine if flagged
+    #         flagged = result["results"][0].get("flagged", False)
+    #         
+    #         result = {
+    #             "genome_id": genome_id,
+    #             "status": "complete",
+    #             "flagged": flagged,
+    #             "scores": normalized_scores,
+    #             "evaluation_timestamp": time.time(),
+    #             "api_version": "openai",
+    #             "model": "text-moderation-latest"
+    #         }
+    #         
+    #         # Cache the result
+    #         _cache_result(text, result, "openai")
+    #         return result
+    #         
+    #     except Exception as e:
+    #         self.logger.error("OpenAI API evaluation failed for genome %s: %s", genome_id, e)
+    #         return None
     
     def _normalize_scores(self, scores: Dict[str, float]) -> Dict[str, float]:
         """Normalize scores to 0.0001-1.0000 range with 4 decimal places"""
@@ -283,14 +307,14 @@ class HybridModerationEvaluator:
                 elif "google" in moderation_methods and not self.google_available:
                     self.logger.warning("Google Perspective API requested but not available for genome %s", genome_id)
                 
-                # Evaluate with OpenAI if requested and available
-                if "openai" in moderation_methods and self.openai_available:
-                    openai_result = self._evaluate_with_openai(text, genome_id)
-                    if openai_result:
-                        results["openai"] = openai_result
-                        self.logger.debug("OpenAI evaluation completed for genome %s", genome_id)
-                elif "openai" in moderation_methods and not self.openai_available:
-                    self.logger.warning("OpenAI Moderation API requested but not available for genome %s", genome_id)
+                # OpenAI evaluation commented out - not using OpenAI
+                # if "openai" in moderation_methods and self.openai_available:
+                #     openai_result = self._evaluate_with_openai(text, genome_id)
+                #     if openai_result:
+                #         results["openai"] = openai_result
+                #         self.logger.debug("OpenAI evaluation completed for genome %s", genome_id)
+                # elif "openai" in moderation_methods and not self.openai_available:
+                #     self.logger.warning("OpenAI Moderation API requested but not available for genome %s", genome_id)
                 
                 if not results:
                     return {
@@ -413,7 +437,7 @@ class HybridModerationEvaluator:
                         self.logger.info("Saving population after evaluation batch %d: %d processed, %d errors", 
                                        batch_count, batch_processed, batch_errors)
                         if pop_path:
-                            _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                            _, _, _, save_population, *rest = get_population_io()
                             save_population(population, pop_path, logger=self.logger)
                             self.logger.debug("Population saved after batch %d", batch_count)
                     
@@ -470,7 +494,7 @@ class HybridModerationEvaluator:
                 self.logger.info("Starting hybrid population evaluation pipeline")
                 
                 # Load population
-                _, _, load_population, _, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                _, _, load_population, *rest = get_population_io()
                 population = load_population(pop_path, logger=self.logger)
                 
                 # Set default moderation methods if not provided
@@ -483,7 +507,7 @@ class HybridModerationEvaluator:
                 updated_population = self._evaluate_population_sync(population, north_star_metric, pop_path=pop_path, moderation_methods=moderation_methods)
                 
                 # Final save
-                _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                _, _, _, save_population, *rest = get_population_io()
                 save_population(updated_population, pop_path, logger=self.logger)
                 
                 self.logger.info("Hybrid population evaluation completed successfully")

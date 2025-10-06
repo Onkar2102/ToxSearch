@@ -6,7 +6,7 @@
 #  - custom_logging: Logging configuration and performance tracking
 #  - population_io: Population loading, saving, and management
 #  - config: Configuration management utilities
-#  - m3_optimizer: M3 Mac optimization utilities
+#  - optimizer: System optimization utilities
 
 # Lazy imports to prevent circular import issues
 def get_custom_logging():
@@ -27,11 +27,8 @@ def get_population_io():
         migrate_from_split_to_single,
         # Steady state population management
         sort_population_by_elite_criteria,
-        redistribute_population_after_evaluation,
-        redistribute_elites_to_population,
         load_elites,
         save_elites,
-        add_variants_to_elites,
         get_population_stats_steady_state
     )
     return (
@@ -45,11 +42,8 @@ def get_population_io():
         migrate_from_split_to_single,
         # Steady state population management
         sort_population_by_elite_criteria,
-        redistribute_population_after_evaluation,
-        redistribute_elites_to_population,
         load_elites,
         save_elites,
-        add_variants_to_elites,
         get_population_stats_steady_state
     )
 

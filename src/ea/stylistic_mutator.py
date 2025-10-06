@@ -31,23 +31,23 @@ class StylisticMutator(VariationOperator):
     - Voice (active/passive)
     - Arbitrary styles (poetic, technical, conversational, etc.)
 
-    The operator is designed to systematically add biases and unfairness by
-    manipulating how information is presented while keeping the core meaning intact.
+    The operator creates stylistic variations by modifying presentation style
+    while preserving the core semantic meaning of the text.
 
-    Design:
-    - Step 1: Extract prompt from genome dictionary
-    - Step 2: Select a random stylistic attribute to modify
-    - Step 3: Use generator.stylistic_mutate() method with selected style
-    - Step 4: Return stylistically modified prompt if different from original
-    - Step 5: Fallback to original prompt if mutation fails
+    Process:
+    1. Receive input text string for stylistic modification
+    2. Randomly select a stylistic attribute to modify
+    3. Use LLaMA model to generate stylistically modified version
+    4. Return list of stylistically varied text versions
+    5. Fallback to original text if mutation fails
 
     Attributes:
-        logger: Logger instance for debugging and monitoring.
-        generator: Local LLaMA generator for stylistic mutation.
-        style_attributes: List of available stylistic attributes to modify.
+        logger: Logger instance for debugging and monitoring
+        generator: Local LLaMA generator for stylistic mutation
+        style_attributes: List of available stylistic attributes to modify
 
     Methods:
-        apply(genome): Generates stylistically modified variant of the input genome's prompt.
+        apply(text): Generates stylistically modified variants of input text string
 
     Example:
         >>> operator = StylisticMutator()
@@ -110,49 +110,65 @@ class StylisticMutator(VariationOperator):
         self.logger.debug(f"{self.name}: Selected style attribute: {selected_style}")
         return selected_style
 
-    def apply(self, genome: Dict[str, Any]) -> List[str]:
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate stylistically modified variant using local LLaMA model.
         
         This method:
-        1. Validates input genome format and extracts prompt
+        1. Validates input format and extracts parent data
         2. Selects a random stylistic attribute to modify
         3. Uses generator.stylistic_mutate() method with selected style
         4. Returns stylistically modified prompt if different from original
         5. Falls back to original prompt if mutation fails
         
         Args:
-            genome (Dict[str, Any]): Genome dictionary containing:
-                - 'prompt': Original prompt text to modify stylistically
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': Enriched parent genome dictionary containing:
+                    - 'prompt': Original prompt text to modify stylistically
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
                 
         Returns:
-            List[str]: List containing single stylistically modified prompt (or original if failed)
+            List[str]: List containing stylistically modified prompt variants (or original if failed)
             
         Raises:
             Warning: If LLM generation fails, logs warning and returns original prompt
             
         Example:
             >>> operator = StylisticMutator()
-            >>> genome = {"prompt": "Write a story about a brave knight"}
-            >>> variants = operator.apply(genome)
+            >>> input_data = {
+            ...     "parent_data": {"prompt": "Write a story about a brave knight"},
+            ...     "max_variants": 3
+            ... }
+            >>> variants = operator.apply(input_data)
             >>> print(variants)
             ['Compose an elegant narrative concerning a valiant warrior']
         """
         try:
             # Validate input format
-            if not isinstance(genome, dict):
-                self.logger.error(f"{self.name}: Input must be a genome dictionary")
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
                 return []
             
-            # Extract prompt
-            original_prompt = genome.get("prompt", "")
+            # Extract parent data and max_variants
+            parent_data = operator_input.get("parent_data", {})
+            max_variants = operator_input.get("max_variants", 1)
+            
+            if not isinstance(parent_data, dict):
+                self.logger.error(f"{self.name}: parent_data must be a dictionary")
+                return []
+            
+            # Extract prompt from parent data
+            original_prompt = parent_data.get("prompt", "")
             
             if not original_prompt:
-                self.logger.error(f"{self.name}: Genome missing required 'prompt' field")
+                self.logger.error(f"{self.name}: Parent data missing required 'prompt' field")
                 return []
             
             # Store debug information
-            self._last_genome = genome
+            self._last_genome = parent_data
             self._last_original_prompt = original_prompt
             
             # Select random stylistic attribute

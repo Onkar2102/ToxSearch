@@ -1,7 +1,13 @@
 """
 EvolutionEngine.py
 
-Author: Onkar Shelar os9660@rit.edu
+Core evolutionary algorithm engine for text generation optimization.
+
+This module implements the main evolution logic including parent selection,
+operator application, and population management. Uses steady-state evolution
+with elites preservation and multi-API moderation scoring.
+
+Author: Onkar Shelar (os9660@rit.edu)
 """
 
 import json
@@ -15,20 +21,33 @@ from pathlib import Path
 
 class EvolutionEngine:
 
-    def __init__(self, north_star_metric, log_file, current_cycle=None):
+    def __init__(self, north_star_metric, log_file, current_cycle=None, max_variants=10):
         self.genomes: List[Dict] = []
         self.next_id = 0
         self.north_star_metric = north_star_metric
         self.log_file = log_file
         self.current_cycle = current_cycle  # Current evolution cycle number
         self.use_steady_state = True
+        self.max_variants = max_variants  # Maximum number of variants to generate per operator
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file)
-        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}, use_steady_state=True")
+        self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}, max_variants={max_variants}, use_steady_state=True")
 
     def _extract_north_star_score(self, genome: Dict) -> float:
-        """Extract the north star metric score from a genome using the configured metric."""
+        """
+        Extract the north star metric score from a genome.
+        
+        Attempts to retrieve the score for the configured north star metric
+        from the genome's moderation results, trying Google API scores first
+        and falling back to OpenAI scores if needed.
+        
+        Args:
+            genome (Dict): Genome dictionary containing moderation results
+            
+        Returns:
+            float: Score for the north star metric, or 0.0 if not found
+        """
         if not genome or not genome.get("moderation_result"):
             return 0.0
         
@@ -94,19 +113,19 @@ class EvolutionEngine:
         else:
             self.logger.warning(f"No completed genomes found")
 
-        mutation_parent, crossover_parents = self.parent_selector.select_parents_global(all_genomes)
+        mutation_parent, crossover_parents = self.parent_selector.select_parents_adaptive_tournament()
         
         # Log parent selection results
         if mutation_parent is None:
-            self.logger.warning(f"No mutation parent selected globally")
+            self.logger.warning(f"No mutation parent selected with adaptive tournament")
         else:
             score = self._extract_north_star_score(mutation_parent)
-            self.logger.info(f"Selected mutation parent globally: genome_id={mutation_parent['id']}, score={score}")
+            self.logger.info(f"Selected mutation parent with adaptive tournament: genome_id={mutation_parent['id']}, score={score}")
         
         if crossover_parents is None:
-            self.logger.warning(f"No crossover parents selected globally")
+            self.logger.warning(f"No crossover parents selected with adaptive tournament")
         else:
-            self.logger.info(f"Selected {len(crossover_parents)} crossover parents globally: {[p['id'] for p in crossover_parents]}")
+            self.logger.info(f"Selected {len(crossover_parents)} crossover parents with adaptive tournament: {[p['id'] for p in crossover_parents]}")
 
         existing_prompts = set(g["prompt"].strip().lower() for g in self.genomes if g is not None)
 
@@ -162,7 +181,12 @@ class EvolutionEngine:
                     continue
 
                 try:
-                    variants = op.apply(mutation_parent["prompt"])
+                    # Pass correct input type based on operator class
+                    operator_input = {
+                        "parent_data": mutation_parent,
+                        "max_variants": self.max_variants
+                    }
+                    variants = op.apply(operator_input)
                     for vp in variants:
                         norm_vp = vp.strip().lower()
                         if norm_vp in existing_prompts:
@@ -202,8 +226,13 @@ class EvolutionEngine:
 
                 for parent_pair in combinations(crossover_parents, 2):  # All pairs of parents
                     try:
-                        # Pass parent genomes directly to crossover operators
-                        variants = op.apply(parent_pair)  # Send parent genomes
+                        # Pass enriched parent data and max_variants to crossover operators
+                        # Pass correct input type for crossover operators
+                        operator_input = {
+                            "parent_data": list(parent_pair),
+                            "max_variants": self.max_variants
+                        }
+                        variants = op.apply(operator_input)
                         for vp in variants:
                             norm_vp = vp.strip().lower()
                             if norm_vp in existing_prompts:

@@ -1,26 +1,47 @@
 """
-Combined llm_back_translation_operators.py
+llm_back_translation_operators.py
 
-This module contains all LLM-based back-translation operators for the evolutionary algorithm.
-Supported languages: Hindi, French, German, Japanese, Chinese
+LLM-based back-translation operators for text mutation through language round-trips.
+
+This module implements mutation operators that translate text from English to
+various target languages and back to English, creating paraphrased variants
+through the translation process. Each operator supports a specific language.
+
+Supported languages: Hindi (HI), French (FR), German (DE), Japanese (JA), Chinese (ZH)
+
+Process for each operator:
+1. Translate English text to target language using LLaMA
+2. Translate back from target language to English
+3. Return the back-translated variant if different from original
 """
 
 
-# Standalone base and helpers
 from .VariationOperators import VariationOperator
 from .operator_helpers import get_generator
 import logging
+from typing import List, Dict, Any
 get_logger = logging.getLogger
 
 class _GenericLLMBackTranslationOperator(VariationOperator):
     """
-    Generic LLaMA-based back-translation operator (EN → target_lang → EN).
-    This operator uses the cached LLaMA generator from `get_generator()` and its
-    task-specific translate() method to:
-    1) Translate English to a target language using config templates
-    2) Translate back to English with natural phrasing
-    It logs the intermediate translated text and returns up to 3 unique variants.
-    Subclasses should pass appropriate language names and codes.
+    Generic LLaMA-based back-translation operator for text mutation.
+    
+    Implements the back-translation process where English text is translated
+    to a target language and then back to English, creating paraphrased variants
+    through the round-trip translation process.
+    
+    Process:
+    1. Translate input English text to target language using LLaMA
+    2. Translate the result back from target language to English
+    3. Return the back-translated text if different from original
+    
+    Attributes:
+        target_lang (str): Full name of the target language
+        target_lang_code (str): Language code (e.g., 'HI', 'FR', 'DE')
+        generator: Local LLaMA model instance for translation
+    
+    Note:
+        Subclasses specify the target language and language code.
     """
     def __init__(self, name: str, target_lang: str, target_lang_code: str, log_file=None):
         super().__init__(name, "mutation", f"LLaMA-based EN→{target_lang_code.upper()}→EN back-translation.")
@@ -29,23 +50,72 @@ class _GenericLLMBackTranslationOperator(VariationOperator):
         self.target_lang_code = target_lang_code
         self.generator = get_generator()
 
-    def apply(self, text: str) -> list:
-        self._last_input = text
-        self._last_intermediate = None
-        self._last_final = None
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
+        """
+        Generate back-translated variant using LLaMA model.
+        
+        This method:
+        1. Validates input format and extracts parent data
+        2. Translates text to target language and back to English
+        3. Returns back-translated variant if different from original
+        4. Falls back to original text if translation fails
+        
+        Args:
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': Enriched parent genome dictionary containing:
+                    - 'prompt': Original prompt text to back-translate
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
+                
+        Returns:
+            List[str]: List containing back-translated prompt variants (or original if failed)
+        """
         try:
+            # Validate input format
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
+                return []
+            
+            # Extract parent data
+            parent_data = operator_input.get("parent_data", {})
+            
+            if not isinstance(parent_data, dict):
+                self.logger.error(f"{self.name}: parent_data must be a dictionary")
+                return []
+            
+            # Extract prompt from parent data
+            text = parent_data.get("prompt", "")
+            
+            if not text:
+                self.logger.error(f"{self.name}: Parent data missing required 'prompt' field")
+                return []
+            
+            # Store debug information
+            self._last_input = text
+            self._last_intermediate = None
+            self._last_final = None
+            
+            # Perform back-translation
             inter = self.generator.translate(text, self.target_lang, "English")
             self._last_intermediate = inter
+            
             if inter and inter != text:
                 back_en = self.generator.translate(inter, "English", self.target_lang)
                 cleaned = back_en.strip()
                 self._last_final = cleaned
                 if cleaned and cleaned.lower() != text.strip().lower():
+                    self.logger.info(f"{self.name}: Generated back-translated variant")
                     return [cleaned]
-        except Exception:
-            pass
-        self._last_final = text
-        return [text]
+            
+            self._last_final = text
+            self.logger.warning(f"{self.name}: Back-translation returned same or empty text, returning original")
+            return [text]
+            
+        except Exception as e:
+            self.logger.error(f"{self.name}: apply failed with error: {e}")
+            return []
 
 class LLMBackTranslationHIOperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based Hindi back-translation operator."""

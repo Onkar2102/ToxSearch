@@ -32,9 +32,24 @@ class POSWord:
 
 class LLM_POSAwareSynonymReplacement(VariationOperator):
     """
-    LLM-based synonym replacement with POS awareness.
+    LLM-based synonym replacement with part-of-speech awareness.
     
-    Detects POS tags, generates synonyms via LLM, and creates text variants.
+    This mutation operator identifies words by POS tags using spaCy,
+    then uses a local LLaMA model to generate contextually appropriate
+    synonyms. The operator maintains grammatical correctness while
+    creating meaningful text variations.
+    
+    Process:
+    1. Parse input text with spaCy for POS tagging
+    2. Randomly select target words based on POS categories
+    3. Generate synonyms using LLaMA with context-aware prompts
+    4. Create variants by substituting original words with synonyms
+    
+    Attributes:
+        max_variants (int): Maximum number of variants to generate
+        num_POS_tags (int): Number of POS categories to target per operation
+        seed (int): Random seed for reproducible word selection
+        generator: Local LLaMA model instance for synonym generation
     """
 
     # POS inventory (excluding PUNCT, SYM, X)
@@ -68,7 +83,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         super().__init__(
             "LLM_POSAwareSynonymReplacement", 
             "mutation", 
-            "Step 1: POS-aware detection and validation"
+            "LLM-based synonym replacement with POS awareness for text mutation"
         )
         
         self.logger = get_logger(self.name, log_file)
@@ -80,7 +95,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         self.seed = seed
         self.rng = random.Random(seed)
         
-        # Initialize generator (for future LLM calls)
+        # Initialize LLaMA generator for synonym generation
         from .operator_helpers import get_generator
         self.generator = get_generator()
         
@@ -389,7 +404,7 @@ Synonyms for {pos_tag}:
         """
         synonyms_by_pos = {}
         
-        self.logger.info(f"{self.name}: STEP 2 - Generating synonyms for {len(selected_pos)} POS types")
+        self.logger.info(f"{self.name}: Generating synonyms for {len(selected_pos)} POS types")
         
         for pos_tag in selected_pos:
             if pos_tag in detected_pos:
@@ -404,7 +419,7 @@ Synonyms for {pos_tag}:
             else:
                 self.logger.warning(f"{self.name}: POS tag {pos_tag} not found in detected POS")
         
-        self.logger.info(f"{self.name}: STEP 2 COMPLETE - Generated synonyms for {len(synonyms_by_pos)} POS types")
+        self.logger.info(f"{self.name}: Generated synonyms for {len(synonyms_by_pos)} POS types")
         return synonyms_by_pos
 
     def _generate_text_variants(self, text: str, detected_pos: Dict[str, List[POSWord]], synonyms_by_pos: Dict[str, List[str]]) -> List[str]:
@@ -419,7 +434,7 @@ Synonyms for {pos_tag}:
         Returns:
             List of text variants with substitutions
         """
-        self.logger.info(f"{self.name}: STEP 3 - Generating text variants")
+        self.logger.info(f"{self.name}: Generating text variants")
         
         try:
             variants = []
@@ -444,11 +459,11 @@ Synonyms for {pos_tag}:
             # Limit to max_variants
             final_variants = unique_variants[:self.max_variants]
             
-            self.logger.info(f"{self.name}: STEP 3 COMPLETE - Generated {len(final_variants)} unique variants")
+            self.logger.info(f"{self.name}: Generated {len(final_variants)} unique variants")
             return final_variants
             
         except Exception as e:
-            self.logger.error(f"{self.name}: Step 3 variant generation failed: {e}")
+            self.logger.error(f"{self.name}: Variant generation failed: {e}")
             return []
 
     def _create_single_variant(self, text: str, detected_pos: Dict[str, List[POSWord]], synonyms_by_pos: Dict[str, List[str]], variant_num: int) -> str:
@@ -628,17 +643,44 @@ Synonyms for {pos_tag}:
             self.logger.error(f"{self.name}: Additional variant generation failed: {e}")
             return []
 
-    def apply(self, text: str) -> List[str]:
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate text variants using POS-aware synonym replacement.
         
+        This method:
+        1. Validates input format and extracts parent data
+        2. Detects POS tags and generates synonyms
+        3. Creates variants with synonym substitutions
+        4. Returns variants if different from original
+        
         Args:
-            text: Input text to process
-            
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': Enriched parent genome dictionary containing:
+                    - 'prompt': Original prompt text to process with synonym replacement
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
+                
         Returns:
-            List of text variants with synonym substitutions
+            List[str]: List containing synonym-replaced prompt variants (or original if failed)
         """
         try:
+            # Validate input format
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
+                return []
+            
+            # Extract parent data
+            parent_data = operator_input.get("parent_data", {})
+            
+            if not isinstance(parent_data, dict):
+                self.logger.error(f"{self.name}: parent_data must be a dictionary")
+                return []
+            
+            # Extract prompt from parent data
+            text = parent_data.get("prompt", "")
+            
             # Handle edge cases
             if not text or not text.strip():
                 self.logger.debug(f"{self.name}: Empty input, returning as-is")

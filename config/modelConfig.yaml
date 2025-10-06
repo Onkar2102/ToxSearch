@@ -1,7 +1,29 @@
+# Device configuration
+device_config:
+  # Device priority order: mps (Apple Silicon), cuda (NVIDIA), cpu (fallback)
+  auto_detect: true
+  preferred_device: null  # null for auto-detection, or specify "mps", "cuda", "cpu"
+  fallback_to_cpu: true
+  enable_mixed_precision: true  # Enable autocast for GPU devices
+  
+  # Device-specific optimizations
+  cuda:
+    enable_tf32: true
+    enable_cudnn_benchmark: true
+    memory_fraction: 0.8  # Use 80% of GPU memory
+  
+  mps:
+    enable_metal_performance_shaders: true
+    memory_pressure_relief: true
+  
+  cpu:
+    num_threads: null  # null for auto-detection
+    enable_mkl: true
+
 llama:
   generation_args:
-    # do_sample: true
-    max_new_tokens: 2048
+    do_sample: true
+    max_new_tokens: 4196
     num_return_sequences: 1
     pad_token_id: 128001
     eos_token_id: 128001
@@ -184,15 +206,15 @@ llama:
       top_k: 50
       top_p: 0.9
       repetition_penalty: 1.15 # Slightly higher to avoid repetition
-      max_new_tokens: 1024     # Sufficient for most operator outputs
+      max_new_tokens: 2048     # Sufficient for most operator outputs
       num_return_sequences: 1
       no_repeat_ngram_size: 3  # Prevent repetitive phrases
-    translation:
-      # do_sample: true        # Deterministic greedy decoding for exact translation
-      # temperature: 0.0        # Greedy
-      top_k: 50
-      top_p: 0.95
-      repetition_penalty: 1.1
-      max_new_tokens: 2048     # Plenty for sentence/paragraph translation
-      num_return_sequences: 1
-      # no_repeat_ngram_size: 3
+    # translation:
+    #   do_sample: true        
+    #   temperature: 0.7        
+    #   top_k: 50
+    #   top_p: 0.95
+    #   repetition_penalty: 1.1
+    #   max_new_tokens: 2048     # Plenty for sentence/paragraph translation
+    #   num_return_sequences: 1
+    #   # no_repeat_ngram_size: 3

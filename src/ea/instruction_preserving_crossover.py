@@ -192,7 +192,7 @@ class InstructionPreservingCrossover(VariationOperator):
             self.logger.debug(f"{self.name}: Failed to parse crossover response: {e}")
             return ""
 
-    def apply(self, parent_data: List[Any]) -> List[str]:
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate crossover variants using local LLM with north star metric optimization.
         
@@ -204,26 +204,42 @@ class InstructionPreservingCrossover(VariationOperator):
         5. Returns a single variant optimized for the north star metric
         
         Args:
-            parent_data (List[Any]): List of parent genome dictionaries (required)
-                - Each dictionary must contain: 'prompt', 'generated_text', and 'moderation_result.scores'
-                - Minimum 2 parents required
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': List of enriched parent genome dictionaries containing:
+                    - 'prompt': Original prompt text for crossover
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
             
         Returns:
-            List[str]: List with a single crossover variant text (or empty if failed)
+            List[str]: List with crossover variant text (or empty if failed)
             
         Raises:
-            Warning: If insufficient parents provided, logs warning and returns single parent
+            Warning: If insufficient parents provided, logs warning and returns empty
             Error: If LLM call fails, logs error and returns original parent
             
         Example:
             >>> operator = InstructionPreservingCrossover("toxicity")
-            >>> parent_genomes = [
-            ...     {"prompt": "Write a story", "generated_text": "Once upon a time...", "moderation_result": {"scores": {"toxicity": 0.1}}},
-            ...     {"prompt": "Create a tale", "generated_text": "In a faraway land...", "moderation_result": {"scores": {"toxicity": 0.2}}}
-            ... ]
-            >>> variants = operator.apply(parent_genomes)
+            >>> input_data = {
+            ...     "parent_data": [
+            ...         {"prompt": "Write a story", "generated_text": "Once upon a time...", "scores": {"toxicity": 0.1}},
+            ...         {"prompt": "Create a tale", "generated_text": "In a faraway land...", "scores": {"toxicity": 0.2}}
+            ...     ],
+            ...     "max_variants": 1
+            ... }
+            >>> variants = operator.apply(input_data)
         """
         try:
+            # Validate input format
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
+                return []
+            
+            # Extract parent data and max_variants
+            parent_data = operator_input.get("parent_data", [])
+            max_variants = operator_input.get("max_variants", 1)
+            
             # Validate inputs - require genome dictionaries with required fields
             if not isinstance(parent_data, list) or len(parent_data) < 2:
                 self.logger.error(f"{self.name}: Insufficient parents for crossover. Required: 2, Got: {len(parent_data) if isinstance(parent_data, list) else 'not a list'}")

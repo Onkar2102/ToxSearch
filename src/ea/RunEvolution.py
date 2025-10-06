@@ -311,6 +311,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             evolution_tracker["generations"].sort(key=lambda x: x["generation_number"])
             
             # Calculate and update population max toxicity at the top level
+            # Also compute top 25% toxicity threshold and set population_status for each genome in this generation
             if population and north_star_metric:
                 all_evaluated_genomes = [g for g in population if g.get("moderation_result")]
                 if all_evaluated_genomes:
@@ -321,6 +322,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                             population_scores.append((genome["id"], score))
                     
                     if population_scores:
+                        # Max toxicity for the whole population
                         population_best_genome_id, population_max_toxicity = max(population_scores, key=lambda x: x[1])
                         evolution_tracker["population_max_toxicity"] = population_max_toxicity
                         evolution_tracker["population_best_genome_id"] = population_best_genome_id
@@ -329,6 +331,35 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                         _logger.warning(f"No valid scores found in entire population")
                 else:
                     _logger.warning(f"No evaluated genomes found in population")
+
+                # --- Top 25% toxicity threshold and elite marking ---
+                # Only for genomes in this generation
+                generation_genomes = [g for g in population if g.get("generation") == gen_number and g.get("moderation_result")]
+                gen_scores = []
+                for genome in generation_genomes:
+                    score = _extract_north_star_score(genome, north_star_metric)
+                    if score > 0:
+                        gen_scores.append(score)
+                if gen_scores:
+                    # Compute 75th percentile (top 25% threshold)
+                    import numpy as np
+                    top25_threshold = float(np.percentile(gen_scores, 75))
+                    # Mark genomes as elite/non-elite
+                    for genome in generation_genomes:
+                        score = _extract_north_star_score(genome, north_star_metric)
+                        if score >= top25_threshold:
+                            genome["population_status"] = "elite"
+                        else:
+                            genome["population_status"] = "non-elite"
+                    # Save threshold in tracker for this generation
+                    # Attach to the new_gen dict in tracker
+                    for gen in evolution_tracker.get("generations", []):
+                        if gen["generation_number"] == gen_number:
+                            gen["top25_toxicity_threshold"] = top25_threshold
+                            break
+                    _logger.info(f"Top 25% toxicity threshold for generation {gen_number}: {top25_threshold:.4f}")
+                else:
+                    _logger.warning(f"No valid scores for top 25% threshold in generation {gen_number}")
             
             # Get the dynamic path for this run
             outputs_path = get_outputs_path()
@@ -569,22 +600,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
 
         # Phase 6.5: Redistribute elites to population (steady state)
         with PerformanceLogger(logger, "Steady State Redistribution"):
-                try:
-                    from utils.population_io import redistribute_elites_to_population
-                    elites_file_path = str(outputs_path / "elites.json")
-                    population_file_path = str(outputs_path / "Population.json")
-                    from utils.constants import EvolutionConstants
-                    redistribute_elites_to_population(
-                        elites_file_path,
-                        population_file_path,
-                        top_k=EvolutionConstants.DEFAULT_TOP_K,
-                        north_star_metric=north_star_metric,
-                        log_file=log_file
-                    )
-                    logger.info("Steady state redistribution completed")
-                except Exception as e:
-                    logger.error("Failed to redistribute elites: %s", e, exc_info=True)
-                    raise
+                    pass
 
         # Phase 7: Deduplicate population
         with PerformanceLogger(logger, "Deduplicate Population"):

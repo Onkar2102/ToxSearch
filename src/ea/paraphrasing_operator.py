@@ -19,33 +19,33 @@ get_logger, _, _, _ = get_custom_logging()
 
 class LLMBasedParaphrasingOperator(VariationOperator):
     """
-    Paraphrasing operator using local LLaMA model's paraphrase method.
+    Paraphrasing operator using local LLaMA model for text mutation.
 
-    This operator generates paraphrased versions of input prompts by leveraging
-    the local LLaMA model's built-in paraphrase method. The paraphrasing process 
+    This operator generates paraphrased versions of input text by leveraging
+    the local LLaMA model's paraphrasing capabilities. The paraphrasing process 
     is guided by a specified optimization metric (north_star_metric) to ensure 
     the generated variants align with desired objectives.
 
-    Design:
-    - Step 1: Extract prompt from genome dictionary
-    - Step 2: Use generator.paraphrase() method with north_star_metric
-    - Step 3: Return paraphrased prompt if different from original
-    - Step 4: Fallback to original prompt if paraphrasing fails
+    Process:
+    1. Receive input text string for paraphrasing
+    2. Use LLaMA model's paraphrase method with metric-specific prompts
+    3. Generate semantically equivalent but stylistically different variants
+    4. Return list of paraphrased text variants
 
     Attributes:
-        north_star_metric (str): The optimization metric guiding the paraphrasing process.
-        logger: Logger instance for debugging and monitoring.
-        generator: Local LLaMA generator for paraphrasing generation.
+        north_star_metric (str): The optimization metric guiding paraphrasing
+        logger: Logger instance for debugging and monitoring
+        generator: Local LLaMA generator for text generation
 
     Methods:
-        apply(genome): Generates paraphrased variant of the input genome's prompt.
+        apply(text): Generates paraphrased variants of the input text string
 
     Example:
         >>> operator = LLMBasedParaphrasingOperator(north_star_metric="engagement")
-        >>> genome = {"prompt": "Write a story", "generated_text": "...", "moderation_result": {"scores": {"engagement": 0.8}}}
-        >>> variants = operator.apply(genome)
+        >>> text = "Write a story about a brave knight"
+        >>> variants = operator.apply(text)
         >>> print(variants)
-        ['Craft an engaging narrative tale']
+        ['Craft a tale about a courageous warrior']
     """
 
     def __init__(self, north_star_metric: str, log_file: Optional[str] = None):
@@ -71,63 +71,70 @@ class LLMBasedParaphrasingOperator(VariationOperator):
         self._last_original_prompt = ""
         self._last_paraphrased_prompt = ""
 
-    def apply(self, genome: Dict[str, Any]) -> List[str]:
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate paraphrased variant using local LLaMA model's paraphrase method.
         
         This method:
-        1. Validates input genome format and extracts prompt
+        1. Validates input format and extracts parent data
         2. Uses generator.paraphrase() method with north_star_metric
         3. Returns paraphrased prompt if different from original
         4. Falls back to original prompt if paraphrasing fails
         
         Args:
-            genome (Dict[str, Any]): Genome dictionary containing:
-                - 'prompt': Original prompt text to paraphrase
-                - 'generated_text': Generated output from the prompt (optional)
-                - 'moderation_result': Dictionary with 'scores' containing north_star_metric (optional)
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': Enriched parent genome dictionary containing:
+                    - 'prompt': Original prompt text to paraphrase
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
                 
         Returns:
-            List[str]: List containing single paraphrased prompt (or original if failed)
+            List[str]: List containing paraphrased prompt variants (or original if failed)
             
         Raises:
             Warning: If LLM generation fails, logs warning and returns original prompt
             
         Example:
             >>> operator = LLMBasedParaphrasingOperator("engagement")
-            >>> genome = {"prompt": "Write a story", "generated_text": "...", "moderation_result": {"scores": {"engagement": 0.8}}}
-            >>> variants = operator.apply(genome)
+            >>> input_data = {
+            ...     "parent_data": {"prompt": "Write a story", "generated_text": "...", "scores": {"engagement": 0.8}},
+            ...     "max_variants": 5
+            ... }
+            >>> variants = operator.apply(input_data)
             >>> print(variants)
             ['Craft an engaging narrative tale']
         """
         try:
             # Validate input format
-            if not isinstance(genome, dict):
-                self.logger.error(f"{self.name}: Input must be a genome dictionary")
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
                 return []
             
-            # Extract prompt
-            original_prompt = genome.get("prompt", "")
+            # Extract parent data and max_variants
+            parent_data = operator_input.get("parent_data", {})
+            max_variants = operator_input.get("max_variants", 1)
+            
+            if not isinstance(parent_data, dict):
+                self.logger.error(f"{self.name}: parent_data must be a dictionary")
+                return []
+            
+            # Extract prompt from parent data
+            original_prompt = parent_data.get("prompt", "")
             
             if not original_prompt:
-                self.logger.error(f"{self.name}: Genome missing required 'prompt' field")
+                self.logger.error(f"{self.name}: Parent data missing required 'prompt' field")
                 return []
             
             # Store debug information
-            self._last_genome = genome
+            self._last_genome = parent_data
             self._last_original_prompt = original_prompt
             
             # Extract optional fields for enhanced paraphrasing
-            generated_output = genome.get("generated_text", "")
-            current_score = 0.0
+            generated_output = parent_data.get("generated_text", "")
+            current_score = parent_data.get("north_star_score", 0.0)
             
-            # Extract north star metric score if available
-            moderation_result = genome.get("moderation_result", {})
-            if isinstance(moderation_result, dict):
-                scores = moderation_result.get("scores", {})
-                if isinstance(scores, dict):
-                    current_score = scores.get(self.north_star_metric, 0.0)
-
             # Use generator's paraphrase method
             paraphrased_prompt = self.generator.paraphrase(
                 original_prompt, 

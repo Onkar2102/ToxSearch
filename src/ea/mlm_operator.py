@@ -2,9 +2,15 @@
 mlm_operator.py
 
 LLM-based Masked Language Model operator for text mutation.
-Step 1: Randomly mask max_variants words with <MASKED_N>
-Step 2: Ask LLM for each mask replacement one by one
-Step 3: Apply replacements and return completed text
+
+This operator implements a mask-and-fill approach using a local LLaMA model.
+It randomly masks words in the input text and uses the LLM to generate
+appropriate replacements, creating contextually coherent text variants.
+
+Process:
+1. Randomly mask up to max_variants words with placeholder tokens
+2. Generate replacement suggestions using LLaMA for each masked position
+3. Apply replacements and return the completed text variant
 
 Author: Onkar Shelar (os9660@rit.edu)
 """
@@ -20,17 +26,29 @@ get_logger, _, _, _ = get_custom_logging()
 
 class MLMOperator(VariationOperator):
     """
-        Simplified LLM Mask-Fill Operator with 3-Step Process
-
-    Design:
-      - Step 1: Randomly mask m words with <MASKED_N>, where m = min(max_variants, word_count)
-            - Step 2: Ask the LLM for each mask replacement individually (one-by-one prompts)
-            - Step 3: Apply all replacements and return completed text
-      - Returns exactly ONE completed variant (wrapped in a list to match interface)
+    LLM-based masked language model operator for text mutation.
+    
+    This operator randomly masks words in the input text and uses a local
+    LLaMA model to generate contextually appropriate replacements. The
+    masking and replacement process creates coherent text variants while
+    preserving overall meaning and structure.
+    
+    Process:
+    1. Randomly mask up to max_variants words with numbered placeholders
+    2. Use LLaMA to generate replacement words for each masked position
+    3. Apply all replacements to create the final text variant
+    
+    Returns:
+        List[str]: Single completed text variant (wrapped in list for interface compatibility)
+    
+    Attributes:
+        max_variants (int): Maximum number of words to mask per operation
+        rng: Random number generator for reproducible word selection
+        generator: Local LLaMA model instance for replacement generation
     """
 
     def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, seed: Optional[int] = 42):
-        super().__init__("MLM", "mutation", "Enhanced 3-step mask and LLM fill with retry logic")
+        super().__init__("MLM", "mutation", "LLM-based masked language model operator for contextual word replacement")
         self.logger = get_logger(self.name, log_file)
         
         # Improved parameter validation
@@ -104,7 +122,7 @@ class MLMOperator(VariationOperator):
                 masked_words.append(word)
         
         masked_text = " ".join(masked_words)
-        self.logger.debug(f"{self.name}: STEP 1 - Masked (m={m}) → {masked_text[:200]}{'...' if len(masked_text)>200 else ''}")
+        self.logger.debug(f"{self.name}: Masked {m} words → {masked_text[:200]}{'...' if len(masked_text)>200 else ''}")
         self.logger.debug(f"{self.name}: Mask mapping: {mask_mapping}")
         
         # Store for debugging
@@ -121,9 +139,9 @@ class MLMOperator(VariationOperator):
 
 
 
-    def _llm_fill_one_by_one(self, masked_text: str, mask_mapping: Dict[int, str]) -> str:
+    def _get_llm_replacements_sequentially(self, masked_text: str, mask_mapping: Dict[int, str]) -> str:
         """
-        Step 2: Ask LLM for each mask replacement one by one, then apply manually.
+        Generate LLM replacements for each masked token individually.
         
         Args:
             masked_text: Text with numbered mask tokens
@@ -140,7 +158,7 @@ class MLMOperator(VariationOperator):
             self.logger.debug(f"{self.name}: No masks to replace")
             return masked_text
 
-        self.logger.debug(f"{self.name}: STEP 2 - Asking LLM for each mask replacement individually")
+        self.logger.debug(f"{self.name}: Asking LLM for each mask replacement individually")
         
         # Store replacements as we get them
         replacements = {}
@@ -204,21 +222,48 @@ Reply with just one replacement word:"""
             mask_token = f"<MASKED_{mask_num}>"
             completed_text = completed_text.replace(mask_token, replacement, 1)
         
-        self.logger.info(f"{self.name}: STEP 2 SUCCESS - Applied replacements: {replacements}")
+        self.logger.info(f"{self.name}: Applied replacements: {replacements}")
         self._last_completed_text = completed_text
         return completed_text
 
-    def apply(self, text: str) -> List[str]:
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Apply the 3-step MLM process to generate text variants.
         
+        This method:
+        1. Validates input format and extracts parent data
+        2. Applies 3-step MLM process (mask, fill, complete)
+        3. Returns MLM-generated variant if different from original
+        4. Falls back to original text if MLM fails
+        
         Args:
-            text: Input text to process
-            
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': Enriched parent genome dictionary containing:
+                    - 'prompt': Original prompt text to process with MLM
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
+                
         Returns:
-            List containing one completed variant
+            List[str]: List containing MLM-generated prompt variants (or original if failed)
         """
         try:
+            # Validate input format
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
+                return []
+            
+            # Extract parent data
+            parent_data = operator_input.get("parent_data", {})
+            
+            if not isinstance(parent_data, dict):
+                self.logger.error(f"{self.name}: parent_data must be a dictionary")
+                return []
+            
+            # Extract prompt from parent data
+            text = parent_data.get("prompt", "")
+            
             # Handle edge cases
             if not text or not text.strip():
                 self.logger.debug(f"{self.name}: Empty input, returning as-is")
@@ -226,22 +271,22 @@ Reply with just one replacement word:"""
             
             self.logger.info(f"{self.name}: Starting 3-step MLM process for text: '{text[:50]}...'")
             
-            # Step 1: Mask words with numbered tokens
+            # Mask words with numbered tokens
             masked_text, mask_mapping = self._mask_once(text)
             
             if not mask_mapping:
                 self.logger.info(f"{self.name}: No words masked, returning original text")
                 return [text]
             
-            # Step 2: Get replacements for each mask one by one
-            completed_text = self._llm_fill_one_by_one(masked_text, mask_mapping)
+            # Get LLM replacements for each mask
+            completed_text = self._get_llm_replacements_sequentially(masked_text, mask_mapping)
             
-            # Step 3: Validate and return result
+            # Validate and return result
             if completed_text != masked_text and "<MASKED_" not in completed_text:
-                self.logger.info(f"{self.name}: STEP 3 SUCCESS - Generated variant: '{completed_text[:50]}...'")
+                self.logger.info(f"{self.name}: Generated variant: '{completed_text[:50]}...'")
                 return [completed_text]
             else:
-                self.logger.warning(f"{self.name}: STEP 3 FAILED - Returning original text")
+                self.logger.warning(f"{self.name}: Generation failed - Returning original text")
                 return [text]
                 
         except Exception as e:

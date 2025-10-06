@@ -578,17 +578,44 @@ Antonyms for {pos_tag}:
             self.logger.error(f"{self.name}: Additional variant generation failed: {e}")
             return []
 
-    def apply(self, text: str) -> List[str]:
+    def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate text variants using POS-aware antonym replacement.
         
+        This method:
+        1. Validates input format and extracts parent data
+        2. Detects POS tags and generates antonyms
+        3. Creates variants with antonym substitutions
+        4. Returns variants if different from original
+        
         Args:
-            text: Input text to process
-            
+            operator_input (Dict[str, Any]): Operator input containing:
+                - 'parent_data': Enriched parent genome dictionary containing:
+                    - 'prompt': Original prompt text to process with antonym replacement
+                    - 'generated_text': Generated output from the prompt (optional)
+                    - 'scores': Moderation scores dictionary
+                    - 'north_star_score': Primary optimization metric score
+                - 'max_variants': Maximum number of variants to generate
+                
         Returns:
-            List of text variants with antonym substitutions
+            List[str]: List containing antonym-replaced prompt variants (or original if failed)
         """
         try:
+            # Validate input format
+            if not isinstance(operator_input, dict):
+                self.logger.error(f"{self.name}: Input must be a dictionary")
+                return []
+            
+            # Extract parent data
+            parent_data = operator_input.get("parent_data", {})
+            
+            if not isinstance(parent_data, dict):
+                self.logger.error(f"{self.name}: parent_data must be a dictionary")
+                return []
+            
+            # Extract prompt from parent data
+            text = parent_data.get("prompt", "")
+            
             # Handle edge cases
             if not text or not text.strip():
                 self.logger.debug(f"{self.name}: Empty input, returning as-is")
