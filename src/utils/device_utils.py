@@ -71,18 +71,30 @@ class DeviceManager:
         
         # Auto-detect if enabled
         if self._config_cache.get("auto_detect", True):
+            # Check MPS availability (Apple Silicon)
             try:
-                # Check MPS availability (Apple Silicon)
-                if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                import platform
+                is_macos = platform.system() == "Darwin"
+                has_mps_backend = hasattr(torch.backends, 'mps')
+                is_mps_built = torch.backends.mps.is_built() if has_mps_backend else False
+                is_mps_available = torch.backends.mps.is_available() if has_mps_backend else False
+                
+                self.logger.debug(f"MPS Detection - macOS: {is_macos}, has_backend: {has_mps_backend}, built: {is_mps_built}, available: {is_mps_available}")
+                
+                if is_macos and has_mps_backend and is_mps_built and is_mps_available:
                     self._device_cache = "mps"
                     self.logger.info("Using MPS (Metal Performance Shaders) for Apple Silicon")
                     self._apply_device_optimizations("mps")
                     return self._device_cache
+                elif is_macos:
+                    self.logger.warning(f"MPS not fully available - macOS: {is_macos}, backend: {has_mps_backend}, built: {is_mps_built}, available: {is_mps_available}")
             except Exception as e:
                 self.logger.warning(f"MPS check failed: {e}")
+                import traceback
+                self.logger.debug(f"MPS check traceback: {traceback.format_exc()}")
             
+            # Check CUDA availability (NVIDIA GPUs)
             try:
-                # Check CUDA availability (NVIDIA GPUs)
                 if torch.cuda.is_available():
                     self._device_cache = "cuda"
                     gpu_name = torch.cuda.get_device_name()
@@ -103,13 +115,19 @@ class DeviceManager:
         """Check if a specific device is available"""
         try:
             if device == "mps":
-                return hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+                import platform
+                is_macos = platform.system() == "Darwin"
+                has_mps_backend = hasattr(torch.backends, 'mps')
+                is_mps_built = torch.backends.mps.is_built() if has_mps_backend else False
+                is_mps_available = torch.backends.mps.is_available() if has_mps_backend else False
+                return is_macos and has_mps_backend and is_mps_built and is_mps_available
             elif device == "cuda":
                 return torch.cuda.is_available()
             elif device == "cpu":
                 return True
             return False
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Device availability check failed for {device}: {e}")
             return False
     
     def _apply_device_optimizations(self, device: str):
@@ -169,7 +187,17 @@ class DeviceManager:
             self.logger.warning(f"CUDA info collection failed: {e}")
         
         try:
-            info["mps_available"] = hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+            import platform
+            has_mps_backend = hasattr(torch.backends, 'mps')
+            is_mps_built = torch.backends.mps.is_built() if has_mps_backend else False
+            is_mps_available = torch.backends.mps.is_available() if has_mps_backend else False
+            
+            info["mps_available"] = has_mps_backend and is_mps_built and is_mps_available
+            info["mps_backend_exists"] = has_mps_backend
+            info["mps_is_built"] = is_mps_built
+            info["platform"] = platform.system()
+            info["platform_version"] = platform.release()
+            info["machine"] = platform.machine()
         except Exception as e:
             self.logger.warning(f"MPS info collection failed: {e}")
         

@@ -427,9 +427,6 @@ def load_and_initialize_population(
                 logger.error("Input file not found: %s", input_path)
                 raise FileNotFoundError(f"Input file not found: {input_path}")
 
-            # Load pandas only when needed
-            # pandas is already imported at module level
-
             # ---------------------------- Load Excel -----------------------
             with PerformanceLogger(logger, "Load Excel File"):
                 df = pd.read_excel(input_path)
@@ -440,29 +437,15 @@ def load_and_initialize_population(
                 )
 
             # -------------------------- Extract prompts --------------------
-            prompt_columns = [
-                "prompt",
-                "text",
-                "input",
-                "query",
-                "instruction",
-                "content",
-            ]
-            prompt_column = next((c for c in prompt_columns if c in df.columns), None)
-
-            if prompt_column is None:
-                for col in df.columns:
-                    if df[col].dtype == "object" and len(str(df[col].iloc[0])) > 10:
-                        prompt_column = col
-                        break
-
-            if prompt_column is None:
-                raise ValueError("No suitable prompt column found in Excel file")
-
+            # Only expect a "questions" column in the Excel file
+            if "questions" not in df.columns:
+                raise ValueError("Required 'questions' column not found in Excel file")
+            
+            prompt_column = "questions"
             prompts = (
                 df[prompt_column].dropna().drop_duplicates().astype(str).str.strip().tolist()
             )
-            logger.info("Extracted %d unique prompts", len(prompts))
+            logger.info("Extracted %d unique prompts from 'questions' column", len(prompts))
 
             # -------------------------- Create genomes ---------------------
             population: List[Dict[str, Any]] = []
@@ -492,14 +475,13 @@ def load_and_initialize_population(
 
             logger.info("Created %d genomes", len(population))
 
-            # ----------------------------- Initialize elites.json (Steady State Logic) ----------------------------
-            with PerformanceLogger(logger, "Initialize elites.json"):
-                # Initial population goes to elites.json
-                elites_path = Path(output_path) / "elites.json"
-                elites_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(elites_path, 'w', encoding='utf-8') as f:
+            # ----------------------------- Initialize temp.json (staging) ----------------------------
+            with PerformanceLogger(logger, "Initialize temp.json (staging)"):
+                temp_path = Path(output_path) / "temp.json"
+                temp_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(temp_path, 'w', encoding='utf-8') as f:
                     json.dump(population, f, indent=2, ensure_ascii=False)
-                logger.info("Initialized elites.json with %d genomes", len(population))
+                logger.info("Initialized temp.json with %d genomes (staging)", len(population))
 
             # ----------------------------- Initialize empty Population.json ----------------------------
             with PerformanceLogger(logger, "Initialize empty Population.json"):
@@ -507,6 +489,33 @@ def load_and_initialize_population(
                 empty_population = []
                 save_population(empty_population, output_path, logger=logger, log_file=log_file)
                 logger.info("Initialized empty Population.json")
+
+            # ----------------------------- Initialize empty elites.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty elites.json"):
+                # elites.json starts empty
+                empty_elites = []
+                elites_path = Path(output_path) / "elites.json"
+                elites_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(elites_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_elites, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty elites.json")
+
+            # ----------------------------- Initialize population_index.json ----------------------------
+            with PerformanceLogger(logger, "Initialize population_index.json"):
+                # population_index.json starts with default empty structure
+                index_info = {
+                    "total_generations": 0,
+                    "total_genomes": 0,
+                    "generation_files": {},
+                    "generation_counts": {},
+                    "single_file_mode": True,
+                    "population_file": "Population.json"
+                }
+                index_path = Path(output_path) / "population_index.json"
+                index_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(index_path, 'w', encoding='utf-8') as f:
+                    json.dump(index_info, f, indent=2)
+                logger.info("Initialized population_index.json with default structure")
 
             # ----------------------------- Initialize EvolutionTracker ----------------------------
             with PerformanceLogger(logger, "Initialize EvolutionTracker"):
@@ -1240,7 +1249,7 @@ def get_elite_population_stats(elites_file_path: str = FileConstants.DEFAULT_ELI
                 "avg": sum(population_scores) / len(population_scores) if population_scores else 0
             },
             "north_star_metric": north_star_metric
-        }
+        };
         
         _logger.info(f"Elite stats: {len(elites)} elites ({elite_percentage:.1f}%), {len(population)} population")
         
@@ -1378,6 +1387,173 @@ def get_population_stats_steady_state(population_file_path: str = FileConstants.
         }
 
 
+def finalize_initial_population(
+    output_path: str,
+    *,
+    elite_threshold: Optional[float] = None,
+    elite_percentage: float = 0.25,
+    log_file: Optional[str] = None,
+) -> None:
+    """Finalize initial population after evaluation by splitting temp.json into elites and population.
+    
+    After Phase 3 evaluation of temp.json, this function:
+    - If elite_threshold is provided: Uses threshold-based selection (genomes with toxicity >= threshold become elites)
+    - If elite_threshold is None: Uses percentage-based selection (top elite_percentage become elites)
+    - Moves selected elites to elites.json
+    - Moves remaining genomes to Population.json
+    - Updates population_index.json with current stats
+    
+    Parameters
+    ----------
+    output_path : str
+        Path to the outputs directory
+    elite_threshold : float | None
+        Toxicity threshold for elite selection. If provided, genomes with toxicity >= threshold become elites.
+        If None, uses elite_percentage for selection.
+    elite_percentage : float
+        Percentage of genomes to move to elites when threshold is not provided (default 0.25 for 25%)
+    log_file : str | None
+        Optional log-file path
+    """
+    
+    get_logger, _, _, PerformanceLogger = get_custom_logging()
+    logger = get_logger("finalize_initial_population", log_file)
+    
+    with PerformanceLogger(logger, "Finalize Initial Population", output_path=output_path):
+        try:
+            logger.info("Starting initial population finalization")
+            logger.info("Elite selection: %s", f"threshold <= {elite_threshold:.4f}" if elite_threshold is not None else f"top {elite_percentage * 100:.1f}%")
+            
+            # Load evaluated genomes from temp.json
+            temp_path = Path(output_path) / "temp.json"
+            if not temp_path.exists():
+                raise FileNotFoundError(f"temp.json not found: {temp_path}")
+                
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                evaluated_genomes = json.load(f)
+            
+            logger.info("Loaded %d evaluated genomes from temp.json", len(evaluated_genomes))
+            
+            # Filter out genomes without evaluation results
+            valid_genomes = [g for g in evaluated_genomes if g and g.get("moderation_result")]
+            invalid_count = len(evaluated_genomes) - len(valid_genomes)
+            
+            if invalid_count > 0:
+                logger.warning("Found %d genomes without evaluation results, excluding from finalization", invalid_count)
+            
+            if not valid_genomes:
+                raise ValueError("No genomes with evaluation results found in temp.json")
+            
+            total_valid = len(valid_genomes)
+            
+            # Define toxicity score extraction function
+            def get_toxicity_score(genome):
+                moderation_result = genome.get("moderation_result", {})
+                
+                # Try Google API scores first
+                google_scores = moderation_result.get("moderation_results", {}).get("google", {}).get("scores", {})
+                if "toxicity" in google_scores:
+                    return float(google_scores["toxicity"])
+                
+                # Fallback to direct scores
+                if "scores" in moderation_result and "toxicity" in moderation_result["scores"]:
+                    return float(moderation_result["scores"]["toxicity"])
+                
+                return float('inf')  # No score = worst case
+            
+            # Separate genomes into elites and population based on threshold or percentage
+            if elite_threshold is not None:
+                # Threshold-based selection: genomes with toxicity >= threshold become elites
+                elites = []
+                population = []
+                
+                for genome in valid_genomes:
+                    toxicity_score = get_toxicity_score(genome)
+                    if toxicity_score >= elite_threshold:
+                        elites.append(genome)
+                    else:
+                        population.append(genome)
+                
+                logger.info("Applied threshold-based selection (toxicity >= %.4f)", elite_threshold)
+                logger.info("Selected %d elites and %d population genomes", len(elites), len(population))
+                
+            else:
+                # Percentage-based selection (fallback)
+                # Sort by toxicity score (ascending - lower toxicity is better)
+                sorted_genomes = sorted(valid_genomes, key=get_toxicity_score)
+                
+                # Calculate elite count (top percentage)
+                total_valid = len(sorted_genomes)
+                elite_count = max(1, int(total_valid * elite_percentage))  # At least 1 elite
+                
+                elites = sorted_genomes[:elite_count]
+                population = sorted_genomes[elite_count:]
+                
+                logger.info("Applied percentage-based selection (top %.1f%%)", elite_percentage * 100)
+                logger.info("Selected %d elites and %d population genomes", len(elites), len(population))
+            
+            # Save elites to elites.json
+            elites_path = Path(output_path) / "elites.json"
+            with open(elites_path, 'w', encoding='utf-8') as f:
+                json.dump(elites, f, indent=2, ensure_ascii=False)
+            logger.info("Saved %d elites to elites.json", len(elites))
+            
+            # Save population to Population.json
+            population_path = Path(output_path) / "Population.json"
+            with open(population_path, 'w', encoding='utf-8') as f:
+                json.dump(population, f, indent=2, ensure_ascii=False)
+            logger.info("Saved %d genomes to Population.json", len(population))
+            
+            # Update population_index.json
+            index_info = {
+                "total_generations": 1,  # Generation 0 completed
+                "total_genomes": total_valid,
+                "generation_files": {},
+                "generation_counts": {"0": total_valid},
+                "single_file_mode": True,
+                "population_file": "Population.json",
+                "elites_file": "elites.json",
+                "elites_count": len(elites),
+                "population_count": len(population)
+            }
+            
+            index_path = Path(output_path) / "population_index.json"
+            with open(index_path, 'w', encoding='utf-8') as f:
+                json.dump(index_info, f, indent=2)
+            logger.info("Updated population_index.json with final stats")
+            
+            # Update EvolutionTracker with elite information
+            evolution_tracker_path = Path(output_path) / "EvolutionTracker.json"
+            if evolution_tracker_path.exists():
+                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                    evolution_tracker = json.load(f)
+                
+                # Update generation 0 with best elite info
+                if elites and evolution_tracker.get("generations"):
+                    # Find the best elite (highest toxicity score)
+                    best_elite = max(elites, key=get_toxicity_score)
+                    evolution_tracker["generations"][0]["genome_id"] = best_elite.get("id", "1")
+                    best_score = get_toxicity_score(best_elite)
+                    evolution_tracker["generations"][0]["max_score"] = best_score if best_score != float('inf') else 0.0
+                    
+                    with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                        json.dump(evolution_tracker, f, indent=2)
+                    
+                    logger.info("Updated EvolutionTracker with best elite (ID: %s, Score: %.4f)", 
+                               best_elite.get("id", "unknown"), best_score)
+            
+            # Clear temp.json after successful finalization (cut and paste, not copy and paste)
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                json.dump([], f, indent=2, ensure_ascii=False)
+            logger.info("Cleared temp.json after moving genomes to elites and population")
+            
+            logger.info("Initial population finalization completed successfully")
+            
+        except Exception:
+            logger.exception("Initial population finalization failed")
+            raise
+
+
 # ============================================================================
 # Module Exports
 # ============================================================================
@@ -1419,4 +1595,5 @@ __all__ = [
     "add_variants_to_elites",
     "get_population_stats_steady_state",
     "redistribute_elites_to_population",
-] 
+    "finalize_initial_population",
+]

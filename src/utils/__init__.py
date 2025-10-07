@@ -5,8 +5,7 @@
 # This package provides:
 #  - custom_logging: Logging configuration and performance tracking
 #  - population_io: Population loading, saving, and management
-#  - config: Configuration management utilities
-#  - optimizer: System optimization utilities
+#  - m3_optimizer: System optimization utilities for Apple Silicon
 
 # Lazy imports to prevent circular import issues
 def get_custom_logging():
@@ -29,7 +28,8 @@ def get_population_io():
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
-        get_population_stats_steady_state
+        get_population_stats_steady_state,
+        finalize_initial_population
     )
     return (
         load_and_initialize_population, 
@@ -44,16 +44,11 @@ def get_population_io():
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
-        get_population_stats_steady_state
+        get_population_stats_steady_state,
+        finalize_initial_population
     )
-
-def get_config():
-    """Lazy import of config functions"""
-    from .config import load_config, save_config
-    return load_config, save_config
 
 __all__ = [
     "get_custom_logging",
     "get_population_io", 
-    "get_config",
 ]

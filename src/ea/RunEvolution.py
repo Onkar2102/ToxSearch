@@ -172,7 +172,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                 _logger.info("Marked %d genomes as complete (global threshold achieved)", marked_count)
                 
                 # Save population to elites.json (steady-state mode)
-                _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                _, _, _, save_population, _, _, _, _, _, _, _, _, _ = get_population_io()
                 elites_path = str(outputs_path / "elites.json")
                 save_population(population, elites_path, logger=_logger)
                 _logger.info("Updated elites with completed statuses")
@@ -538,7 +538,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         # Phase 2: Load population with error handling
         with PerformanceLogger(logger, "Load Population"):
             try:
-                _, _, load_population, _, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                _, _, load_population, _, _, _, _, _, _, _, _, _, _ = get_population_io()
                 population = load_population(str(outputs_path), logger=logger)
                 logger.info("Successfully loaded population with %d genomes", len(population))
             except Exception as e:
@@ -583,7 +583,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
             # Save updated population after evolution to elites.json
             with PerformanceLogger(logger, "Save Population After Evolution"):
                 try:
-                    _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                    _, _, _, save_population, _, _, _, _, _, _, _, _, _ = get_population_io()
                     # Save to elites.json since we're in steady-state mode
                     elites_path = str(outputs_path / "elites.json")
                     save_population(engine.genomes, elites_path, logger=logger)
@@ -639,7 +639,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         # Phase 8: Save final population to elites.json
         with PerformanceLogger(logger, "Save Final Population"):
             try:
-                _, _, _, save_population, _, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+                _, _, _, save_population, _, _, _, _, _, _, _, _, _ = get_population_io()
                 # Save to elites.json since we're in steady-state mode
                 elites_path = str(outputs_path / "elites.json")
                 save_population(final_population, elites_path, logger=logger)
