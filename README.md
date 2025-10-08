@@ -65,7 +65,7 @@ flowchart TD
     C --> D[Parent Selection: Top Elite + Random]
     D --> E[Text Generation: LLaMaTextGenerator]
     E --> F[Safety Evaluation: Hybrid Moderation]
-    F --> G[Evolution: 16 Variation Operators]
+    F --> G[Evolution: 12 Variation Operators]
     G --> H[Update Elites: outputs/elites.json]
     H --> I{Threshold Reached?}
     I -->|No| D
@@ -80,51 +80,44 @@ flowchart TD
   style J fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
 ```
 
-## System Components Overview
+## 🏗️ **System Architecture**
 
 ```mermaid
 graph TB
-  subgraph "Input Layer"
-    A1[data/prompt.xlsx]
+  subgraph "Entry Points"
+    A1[app.py<br/>Interactive entry with monitoring]
+    A2[src/main.py<br/>Direct execution pipeline]
   end
   
   subgraph "Core Pipeline"
-    B1[Population Initialization]
-    B2[Text Generation - LLaMA]
-    B3[Safety Evaluation - Hybrid API]
-    B4[Evolution Engine - 16 Operators]
+    B1[RunEvolution.py<br/>Evolution orchestration]
+    B2[EvolutionEngine.py<br/>Genetic algorithm core]
   end
   
-  subgraph "Storage Layer"
-    C1[outputs/elites.json<br/>Steady-State Population]
-    C2[outputs/EvolutionTracker.json<br/>Progress Tracking]
-    C3[outputs/Population.json<br/>Full Population]
+  subgraph "Evolution Components"
+    C1[ParentSelector.py<br/>Steady-state selection]
+    C2[Operator System<br/>12 variation operators]
+    C3[Population I/O<br/>Steady-state management]
   end
   
-  subgraph "Text Variation Operators"
-    D1[Mutation Operators<br/>10 Total]
-    D2[Crossover Operators<br/>2 Total]
-    D3[Multi-Language Support<br/>5 Languages]
+  subgraph "Generation & Evaluation"
+    D1[LLaMaTextGenerator.py<br/>Task-specific text generation]
+    D2[hybrid_moderation.py<br/>Safety evaluation]
   end
   
-  A1 --> B1
+  A1 --> A2
+  A2 --> B1
   B1 --> B2
-  B2 --> B3
-  B3 --> B4
-  B4 --> B1
+  B2 --> C1
+  B2 --> C2
+  B2 --> C3
+  C2 --> D1
+  D1 --> D2
   
-  B1 --> C1
-  B3 --> C2
-  B4 --> C3
-  
-  B4 --> D1
-  B4 --> D2
-  B4 --> D3
-  
-  style B1 fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style B2 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style B3 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style B4 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
+  style A1 fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style B1 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style C2 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D1 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
 ```
 
 ## Memory Management Architecture
@@ -202,7 +195,7 @@ python -c "from src.utils.population_io import load_elites; elites = load_elites
 python tests/test_operators_demo.py
 
 # Test specific back translation
-python -c "from src.ea.TextVariationOperators import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
+python -c "from src.ea.llm_back_translation_operators import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
 ```
 
  
@@ -245,38 +238,6 @@ outputs/
 - **PointCrossover** - Deprecated and commented out
 - **Classic Back-translation operators** - Replaced by LLM versions
 
-```mermaid
-graph TB
-  subgraph "Active Mutation Operators (10)"
-    A1[LLM_POSAwareSynonymReplacement]
-    A2[MLMOperator]
-    A3[LLMBasedParaphrasingOperator]
-    A4[LLM_POSAwareAntonymReplacement]
-    A5[StylisticMutator]
-    A6[LLM Back-Translation: 5 Languages]
-      B2 --> C2
-      B2 --> C3
-      B2 --> C4
-      B2 --> C5
-    end
-  end
-  
-  subgraph "Crossover Operators (3)"
-    D1[PointCrossover<br/>Single-point crossover]
-    D2[SemanticSimilarityCrossover<br/>Semantic similarity-based]
-    D3[InstructionPreservingCrossover<br/>Instruction structure preservation]
-  end
-  
-  style A1 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style A2 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style A3 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style B1 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
-  style B2 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
-  style D1 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D2 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D3 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-```
-
 ### **Operator Selection Logic**
 
 ```mermaid
@@ -310,10 +271,11 @@ flowchart TD
 - ✅ **Deprecated classic back-translation** - now using LLM-based versions only
 - ✅ **Updated to 12 active operators** (10 mutation + 2 crossover)
 
-### Configuration Improvements
-- ✅ **Config-driven prompt templates** for instruction-preserving crossover
-- ✅ **Centralized system instructions** in modelConfig.yaml
-- ✅ **Single-variant behavior** for consistency across operators
+### Architecture Improvements
+- ✅ **Layered Architecture**: app.py → src/main.py → src/ea/RunEvolution.py → src/ea/EvolutionEngine.py
+- ✅ **Modular Operator Design**: Individual operator files for better maintainability
+- ✅ **Enhanced Import System**: Lazy imports and improved dependency management
+- ✅ **Steady-State Population Management**: Continuous evolution with elite preservation
 
 ### Current Active Operators
 **Mutation Operators (10):**
@@ -335,9 +297,3 @@ flowchart TD
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
- 
-
-## License
-
-MIT License - see LICENSE file for details.

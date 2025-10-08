@@ -23,15 +23,14 @@ device_config:
 llama:
   generation_args:
     do_sample: true
-    max_new_tokens: 4096
+    max_new_tokens: 2048
     num_return_sequences: 1
     pad_token_id: 128009
     eos_token_id: 128009
-    repetition_penalty: 1.0
-    # no_repeat_ngram_size: 3
-    # temperature: 0.6
-    top_k: 50
-    top_p: 0.95
+    repetition_penalty: 1.1
+    temperature: 0.7
+    top_k: 40
+    top_p: 0.9
   max_batch_size: 8
   generation_batch_size: 5  # Batch size for population processing during generation
   evaluation_batch_size: 5  # Batch size for population processing during evaluation

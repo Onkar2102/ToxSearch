@@ -29,35 +29,42 @@ from dotenv import load_dotenv
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
 
-# Lazy initialization - will be created when first needed
-_generator = None
+# Global generator instance - will be set by main.py
+_global_generator = None
+
+def set_global_generator(generator):
+    """
+    Set the global generator instance to be used by all operators.
+    
+    This should be called once from main.py after initializing the generator.
+    
+    Args:
+        generator: LlaMaTextGenerator instance
+    """
+    global _global_generator
+    _global_generator = generator
 
 def get_generator():
     """
-    Get or create the shared LLaMA text generator instance.
+    Get the shared LLaMA text generator instance.
     
-    This function implements lazy initialization and caching of the local LLaMA model
-    (from models/ directory) to ensure efficient memory usage across all operators that need it.
+    This function returns the globally shared generator instance set by main.py.
+    If no generator has been set, it raises an error.
     
     Returns:
-        LlaMaTextGenerator: Cached instance of the LLaMA text generator
+        LlaMaTextGenerator: Shared instance of the LLaMA text generator
         
     Raises:
-        ValueError: If model configuration is not found
-        FileNotFoundError: If config file is not found
+        RuntimeError: If no generator has been set globally
         
     Example:
         >>> generator = get_generator()
         >>> response = generator.generate_response("Hello world")
     """
-    global _generator
-    if _generator is None:
-        from gne import get_LLaMaTextGenerator
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        config_path = os.path.join(project_root, "config", "modelConfig.yaml")
-        LlaMaTextGenerator = get_LLaMaTextGenerator()
-        _generator = LlaMaTextGenerator(config_path=config_path, log_file=None)
-    return _generator
+    global _global_generator
+    if _global_generator is None:
+        raise RuntimeError("No global generator set. Call set_global_generator() first from main.py")
+    return _global_generator
 
 def limit_variants(variants: List[str], max_variants: int = 3) -> List[str]:
     """

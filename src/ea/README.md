@@ -13,7 +13,7 @@ The main orchestrator for the evolutionary process.
 - Tracks variant counts and integrates deduplication
 - Steady-state population persistence (`outputs/elites.json`)
 - Memory-optimized for large populations
-- Supports 16 text variation operators
+- Supports 12 text variation operators
 
 **Main Methods (excerpt):**
 ```python
@@ -74,8 +74,8 @@ def select_parents_steady_state(self):
     # Up to 5 crossover parents for maximum diversity
 ```
 
-### **4. TextVariationOperators** (`TextVariationOperators.py`)
-Comprehensive implementation of mutation and crossover operators.
+### **4. Individual Operator Files**
+Comprehensive implementation of mutation and crossover operators as separate modules.
 
 **Recent Improvements:**
 - **12 Total Operators**: 10 mutation + 2 crossover (consolidated and cleaned up)
@@ -320,27 +320,39 @@ graph TB
     B[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
     C[RunEvolution.py<br/>Evolution pipeline driver]
     D[ParentSelector.py<br/>Selection strategies (steady-state)]
-    E[TextVariationOperators.py<br/>16 mutation/crossover operators]
+    E[Individual Operator Files<br/>12 variation operators]
     F[VariationOperators.py<br/>Legacy operators (deprecated)]
-    G[README.md<br/>Package documentation]
+    G[operator_helpers.py<br/>Operator factory and utilities]
+    H[README.md<br/>Package documentation]
+  end
+  
+  subgraph "Individual Operator Files"
+    E1[llm_pos_aware_synonym_replacement.py<br/>POS-aware synonym replacement]
+    E2[mlm_operator.py<br/>Masked language modeling]
+    E3[paraphrasing_operator.py<br/>OpenAI paraphrasing]
+    E4[llm_pos_aware_antonym_replacement.py<br/>POS-aware antonym replacement]
+    E5[stylistic_mutator.py<br/>Style variation]
+    E6[llm_back_translation_operators.py<br/>Multi-language back-translation]
+    E7[semantic_similarity_crossover.py<br/>Semantic similarity crossover]
+    E8[instruction_preserving_crossover.py<br/>Instruction-preserving crossover]
   end
   
   subgraph "Key Dependencies"
-    H[utils.population_io<br/>Steady-state population management]
-    I[gne.LLaMaTextGenerator<br/>Text generation]
-    J[gne.hybrid_moderation<br/>Safety evaluation]
-    K[utils.custom_logging<br/>Performance tracking]
+    I[utils.population_io<br/>Steady-state population management]
+    J[gne.LLaMaTextGenerator<br/>Text generation]
+    K[gne.hybrid_moderation<br/>Safety evaluation]
+    L[utils.custom_logging<br/>Performance tracking]
   end
   
-  B --> H
   B --> I
   B --> J
   B --> K
+  B --> L
   C --> B
   C --> D
   C --> E
-  D --> H
-  E --> I
+  D --> I
+  E --> J
   
   style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
   style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
@@ -359,7 +371,7 @@ graph TB
 ## 📝 **Recent Updates and Fixes**
 
 ### **Major Additions**
-- **16 Text Variation Operators**: Complete operator suite
+- **12 Text Variation Operators**: Complete operator suite
 - **Multi-Language Back-Translation**: 5 languages with dual approaches
 - **Steady-State Population Management**: Elite preservation and continuous evolution
 - **Task-Specific Templates**: Configurable prompts for different tasks
@@ -373,16 +385,16 @@ graph TB
 - Adaptive batch sizing
 
 ### **Architecture Enhancements**
-- Dual translation approaches for better coverage
-- Comprehensive operator selection logic
+- Modular operator implementation (individual files vs monolithic class)
 - Enhanced parent selection strategies
 - Improved error handling and recovery
+- Layered architecture: main.py → RunEvolution.py → EvolutionEngine.py
 
 ## 🚀 **Usage Examples**
 
 ### **Basic Operator Usage**
 ```python
-from src.ea.TextVariationOperators import LLMBackTranslationHIOperator
+from src.ea.llm_back_translation_operators import LLMBackTranslationHIOperator
 
 # Initialize operator
 operator = LLMBackTranslationHIOperator()

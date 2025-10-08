@@ -70,7 +70,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         "SCONJ": "Subordinating Conjunction: joins a main clause with a subordinate clause such as a sentential complement"
     }
 
-    def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, num_POS_tags: int = 1, seed: Optional[int] = 42):
+    def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, num_POS_tags: int = 1, seed: Optional[int] = 42, generator=None):
         """
         Initialize the LLM POS-aware synonym replacement operator.
         
@@ -79,6 +79,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
             max_variants: Maximum number of variants to generate (default: 3)
             num_POS_tags: Number of POS types to randomly select (1 to max available)
             seed: Random seed for reproducible selection (default: 42)
+            generator: LLaMA generator instance to use
         """
         super().__init__(
             "LLM_POSAwareSynonymReplacement", 
@@ -95,9 +96,8 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         self.seed = seed
         self.rng = random.Random(seed)
         
-        # Initialize LLaMA generator for synonym generation
-        from .operator_helpers import get_generator
-        self.generator = get_generator()
+        # Use provided generator
+        self.generator = generator
         
         self.logger.info(f"{self.name}: Configured with max_variants={self.max_variants}, num_POS_tags={self.num_POS_tags}, seed={seed}")
 

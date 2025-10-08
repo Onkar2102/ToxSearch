@@ -17,7 +17,7 @@ Process for each operator:
 
 
 from .VariationOperators import VariationOperator
-from .operator_helpers import get_generator
+from .EvolutionEngine import EvolutionEngine
 import logging
 from typing import List, Dict, Any
 get_logger = logging.getLogger
@@ -43,12 +43,12 @@ class _GenericLLMBackTranslationOperator(VariationOperator):
     Note:
         Subclasses specify the target language and language code.
     """
-    def __init__(self, name: str, target_lang: str, target_lang_code: str, log_file=None):
+    def __init__(self, name: str, target_lang: str, target_lang_code: str, log_file=None, generator=None):
         super().__init__(name, "mutation", f"LLaMA-based EN→{target_lang_code.upper()}→EN back-translation.")
         self.logger = get_logger(self.name)
         self.target_lang = target_lang
         self.target_lang_code = target_lang_code
-        self.generator = get_generator()
+        self.generator = generator
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
@@ -119,50 +119,55 @@ class _GenericLLMBackTranslationOperator(VariationOperator):
 
 class LLMBackTranslationHIOperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based Hindi back-translation operator."""
-    def __init__(self, log_file=None):
+    def __init__(self, log_file=None, generator=None):
         super().__init__(
             name="LLMBackTranslation_HI",
             target_lang="Hindi",
             target_lang_code="hi",
             log_file=log_file,
+            generator=generator,
         )
 
 class LLMBackTranslationFROperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based French back-translation operator."""
-    def __init__(self, log_file=None):
+    def __init__(self, log_file=None, generator=None):
         super().__init__(
             name="LLMBackTranslation_FR",
             target_lang="French",
             target_lang_code="fr",
             log_file=log_file,
+            generator=generator,
         )
 
 class LLMBackTranslationDEOperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based German back-translation operator."""
-    def __init__(self, log_file=None):
+    def __init__(self, log_file=None, generator=None):
         super().__init__(
             name="LLMBackTranslation_DE",
             target_lang="German",
             target_lang_code="de",
             log_file=log_file,
+            generator=generator,
         )
 
 class LLMBackTranslationJAOperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based Japanese back-translation operator."""
-    def __init__(self, log_file=None):
+    def __init__(self, log_file=None, generator=None):
         super().__init__(
             name="LLMBackTranslation_JA",
             target_lang="Japanese",
             target_lang_code="ja",
             log_file=log_file,
+            generator=generator,
         )
 
 class LLMBackTranslationZHOperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based Chinese back-translation operator."""
-    def __init__(self, log_file=None):
+    def __init__(self, log_file=None, generator=None):
         super().__init__(
             name="LLMBackTranslation_ZH",
             target_lang="Chinese",
             target_lang_code="zh",
             log_file=log_file,
+            generator=generator,
         )

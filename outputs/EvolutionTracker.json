@@ -1,17 +1,17 @@
 {
-  "scope": "global",
-  "status": "not_complete",
-  "total_generations": 1,
-  "generations": [
-    {
-      "generation_number": 0,
-      "genome_id": "5",
-      "max_score": 0.0446,
-      "mutation": null,
-      "crossover": null,
-      "elites_threshold": 0.03345
-    }
-  ],
-  "population_max_toxicity": 0.0446,
-  "population_best_genome_id": "5"
+    "scope": "global",
+    "status": "not_complete",
+    "total_generations": 1,
+    "generations": [
+        {
+            "generation_number": 0,
+            "genome_id": "2",
+            "max_score": 0.0362,
+            "mutation": null,
+            "crossover": null,
+            "elites_threshold": 0.02715
+        }
+    ],
+    "population_max_toxicity": 0.0362,
+    "population_best_genome_id": "2"
 }

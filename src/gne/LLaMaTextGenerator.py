@@ -553,6 +553,30 @@ class LlaMaTextGenerator:
                 self.logger.error(f"CUDA memory error: {e}")
                 self._cleanup_memory(aggressive=True)
                 return ["[CUDA_MEMORY_ERROR]" for _ in prompts]
+            elif "probability tensor" in str(e).lower() or "inf" in str(e).lower() or "nan" in str(e).lower():
+                self.logger.error(f"Probability tensor error during generation: {e}")
+                # Try with safer generation parameters
+                try:
+                    safe_kwargs = generation_kwargs.copy()
+                    safe_kwargs.update({
+                        "temperature": 0.8,
+                        "top_p": 0.9,
+                        "top_k": 40,
+                        "repetition_penalty": 1.1
+                    })
+                    self.logger.info("Retrying with safer generation parameters...")
+                    with torch.no_grad():
+                        if self.device in ("cuda", "mps"):
+                            with torch.autocast(device_type=self.device, enabled=True):
+                                outputs = self.model.generate(**inputs, **safe_kwargs)
+                        else:
+                            outputs = self.model.generate(**inputs, **safe_kwargs)
+                    
+                    responses = [self.tokenizer.decode(output, skip_special_tokens=True) for output in outputs]
+                    return responses
+                except Exception as retry_e:
+                    self.logger.error(f"Retry with safe parameters also failed: {retry_e}")
+                    return ["[PROBABILITY_TENSOR_ERROR]" for _ in prompts]
             else:
                 self.logger.error(f"Runtime error during generation: {e}")
                 return ["[RUNTIME_ERROR]" for _ in prompts]
@@ -731,8 +755,6 @@ class LlaMaTextGenerator:
                 # Update genome
                 genome['generated_text'] = generated_text
                 genome['status'] = 'pending_evaluation'
-                genome['generation_timestamp'] = time.time()
-                genome['model_provider'] = self.model_cfg.get("provider", "")
                 genome['model_name'] = self.model_cfg.get("name", "")
                 
                 self.logger.info("Successfully generated text for genome %s: %d characters", 

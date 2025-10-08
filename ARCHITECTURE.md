@@ -11,7 +11,7 @@ flowchart TD
     C --> D[Parent Selection: Top Elite + Random]
     D --> E[Text Generation: gne.LLaMaTextGenerator]
     E --> F[Safety Evaluation: gne.hybrid_moderation]
-    F --> G[Evolution: ea.EvolutionEngine.generate_variants_global]
+    F --> G[Evolution: 12 Text Variation Operators]
     G --> H[Update Elites: outputs/elites.json]
     H --> I{Threshold Reached?}
     I -->|No| D
@@ -60,7 +60,7 @@ graph TB
 flowchart LR
   A[Input Prompts<br/>data/prompt.xlsx] --> B[Text Generation<br/>LLaMA Model]
   B --> C[Safety Evaluation<br/>Hybrid Moderation]
-  C --> D[Evolution<br/>16 Genetic Operators]
+  C --> D[Evolution<br/>12 Text Variation Operators]
   D --> E[Population Update<br/>Steady-State Elites]
   E --> F{Threshold<br/>Reached?}
   F -->|No| B
@@ -94,10 +94,10 @@ flowchart LR
 - **Dynamic Redistribution**: Elites redistributed to population when thresholds exceeded
 - **Memory Efficiency**: Single-file population with lazy loading
 
-### **16 Text Variation Operators**
-- **13 Mutation Operators**: Including 10 back-translation operators (5 languages × 2 methods)
-- **3 Crossover Operators**: One-point, semantic similarity, instruction-preserving
-- **Dual Translation Approaches**: Helsinki-NLP models + LLaMA-based translation
+### **12 Text Variation Operators**
+- **10 Mutation Operators**: Including 5 LLM-based back-translation operators (5 languages)
+- **2 Crossover Operators**: Semantic similarity and instruction-preserving
+- **LLM-Based Approaches**: LLaMA-based text variation across all operators
 - **Multi-Language Support**: Hindi, French, German, Japanese, Chinese
 
 ### **Enhanced Evolution Tracking**
@@ -149,7 +149,7 @@ flowchart LR
 
 ```mermaid
 graph TB
-  subgraph "Text Variation Operators (16 Total)"
+  subgraph "Text Variation Operators (12 Total)"
     subgraph "Mutation Operators (13)"
       A1[Core LLM Operators]
       A2[BERT-based Operators]
@@ -350,7 +350,7 @@ graph TB
       
       subgraph "Evolutionary Algorithms (ea/)"
         F1[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
-        F2[TextVariationOperators.py<br/>16 mutation/crossover operators]
+        F2[Individual Operator Files<br/>12 variation operators]
         F3[ParentSelector.py<br/>Selection strategies (steady-state)]
         F4[RunEvolution.py<br/>Evolution pipeline]
         F5[__init__.py<br/>Package exports]
@@ -424,7 +424,7 @@ graph TB
 - Solution: Continuous evolution with elite preservation
 - Benefits: More natural evolution, better performance tracking, memory efficiency
 
-### **2. 16 Text Variation Operators**
+### **2. 12 Text Variation Operators**
 - Problem: Limited text variation capabilities
 - Solution: Comprehensive operator suite with dual translation approaches
 - Benefits: Rich text variation, multi-language support, diverse evolution strategies

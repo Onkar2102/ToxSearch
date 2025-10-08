@@ -32,40 +32,46 @@ class InstructionPreservingCrossover(VariationOperator):
     
     Attributes:
         name (str): Operator name "InstructionPreservingCrossover"
-        operator_type (str): "crossover" (multiple parents required)
+        def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
         description (str): Description of the operator's functionality
         logger: Logger instance for debugging and monitoring
         generator: Local LLM generator for crossover generation
         north_star_metric (str): The metric to optimize for (e.g., "engagement", "toxicity")
         
     Methods:
+                generator: LLaMA generator instance to use
         apply(parent_texts): Generate crossover variants using local LLM
         
     Example:
         >>> operator = InstructionPreservingCrossover("engagement")
         >>> parents = ["Write a story about a brave knight", "Create a tale about a princess"]
-        >>> variants = operator.apply(parents)
-        >>> print(variants)
-        ['Write a compelling story about heroic characters']
+            # Use provided generator
+            self.generator = generator
     """
     
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
         """
         Initialize the instruction preserving crossover operator.
         
         Args:
             north_star_metric (str): The metric to optimize for (e.g., "engagement", "toxicity")
             log_file (str, optional): Path to log file for debugging. Defaults to None.
+            generator: LLaMA generator instance to use. If None, will create own instance.
         """
         super().__init__("InstructionPreservingCrossover", "crossover", 
                         f"LLM-based instruction preserving crossover optimized for {north_star_metric}")
         self.logger = get_logger(self.name, log_file)
         self.north_star_metric = north_star_metric
         
-        # Initialize generator
-        from .operator_helpers import get_generator
-        self.generator = get_generator()
-        self.logger.info(f"{self.name}: LLM generator initialized successfully")
+        # Initialize generator - use provided or create new one
+        if generator is not None:
+            self.generator = generator
+            self.logger.info(f"{self.name}: Using provided LLM generator")
+        else:
+            from .EvolutionEngine import EvolutionEngine
+            from .operator_helpers import get_generator
+            self.generator = get_generator()
+            self.logger.info(f"{self.name}: LLM generator initialized successfully")
         
         # Debug tracking attributes
         self._last_parent1 = ""
@@ -91,11 +97,28 @@ class InstructionPreservingCrossover(VariationOperator):
             float: The score for the north star metric, or 0.0 if not found
         """
         try:
+            # Handle both full genome structure and slimmed parent structure
+            if "scores" in genome:
+                # Slimmed structure - scores are directly available
+                scores = genome.get("scores", {})
+                if isinstance(scores, dict):
+                    return float(scores.get(self.north_star_metric, 0.0))
+            
+            # Fallback to full genome structure for backward compatibility
             moderation_result = genome.get("moderation_result", {})
             if isinstance(moderation_result, dict):
+                # Try flattened structure first: google.scores
+                if "google" in moderation_result:
+                    google_results = moderation_result["google"]
+                    if "scores" in google_results:
+                        scores = google_results["scores"]
+                        if isinstance(scores, dict):
+                            return float(scores.get(self.north_star_metric, 0.0))
+                
+                # Fallback to direct scores field
                 scores = moderation_result.get("scores", {})
                 if isinstance(scores, dict):
-                    return scores.get(self.north_star_metric, 0.0)
+                    return float(scores.get(self.north_star_metric, 0.0))
             return 0.0
         except Exception as e:
             self.logger.debug(f"{self.name}: Failed to extract score from genome: {e}")
@@ -253,23 +276,18 @@ class InstructionPreservingCrossover(VariationOperator):
                 self.logger.error(f"{self.name}: Parents must be genome dictionaries with required fields")
                 return []
             
-            # Validate required fields in genome dictionaries
-            required_fields = ["prompt", "generated_text", "moderation_result"]
+            # Validate required fields in slimmed parent data structure
+            required_fields = ["prompt", "generated_text", "scores"]
             for i, parent_data_item in enumerate([parent1_data, parent2_data], 1):
                 for field in required_fields:
                     if field not in parent_data_item:
                         self.logger.error(f"{self.name}: Parent {i} missing required field: {field}")
                         return []
                 
-                # Validate moderation_result structure
-                moderation_result = parent_data_item.get("moderation_result", {})
-                if not isinstance(moderation_result, dict) or "scores" not in moderation_result:
-                    self.logger.error(f"{self.name}: Parent {i} has invalid moderation_result structure")
-                    return []
-                
-                scores = moderation_result.get("scores", {})
+                # Validate scores structure (now directly available)
+                scores = parent_data_item.get("scores", {})
                 if not isinstance(scores, dict) or self.north_star_metric not in scores:
-                    self.logger.error(f"{self.name}: Parent {i} missing {self.north_star_metric} score in moderation_result.scores")
+                    self.logger.error(f"{self.name}: Parent {i} missing {self.north_star_metric} score in scores")
                     return []
             
             if not self.generator:

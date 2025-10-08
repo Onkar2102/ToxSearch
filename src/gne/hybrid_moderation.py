@@ -1,11 +1,10 @@
 """
 hybrid_moderation.py
 
-Hybrid content moderation system combining Google Perspective API and OpenAI Moderation.
+Content moderation system using Google Perspective API.
 
-This module provides toxicity evaluation using multiple moderation APIs for
-robust content safety assessment. Results are cached for efficiency and
-both APIs are used in parallel for comprehensive evaluation.
+This module provides toxicity evaluation for robust content safety assessment.
+Results are cached for efficiency.
 """
 
 import os
@@ -66,11 +65,10 @@ def _cache_result(text: str, result: Dict, api_name: str = ""):
 
 class HybridModerationEvaluator:
     """
-    Hybrid content moderation evaluator using multiple APIs.
+    Content moderation evaluator using Google Perspective API.
     
-    Combines Google Perspective API and OpenAI Moderation API to provide
-    comprehensive toxicity and safety evaluation of text content. Uses
-    caching and parallel processing for efficiency.
+    Provides comprehensive toxicity and safety evaluation of text content.
+    Uses caching and parallel processing for efficiency.
     
     Attributes:
         logger: Logger instance for debugging and monitoring
@@ -104,9 +102,8 @@ class HybridModerationEvaluator:
 
         # Check API availability
         self.google_available = bool(os.getenv("PERSPECTIVE_API_KEY"))
-        # self.openai_available = bool(os.getenv("OPENAI_API_KEY"))  # Commented out - not using OpenAI
         
-        if not self.google_available:  # Removed OpenAI check
+        if not self.google_available:
             raise ValueError("PERSPECTIVE_API_KEY environment variable is not set")
         
         self.logger.info("API Availability - Google: %s", 
@@ -137,16 +134,6 @@ class HybridModerationEvaluator:
                     static_discovery=False,
                 )
                 self.logger.info("Google Perspective API client initialized")
-            
-            # OpenAI client initialization commented out - not using OpenAI
-            # if self.openai_available:
-            #     from openai import OpenAI
-            #     self.openai_client = OpenAI(
-            #         api_key=os.getenv("OPENAI_API_KEY"),
-            #         organization=os.getenv("OPENAI_ORG_ID"),
-            #         project=os.getenv("OPENAI_PROJECT_ID")
-            #     )
-            #     self.logger.info("OpenAI client initialized")
                 
         except Exception as e:
             self.logger.error("Failed to initialize API clients: %s", e)
@@ -193,11 +180,7 @@ class HybridModerationEvaluator:
             flagged = normalized_scores.get("toxicity", 0.0) > 0.5
             
             result = {
-                "genome_id": genome_id,
-                "status": "complete",
-                "flagged": flagged,
                 "scores": normalized_scores,
-                "evaluation_timestamp": time.time(),
                 "api_version": "google",
                 "model": "perspective-api"
             }
@@ -209,52 +192,6 @@ class HybridModerationEvaluator:
         except Exception as e:
             self.logger.error("Google API evaluation failed for genome %s: %s", genome_id, e)
             return None
-    
-    # OpenAI evaluation method commented out - not using OpenAI
-    # def _evaluate_with_openai(self, text: str, genome_id: str) -> Optional[Dict[str, Any]]:
-    #     """Evaluate text using OpenAI moderation API"""
-    #     # Check cache first
-    #     cached = _get_cached_result(text, "openai")
-    #     if cached:
-    #         self.logger.debug("Using cached OpenAI result for genome %s", genome_id)
-    #         return cached
-    #         
-    #     try:
-    #         response = self.openai_client.moderations.create(
-    #             model="text-moderation-latest",
-    #             input=text
-    #         )
-    #         
-    #         result = response.to_dict()
-    #         if not result.get("results"):
-    #             return None
-    #         
-    #         # Extract scores from OpenAI response
-    #         scores = result["results"][0].get("category_scores", {})
-    #         
-    #         # Normalize scores to 0.0001-1.0000 range
-    #         normalized_scores = self._normalize_scores(scores)
-    #         
-    #         # Determine if flagged
-    #         flagged = result["results"][0].get("flagged", False)
-    #         
-    #         result = {
-    #             "genome_id": genome_id,
-    #             "status": "complete",
-    #             "flagged": flagged,
-    #             "scores": normalized_scores,
-    #             "evaluation_timestamp": time.time(),
-    #             "api_version": "openai",
-    #             "model": "text-moderation-latest"
-    #         }
-    #         
-    #         # Cache the result
-    #         _cache_result(text, result, "openai")
-    #         return result
-    #         
-    #     except Exception as e:
-    #         self.logger.error("OpenAI API evaluation failed for genome %s: %s", genome_id, e)
-    #         return None
     
     def _normalize_scores(self, scores: Dict[str, float]) -> Dict[str, float]:
         """Normalize scores to 0.0001-1.0000 range with 4 decimal places"""
@@ -292,7 +229,7 @@ class HybridModerationEvaluator:
                 
                 # Set default moderation methods if not provided
                 if moderation_methods is None:
-                    moderation_methods = ["google", "openai"]
+                    moderation_methods = ["google"]
                 
                 self.logger.debug("Using moderation methods: %s for genome %s", moderation_methods, genome_id)
                 
@@ -307,50 +244,23 @@ class HybridModerationEvaluator:
                 elif "google" in moderation_methods and not self.google_available:
                     self.logger.warning("Google Perspective API requested but not available for genome %s", genome_id)
                 
-                # OpenAI evaluation commented out - not using OpenAI
-                # if "openai" in moderation_methods and self.openai_available:
-                #     openai_result = self._evaluate_with_openai(text, genome_id)
-                #     if openai_result:
-                #         results["openai"] = openai_result
-                #         self.logger.debug("OpenAI evaluation completed for genome %s", genome_id)
-                # elif "openai" in moderation_methods and not self.openai_available:
-                #     self.logger.warning("OpenAI Moderation API requested but not available for genome %s", genome_id)
-                
                 if not results:
                     return {
-                        "genome_id": genome_id,
-                        "status": "error",
-                        "error": "All available APIs failed",
-                        "evaluation_timestamp": time.time()
+                        "error": "All available APIs failed"
                     }
                 
-                # Create unified result structure
-                unified_result = {
-                    "genome_id": genome_id,
-                    "status": "complete",
-                    "evaluation_timestamp": time.time(),
-                    "moderation_results": results
-                }
-                
-                # Determine overall flagged status (flagged if any API flags it)
-                overall_flagged = any(result.get("flagged", False) for result in results.values())
-                unified_result["flagged"] = overall_flagged
+                # Create unified result structure - flatten to have google directly in moderation_result
+                unified_result = results
                 
                 # Log summary
-                if overall_flagged:
-                    self.logger.warning("Genome %s flagged for moderation by at least one API", genome_id)
-                else:
-                    self.logger.info("Genome %s passed moderation by all APIs", genome_id)
+                self.logger.info("Genome %s moderation evaluation completed", genome_id)
                 
                 return unified_result
                 
             except Exception as e:
                 self.logger.error("Unexpected error evaluating genome %s: %s", genome_id, e, exc_info=True)
                 return {
-                    "genome_id": genome_id,
-                    "status": "error",
-                    "error": str(e),
-                    "evaluation_timestamp": time.time()
+                    "error": str(e)
                 }
     
     def _evaluate_population_sync(self, population: List[Dict[str, Any]], 
@@ -410,7 +320,7 @@ class HybridModerationEvaluator:
                             # Evaluate the genome using hybrid approach
                             evaluation_result = self._evaluate_text_hybrid(generated_text, genome_id, moderation_methods=moderation_methods)
                             
-                            if evaluation_result.get('status') == 'complete':
+                            if 'google' in evaluation_result:
                                 # Store the hybrid result
                                 genome['moderation_result'] = evaluation_result
                                 
@@ -462,11 +372,11 @@ class HybridModerationEvaluator:
                 raise
     
     def _extract_north_star_score(self, evaluation_result: Dict[str, Any], north_star_metric: str) -> float:
-        """Extract north star score from hybrid evaluation result"""
-        moderation_results = evaluation_result.get("moderation_results", {})
-        
-        # Try to find the score in available APIs
-        for api_name, result in moderation_results.items():
+        """Extract north star score from hybrid evaluation result (flattened structure)"""
+        # Try to find the score in available APIs (flattened structure)
+        for api_name, result in evaluation_result.items():
+            if api_name == "error":
+                continue
             scores = result.get("scores", {})
             if north_star_metric in scores:
                 return scores[north_star_metric]

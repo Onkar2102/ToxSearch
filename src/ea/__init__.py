@@ -28,10 +28,11 @@ def get_update_evolution_tracker_with_generation_global():
     from ea.RunEvolution import update_evolution_tracker_with_generation_global
     return update_evolution_tracker_with_generation_global
 
+
 def get_applicable_operators():
     """Lazy import of get_applicable_operators to avoid torch dependency issues"""
-    from ea.operator_helpers import get_applicable_operators
-    return get_applicable_operators
+    # This function is deprecated - operator logic is now in EvolutionEngine.py
+    raise DeprecationWarning("get_applicable_operators is deprecated. Operator logic is now in EvolutionEngine.py")
 
 import logging
 logger = logging.getLogger(__name__)

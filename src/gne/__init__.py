@@ -4,7 +4,7 @@
 #
 # This package provides:
 #  - LLaMaTextGenerator: LLaMA model integration with memory management
-#  - hybrid_moderation: Hybrid moderation using Google and OpenAI APIs
+#  - hybrid_moderation: Content moderation using Google Perspective API
 
 # Lazy imports to prevent circular import issues
 def get_LLaMaTextGenerator():

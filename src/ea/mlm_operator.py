@@ -47,27 +47,22 @@ class MLMOperator(VariationOperator):
         generator: Local LLaMA model instance for replacement generation
     """
 
-    def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, seed: Optional[int] = 42):
+    def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, seed: Optional[int] = 42, generator=None):
         super().__init__("MLM", "mutation", "LLM-based masked language model operator for contextual word replacement")
         self.logger = get_logger(self.name, log_file)
-        
         # Improved parameter validation
         self.max_variants = self._validate_max_variants(max_variants)
         self.rng = random.Random(seed)
-        
-        # Initialize generator
-        from .operator_helpers import get_generator
-        self.generator = get_generator()
+        # Use provided generator
+        self.generator = generator
         self.logger.info(f"{self.name}: LLM generator initialized successfully")
-        
         # Debug/trace attributes for tests and observability
-        self._last_mask_mapping: Dict[int, str] = {}
-        self._last_masked_text: str = ""
-        self._last_structured_prompt: str = ""
-        self._last_raw_response: str = ""
-        self._last_parsed_result: Optional[Dict[str, Any]] = None
-        self._last_completed_text: str = ""
-        
+        self._last_mask_mapping = {}
+        self._last_masked_text = ""
+        self._last_structured_prompt = ""
+        self._last_raw_response = ""
+        self._last_parsed_result = None
+        self._last_completed_text = ""
         self.logger.info(f"{self.name}: Initialized with max_variants={self.max_variants}, seed={seed}")
 
     def _validate_max_variants(self, max_variants: Any) -> int:

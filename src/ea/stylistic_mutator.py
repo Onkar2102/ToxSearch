@@ -13,7 +13,7 @@ import traceback
 import random
 from typing import List, Optional, Dict, Any
 from .VariationOperators import VariationOperator
-from .operator_helpers import get_generator
+from .EvolutionEngine import EvolutionEngine
 from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()
@@ -73,26 +73,25 @@ class StylisticMutator(VariationOperator):
         "persuasive"     # persuasive/neutral
     ]
 
-    def __init__(self, log_file: Optional[str] = None, seed: Optional[int] = 42):
+    def __init__(self, log_file: Optional[str] = None, seed: Optional[int] = 42, generator=None):
         """
         Initialize the stylistic mutation operator.
         
         Args:
             log_file (str, optional): Path to log file for debugging. Defaults to None.
             seed (int, optional): Random seed for reproducible style selection. Defaults to 42.
+            generator: LLaMA generator instance to use
         """
         super().__init__("StylisticMutator", "mutation", 
                         "Alters text style while preserving semantic content.")
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
         
-        # Initialize generator
-        self.generator = get_generator()
+        # Use provided generator
+        self.generator = generator
         self.logger.info(f"{self.name}: Local LLaMA generator initialized successfully")
-        
         # Initialize random number generator for style selection
         self.rng = random.Random(seed)
-        
         # Debug tracking attributes
         self._last_genome = {}
         self._last_original_prompt = ""

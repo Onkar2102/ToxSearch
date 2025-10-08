@@ -11,7 +11,7 @@ import os
 import traceback
 from typing import List, Optional, Dict, Any
 from .VariationOperators import VariationOperator
-from .operator_helpers import get_generator
+from .EvolutionEngine import EvolutionEngine
 from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()
@@ -30,7 +30,7 @@ class LLMBasedParaphrasingOperator(VariationOperator):
     1. Receive input text string for paraphrasing
     2. Use LLaMA model's paraphrase method with metric-specific prompts
     3. Generate semantically equivalent but stylistically different variants
-    4. Return list of paraphrased text variants
+        def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
 
     Attributes:
         north_star_metric (str): The optimization metric guiding paraphrasing
@@ -45,16 +45,22 @@ class LLMBasedParaphrasingOperator(VariationOperator):
         >>> text = "Write a story about a brave knight"
         >>> variants = operator.apply(text)
         >>> print(variants)
-        ['Craft a tale about a courageous warrior']
+            # Use provided generator
+            if generator is not None:
+                self.generator = generator
+            else:
+                from .operator_helpers import get_generator
+                self.generator = get_generator()
     """
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
         """
         Initialize the LLM-based paraphrasing operator.
         
         Args:
             north_star_metric (str): The optimization metric for paraphrasing direction
             log_file (str, optional): Path to log file for debugging. Defaults to None.
+            generator: LLaMA generator instance to use. If None, will create own instance.
         """
         super().__init__("LLMBasedParaphrasing", "mutation", 
                         f"Uses local LLaMA model paraphrase method with {north_star_metric} optimization.")
@@ -62,9 +68,14 @@ class LLMBasedParaphrasingOperator(VariationOperator):
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name} with north_star_metric: {self.north_star_metric}")
         
-        # Initialize generator
-        self.generator = get_generator()
-        self.logger.info(f"{self.name}: Local LLaMA generator initialized successfully")
+        # Initialize generator - use provided or get global one
+        if generator is not None:
+            self.generator = generator
+            self.logger.info(f"{self.name}: Using provided LLM generator")
+        else:
+            from .operator_helpers import get_generator
+            self.generator = get_generator()
+            self.logger.info(f"{self.name}: Using global LLM generator")
         
         # Debug tracking attributes
         self._last_genome = {}

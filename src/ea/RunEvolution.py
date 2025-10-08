@@ -33,28 +33,6 @@ population_path = None
 evolution_tracker_path = None
 parent_selection_tracker_path = None
 
-def initialize_evolution_tracker(logger, log_file=None):
-    """Initialize the evolution tracker file if it doesn't exist"""
-    with PerformanceLogger(logger, "Initialize Evolution Tracker"):
-        try:
-            # Get the dynamic path for this run
-            outputs_path = get_outputs_path()
-            evolution_tracker_path = outputs_path / "EvolutionTracker.json"
-            
-            if not evolution_tracker_path.exists():
-                # Create initial evolution tracker structure as a flat list
-                evolution_tracker = []
-                with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
-                    json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
-                logger.info("Created new evolution tracker file: %s", evolution_tracker_path)
-            else:
-                logger.info("Evolution tracker file already exists: %s", evolution_tracker_path)
-        except Exception as e:
-            logger.error("Failed to initialize evolution tracker: %s", e, exc_info=True)
-            raise
-
-# Function removed - no longer needed for global evolution
-
 def _extract_north_star_score(genome: Dict, north_star_metric: str) -> float:
     """Extract the north star metric score from a genome using the configured metric."""
     if not genome or not genome.get("moderation_result"):
@@ -62,34 +40,21 @@ def _extract_north_star_score(genome: Dict, north_star_metric: str) -> float:
     
     moderation_result = genome["moderation_result"]
     
-    # Try Google API scores first (most comprehensive)
-    if "moderation_results" in moderation_result:
-        google_scores = moderation_result["moderation_results"].get("google", {})
+    # Google API scores
+    if "google" in moderation_result:
+        google_scores = moderation_result["google"]
         if "scores" in google_scores:
             score = google_scores["scores"].get(north_star_metric, 0.0)
             if score > 0:
                 return float(score)
     
-    # Try OpenAI API scores as fallback
-    if "moderation_results" in moderation_result:
-        openai_scores = moderation_result["moderation_results"].get("openai", {})
-        if "scores" in openai_scores:
-            score = openai_scores["scores"].get(north_star_metric, 0.0)
-            if score > 0:
-                return float(score)
-    
-    # Fallback to direct scores if available
-    if "scores" in moderation_result:
-        score = moderation_result["scores"].get(north_star_metric, 0.0)
-        if score > 0:
-            return float(score)
-    
     return 0.0
 
-def check_threshold_and_update_tracker(population, north_star_metric, logger, log_file=None, threshold=0.99):
+def check_threshold_and_update_tracker(population, north_star_metric, log_file=None, threshold=0.99):
     """Check threshold achievement and update evolution tracker (global version)"""
-    _logger = logger or get_logger("check_threshold", log_file)
-    with PerformanceLogger(_logger, "Check Threshold and Update Tracker"):
+    get_logger, _, _, PerformanceLogger = get_custom_logging()
+    logger = get_logger("RunEvolution", log_file)
+    with PerformanceLogger(logger, "Check Threshold and Update Tracker"):
         try:
             # Get the dynamic path for this run
             outputs_path = get_outputs_path()
@@ -130,18 +95,16 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                 best_genome = max(completed_genomes, key=lambda g: _extract_north_star_score(g, north_star_metric))
                 best_score = _extract_north_star_score(best_genome, north_star_metric)
                 best_genome_id = best_genome["id"]
-                
                 if isinstance(best_score, (int, float)) and best_score >= threshold:
                     evolution_tracker["status"] = "complete"
-                    _logger.info("Global population achieved threshold with score %.4f (genome %s)", best_score, best_genome_id)
+                    logger.info("Global population achieved threshold with score %.4f (genome %s)", best_score, best_genome_id)
                 else:
                     evolution_tracker["status"] = "not_complete"
-                    _logger.info("Global population best score: %.4f (genome %s), threshold not reached", best_score, best_genome_id)
+                    logger.info("Global population best score: %.4f (genome %s), threshold not reached", best_score, best_genome_id)
             else:
                 evolution_tracker["status"] = "not_complete"
-                _logger.info("No completed genomes found in global population")
+                logger.info("No completed genomes found in global population")
 
-                        # Update evolution tracker for global population
             if not evolution_tracker.get("generations"):
                 # Initialize generation 0 if not exists
                 gen0_genomes = [g for g in population if g.get("generation") == 0]
@@ -150,7 +113,6 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                     best_gen0_genome = max(gen0_genomes, key=lambda g: _extract_north_star_score(g, north_star_metric))
                     best_gen0_id = best_gen0_genome["id"]
                     best_gen0_score = _extract_north_star_score(best_gen0_genome, north_star_metric)
-                    
                     evolution_tracker["generations"] = [{
                         "generation_number": 0,
                         "genome_id": best_gen0_id,  # Best genome ID from generation 0
@@ -158,8 +120,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                         "mutation": None,
                         "crossover": None
                     }]
-                    _logger.info("Created generation 0 entry with best genome %s, score: %.4f", 
-                              best_gen0_id, best_gen0_score)
+                    logger.info("Created generation 0 entry with best genome %s, score: %.4f", best_gen0_id, best_gen0_score)
 
             # Mark all genomes as complete if threshold is achieved globally
             if evolution_tracker["status"] == "complete":
@@ -169,23 +130,21 @@ def check_threshold_and_update_tracker(population, north_star_metric, logger, lo
                         genome["status"] = "complete"
                         genome["completion_reason"] = f"Global population achieved {north_star_metric} >= {threshold}"
                         marked_count += 1
-                _logger.info("Marked %d genomes as complete (global threshold achieved)", marked_count)
-                
+                logger.info("Marked %d genomes as complete (global threshold achieved)", marked_count)
                 # Save population to elites.json (steady-state mode)
                 _, _, _, save_population, _, _, _, _, _, _, _, _, _ = get_population_io()
                 elites_path = str(outputs_path / "elites.json")
-                save_population(population, elites_path, logger=_logger)
-                _logger.info("Updated elites with completed statuses")
+                save_population(population, elites_path, logger=logger)
+                logger.info("Updated elites with completed statuses")
             else:
-                _logger.info("Global population has not achieved the threshold of %.4f", threshold)
+                logger.info("Global population has not achieved the threshold of %.4f", threshold)
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
-            _logger.info("Updated evolution tracker with threshold check results")
+            logger.info("Updated evolution tracker with threshold check results")
             
             return evolution_tracker
-            
         except Exception as e:
-            _logger.error("Failed to check threshold and update tracker: %s", e, exc_info=True)
+            logger.error("Failed to check threshold and update tracker: %s", e, exc_info=True)
             # Return a default tracker structure on error
             return {
                 "scope": "global",
@@ -375,8 +334,6 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             _logger.error("Failed to update global evolution tracker with generation data: %s", e, exc_info=True)
             raise
 
-# Function removed - no longer needed for global evolution
-
 def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_star_metric: str, 
                                        execution_time: float, generations_completed: int,
                                        *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
@@ -509,7 +466,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
-def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None):
+def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=5):
     """Run one evolution generation with comprehensive logging and steady state support"""
     # Set up dynamic paths for this run
     outputs_path = get_outputs_path()
@@ -532,9 +489,6 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
             logger.error("Population file not found: %s", population_path)
             raise FileNotFoundError(f"Population file not found: {population_path}")
 
-        # Phase 1: Initialize evolution tracker
-        initialize_evolution_tracker(logger, log_file)
-
         # Phase 2: Load population with error handling
         with PerformanceLogger(logger, "Load Population"):
             try:
@@ -546,7 +500,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                 raise
 
         # Phase 3: Check threshold and update evolution tracker
-        evolution_tracker = check_threshold_and_update_tracker(population, north_star_metric, logger, log_file, threshold)
+        evolution_tracker = check_threshold_and_update_tracker(population, north_star_metric, log_file, threshold)
 
         # Phase 4: Check if evolution should continue
         evolution_status = get_pending_status(evolution_tracker, logger)
@@ -559,7 +513,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         with PerformanceLogger(logger, "Initialize Evolution Engine"):
             try:
                 EvolutionEngine = get_EvolutionEngine()
-                engine = EvolutionEngine(north_star_metric, log_file, current_cycle=current_cycle)
+                engine = EvolutionEngine(north_star_metric, log_file, current_cycle=current_cycle, max_variants=max_variants, adaptive_selection_after=5)
                 engine.genomes = population
                 engine.update_next_id()
                 logger.debug("EvolutionEngine next_id set to %d", engine.next_id)
@@ -567,19 +521,29 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                 logger.error("Failed to initialize evolution engine: %s", e, exc_info=True)
                 raise
 
+        # Phase 5.5: Determine parent counts (let EvolutionEngine handle parent selection and parents.json)
+        # Only determine x and y values based on evolution tracker, pass to EvolutionEngine
+        try:
+            from .ParentSelector import ParentSelector
+            parent_selector = ParentSelector(north_star_metric, log_file)
+            x, y = parent_selector.determine_parent_counts(evolution_tracker)
+            logger.info(f"Determined parent counts: x={x} (elites), y={y} (population)")
+            parent_counts = {"x": x, "y": y}
+        except Exception as e:
+            logger.error("Failed to determine parent counts: %s", e, exc_info=True)
+            raise
+
         # Phase 6: Process global evolution
+        # EvolutionEngine handles parent selection, parents.json, and deduplication of new variants (temp.json) against elites.json and population.json.
         try:
             logger.info("Processing global evolution")
             logger.debug("Calling generate_variants_global()")
-            
-            # Get generation data from the engine
-            generation_data = engine.generate_variants_global()
-            
+            # Get generation data from the engine (handles parent selection and variant deduplication)
+            generation_data = engine.generate_variants_global(x=parent_counts["x"], y=parent_counts["y"])
             logger.info("Generated %d variants (mutation: %d, crossover: %d) globally", 
                        generation_data["variants_created"], 
                        generation_data["mutation_variants"], 
                        generation_data["crossover_variants"])
-            
             # Save updated population after evolution to elites.json
             with PerformanceLogger(logger, "Save Population After Evolution"):
                 try:
@@ -591,33 +555,26 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                 except Exception as e:
                     logger.error("Failed to save population after evolution: %s", e, exc_info=True)
                     raise
-                    
         except Exception as e:
             logger.error("Failed to process global evolution: %s", e, exc_info=True)
             raise
-
         logger.info("Global evolution processing completed successfully")
 
-        # Phase 6.5: Redistribute elites to population (steady state)
-        with PerformanceLogger(logger, "Steady State Redistribution"):
-                    pass
+        # Steady state redistribution is handled by population management
 
-        # Phase 7: Deduplicate population
+        # Phase 7: Deduplicate population (final population deduplication by prompt)
+        # This step ensures that the final elites do not contain duplicate prompts across all generations.
         with PerformanceLogger(logger, "Deduplicate Population"):
             from collections import defaultdict
             try:
-
                 # Keep generation 0 genomes as-is
                 gen_zero = [g for g in engine.genomes if g["generation"] == 0]
                 gen_gt_zero = [g for g in engine.genomes if g["generation"] > 0]
-
                 logger.debug("Generation 0 genomes: %d, Generation >0 genomes: %d", len(gen_zero), len(gen_gt_zero))
-
                 # Deduplicate gen > 0 by exact prompt string (case-insensitive), preserving sort order
                 seen_prompts = set()
                 deduplicated = []
                 duplicates_removed = 0
-                
                 for genome in gen_gt_zero:
                     norm_prompt = genome["prompt"].strip().lower()
                     if norm_prompt not in seen_prompts:
@@ -626,10 +583,8 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                     else:
                         duplicates_removed += 1
                         logger.debug("Removed duplicate prompt for genome %s", genome.get('id'))
-
                 # Final population = gen 0 + unique variants
                 final_population = gen_zero + deduplicated
-
                 logger.info("Deduplicated population: %d → %d (removed %d duplicates)", 
                            len(engine.genomes), len(final_population), duplicates_removed)
             except Exception as e:
@@ -648,9 +603,15 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
                 logger.error("Failed to save final population: %s", e, exc_info=True)
                 raise
 
+        # Parent file cleanup is handled by EvolutionEngine.clean_parent_files()
+        
         # Log final summary
         logger.info("Evolution run completed successfully:")
         logger.info("  - Total genomes processed: %d", len(engine.genomes))
         logger.info("  - Final elites size: %d", len(final_population))
         logger.info("  - Evolution tracker updated: %s", evolution_tracker_path)
+        
+        return generation_data
+
+
 

@@ -64,7 +64,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
     info = {
         "total_generations": 0,
         "total_genomes": 0,
-        "generation_files": {},
         "generation_counts": {},
         "single_file_mode": True,
         "population_file": "Population.json"
@@ -88,9 +87,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             info["total_generations"] = max(generation_counts.keys()) + 1 if generation_counts else 0
             info["generation_counts"] = generation_counts
             
-            # For backward compatibility, create generation_files dict
-            for gen_num in range(info["total_generations"]):
-                info["generation_files"][gen_num] = f"Population.json (gen{gen_num})"
             
         except Exception as e:
             # Silently fail if we can't read the file
@@ -308,13 +304,10 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
             # Fall back to split files if Population.json doesn't exist or fails
             info = get_population_files_info(str(base_dir))
             
-            if info["generation_files"]:
-                _logger.info("Using split population files (fallback mode)")
-                # Load all generations (but this is still memory-intensive for large populations)
-                all_genomes = []
-                for gen in sorted(info["generation_files"].keys()):
-                    genomes = load_population_generation(gen, str(base_dir), logger=_logger, log_file=log_file)
-                    all_genomes.extend(genomes)
+            if info["generation_counts"]:
+                _logger.info("Using single file mode with generation counts")
+                # Load all genomes from single file
+                all_genomes = load_population(str(base_dir), logger=_logger, log_file=log_file)
                 
                 # Clean the population to remove None genomes
                 all_genomes = clean_population(all_genomes, logger=_logger, log_file=log_file)
@@ -454,7 +447,6 @@ def load_and_initialize_population(
                     {
                         "id": str(i + 1),
                         "prompt": prompt,
-                        "model_provider": None,
                         "model_name": None,
                         "moderation_result": None,
                         "operator": None,
@@ -466,10 +458,7 @@ def load_and_initialize_population(
                             "operator": "excel_import",
                             "source_generation": 0,
                             "evolution_cycle": 0
-                        },
-                        "generation_timestamp": time.time(),
-                        "source_file": input_path,
-                        "source_column": prompt_column,
+                        }
                     }
                 )
 
@@ -500,13 +489,42 @@ def load_and_initialize_population(
                     json.dump(empty_elites, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized empty elites.json")
 
+            # ----------------------------- Initialize empty parents.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty parents.json"):
+                # parents.json starts empty
+                empty_parents = []
+                parents_path = Path(output_path) / "parents.json"
+                parents_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(parents_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_parents, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty parents.json")
+
+            # ----------------------------- Initialize empty most_toxic.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty most_toxic.json"):
+                # most_toxic.json starts empty
+                empty_most_toxic = []
+                most_toxic_path = Path(output_path) / "most_toxic.json"
+                most_toxic_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(most_toxic_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_most_toxic, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty most_toxic.json")
+
+            # ----------------------------- Initialize empty top_10.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty top_10.json"):
+                # top_10.json starts empty
+                empty_top_10 = []
+                top_10_path = Path(output_path) / "top_10.json"
+                top_10_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(top_10_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_top_10, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty top_10.json")
+
             # ----------------------------- Initialize population_index.json ----------------------------
             with PerformanceLogger(logger, "Initialize population_index.json"):
                 # population_index.json starts with default empty structure
                 index_info = {
                     "total_generations": 0,
                     "total_genomes": 0,
-                    "generation_files": {},
                     "generation_counts": {},
                     "single_file_mode": True,
                     "population_file": "Population.json"
@@ -826,33 +844,18 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
             # Get information about available generation files
             info = get_population_files_info(str(base_path))
             
-            if not info["generation_files"]:
-                _logger.warning("No generation files found to consolidate")
+            if not info["generation_counts"]:
+                _logger.warning("No generation counts found to consolidate")
                 return False
             
-            _logger.info(f"Found {len(info['generation_files'])} generation files to consolidate")
+            _logger.info(f"Found {len(info['generation_counts'])} generations to consolidate")
             _logger.info(f"Total genomes across all generations: {info['total_genomes']}")
             
-            # Load all genomes from all generations
-            all_genomes = []
-            generation_order = sorted(info["generation_files"].keys())
-            
-            for gen_num in generation_order:
-                gen_file = base_path / f"gen{gen_num}.json"
-                if gen_file.exists():
-                    try:
-                        with open(gen_file, 'r', encoding='utf-8') as f:
-                            generation_genomes = json.load(f)
-                        
-                        _logger.info(f"Loaded generation {gen_num}: {len(generation_genomes)} genomes")
-                        all_genomes.extend(generation_genomes)
-                        
-                    except Exception as e:
-                        _logger.error(f"Failed to load generation {gen_num}: {e}")
-                        continue
+            # Load all genomes from single file
+            all_genomes = load_population(str(base_path), logger=_logger, log_file=log_file)
             
             if not all_genomes:
-                _logger.error("No genomes loaded from any generation files")
+                _logger.error("No genomes loaded from Population.json")
                 return False
             
             # Clean the population (remove None genomes)
@@ -939,7 +942,6 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                 updated_info = {
                     "total_generations": 1,
                     "total_genomes": 0,  # Will be calculated from Population.json
-                    "generation_files": {"0": "Population.json"},
                     "generation_counts": {"0": 0},  # Will be calculated
                     "migration_note": "Migrated from split files to single Population.json"
                 }
@@ -986,19 +988,11 @@ def _extract_score(genome: Dict[str, Any], north_star_metric: str = "toxicity") 
     
     moderation_result = genome["moderation_result"]
     
-    # Try Google API scores first
-    if "moderation_results" in moderation_result:
-        google_scores = moderation_result["moderation_results"].get("google", {})
+    # Try Google API scores first (flattened structure)
+    if "google" in moderation_result:
+        google_scores = moderation_result["google"]
         if "scores" in google_scores:
             score = google_scores["scores"].get(north_star_metric, 0.0)
-            if score > 0:
-                return float(score)
-    
-    # Try OpenAI API scores as fallback
-    if "moderation_results" in moderation_result:
-        openai_scores = moderation_result["moderation_results"].get("openai", {})
-        if "scores" in openai_scores:
-            score = openai_scores["scores"].get(north_star_metric, 0.0)
             if score > 0:
                 return float(score)
     
@@ -1442,6 +1436,7 @@ def finalize_initial_population(
                 logger.warning("Found %d genomes without evaluation results, excluding from finalization", invalid_count)
             
             if not valid_genomes:
+                logger.error("All genomes in temp.json are unevaluated (missing moderation_result). Run evaluation before finalization.")
                 raise ValueError("No genomes with evaluation results found in temp.json")
             
             total_valid = len(valid_genomes)
@@ -1451,7 +1446,7 @@ def finalize_initial_population(
                 moderation_result = genome.get("moderation_result", {})
                 
                 # Try Google API scores first
-                google_scores = moderation_result.get("moderation_results", {}).get("google", {}).get("scores", {})
+                google_scores = moderation_result.get("google", {}).get("scores", {})
                 if "toxicity" in google_scores:
                     return float(google_scores["toxicity"])
                 
