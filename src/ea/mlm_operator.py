@@ -12,7 +12,6 @@ Process:
 2. Generate replacement suggestions using LLaMA for each masked position
 3. Apply replacements and return the completed text variant
 
-Author: Onkar Shelar (os9660@rit.edu)
 """
 
 import random
@@ -25,61 +24,22 @@ get_logger, _, _, _ = get_custom_logging()
 
 
 class MLMOperator(VariationOperator):
-    """
-    LLM-based masked language model operator for text mutation.
-    
-    This operator randomly masks words in the input text and uses a local
-    LLaMA model to generate contextually appropriate replacements. The
-    masking and replacement process creates coherent text variants while
-    preserving overall meaning and structure.
-    
-    Process:
-    1. Randomly mask up to max_variants words with numbered placeholders
-    2. Use LLaMA to generate replacement words for each masked position
-    3. Apply all replacements to create the final text variant
-    
-    Returns:
-        List[str]: Single completed text variant (wrapped in list for interface compatibility)
-    
-    Attributes:
-        max_variants (int): Maximum number of words to mask per operation
-        rng: Random number generator for reproducible word selection
-        generator: Local LLaMA model instance for replacement generation
-    """
+    """LLM-based masked language model operator for text mutation."""
 
     def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, seed: Optional[int] = 42, generator=None):
         super().__init__("MLM", "mutation", "LLM-based masked language model operator for contextual word replacement")
         self.logger = get_logger(self.name, log_file)
-        # Improved parameter validation
         self.max_variants = self._validate_max_variants(max_variants)
         self.rng = random.Random(seed)
-        # Use provided generator
         self.generator = generator
-        self.logger.info(f"{self.name}: LLM generator initialized successfully")
-        # Debug/trace attributes for tests and observability
-        self._last_mask_mapping = {}
-        self._last_masked_text = ""
-        self._last_structured_prompt = ""
-        self._last_raw_response = ""
-        self._last_parsed_result = None
-        self._last_completed_text = ""
-        self.logger.info(f"{self.name}: Initialized with max_variants={self.max_variants}, seed={seed}")
 
     def _validate_max_variants(self, max_variants: Any) -> int:
         """Validate and convert max_variants to positive integer."""
         try:
-            if isinstance(max_variants, str):
-                max_variants = int(max_variants)
-            elif isinstance(max_variants, float):
-                max_variants = int(max_variants)
-            
             val = max(1, int(max_variants))
-            if val < 1:
-                self.logger.warning(f"{self.name}: max_variants < 1, setting to 1")
-                return 1
             return val
-        except (ValueError, TypeError) as e:
-            self.logger.warning(f"{self.name}: Invalid max_variants '{max_variants}', using default 3: {e}")
+        except (ValueError, TypeError):
+            self.logger.warning(f"{self.name}: Invalid max_variants '{max_variants}', using default 3")
             return 3
 
     def _mask_once(self, text: str) -> Tuple[str, Dict[int, str]]:
@@ -164,7 +124,7 @@ class MLMOperator(VariationOperator):
             mask_token = f"<MASKED_{mask_num}>"
             
             # Get prompt template from config
-            template = self.generator.task_templates.get("mlm_mask_filling", {}).get("single_word_replacement")
+            template = self.generator.task_templates.get("single_word_replacement", "")
             if template:
                 prompt = template.format(
                     mask_token=mask_token,
@@ -184,12 +144,18 @@ Reply with just one replacement word:"""
             self.logger.debug(f"{self.name}: Asking for replacement of {mask_token} (original: '{original_word}')")
             
             try:
-                response = self.generator.generate_response(prompt, task_type="mutation_crossover")
+                response = self.generator.generate_response(prompt, task_type="single_word_replacement")
                 all_responses.append(f"{mask_token}: {response}")
                 
                 if response:
-                    # Clean up the response to get just the word
-                    replacement = response.strip().strip('"').strip("'").split()[0]  # Take first word only
+                    # Extract replacement from structured tags
+                    import re
+                    replacement_match = re.search(r'<replacement>(.*?)</replacement>', response, re.DOTALL)
+                    if replacement_match:
+                        replacement = replacement_match.group(1).strip()
+                    else:
+                        # Fallback: Extract word from response
+                        replacement = self._extract_word_from_response(response, original_word)
                     
                     # Basic validation: should be a single word, no special tokens
                     if replacement and len(replacement.split()) == 1 and "<MASKED_" not in replacement:
@@ -220,6 +186,31 @@ Reply with just one replacement word:"""
         self.logger.info(f"{self.name}: Applied replacements: {replacements}")
         self._last_completed_text = completed_text
         return completed_text
+    
+    def _extract_word_from_response(self, response: str, fallback_word: str) -> str:
+        """Extract a single word from LLM response as fallback parsing."""
+        try:
+            import re
+            # Look for quoted words first
+            quoted_words = re.findall(r'"([^"]+)"', response)
+            if quoted_words:
+                for word in quoted_words:
+                    stripped_word = word.strip()
+                    if stripped_word and len(stripped_word.split()) == 1 and stripped_word.isalpha():
+                        return stripped_word
+            
+            # Look for single words in the response
+            words = re.findall(r'\b[a-zA-Z]{2,}\b', response)
+            if words:
+                for word in words:
+                    if len(word) > 1 and word.isalpha():
+                        return word
+            
+            return fallback_word
+            
+        except Exception as e:
+            self.logger.debug(f"{self.name}: Failed to extract word from response: {e}")
+            return fallback_word
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
@@ -278,7 +269,7 @@ Reply with just one replacement word:"""
             
             # Validate and return result
             if completed_text != masked_text and "<MASKED_" not in completed_text:
-                self.logger.info(f"{self.name}: Generated variant: '{completed_text[:50]}...'")
+                self.logger.debug(f"{self.name}: Generated variant: '{completed_text[:50]}...'")
                 return [completed_text]
             else:
                 self.logger.warning(f"{self.name}: Generation failed - Returning original text")

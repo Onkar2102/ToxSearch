@@ -1,6 +1,6 @@
 # System Performance Optimizer for Evolutionary Text Generation
 #
-# Provides system info, batch size estimation, and config optimization for local inference.
+# Provides system info and config optimization for local inference.
 
 import psutil
 import torch
@@ -28,32 +28,16 @@ def get_system_info() -> Dict:
     # Optionally add more hardware info here if needed
     return info
 
-def estimate_optimal_batch_size(model_name: str = "meta-llama/Llama-3.2-3B-instruct") -> int:
-    """Estimate optimal batch size based on available memory and model size"""
-    memory_gb = psutil.virtual_memory().available / (1024**3)
-    model_sizes = {
-        "meta-llama/Llama-3.2-3B-instruct": 6.0,  # ~6GB in fp16
-        "meta-llama/Llama-3.2-1B-instruct": 2.0,   # ~2GB in fp16
-    }
-    model_size = model_sizes.get(model_name, 6.0)
-    usable_memory = memory_gb * 0.5
-    memory_per_sample = model_size * 0.3
-    if usable_memory < model_size:
-        return 1
-    estimated_batch_size = int((usable_memory - model_size) / memory_per_sample)
-    return max(1, min(estimated_batch_size, 16))
 
 def optimize_config_for_local() -> Dict:
     """Generate optimized configuration for local inference"""
     system_info = get_system_info()
-    optimal_batch_size = estimate_optimal_batch_size()
     config = {
         "llama": {
             "provider": "huggingface",
             "name": "meta-llama/Llama-3.2-3B-instruct",
             "strategy": "local",
             "task_type": "text-generation",
-            "max_batch_size": optimal_batch_size,
             "generation_args": {
                 "max_new_tokens": 512,
                 "do_sample": False,
@@ -72,10 +56,8 @@ def optimize_config_for_local() -> Dict:
         }
     }
     if system_info["memory_available_gb"] < 8:
-        config["llama"]["max_batch_size"] = 2
         config["llama"]["generation_args"]["max_new_tokens"] = 256
     elif system_info["memory_available_gb"] > 16:
-        config["llama"]["max_batch_size"] = min(optimal_batch_size * 2, 16)
         config["llama"]["generation_args"]["max_new_tokens"] = 1024
     return config
 
@@ -100,7 +82,6 @@ def main():
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
-        print(f"Recommended batch size: {config['llama']['max_batch_size']}")
         print("\n")
         print("Optimization complete!")
     elif args.system_info:
@@ -112,7 +93,6 @@ def main():
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
-        print(f"Recommended batch size: {config['llama']['max_batch_size']}")
     else:
         print("System Optimizer - choose an option:")
         print("  --system-info: Show system information")

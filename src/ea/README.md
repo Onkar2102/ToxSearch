@@ -382,7 +382,6 @@ graph TB
 - Steady-state population with indexing
 - Lazy imports; robust path handling
 - Model reuse across operators
-- Adaptive batch sizing
 
 ### **Architecture Enhancements**
 - Modular operator implementation (individual files vs monolithic class)

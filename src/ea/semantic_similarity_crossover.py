@@ -21,51 +21,10 @@ get_logger, _, _, _ = get_custom_logging()
 
 
 class SemanticSimilarityCrossover(VariationOperator):
-    """
-    Semantic similarity crossover operator for prompt recombination.
-    
-    This crossover operator analyzes semantic similarity between sentences from
-    two parent prompts and creates hybrid variants by combining semantically
-    related content. Uses sentence transformers to compute embeddings and
-    similarity scores for intelligent content combination.
-    
-    Process:
-    1. Split both parent texts into sentences
-    2. Compute semantic embeddings for all sentences
-    3. Find semantically similar sentence pairs across parents
-    4. Combine similar sentences to create crossover variants
-    
-    Attributes:
-        name (str): Operator name "SemanticSimilarityCrossover"
-        operator_type (str): "crossover" (requires multiple parents)
-        description (str): Description of the operator's functionality
-        logger: Logger instance for debugging and monitoring
-        model: Sentence transformer model for semantic embeddings
-        
-    Methods:
-        apply(parent_texts): Generate crossover variants using semantic similarity
-        
-    Example:
-        >>> operator = SemanticSimilarityCrossover()
-        >>> parents = ["Write a story about a brave knight", "Create a tale about a courageous warrior"]
-        >>> variants = operator.apply(parents)
-        >>> print(variants)
-        ['Write a tale about a brave knight']
-    """
+    """Semantic similarity crossover operator for prompt recombination."""
     
     def __init__(self, log_file=None):
-        """
-        Initialize the semantic similarity crossover operator.
-        
-        Loads the sentence transformer model for computing semantic embeddings
-        and sets up logging for debugging crossover operations.
-        
-        Args:
-            log_file (str, optional): Path to log file for debugging. Defaults to None.
-            
-        Note:
-            Loads SentenceTransformer model "all-MiniLM-L6-v2" for embeddings.
-        """
+        """Initialize the semantic similarity crossover operator."""
         super().__init__("SemanticSimilarityCrossover", "crossover", "Combines semantically similar sentences from two parents.")
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")

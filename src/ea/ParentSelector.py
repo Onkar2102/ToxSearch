@@ -23,43 +23,40 @@ class ParentSelector:
     - Adaptive logic: Increases x and y based on population_max_toxicity stagnation
     """
     
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, adaptive_selection_after: int = 5, max_variants: int = 3):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, adaptive_selection_after: int = 5, max_num_parents: int = 4):
         """
         Initialize the ParentSelector.
         
         Args:
             north_star_metric (str): The primary fitness metric to use for selection
             log_file (Optional[str]): Log file path for logging
-            adaptive_selection_after (int): Number of generations after which to check for stagnation
-            max_variants (int): Maximum number of variants to generate per operator
+            adaptive_selection_after (int): Size of moving window for adaptive selection
+            max_num_parents (int): Maximum number of parents to select (default: 4)
         """
         self.north_star_metric = north_star_metric
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("ParentSelector", log_file)
         self.logger.debug(f"ParentSelector initialized with north_star_metric={north_star_metric}")
         self.adaptive_selection_after = adaptive_selection_after
-        self.max_variants = max_variants
+        self.max_num_parents = max_num_parents
     
     def _extract_toxicity_score(self, genome: Dict) -> float:
-        """Extract toxicity score from a genome."""
-        if not genome or not genome.get("moderation_result"):
-            return 0.0
-        
-        moderation_result = genome["moderation_result"]
-        
-        if "google" in moderation_result:
-            google_scores = moderation_result["google"]
-            if "scores" in google_scores:
-                score = google_scores["scores"].get(self.north_star_metric, 0.0)
-                if score > 0:
-                    return float(score)      
-        
-        return 0.0001
+        """Extract toxicity score from a genome using the north star metric."""
+        from utils import get_system_utils
+        _, _, _, _, _extract_north_star_score, _ = get_system_utils()
+        return _extract_north_star_score(genome, self.north_star_metric)
     
-    def determine_parent_counts(self, evolution_tracker: Dict[str, Any]) -> Tuple[int, int]:
+    def _determine_parent_counts(self, evolution_tracker: Dict[str, Any]) -> Tuple[int, int]:
         """
         Determine the number of parents to select from elites (x) and population (y) using adaptive logic.
-
+        
+        Logic:
+        - Initially: x=2, y=0 (top performing genome + 1 random from elites)
+        - Until generation adaptive_selection_after: no checking, keep (2, 0)
+        - After adaptive_selection_after: check if population_max_toxicity increased
+        - If increased: keep current (x, y)
+        - If same: alternate adding 1 to x or y, max total = max_num_parents
+        
         Args:
             evolution_tracker: Evolution tracker data
 
@@ -69,100 +66,133 @@ class ParentSelector:
         try:
             generations = evolution_tracker.get("generations", [])
             total_generations = len(generations)
-            if total_generations < self.adaptive_selection_after:
-                self.logger.debug(f"Not enough generations (<{self.adaptive_selection_after}) for adaptive selection, using x=1, y=1")
-                return 1, 1
-
-            # Only perform adaptive logic every 'adaptive_selection_after' generations
-            if total_generations % self.adaptive_selection_after != 0:
-                self.logger.debug(f"Adaptive selection only runs every {self.adaptive_selection_after} generations, using x=1, y=1")
-                return 1, 1
-
-            population_max_toxicity = evolution_tracker.get("population_max_toxicity", 0.0)
-
-            # Check if population_max_toxicity matches any of the last 'adaptive_selection_after' generations' max_score
-            found_update = False
+            
+            # Initial selection: x=2, y=0 (top performing + 1 random from elites)
+            if total_generations <= self.adaptive_selection_after:
+                self.logger.debug(f"Within initial window ({total_generations} <= {self.adaptive_selection_after}), using x=2, y=0")
+                return 2, 0
+            
+            # After initial window, check for stagnation by looking at score progression
+            # Check if max_score has increased in the last adaptive_selection_after generations
+            found_improvement = False
+            current_max_score = 0.0
+            
+            # Find the current maximum score from recent generations
+            for i in range(min(self.adaptive_selection_after, total_generations)):
+                gen_idx = total_generations - 1 - i
+                if gen_idx < 0:
+                    break
+                gen = generations[gen_idx]
+                gen_score = gen.get("max_score", 0.0)
+                current_max_score = max(current_max_score, gen_score)
+            
+            # Check if there was any improvement in the last adaptive_selection_after generations
             for i in range(1, self.adaptive_selection_after + 1):
                 gen_idx = total_generations - i
                 if gen_idx < 0:
                     break
                 gen = generations[gen_idx]
                 gen_score = gen.get("max_score", 0.0)
-                if abs(population_max_toxicity - gen_score) < 1e-8:
-                    found_update = True
-                    self.logger.info(f"population_max_toxicity updated in last {i} generations (matched at generation {gen_idx})")
-                    break
-
-            if found_update:
-                # Reset to base values if updated recently
-                return 1, 1
+                
+                # Check if this generation had a higher score than previous generations
+                if gen_score > current_max_score - 1e-8:  # Allow for small floating point differences
+                    # Look at previous generations to see if there was improvement
+                    for j in range(i + 1, min(i + self.adaptive_selection_after + 1, total_generations + 1)):
+                        prev_gen_idx = total_generations - j
+                        if prev_gen_idx < 0:
+                            break
+                        prev_gen = generations[prev_gen_idx]
+                        prev_score = prev_gen.get("max_score", 0.0)
+                        if gen_score > prev_score + 1e-8:  # Significant improvement
+                            found_improvement = True
+                            self.logger.info(f"Score improvement detected: {prev_score:.4f} -> {gen_score:.4f} in generation {gen_idx}")
+                            break
+                    if found_improvement:
+                        break
+            
+            if found_improvement:
+                # Recent improvement detected, fallback to original logic (2, 0)
+                self.logger.info(f"Recent score improvement detected, falling back to x=2, y=0")
+                return 2, 0
             else:
-                # Stagnation detected, increase x and y
-                # Alternate increases for each adaptive_selection_after window of stagnation
-                stagnant_windows = (total_generations // self.adaptive_selection_after) - 1
-                x = 1 + (stagnant_windows + 1) // 2
-                y = 1 + stagnant_windows // 2
-                self.logger.info(f"Stagnation detected for {stagnant_windows+1} windows, using x={x}, y={y}")
+                # Stagnation detected, increase parent counts
+                stagnation_windows = (total_generations - self.adaptive_selection_after) // self.adaptive_selection_after + 1
+                x = 2 + (stagnation_windows + 1) // 2
+                y = stagnation_windows // 2
+                
+                # Cap at max limits: x=1+max_num_parents, y=max_num_parents
+                # (where 1 is the topmost performing genome)
+                x = min(x, 1 + self.max_num_parents)
+                y = min(y, self.max_num_parents)
+                
+                self.logger.info(f"Stagnation detected for {stagnation_windows} windows, using x={x}, y={y}")
                 return x, y
 
         except Exception as e:
             self.logger.warning(f"Error determining parent counts: {e}")
-            return 1, 1
+            return 2, 0
     
-    def adaptive_tournament_selection(self, x: int, y: int) -> List[Dict]:
+    def adaptive_tournament_selection(self, evolution_tracker: Dict[str, Any] = None) -> None:
         """
         Perform adaptive tournament selection.
+        Updates parents.json and top_10.json with selected parents.
         
         Args:
-            x (int): Number of random parents to select from elites.json
-            y (int): Number of random parents to select from population.json
-            
-        Returns:
-            List[Dict]: List of selected parent genomes
+            evolution_tracker (Dict[str, Any]): Evolution tracker data for determining parent counts
         """
         try:
+            # Determine parent counts using evolution tracker
+            if evolution_tracker:
+                x, y = self._determine_parent_counts(evolution_tracker)
+                self.logger.info(f"Determined parent counts: x={x} (elites), y={y} (population)")
+            else:
+                x, y = 2, 0
+                self.logger.warning("No evolution tracker provided, using default parent counts: x=2, y=0")
+            
             # Load elites and population
             elites = load_elites(log_file=None)
             population = load_population(log_file=None)
             
             if not elites:
                 self.logger.warning("No genomes in elites, cannot select parents")
-                return []
+                return
             
             # Select parents: genome with highest toxicity score from elites + x random from elites + y random from population
             selected_parents = []
             
             # Add genome with highest toxicity score from elites
-            mutation_parent = max(elites, key=lambda g: self._extract_toxicity_score(g))
-            selected_parents.append(mutation_parent)
+            topmost_elite = max(elites, key=lambda g: self._extract_toxicity_score(g))
+            selected_parents.append(topmost_elite)
             
-            # Add x random parents from elites (excluding mutation parent)
-            elites_candidates = [g for g in elites if g != mutation_parent]
-            if len(elites_candidates) >= x:
-                selected_elites = random.sample(elites_candidates, x)
+            # Add x-1 random parents from elites (excluding topmost, since topmost is already added)
+            elites_candidates = [g for g in elites if g != topmost_elite]
+            elites_to_select = min(x - 1, len(elites_candidates))
+            
+            if elites_to_select > 0:
+                selected_elites = random.sample(elites_candidates, elites_to_select)
                 selected_parents.extend(selected_elites)
-            else:
-                selected_parents.extend(elites_candidates)
-                self.logger.warning(f"Only {len(elites_candidates)} elites available, requested {x}")
+                self.logger.info(f"Selected {elites_to_select} random elite parents (excluding topmost)")
+            elif x > 1:
+                self.logger.warning(f"Requested {x-1} additional elite parents but only {len(elites_candidates)} available")
             
-            # Add y random parents from population
-            if len(population) >= y:
+            # Select y random parents from population if requested
+            if y > 0 and len(population) >= y:
                 selected_population = random.sample(population, y)
                 selected_parents.extend(selected_population)
-            else:
-                selected_parents.extend(population)
-                self.logger.warning(f"Only {len(population)} population genomes available, requested {y}")
+                self.logger.info(f"Selected {y} random parents from population")
+            elif y > 0:
+                self.logger.warning(f"Requested {y} parents from population but only {len(population)} available")
             
             self.logger.info(f"Selected {len(selected_parents)} parents: {[p['id'] for p in selected_parents]}")
             
             # Save parents to parents.json
             self._save_parents_to_file(selected_parents)
             
-            return selected_parents
+            # Save top 10 genomes by toxicity to top_10.json
+            self._save_top_10_by_toxicity()
             
         except Exception as e:
             self.logger.error(f"Error in adaptive tournament selection: {e}")
-            return []
     
     def _save_parents_to_file(self, parents: List[Dict]) -> None:
         """
@@ -180,7 +210,7 @@ class ParentSelector:
                 slim_parent = {
                     "id": parent.get("id"),
                     "prompt": parent.get("prompt", ""),
-                    "generated_text": parent.get("generated_text", ""),
+                    "generated_output": parent.get("generated_output", ""),
                     "generation": parent.get("generation", 0)  # Add generation field for EvolutionEngine
                 }
                 
@@ -193,10 +223,6 @@ class ParentSelector:
                     google_results = moderation_result["google"]
                     if "scores" in google_results:
                         scores = google_results["scores"]
-                
-                # Fallback to direct scores field
-                if not scores and "scores" in moderation_result:
-                    scores = moderation_result["scores"]
                 
                 # Add scores to slim parent
                 slim_parent["scores"] = scores
@@ -220,32 +246,8 @@ class ParentSelector:
             self.logger.error(f"Failed to save parents to file: {e}")
             raise
     
-    def clean_parents_file(self) -> None:
-        """
-        Empty the parents.json and top_10.json files after all operators have processed the parents.
-        """
-        try:
-            parents_path = Path("outputs/parents.json")
-            top10_path = Path("outputs/top_10.json")
-            emptied = []
-            for path in [parents_path, top10_path]:
-                if path.exists():
-                    # Empty the file instead of removing it
-                    with open(path, 'w', encoding='utf-8') as f:
-                        json.dump([], f, indent=2, ensure_ascii=False)
-                    emptied.append(str(path))
-                else:
-                    # Create empty file if it doesn't exist
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    with open(path, 'w', encoding='utf-8') as f:
-                        json.dump([], f, indent=2, ensure_ascii=False)
-                    emptied.append(str(path))
-            if emptied:
-                self.logger.info(f"Emptied files: {', '.join(emptied)}")
-        except Exception as e:
-            self.logger.error(f"Failed to empty parents/top_10 file: {e}")
     
-    def save_top_10_by_toxicity(self, elites_path: str = "outputs/elites.json", output_path: str = "outputs/top_10.json") -> None:
+    def _save_top_10_by_toxicity(self, elites_path: str = "outputs/elites.json", output_path: str = "outputs/top_10.json") -> None:
         """
         Save the top 10 genomes from elites.json by their toxicity score to top_10.json.
         Only saves essential fields: id, prompt, generated_text, generation, and scores.
@@ -273,7 +275,7 @@ class ParentSelector:
                 slim_genome = {
                     "id": genome.get("id"),
                     "prompt": genome.get("prompt", ""),
-                    "generated_text": genome.get("generated_text", ""),
+                    "generated_output": genome.get("generated_output", ""),
                     "generation": genome.get("generation", 0)
                 }
                 
@@ -286,10 +288,6 @@ class ParentSelector:
                     google_results = moderation_result["google"]
                     if "scores" in google_results:
                         scores = google_results["scores"]
-                
-                # Fallback to direct scores field
-                if not scores and "scores" in moderation_result:
-                    scores = moderation_result["scores"]
                 
                 # Add scores to slim genome
                 slim_genome["scores"] = scores

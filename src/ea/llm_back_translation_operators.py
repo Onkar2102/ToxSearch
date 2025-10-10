@@ -17,32 +17,12 @@ Process for each operator:
 
 
 from .VariationOperators import VariationOperator
-from .EvolutionEngine import EvolutionEngine
 import logging
 from typing import List, Dict, Any
 get_logger = logging.getLogger
 
 class _GenericLLMBackTranslationOperator(VariationOperator):
-    """
-    Generic LLaMA-based back-translation operator for text mutation.
-    
-    Implements the back-translation process where English text is translated
-    to a target language and then back to English, creating paraphrased variants
-    through the round-trip translation process.
-    
-    Process:
-    1. Translate input English text to target language using LLaMA
-    2. Translate the result back from target language to English
-    3. Return the back-translated text if different from original
-    
-    Attributes:
-        target_lang (str): Full name of the target language
-        target_lang_code (str): Language code (e.g., 'HI', 'FR', 'DE')
-        generator: Local LLaMA model instance for translation
-    
-    Note:
-        Subclasses specify the target language and language code.
-    """
+    """Generic LLaMA-based back-translation operator for text mutation."""
     def __init__(self, name: str, target_lang: str, target_lang_code: str, log_file=None, generator=None):
         super().__init__(name, "mutation", f"LLaMA-based EN→{target_lang_code.upper()}→EN back-translation.")
         self.logger = get_logger(self.name)
@@ -51,27 +31,7 @@ class _GenericLLMBackTranslationOperator(VariationOperator):
         self.generator = generator
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
-        """
-        Generate back-translated variant using LLaMA model.
-        
-        This method:
-        1. Validates input format and extracts parent data
-        2. Translates text to target language and back to English
-        3. Returns back-translated variant if different from original
-        4. Falls back to original text if translation fails
-        
-        Args:
-            operator_input (Dict[str, Any]): Operator input containing:
-                - 'parent_data': Enriched parent genome dictionary containing:
-                    - 'prompt': Original prompt text to back-translate
-                    - 'generated_text': Generated output from the prompt (optional)
-                    - 'scores': Moderation scores dictionary
-                    - 'north_star_score': Primary optimization metric score
-                - 'max_variants': Maximum number of variants to generate
-                
-        Returns:
-            List[str]: List containing back-translated prompt variants (or original if failed)
-        """
+        """Generate back-translated variant using LLaMA model."""
         try:
             # Validate input format
             if not isinstance(operator_input, dict):

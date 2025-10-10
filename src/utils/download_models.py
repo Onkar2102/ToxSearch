@@ -2,7 +2,6 @@
 """
 download_models.py
 
-Author: Onkar Shelar os9660@rit.edu
 
 Idempotent multi-model downloader & local loader for Hugging Face models.
 - Downloads into a project-local folder (default: ./models)

@@ -1,7 +1,6 @@
 """
 LLM-based POS-aware synonym replacement for text mutation.
 
-Author: Onkar Shelar (os9660@rit.edu)
 """
 
 from typing import List, Optional, Dict, Any, Tuple
@@ -31,26 +30,7 @@ class POSWord:
 
 
 class LLM_POSAwareSynonymReplacement(VariationOperator):
-    """
-    LLM-based synonym replacement with part-of-speech awareness.
-    
-    This mutation operator identifies words by POS tags using spaCy,
-    then uses a local LLaMA model to generate contextually appropriate
-    synonyms. The operator maintains grammatical correctness while
-    creating meaningful text variations.
-    
-    Process:
-    1. Parse input text with spaCy for POS tagging
-    2. Randomly select target words based on POS categories
-    3. Generate synonyms using LLaMA with context-aware prompts
-    4. Create variants by substituting original words with synonyms
-    
-    Attributes:
-        max_variants (int): Maximum number of variants to generate
-        num_POS_tags (int): Number of POS categories to target per operation
-        seed (int): Random seed for reproducible word selection
-        generator: Local LLaMA model instance for synonym generation
-    """
+    """LLM-based synonym replacement with part-of-speech awareness."""
 
     # POS inventory (excluding PUNCT, SYM, X)
     POS_DESCRIPTIONS = {
@@ -71,16 +51,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
     }
 
     def __init__(self, log_file: Optional[str] = None, max_variants: int = 3, num_POS_tags: int = 1, seed: Optional[int] = 42, generator=None):
-        """
-        Initialize the LLM POS-aware synonym replacement operator.
-        
-        Args:
-            log_file: Path to log file (optional)
-            max_variants: Maximum number of variants to generate (default: 3)
-            num_POS_tags: Number of POS types to randomly select (1 to max available)
-            seed: Random seed for reproducible selection (default: 42)
-            generator: LLaMA generator instance to use
-        """
+        """Initialize the LLM POS-aware synonym replacement operator."""
         super().__init__(
             "LLM_POSAwareSynonymReplacement", 
             "mutation", 
@@ -88,15 +59,10 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         )
         
         self.logger = get_logger(self.name, log_file)
-        self.logger.debug(f"Initialized {self.name}")
-        
-        # Validate and set parameters
         self.max_variants = self._validate_max_variants(max_variants)
         self.num_POS_tags = self._validate_num_POS_tags(num_POS_tags)
         self.seed = seed
         self.rng = random.Random(seed)
-        
-        # Use provided generator
         self.generator = generator
         
         self.logger.info(f"{self.name}: Configured with max_variants={self.max_variants}, num_POS_tags={self.num_POS_tags}, seed={seed}")
@@ -202,7 +168,7 @@ class LLM_POSAwareSynonymReplacement(VariationOperator):
         sample_words_str = ", ".join(sample_words[:5])
         
         # Get template from config
-        template = self.generator.task_templates.get("pos_aware_synonym_replacement", {}).get("synonym_generation")
+        template = self.generator.task_templates.get("synonym_generation", "")
         if template:
             prompt = template.format(
                 pos_tag=pos_tag,
@@ -233,63 +199,72 @@ Synonyms for {pos_tag}:
     def _parse_synonyms_from_response(self, response: str, pos_tag: str) -> List[str]:
         """Parse synonyms from LLM response."""
         try:
-            # Try to parse as JSON array first
-            synonyms = json.loads(response.strip())
-            if isinstance(synonyms, list):
-                # Filter and clean synonyms
-                cleaned_synonyms = []
-                for word in synonyms:
-                    if isinstance(word, str) and word.strip():
-                        cleaned_word = word.strip().lower()
-                        if len(cleaned_word) > 1 and cleaned_word.isalpha():
-                            cleaned_synonyms.append(cleaned_word)
-                
-                # Limit to max_variants
-                return cleaned_synonyms[:self.max_variants]
+            # Extract synonyms from structured tags
+            import re
+            synonyms_match = re.search(r'<synonyms>(.*?)</synonyms>', response, re.DOTALL)
+            if synonyms_match:
+                synonyms_text = synonyms_match.group(1).strip()
+                synonyms = json.loads(synonyms_text)
+                if isinstance(synonyms, list):
+                    cleaned_synonyms = []
+                    for word in synonyms:
+                        if isinstance(word, str) and word.strip():
+                            cleaned_word = word.strip().lower()
+                            if len(cleaned_word) > 1 and cleaned_word.isalpha():
+                                cleaned_synonyms.append(cleaned_word)
+                    return cleaned_synonyms[:self.max_variants]
             
-            # Try to parse as JSON object with synonyms dict
-            elif isinstance(synonyms, dict) and "synonyms" in synonyms:
-                synonyms_dict = synonyms["synonyms"]
-                all_synonyms = []
-                
-                # Extract all synonyms from the dictionary
-                for word, synonym_list in synonyms_dict.items():
-                    if isinstance(synonym_list, list):
-                        all_synonyms.extend(synonym_list)
-                    elif isinstance(synonym_list, str):
-                        all_synonyms.append(synonym_list)
-                
-                # Clean and validate synonyms
-                cleaned_synonyms = []
-                for synonym in all_synonyms:
-                    if isinstance(synonym, str) and synonym.strip():
-                        cleaned = synonym.strip().lower()
-                        if len(cleaned) > 0 and cleaned.isalpha():
-                            cleaned_synonyms.append(cleaned)
-                
-                return cleaned_synonyms[:self.max_variants]
-            
-        except Exception:
-            pass
-        
-        # Fallback: try to extract words from text response
-        try:
-            # Look for quoted words or simple word lists
-            words = re.findall(r'"([^"]+)"', response)
-            if not words:
-                words = re.findall(r'\b([a-zA-Z]{2,})\b', response)
-            
-            # Clean and filter words
-            cleaned_words = []
-            for word in words:
-                word = word.strip().lower()
-                if word.isalpha() and len(word) > 1:
-                    cleaned_words.append(word)
-            
-            return cleaned_words[:self.max_variants]
+            # Fallback: Extract words from response text
+            return self._extract_words_from_response(response)
             
         except Exception as e:
             self.logger.debug(f"{self.name}: Failed to parse synonyms from response: {e}")
+            return self._extract_words_from_response(response)
+    
+    def _extract_words_from_response(self, response: str) -> List[str]:
+        """Extract words from LLM response as fallback parsing."""
+        try:
+            import re
+            # Look for JSON arrays in the response
+            json_match = re.search(r'\[(.*?)\]', response)
+            if json_match:
+                json_text = '[' + json_match.group(1) + ']'
+                try:
+                    words = json.loads(json_text)
+                    if isinstance(words, list):
+                        cleaned_words = []
+                        for word in words:
+                            if isinstance(word, str) and word.strip():
+                                cleaned_word = word.strip().lower()
+                                if len(cleaned_word) > 1 and cleaned_word.isalpha():
+                                    cleaned_words.append(cleaned_word)
+                        return cleaned_words[:self.max_variants]
+                except:
+                    pass
+            
+            # Look for quoted words
+            quoted_words = re.findall(r'"([^"]+)"', response)
+            if quoted_words:
+                cleaned_words = []
+                for word in quoted_words:
+                    stripped_word = word.strip()
+                    if stripped_word and len(stripped_word) > 1 and stripped_word.isalpha():
+                        cleaned_words.append(stripped_word.lower())
+                return cleaned_words[:self.max_variants]
+            
+            # Look for comma-separated words
+            words = re.findall(r'\b[a-zA-Z]{2,}\b', response)
+            if words:
+                cleaned_words = []
+                for word in words:
+                    if len(word) > 1 and word.isalpha():
+                        cleaned_words.append(word.lower())
+                return cleaned_words[:self.max_variants]
+            
+            return []
+            
+        except Exception as e:
+            self.logger.debug(f"{self.name}: Failed to extract words from response: {e}")
             return []
 
     def _safe_json_obj(self, s: str) -> Optional[Dict[str, Any]]:
@@ -370,7 +345,7 @@ Synonyms for {pos_tag}:
             self.logger.debug(f"{self.name}: Prompt: {prompt[:200]}...")
             
             # Get LLM response with unified task parameters
-            response = self.generator.generate_response(prompt, task_type="mutation_crossover")
+            response = self.generator.generate_response(prompt, task_type="synonym_generation")
             
             if not response:
                 self.logger.warning(f"{self.name}: Empty LLM response for {pos_tag}")
@@ -644,27 +619,7 @@ Synonyms for {pos_tag}:
             return []
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
-        """
-        Generate text variants using POS-aware synonym replacement.
-        
-        This method:
-        1. Validates input format and extracts parent data
-        2. Detects POS tags and generates synonyms
-        3. Creates variants with synonym substitutions
-        4. Returns variants if different from original
-        
-        Args:
-            operator_input (Dict[str, Any]): Operator input containing:
-                - 'parent_data': Enriched parent genome dictionary containing:
-                    - 'prompt': Original prompt text to process with synonym replacement
-                    - 'generated_text': Generated output from the prompt (optional)
-                    - 'scores': Moderation scores dictionary
-                    - 'north_star_score': Primary optimization metric score
-                - 'max_variants': Maximum number of variants to generate
-                
-        Returns:
-            List[str]: List containing synonym-replaced prompt variants (or original if failed)
-        """
+        """Generate text variants using POS-aware synonym replacement."""
         try:
             # Validate input format
             if not isinstance(operator_input, dict):

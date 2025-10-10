@@ -6,7 +6,7 @@ This utility provides system optimization and monitoring for Apple Silicon Macs,
 specifically optimized for M3 chips running the evolutionary text generation pipeline.
 
 Functionality:
-1. Detect optimal batch sizes based on available memory and MPS capabilities
+1. Detect optimal settings based on available memory and MPS capabilities
 2. Monitor GPU/CPU/memory usage during evolution runs
 3. Provide performance recommendations for model configuration
 4. Automatically tune YAML configuration for optimal Apple Silicon performance
@@ -70,37 +70,10 @@ def get_system_info() -> Dict:
     
     return info
 
-def estimate_optimal_batch_size(model_name: str = "meta-llama/Llama-3.2-3B-instruct") -> int:
-    """Estimate optimal batch size based on available memory and model size"""
-    memory_gb = psutil.virtual_memory().available / (1024**3)
-    
-    # Model size estimates (in GB)
-    model_sizes = {
-        "meta-llama/Llama-3.2-3B-instruct": 6.0,  # ~6GB in fp16
-        "meta-llama/Llama-3.2-1B-instruct": 2.0,   # ~2GB in fp16
-    }
-    
-    model_size = model_sizes.get(model_name, 6.0)  # Default to 3B size
-    
-    # Reserve memory for system and other processes (50% of available)
-    usable_memory = memory_gb * 0.5
-    
-    # Estimate memory per sample (model + activations + gradients)
-    # For inference only, roughly 2x model size for batch of 1
-    memory_per_sample = model_size * 0.3  # Conservative estimate
-    
-    if usable_memory < model_size:
-        return 1  # Minimum batch size
-    
-    estimated_batch_size = int((usable_memory - model_size) / memory_per_sample)
-    
-    # Clamp to reasonable bounds
-    return max(1, min(estimated_batch_size, 16))
 
 def optimize_config_for_m3() -> Dict:
     """Generate optimized configuration for M3 Mac"""
     system_info = get_system_info()
-    optimal_batch_size = estimate_optimal_batch_size()
     
     config = {
         "llama": {
@@ -108,7 +81,6 @@ def optimize_config_for_m3() -> Dict:
             "name": "meta-llama/Llama-3.2-3B-instruct",
             "strategy": "local",
             "task_type": "text-generation",
-            "max_batch_size": optimal_batch_size,
             "generation_args": {
                 "max_new_tokens": 512,  # Balanced speed/quality
                 "do_sample": False,
@@ -130,11 +102,9 @@ def optimize_config_for_m3() -> Dict:
     # Adjust based on available memory
     if system_info["memory_available_gb"] < 8:
         # Low memory - conservative settings
-        config["llama"]["max_batch_size"] = 2
         config["llama"]["generation_args"]["max_new_tokens"] = 256
     elif system_info["memory_available_gb"] > 16:
         # High memory - aggressive settings
-        config["llama"]["max_batch_size"] = min(optimal_batch_size * 2, 16)
         config["llama"]["generation_args"]["max_new_tokens"] = 1024
     
     return config
@@ -168,7 +138,6 @@ def main():
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
-        print(f"Recommended batch size: {config['llama']['max_batch_size']}")
         print("\n")
         
         print("Optimization complete!")
@@ -186,7 +155,6 @@ def main():
             yaml.dump(config, f, default_flow_style=False)
         
         print(f"Optimized configuration saved to {config_path}")
-        print(f"Recommended batch size: {config['llama']['max_batch_size']}")
     
     else:
         print("M3 Mac Optimizer - choose an option:")

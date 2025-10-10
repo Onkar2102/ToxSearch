@@ -1,5 +1,4 @@
 ## @file src/gne/__init__.py
-# @author Onkar Shelar (os9660@rit.edu)
 # @brief Generative Neural Engine (GNE) package for LLM integration and moderation.
 #
 # This package provides:

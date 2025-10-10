@@ -1,7 +1,6 @@
 """
 LLM-based POS-aware antonym replacement for text mutation.
 
-Author: Onkar Shelar (os9660@rit.edu)
 """
 
 from typing import List, Optional, Dict, Any, Tuple
@@ -86,12 +85,11 @@ class LLM_POSAwareAntonymReplacement(VariationOperator):
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import EvolutionEngine
-            from .operator_helpers import get_generator
+            from .EvolutionEngine import get_generator
             self.generator = get_generator()
-            self.logger.info(f"{self.name}: LLM generator initialized successfully")
+            self.logger.debug(f"{self.name}: LLM generator initialized successfully")
         
-        self.logger.info(f"{self.name}: Configured with max_variants={self.max_variants}, num_POS_tags={self.num_POS_tags}, seed={seed}")
+        self.logger.debug(f"{self.name}: Configured with max_variants={self.max_variants}, num_POS_tags={self.num_POS_tags}, seed={seed}")
 
     def _validate_max_variants(self, max_variants: int) -> int:
         """Ensure max_variants is positive integer."""
@@ -194,7 +192,7 @@ class LLM_POSAwareAntonymReplacement(VariationOperator):
         sample_words_str = ", ".join(sample_words[:5])
         
         # Get template from config
-        template = self.generator.task_templates.get("pos_aware_antonym_replacement", {}).get("antonym_generation")
+        template = self.generator.task_templates.get("antonym_generation", "")
         if template:
             prompt = template.format(
                 pos_tag=pos_tag,
@@ -225,63 +223,72 @@ Antonyms for {pos_tag}:
     def _parse_antonyms_from_response(self, response: str, pos_tag: str) -> List[str]:
         """Parse antonyms from LLM response."""
         try:
-            # Try to parse as JSON array first
-            antonyms = json.loads(response.strip())
-            if isinstance(antonyms, list):
-                # Filter and clean antonyms
-                cleaned_antonyms = []
-                for word in antonyms:
-                    if isinstance(word, str) and word.strip():
-                        cleaned_word = word.strip().lower()
-                        if len(cleaned_word) > 1 and cleaned_word.isalpha():
-                            cleaned_antonyms.append(cleaned_word)
-                
-                # Limit to max_variants
-                return cleaned_antonyms[:self.max_variants]
+            # Extract antonyms from structured tags
+            import re
+            antonyms_match = re.search(r'<antonyms>(.*?)</antonyms>', response, re.DOTALL)
+            if antonyms_match:
+                antonyms_text = antonyms_match.group(1).strip()
+                antonyms = json.loads(antonyms_text)
+                if isinstance(antonyms, list):
+                    cleaned_antonyms = []
+                    for word in antonyms:
+                        if isinstance(word, str) and word.strip():
+                            cleaned_word = word.strip().lower()
+                            if len(cleaned_word) > 1 and cleaned_word.isalpha():
+                                cleaned_antonyms.append(cleaned_word)
+                    return cleaned_antonyms[:self.max_variants]
             
-            # Try to parse as JSON object with antonyms dict
-            elif isinstance(antonyms, dict) and "antonyms" in antonyms:
-                antonyms_dict = antonyms["antonyms"]
-                all_antonyms = []
-                
-                # Extract all antonyms from the dictionary
-                for word, antonym_list in antonyms_dict.items():
-                    if isinstance(antonym_list, list):
-                        all_antonyms.extend(antonym_list)
-                    elif isinstance(antonym_list, str):
-                        all_antonyms.append(antonym_list)
-                
-                # Clean and validate antonyms
-                cleaned_antonyms = []
-                for antonym in all_antonyms:
-                    if isinstance(antonym, str) and antonym.strip():
-                        cleaned = antonym.strip().lower()
-                        if len(cleaned) > 0 and cleaned.isalpha():
-                            cleaned_antonyms.append(cleaned)
-                
-                return cleaned_antonyms[:self.max_variants]
-            
-        except Exception:
-            pass
-        
-        # Fallback: try to extract words from text response
-        try:
-            # Look for quoted words or simple word lists
-            words = re.findall(r'"([^"]+)"', response)
-            if not words:
-                words = re.findall(r'\b([a-zA-Z]{2,})\b', response)
-            
-            # Clean and filter words
-            cleaned_words = []
-            for word in words:
-                word = word.strip().lower()
-                if word.isalpha() and len(word) > 1:
-                    cleaned_words.append(word)
-            
-            return cleaned_words[:self.max_variants]
+            # Fallback: Extract words from response text
+            return self._extract_words_from_response(response)
             
         except Exception as e:
             self.logger.debug(f"{self.name}: Failed to parse antonyms from response: {e}")
+            return self._extract_words_from_response(response)
+    
+    def _extract_words_from_response(self, response: str) -> List[str]:
+        """Extract words from LLM response as fallback parsing."""
+        try:
+            import re
+            # Look for JSON arrays in the response
+            json_match = re.search(r'\[(.*?)\]', response)
+            if json_match:
+                json_text = '[' + json_match.group(1) + ']'
+                try:
+                    words = json.loads(json_text)
+                    if isinstance(words, list):
+                        cleaned_words = []
+                        for word in words:
+                            if isinstance(word, str) and word.strip():
+                                cleaned_word = word.strip().lower()
+                                if len(cleaned_word) > 1 and cleaned_word.isalpha():
+                                    cleaned_words.append(cleaned_word)
+                        return cleaned_words[:self.max_variants]
+                except:
+                    pass
+            
+            # Look for quoted words
+            quoted_words = re.findall(r'"([^"]+)"', response)
+            if quoted_words:
+                cleaned_words = []
+                for word in quoted_words:
+                    stripped_word = word.strip()
+                    if stripped_word and len(stripped_word) > 1 and stripped_word.isalpha():
+                        cleaned_words.append(stripped_word.lower())
+                return cleaned_words[:self.max_variants]
+            
+            # Look for comma-separated words
+            words = re.findall(r'\b[a-zA-Z]{2,}\b', response)
+            if words:
+                cleaned_words = []
+                for word in words:
+                    if len(word) > 1 and word.isalpha():
+                        cleaned_words.append(word.lower())
+                return cleaned_words[:self.max_variants]
+            
+            return []
+            
+        except Exception as e:
+            self.logger.debug(f"{self.name}: Failed to extract words from response: {e}")
             return []
 
     def _ask_llm_for_antonyms(self, pos_tag: str, pos_words: List[POSWord], text_context: str) -> List[str]:
@@ -312,7 +319,7 @@ Antonyms for {pos_tag}:
             self.logger.debug(f"{self.name}: Prompt: {prompt[:200]}...")
             
             # Get LLM response with unified task parameters
-            response = self.generator.generate_response(prompt, task_type="mutation_crossover")
+            response = self.generator.generate_response(prompt, task_type="antonym_generation")
             
             if not response:
                 self.logger.warning(f"{self.name}: Empty LLM response for {pos_tag}")

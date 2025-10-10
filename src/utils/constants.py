@@ -21,9 +21,7 @@ class LoggingConstants:
 
 class ModelConstants:
     """Constants related to model configuration"""
-    DEFAULT_BATCH_SIZE = 5  # Default batch size for generation
-    MAX_BATCH_SIZE = 16  # Maximum batch size
-    MIN_BATCH_SIZE = 1  # Minimum batch size
+    pass
 
 class FileConstants:
     """Constants related to file operations"""

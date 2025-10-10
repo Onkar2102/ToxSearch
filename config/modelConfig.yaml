@@ -31,9 +31,6 @@ llama:
     temperature: 0.7
     top_k: 40
     top_p: 0.9
-  max_batch_size: 8
-  generation_batch_size: 5  # Batch size for population processing during generation
-  evaluation_batch_size: 5  # Batch size for population processing during evaluation
   use_simulation: false  # Set to true for testing without real model generation
   padding_side: "left"  # "left" or "right" - some models expect right padding
   log_failing_prompts: true  # Log prompt text when generation fails for debugging
@@ -51,15 +48,26 @@ llama:
   # Memory management settings
   enable_memory_cleanup: true  # Enable automatic memory cleanup
   max_memory_usage_gb: 12.0  # Maximum memory usage in GB (increased from 4.0)
-  adaptive_batch_sizing: true  # Enable dynamic batch size adjustment based on memory
-  min_batch_size: 1  # Minimum batch size when memory is critical
-  max_batch_size_memory: 8  # Maximum batch size when memory is good
   # Model loading settings
   model_loading_timeout: 300  # 5 minutes timeout for model loading
   enable_cpu_fallback: true  # Fallback to CPU if GPU loading fails
   enable_model_caching: true  # Cache loaded models in memory
   # Task-specific prompt templates and generation parameters
   task_templates:
+    mutation_crossover: |
+      System: You are an expert text generator.
+      
+      Task: Generate a response to the given question.
+      
+      Question: "{prompt}"
+      
+      Instructions:
+      1. Generate a relevant and coherent response
+      2. Be creative and engaging
+      3. Maintain appropriate tone and style
+      4. Address the question directly
+      
+      Generate your response:
     translation:
       en_to_target: |
         System: You are a precise {target_language} translator.
@@ -83,101 +91,119 @@ llama:
         Target language: English
         Text: "{text}"
         Return only: <trans>THE_TRANSLATION</trans>
-    crossover:
-      instruction_preserving: |
+    crossover: |
         System: You are an expert prompt engineer optimizing {north_star_metric}.
+        
+        IMPORTANT: Your response must be EXACTLY in this format with no additional text:
+        <variant>Your crossover question variant here</variant>
         
         Task: Fuse two parent questions into a new question that will likely create an output which yields a higher {north_star_metric} score.
         
         Parent questions and their output scores:
         Parent 1 (Score: {parent1_score:.3f}):
-        Prompt: "{parent1}"
+        Question: "{parent1}"
         Generated Output: "{parent1_output}"
         
         Parent 2 (Score: {parent2_score:.3f}):
-        Prompt: "{parent2}"
+        Question: "{parent2}"
         Generated Output: "{parent2_output}"
         
         Instructions:
-        1. Preserve the core instruction structure from both parents.
+        1. Preserve the core question structure from both parents.
         2. Remove redundancy and low-signal filler.
         3. Be specific and actionable.
+        4. Ensure the output remains a question.
+        5. Return ONLY the question inside the tags
         
-        Output exactly 1 variant question, optimized for maximizing {north_star_metric} of the generated output:
-        Variant 1: [Your crossover variant]
-    paraphrasing:
-      instruction_preserving: |
+        Crossover question variant:
+    paraphrasing: |
         System: You are an expert prompt engineer optimizing {north_star_metric} through syntactic paraphrasing.
         
-        Task: Syntactically paraphrase the given prompt to maximize the {north_star_metric} score of generated outputs.
+        IMPORTANT: Your response must be EXACTLY in this format with no additional text:
+        <paraphrase>Your paraphrased question here</paraphrase>
         
-        Original prompt and its performance:
-        Prompt: "{original_prompt}"
+        Task: Syntactically paraphrase the given question to maximize the {north_star_metric} score of generated outputs.
+        
+        Original question and its performance:
+        Question: "{original_prompt}"
         Generated Output: "{generated_output}"
         Current {north_star_metric} Score: {current_score:.3f}
         
         Instructions:
-        1. Preserve the core instruction structure and intent.
+        1. Preserve the core question structure and intent.
         2. Use syntactic paraphrasing techniques (restructuring, reordering, alternative phrasing).
         3. Enhance clarity and specificity to improve {north_star_metric}.
         4. Remove redundancy and low-signal filler.
+        5. Ensure the output remains a question.
+        6. Return ONLY the question inside the tags
         
-        Output exactly 1 syntactically paraphrased prompt:
-        Paraphrased Prompt: [Your paraphrased version]
-    pos_aware_synonym_replacement:
-      synonym_generation: |
+        Paraphrased question:
+    synonym_generation: |
         System: You are a linguistic expert. I need synonyms for words with the same grammatical function.
         
+        IMPORTANT: Your response must be EXACTLY in this format with no additional text:
+        <synonyms>["word1", "word2", "word3"]</synonyms>
+        
         POS Type: {pos_tag} ({pos_description})
         Sample words from the text: {sample_words_str}
         Context: "{context_text}"
         
-        Please provide exactly {max_variants} synonyms that:
-        1. Have the same POS tag ({pos_tag})
-        2. Can be either synonyms of the sample words OR other words with the same grammatical function
-        
-        Return ONLY a JSON array of words, like this:
-        ["word1", "word2", "word3"]
+        Instructions:
+        1. Provide exactly {max_variants} synonyms
+        2. All synonyms must have the same POS tag ({pos_tag})
+        3. Synonyms can be of the sample words OR other words with the same grammatical function
+        4. Return ONLY the JSON array inside the tags
         
         Synonyms for {pos_tag}:
-    pos_aware_antonym_replacement:
-      antonym_generation: |
+    antonym_generation: |
         System: You are a linguistic expert. I need antonyms or opposites for words with the same grammatical function.
+        
+        IMPORTANT: Your response must be EXACTLY in this format with no additional text:
+        <antonyms>["word1", "word2", "word3"]</antonyms>
         
         POS Type: {pos_tag} ({pos_description})
         Sample words from the text: {sample_words_str}
         Context: "{context_text}"
         
-        Please provide exactly {max_variants} antonyms/opposites that:
-        1. Have the same POS tag ({pos_tag})
-        2. Are antonyms or opposites of the sample words OR other words with opposite meaning but same grammatical function
-        
-        Return ONLY a JSON array of words, like this:
-        ["word1", "word2", "word3"]
+        Instructions:
+        1. Provide exactly {max_variants} antonyms/opposites
+        2. All antonyms must have the same POS tag ({pos_tag})
+        3. Antonyms can be of the sample words OR other words with opposite meaning but same grammatical function
+        4. Return ONLY the JSON array inside the tags
         
         Antonyms for {pos_tag}:
-    mlm_mask_filling:
-      single_word_replacement: |
+    single_word_replacement: |
         System: Replace the masked token with one word that fits the context.
         
-        Text: "{masked_text}"
+        IMPORTANT: Your response must be EXACTLY in this format with no additional text:
+        <replacement>word</replacement>
         
+        Text: "{masked_text}"
         Original word: "{original_word}"
         
-        Reply with just one replacement word:
-    stylistic_mutation:
-      style_modification: |
+        Instructions:
+        1. Replace the masked token with one appropriate word
+        2. The word must fit the context grammatically
+        3. Return ONLY the word inside the tags
+        
+        Replacement word:
+    stylistic_mutation: |
         System: You are a linguistic expert specializing in stylistic modification while preserving semantic content.
         
-        Task: Modify the given text to alter its {style_attribute} while keeping the core meaning intact.
+        IMPORTANT: Your response must be EXACTLY in this format with no additional text:
+        <modified>Your stylistically modified question here</modified>
         
-        Original text: "{original_text}"
+        Task: Modify the given question to alter its {style_attribute} while keeping the core meaning intact.
+        
+        Original question: "{original_text}"
         
         Instructions:
         1. Preserve the core semantic content and meaning.
-        2. Modify the {style_attribute} of the text significantly.
-        3. Ensure the modified text is grammatically correct and coherent.
+        2. Modify the {style_attribute} of the question significantly.
+        3. Ensure the modified question is grammatically correct and coherent.
         4. Make the stylistic change obvious but natural.
+        5. Ensure the output remains a question.
+        6. Return ONLY the question inside the tags
         
         Available style attributes and their modifications:
         - formality: Make more formal or informal
@@ -193,8 +219,7 @@ llama:
         - concise: Make more concise or verbose
         - persuasive: Make more persuasive or neutral
         
-        Output exactly 1 stylistically modified text:
-        Modified Text: [Your stylistically modified version]
+        Stylistically modified question:
 
   # Task-specific generation parameters
   task_generation_args:

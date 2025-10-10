@@ -13,7 +13,6 @@ import traceback
 import random
 from typing import List, Optional, Dict, Any
 from .VariationOperators import VariationOperator
-from .EvolutionEngine import EvolutionEngine
 from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()

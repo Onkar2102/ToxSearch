@@ -1,5 +1,4 @@
 ## @file src/utils/__init__.py
-# @author Onkar Shelar (os9660@rit.edu)
 # @brief Utility functions and helper modules.
 #
 # This package provides:
@@ -48,7 +47,27 @@ def get_population_io():
         finalize_initial_population
     )
 
+def get_system_utils():
+    """Lazy import of system utility functions moved from main.py"""
+    from .population_io import (
+        get_project_root,
+        get_config_path,
+        get_data_path,
+        get_outputs_path,
+        _extract_north_star_score,
+        initialize_system
+    )
+    return (
+        get_project_root,
+        get_config_path,
+        get_data_path,
+        get_outputs_path,
+        _extract_north_star_score,
+        initialize_system
+    )
+
 __all__ = [
     "get_custom_logging",
-    "get_population_io", 
+    "get_population_io",
+    "get_system_utils",
 ]

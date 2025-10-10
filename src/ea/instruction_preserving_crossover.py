@@ -4,7 +4,6 @@ instruction_preserving_crossover.py
 LLM-based instruction preserving crossover operator for prompt recombination.
 Uses local LLM with task templates and north star metric optimization.
 
-Author: Onkar Shelar (os9660@rit.edu)
 """
 
 import os
@@ -19,110 +18,32 @@ get_logger, _, _, _ = get_custom_logging()
 
 
 class InstructionPreservingCrossover(VariationOperator):
-    """
-    LLM-based instruction preserving crossover operator for prompt recombination.
-    
-    This crossover operator uses the local LLM to combine two parent prompts while
-    preserving instruction structure and optimizing for high north star metric values.
-    
-    Design:
-    - Step 1: Analyze both parent prompts and their north star metric values
-    - Step 2: Use LLM with task template to fuse parents for optimal metric performance
-    - Step 3: Return up to 3 crossover variants optimized for the north star metric
-    
-    Attributes:
-        name (str): Operator name "InstructionPreservingCrossover"
-        def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
-        description (str): Description of the operator's functionality
-        logger: Logger instance for debugging and monitoring
-        generator: Local LLM generator for crossover generation
-        north_star_metric (str): The metric to optimize for (e.g., "engagement", "toxicity")
-        
-    Methods:
-                generator: LLaMA generator instance to use
-        apply(parent_texts): Generate crossover variants using local LLM
-        
-    Example:
-        >>> operator = InstructionPreservingCrossover("engagement")
-        >>> parents = ["Write a story about a brave knight", "Create a tale about a princess"]
-            # Use provided generator
-            self.generator = generator
-    """
+    """LLM-based instruction preserving crossover operator for prompt recombination."""
     
     def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
-        """
-        Initialize the instruction preserving crossover operator.
-        
-        Args:
-            north_star_metric (str): The metric to optimize for (e.g., "engagement", "toxicity")
-            log_file (str, optional): Path to log file for debugging. Defaults to None.
-            generator: LLaMA generator instance to use. If None, will create own instance.
-        """
+        """Initialize the instruction preserving crossover operator."""
         super().__init__("InstructionPreservingCrossover", "crossover", 
                         f"LLM-based instruction preserving crossover optimized for {north_star_metric}")
         self.logger = get_logger(self.name, log_file)
         self.north_star_metric = north_star_metric
         
-        # Initialize generator - use provided or create new one
         if generator is not None:
             self.generator = generator
-            self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import EvolutionEngine
-            from .operator_helpers import get_generator
+            from .EvolutionEngine import get_generator
             self.generator = get_generator()
-            self.logger.info(f"{self.name}: LLM generator initialized successfully")
-        
-        # Debug tracking attributes
-        self._last_parent1 = ""
-        self._last_parent2 = ""
-        self._last_parent1_score = 0.0
-        self._last_parent2_score = 0.0
-        self._last_parent1_output = ""
-        self._last_parent2_output = ""
-        self._last_crossover_prompt = ""
-        self._last_raw_response = ""
-        self._last_variants = []
-        
-        self.logger.info(f"{self.name}: Initialized for north star metric: {north_star_metric}")
 
     def _extract_score_from_genome(self, genome: Dict[str, Any]) -> float:
-        """
-        Extract the north star metric score from a genome dictionary.
-        
-        Args:
-            genome: Genome dictionary containing moderation results
-            
-        Returns:
-            float: The score for the north star metric, or 0.0 if not found
-        """
-        try:
-            # Handle both full genome structure and slimmed parent structure
-            if "scores" in genome:
-                # Slimmed structure - scores are directly available
-                scores = genome.get("scores", {})
-                if isinstance(scores, dict):
-                    return float(scores.get(self.north_star_metric, 0.0))
-            
-            # Fallback to full genome structure for backward compatibility
-            moderation_result = genome.get("moderation_result", {})
-            if isinstance(moderation_result, dict):
-                # Try flattened structure first: google.scores
-                if "google" in moderation_result:
-                    google_results = moderation_result["google"]
-                    if "scores" in google_results:
-                        scores = google_results["scores"]
-                        if isinstance(scores, dict):
-                            return float(scores.get(self.north_star_metric, 0.0))
-                
-                # Fallback to direct scores field
-                scores = moderation_result.get("scores", {})
-                if isinstance(scores, dict):
-                    return float(scores.get(self.north_star_metric, 0.0))
-            return 0.0
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to extract score from genome: {e}")
-            return 0.0
+        """Extract the north star metric score from a genome dictionary."""
+        from utils import get_system_utils
+        _, _, _, _, _extract_north_star_score, _ = get_system_utils()
+        return _extract_north_star_score(genome, self.north_star_metric)
+    
+    def _can_extract_score(self, genome: Dict[str, Any]) -> bool:
+        """Check if we can extract a score from the genome."""
+        from utils import get_system_utils
+        _, _, _, _, _extract_north_star_score, _ = get_system_utils()
+        return _extract_north_star_score(genome, self.north_star_metric) > 0
 
     def _create_crossover_prompt(self, parent1: str, parent2: str, parent1_score: float, parent2_score: float, 
                                 parent1_output: str = "", parent2_output: str = "") -> str:
@@ -143,7 +64,7 @@ class InstructionPreservingCrossover(VariationOperator):
         
         # Use the task template from config
         try:
-            template = self.generator.task_templates.get("crossover", {}).get("instruction_preserving")
+            template = self.generator.task_templates.get("crossover", "")
             if template:
                 prompt = template.format(
                     north_star_metric=self.north_star_metric,
@@ -158,61 +79,61 @@ class InstructionPreservingCrossover(VariationOperator):
         except Exception as e:
             self.logger.warning(f"{self.name}: Failed to use task template: {e}")
         
-        # Fallback to simple prompt if template fails
-        output_section = ""
-        if parent1_output or parent2_output:
-            output_section = f"""
-            
-            Generated Outputs:
-            Parent 1 Output: "{parent1_output[:200]}{'...' if len(parent1_output) > 200 else ''}"
-            Parent 2 Output: "{parent2_output[:200]}{'...' if len(parent2_output) > 200 else ''}"
-            """
-        
-        return f"""Create 3 crossover variants by fusing these prompts for {self.north_star_metric} optimization:
-
-                Parent 1 (Score: {parent1_score:.3f}): "{parent1}"
-                Parent 2 (Score: {parent2_score:.3f}): "{parent2}"{output_section}
-
-                Output exactly 3 variants:
-                Variant 1: [variant]
-                Variant 2: [variant]  
-                Variant 3: [variant]
-                """
 
     def _parse_crossover_response(self, response: str) -> str:
-        """
-        Parse LLM response to extract crossover variants.
-        
-        Args:
-            response: Raw LLM response
-            
-        Returns:
-            The first parsed crossover variant as a string, or empty string if none found
-        """
+        """Parse LLM response to extract crossover variants."""
         try:
-            # Try to extract the first variant from the response
-            lines = response.strip().split('\n')
-            for line in lines:
-                line = line.strip()
-                if line.startswith('Variant 1:') or line.startswith('1.'):
-                    variant = line.split(':', 1)[1].strip() if ':' in line else line[2:].strip()
-                    if variant and len(variant) > 10:
-                        return variant
-            # Fallback: look for any quoted text
+            # Extract crossover variant from structured tags
             import re
-            quoted_variants = re.findall(r'"([^"]+)"', response)
-            for variant in quoted_variants:
-                if len(variant) > 10:
+            variant_match = re.search(r'<variant>(.*?)</variant>', response, re.DOTALL)
+            if variant_match:
+                variant = variant_match.group(1).strip()
+                if variant and len(variant) > 10:
                     return variant
-            # Fallback: take the first long enough chunk
-            chunks = re.split(r'[.!?]\s+', response)
-            for chunk in chunks:
-                chunk = chunk.strip()
-                if len(chunk) > 10:
-                    return chunk
-            return ""
+            
+            # Fallback: Extract question from response
+            return self._extract_question_from_response(response)
         except Exception as e:
             self.logger.debug(f"{self.name}: Failed to parse crossover response: {e}")
+            return self._extract_question_from_response(response)
+    
+    def _extract_question_from_response(self, response: str) -> str:
+        """Extract a question from LLM response as fallback parsing."""
+        try:
+            import re
+            # Look for sentences ending with question marks
+            questions = re.findall(r'[^.!?]*\?', response)
+            if questions:
+                for question in questions:
+                    question = question.strip()
+                    if len(question) > 10 and question.endswith('?'):
+                        return question
+            
+            # Look for sentences that start with question words
+            question_patterns = [
+                r'(?:How|What|Why|When|Where|Who|Which|Can|Could|Should|Would|Do|Does|Did|Is|Are|Was|Were|Will|Shall)\s+[^.!?]*[.!?]',
+                r'(?:How|What|Why|When|Where|Who|Which|Can|Could|Should|Would|Do|Does|Did|Is|Are|Was|Were|Will|Shall)\s+[^.!?]*\?'
+            ]
+            
+            for pattern in question_patterns:
+                matches = re.findall(pattern, response, re.IGNORECASE)
+                if matches:
+                    for match in matches:
+                        match = match.strip()
+                        if len(match) > 10:
+                            return match
+            
+            # Look for any sentence that could be a question
+            sentences = re.split(r'[.!?]+', response)
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if len(sentence) > 10 and any(word in sentence.lower() for word in ['how', 'what', 'why', 'when', 'where', 'who', 'which', 'can', 'could', 'should', 'would']):
+                    return sentence + '?'
+            
+            return ""
+            
+        except Exception as e:
+            self.logger.debug(f"{self.name}: Failed to extract question from response: {e}")
             return ""
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
@@ -253,11 +174,10 @@ class InstructionPreservingCrossover(VariationOperator):
             ... }
             >>> variants = operator.apply(input_data)
         """
+        import time
+        start_time = time.time()
+        
         try:
-            # Validate input format
-            if not isinstance(operator_input, dict):
-                self.logger.error(f"{self.name}: Input must be a dictionary")
-                return []
             
             # Extract parent data and max_variants
             parent_data = operator_input.get("parent_data", [])
@@ -277,17 +197,16 @@ class InstructionPreservingCrossover(VariationOperator):
                 return []
             
             # Validate required fields in slimmed parent data structure
-            required_fields = ["prompt", "generated_text", "scores"]
+            required_fields = ["prompt", "generated_output"]
             for i, parent_data_item in enumerate([parent1_data, parent2_data], 1):
                 for field in required_fields:
                     if field not in parent_data_item:
                         self.logger.error(f"{self.name}: Parent {i} missing required field: {field}")
                         return []
                 
-                # Validate scores structure (now directly available)
-                scores = parent_data_item.get("scores", {})
-                if not isinstance(scores, dict) or self.north_star_metric not in scores:
-                    self.logger.error(f"{self.name}: Parent {i} missing {self.north_star_metric} score in scores")
+                # Validate that we can extract scores (either from scores field or moderation_result)
+                if not self._can_extract_score(parent_data_item):
+                    self.logger.error(f"{self.name}: Parent {i} missing score data (scores field or moderation_result)")
                     return []
             
             if not self.generator:
@@ -297,8 +216,8 @@ class InstructionPreservingCrossover(VariationOperator):
             # Extract parent information from validated genome dictionaries
             parent1 = parent1_data.get("prompt", "")
             parent2 = parent2_data.get("prompt", "")
-            parent1_output = parent1_data.get("generated_text", "")
-            parent2_output = parent2_data.get("generated_text", "")
+            parent1_output = parent1_data.get("generated_output", "")
+            parent2_output = parent2_data.get("generated_output", "")
             
             # Extract scores from genome data
             parent1_score = self._extract_score_from_genome(parent1_data)
@@ -325,7 +244,7 @@ class InstructionPreservingCrossover(VariationOperator):
 
             try:
                 # Generate response using local LLM with unified task parameters
-                response = self.generator.generate_response(crossover_prompt, task_type="mutation_crossover")
+                response = self.generator.generate_response(crossover_prompt, task_type="crossover")
                 self._last_raw_response = str(response) if response else ""
                 
                 if response:
@@ -348,6 +267,15 @@ class InstructionPreservingCrossover(VariationOperator):
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")
             return []
+        finally:
+            end_time = time.time()
+            operation_time = end_time - start_time
+            # Store timing in a global variable that can be accessed by the caller
+            if not hasattr(self, '_last_operation_time'):
+                self._last_operation_time = {}
+            self._last_operation_time['start_time'] = start_time
+            self._last_operation_time['end_time'] = end_time
+            self._last_operation_time['duration'] = operation_time
 
     def get_debug_info(self) -> Dict[str, Any]:
         """

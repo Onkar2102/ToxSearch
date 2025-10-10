@@ -21,6 +21,156 @@ import pandas as pd
 get_logger, _, _, PerformanceLogger = get_custom_logging()
 
 
+# ============================================================================
+# UTILITY FUNCTIONS (moved from main.py)
+# ============================================================================
+
+def get_project_root():
+    """Get the absolute path to the project root directory"""
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    # Go up two levels to get to the project root (from src/utils/ to project root)
+    project_root = script_dir.parent.parent
+    return project_root.resolve()
+
+def get_config_path():
+    """Get the absolute path to the config directory"""
+    return get_project_root() / "config" / "modelConfig.yaml"
+
+def get_data_path():
+    """Get the absolute path to the data directory"""
+    return get_project_root() / "data" / "prompt.xlsx"
+
+def get_outputs_path():
+    """Get the absolute path to the outputs directory"""
+    # Create the full path: outputs/
+    outputs_dir = get_project_root() / "outputs"
+    
+    # Ensure the directory exists
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    
+    return outputs_dir
+
+def _extract_north_star_score(genome, metric="toxicity"):
+    """Extract the north star metric score from a genome using the configured metric."""
+    if not genome:
+        return 0.0
+    
+    # Try different score locations in order of preference
+    try:
+        # 1. Direct scores field (flattened structure)
+        if "scores" in genome:
+            scores = genome.get("scores", {})
+            if isinstance(scores, dict) and metric in scores:
+                score = scores.get(metric, 0.0)
+                if score > 0:
+                    return float(score)
+        
+        # 2. moderation_result.google.scores (nested structure)
+        if "moderation_result" in genome:
+            moderation_result = genome["moderation_result"]
+            
+            if "google" in moderation_result:
+                google_scores = moderation_result["google"]
+                if "scores" in google_scores:
+                    score = google_scores["scores"].get(metric, 0.0)
+                    if score > 0:
+                        return float(score)
+            
+            # 3. Direct scores in moderation_result (flattened)
+            if "scores" in moderation_result:
+                scores = moderation_result["scores"]
+                if isinstance(scores, dict) and metric in scores:
+                    score = scores.get(metric, 0.0)
+                    if score > 0:
+                        return float(score)
+        
+        # 4. Direct north_star_score field
+        if "north_star_score" in genome:
+            return float(genome.get("north_star_score", 0.0))
+        
+        # 5. Fallback to max_score for legacy compatibility
+        if "max_score" in genome:
+            return float(genome.get("max_score", 0.0))
+        
+        return 0.0
+        
+    except Exception:
+        return 0.0
+
+
+# ============================================================================
+# SYSTEM INITIALIZATION (moved from main.py)
+# ============================================================================
+
+def initialize_system(logger, log_file):
+    """Initialize the system components and create gen0 if needed"""
+    logger.info("Initializing optimized pipeline for M3 Mac...")
+    
+    # Import required modules
+    from utils import get_population_io
+    from gne import get_LLaMaTextGenerator
+    
+    # Get population IO functions
+    load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, load_elites, save_elites, get_population_stats_steady_state, finalize_initial_population = get_population_io()
+    
+    # Initialize LLaMA generator
+    LlaMaTextGenerator = get_LLaMaTextGenerator()
+    generator = LlaMaTextGenerator(config_path=str(get_config_path()), log_file=log_file)
+    
+    # Set the global generator for all operators to use
+    from ea.EvolutionEngine import set_global_generator
+    set_global_generator(generator)
+    logger.info("Global generator set for all operators")
+    
+    # Check if population already exists (steady state: check elites.json)
+    population_file = get_outputs_path() / "elites.json"
+    
+    # Check if population file exists and has content, and avoid double-loading
+    population_content = None
+    if not population_file.exists():
+        should_initialize = True
+    else:
+        try:
+            with open(population_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            should_initialize = len(content) == 0 or content == '[]'
+            if not should_initialize:
+                # Parse content once for later use
+                import json
+                population_content = json.loads(content)
+        except Exception:
+            should_initialize = True
+
+    if should_initialize:
+        try:
+            if not population_file.exists():
+                logger.info("No population file found. Initializing population from prompt.xlsx...")
+            else:
+                logger.info("Population file exists but is empty. Initializing population from prompt.xlsx...")
+            load_and_initialize_population(
+                input_path=str(get_data_path()),
+                output_path=str(get_outputs_path()),
+                log_file=log_file
+            )
+            logger.debug("Population successfully initialized and saved.")
+        except Exception as e:
+            logger.error("Failed to initialize population: %s", e, exc_info=True)
+            raise
+    else:
+        logger.info("Existing elites file found. Skipping initialization.")
+        # Use already loaded content for info
+        try:
+            population = population_content if population_content is not None else []
+            logger.info("Loaded %d genomes from existing elites.json", len(population))
+            generations = set(g.get("generation", 0) for g in population if g)
+            logger.info("Available generations: %s", sorted(generations))
+        except Exception as e:
+            logger.warning("Could not read existing population info: %s", e)
+    
+    return generator
+
+
 def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """Remove None genomes and invalid entries from population.
     
@@ -56,26 +206,33 @@ def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file:
 # ============================================================================
 
 def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
-    """Get information about the single Population.json file"""
+    """Get information about population files including Population.json, elites.json, and most_toxic.json"""
     
     base_path = Path(base_dir).resolve()
     population_file = base_path / "Population.json"
+    elites_file = base_path / "elites.json"
+    most_toxic_file = base_path / "most_toxic.json"
     
     info = {
         "total_generations": 0,
         "total_genomes": 0,
         "generation_counts": {},
         "single_file_mode": True,
-        "population_file": "Population.json"
+        "population_file": "Population.json",
+        "elites_file": "elites.json",
+        "most_toxic_file": "most_toxic.json",
+        "elites_count": 0,
+        "population_count": 0,
+        "most_toxic_count": 0
     }
     
+    # Count genomes in Population.json
     if population_file.exists():
         try:
             with open(population_file, 'r', encoding='utf-8') as f:
                 population = json.load(f)
             
-            # Calculate statistics from the single file
-            info["total_genomes"] = len(population)
+            info["population_count"] = len(population)
             
             # Count genomes by generation
             generation_counts = {}
@@ -84,13 +241,51 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
                     gen_num = genome["generation"]
                     generation_counts[gen_num] = generation_counts.get(gen_num, 0) + 1
             
-            info["total_generations"] = max(generation_counts.keys()) + 1 if generation_counts else 0
             info["generation_counts"] = generation_counts
-            
             
         except Exception as e:
             # Silently fail if we can't read the file
             pass
+    
+    # Count genomes in elites.json
+    if elites_file.exists():
+        try:
+            with open(elites_file, 'r', encoding='utf-8') as f:
+                elites = json.load(f)
+            
+            info["elites_count"] = len(elites)
+            
+            # Add elite genomes to generation counts
+            for genome in elites:
+                if genome and "generation" in genome:
+                    gen_num = genome["generation"]
+                    info["generation_counts"][gen_num] = info["generation_counts"].get(gen_num, 0) + 1
+            
+        except Exception as e:
+            # Silently fail if we can't read the file
+            pass
+    
+    # Count genomes in most_toxic.json
+    if most_toxic_file.exists():
+        try:
+            with open(most_toxic_file, 'r', encoding='utf-8') as f:
+                most_toxic = json.load(f)
+            
+            info["most_toxic_count"] = len(most_toxic)
+            
+            # Add most_toxic genomes to generation counts
+            for genome in most_toxic:
+                if genome and "generation" in genome:
+                    gen_num = genome["generation"]
+                    info["generation_counts"][gen_num] = info["generation_counts"].get(gen_num, 0) + 1
+            
+        except Exception as e:
+            # Silently fail if we can't read the file
+            pass
+    
+    # Calculate total genomes and generations
+    info["total_genomes"] = info["population_count"] + info["elites_count"] + info["most_toxic_count"]
+    info["total_generations"] = max(info["generation_counts"].keys()) + 1 if info["generation_counts"] else 0
     
     return info
 
@@ -108,7 +303,9 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
         with open(index_file, 'w', encoding='utf-8') as f:
             json.dump(info, f, indent=2)
         
-        _logger.debug(f"Updated population index: single file mode, {total_genomes} genomes")
+        _logger.debug(f"Updated population index: single file mode, {info['total_genomes']} total genomes "
+                     f"(population: {info['population_count']}, elites: {info['elites_count']}, "
+                     f"most_toxic: {info['most_toxic_count']})")
         
     except Exception as e:
         _logger.warning(f"Failed to update population index: {e}")
@@ -445,7 +642,7 @@ def load_and_initialize_population(
             for i, prompt in enumerate(prompts):
                 population.append(
                     {
-                        "id": str(i + 1),
+                        "id": i + 1,
                         "prompt": prompt,
                         "model_name": None,
                         "moderation_result": None,
@@ -527,7 +724,12 @@ def load_and_initialize_population(
                     "total_genomes": 0,
                     "generation_counts": {},
                     "single_file_mode": True,
-                    "population_file": "Population.json"
+                    "population_file": "Population.json",
+                    "elites_file": "elites.json",
+                    "most_toxic_file": "most_toxic.json",
+                    "elites_count": 0,
+                    "population_count": 0,
+                    "most_toxic_count": 0
                 }
                 index_path = Path(output_path) / "population_index.json"
                 index_path.parent.mkdir(parents=True, exist_ok=True)
@@ -851,6 +1053,9 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
             _logger.info(f"Found {len(info['generation_counts'])} generations to consolidate")
             _logger.info(f"Total genomes across all generations: {info['total_genomes']}")
             
+            # Extract generation order for backup operations
+            generation_order = sorted(info['generation_counts'].keys())
+            
             # Load all genomes from single file
             all_genomes = load_population(str(base_path), logger=_logger, log_file=log_file)
             
@@ -983,26 +1188,7 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
 
 def _extract_score(genome: Dict[str, Any], north_star_metric: str = "toxicity") -> float:
     """Extract score from genome using north star metric."""
-    if not genome or not genome.get("moderation_result"):
-        return 0.0
-    
-    moderation_result = genome["moderation_result"]
-    
-    # Try Google API scores first (flattened structure)
-    if "google" in moderation_result:
-        google_scores = moderation_result["google"]
-        if "scores" in google_scores:
-            score = google_scores["scores"].get(north_star_metric, 0.0)
-            if score > 0:
-                return float(score)
-    
-    # Fallback to direct scores
-    if "scores" in moderation_result:
-        score = moderation_result["scores"].get(north_star_metric, 0.0)
-        if score > 0:
-            return float(score)
-    
-    return 0.0
+    return _extract_north_star_score(genome, north_star_metric)
 
 
 def sort_population_by_elite_criteria(population: List[Dict[str, Any]], north_star_metric: str = "toxicity", 
@@ -1032,9 +1218,9 @@ def sort_population_by_elite_criteria(population: List[Dict[str, Any]], north_st
         def sort_key(genome: Dict[str, Any]) -> tuple:
             score = _extract_score(genome, north_star_metric)
             generation = genome.get("generation", 0)
-            genome_id = genome.get("id", "0")
-            # Negative for descending order
-            return (-score, -generation, -int(genome_id) if genome_id.isdigit() else genome_id)
+            genome_id = genome.get("id", 0)
+            # Genome IDs are always integers
+            return (-score, -generation, -genome_id)
         
         sorted_population = sorted(population, key=sort_key)
         _logger.info(f"Sorted {len(sorted_population)} genomes by elite criteria")
@@ -1044,6 +1230,90 @@ def sort_population_by_elite_criteria(population: List[Dict[str, Any]], north_st
 from .constants import EvolutionConstants, FileConstants
 
 
+
+
+def redistribute_population_with_threshold(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE, 
+                                          elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+                                          elite_threshold: float = None,
+                                          north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
+                                          *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Redistribute population using threshold-based elite selection:
+    - Genomes with score >= elite_threshold → elites.json
+    - Genomes with score < elite_threshold → Population.json
+    
+    Parameters
+    ----------
+    population_file_path : str
+        Path to the Population.json file
+    elites_file_path : str
+        Path to the elites.json file
+    elite_threshold : float
+        Threshold score for elite selection (genomes >= threshold become elites)
+    north_star_metric : str
+        Metric to use for scoring (default: "toxicity")
+    logger : logging.Logger | None
+        Existing logger to reuse; if *None* a new one is created
+    log_file : str | None
+        Optional log-file path when a new logger is created
+        
+    Returns
+    -------
+    Dict[str, Any]
+        Statistics about the redistribution process
+    """
+    _logger = logger or get_logger("population_io", log_file)
+    
+    with PerformanceLogger(_logger, "Redistribute Population with Threshold", 
+                         population_file=population_file_path, elites_file=elites_file_path, 
+                         elite_threshold=elite_threshold):
+        
+        if elite_threshold is None:
+            _logger.warning("No elite threshold provided for threshold-based redistribution")
+            return {"elites_count": 0, "population_count": 0, "total_count": 0, "elite_threshold": 0}
+        
+        # Load current population
+        population = load_population(population_file_path, logger=_logger)
+        if not population:
+            _logger.warning("No population found to redistribute")
+            return {"elites_count": 0, "population_count": 0, "total_count": 0, "elite_threshold": elite_threshold}
+        
+        # Load current elites
+        current_elites = load_elites(elites_file_path, logger=_logger)
+        
+        # Combine all genomes for threshold-based redistribution
+        all_genomes = population + current_elites
+        total_count = len(all_genomes)
+        
+        _logger.info(f"Total genomes: {total_count}, Elite threshold: {elite_threshold}")
+        
+        # Separate genomes based on threshold
+        new_elites = []
+        new_population = []
+        
+        for genome in all_genomes:
+            score = _extract_north_star_score(genome, north_star_metric)
+            if score >= elite_threshold:
+                new_elites.append(genome)
+            else:
+                new_population.append(genome)
+        
+        # Save elites and population
+        save_elites(new_elites, elites_file_path, logger=_logger)
+        save_population(new_population, population_file_path, logger=_logger)
+        
+        # Log statistics
+        elites_count = len(new_elites)
+        population_count = len(new_population)
+        
+        _logger.info(f"Threshold-based redistribution complete: {elites_count} elites (>= {elite_threshold}), {population_count} population (< {elite_threshold})")
+        
+        return {
+            "elites_count": elites_count,
+            "population_count": population_count,
+            "total_count": total_count,
+            "elite_threshold": elite_threshold
+        }
 
 
 def redistribute_population_with_dynamic_elite_threshold(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE, 
@@ -1386,6 +1656,7 @@ def finalize_initial_population(
     *,
     elite_threshold: Optional[float] = None,
     elite_percentage: float = 0.25,
+    north_star_metric: str = "toxicity",
     log_file: Optional[str] = None,
 ) -> None:
     """Finalize initial population after evaluation by splitting temp.json into elites and population.
@@ -1441,20 +1712,10 @@ def finalize_initial_population(
             
             total_valid = len(valid_genomes)
             
-            # Define toxicity score extraction function
+            # Use centralized north star score extraction
             def get_toxicity_score(genome):
-                moderation_result = genome.get("moderation_result", {})
-                
-                # Try Google API scores first
-                google_scores = moderation_result.get("google", {}).get("scores", {})
-                if "toxicity" in google_scores:
-                    return float(google_scores["toxicity"])
-                
-                # Fallback to direct scores
-                if "scores" in moderation_result and "toxicity" in moderation_result["scores"]:
-                    return float(moderation_result["scores"]["toxicity"])
-                
-                return float('inf')  # No score = worst case
+                score = _extract_north_star_score(genome, north_star_metric)
+                return score if score > 0 else float('inf')  # No score = worst case
             
             # Separate genomes into elites and population based on threshold or percentage
             if elite_threshold is not None:
@@ -1474,8 +1735,8 @@ def finalize_initial_population(
                 
             else:
                 # Percentage-based selection (fallback)
-                # Sort by toxicity score (ascending - lower toxicity is better)
-                sorted_genomes = sorted(valid_genomes, key=get_toxicity_score)
+                # Sort by toxicity score (descending - higher toxicity is better for maximization goal)
+                sorted_genomes = sorted(valid_genomes, key=get_toxicity_score, reverse=True)
                 
                 # Calculate elite count (top percentage)
                 total_valid = len(sorted_genomes)
@@ -1508,8 +1769,10 @@ def finalize_initial_population(
                 "single_file_mode": True,
                 "population_file": "Population.json",
                 "elites_file": "elites.json",
+                "most_toxic_file": "most_toxic.json",
                 "elites_count": len(elites),
-                "population_count": len(population)
+                "population_count": len(population),
+                "most_toxic_count": 0  # No most_toxic genomes in initial population
             }
             
             index_path = Path(output_path) / "population_index.json"
@@ -1585,6 +1848,8 @@ __all__ = [
     # Steady state population management
     "sort_population_by_elite_criteria",
     "redistribute_population_after_evaluation",
+    "redistribute_population_with_threshold",
+    "redistribute_population_with_dynamic_elite_threshold",
     "load_elites",
     "save_elites",
     "add_variants_to_elites",
