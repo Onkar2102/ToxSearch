@@ -48,7 +48,7 @@ def check_requirements():
     # Check for required files
     required_files = [
         "src/main.py",
-        "config/modelConfig.yaml", 
+        "config/modelConfig_llamacpp.yaml", 
         "data/prompt.xlsx"
     ]
     
@@ -473,7 +473,7 @@ def main():
             sys.exit(1)
         
         # Check data files
-        required_files = ["data/prompt.xlsx", "config/modelConfig.yaml"]
+        required_files = ["data/prompt.xlsx", "config/modelConfig_llamacpp.yaml"]
         missing_files = []
         for file_path in required_files:
             if not Path(file_path).exists():

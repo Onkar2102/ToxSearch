@@ -78,7 +78,7 @@ def main():
         print("2. Optimizing Configuration:")
         print("=" * 50)
         config = optimize_config_for_local()
-        config_path = Path("../config/modelConfig.yaml")
+        config_path = Path("../config/modelConfig_llamacpp.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
@@ -89,7 +89,7 @@ def main():
         print(json.dumps(info, indent=2))
     elif args.optimize_config:
         config = optimize_config_for_local()
-        config_path = Path("../config/modelConfig.yaml")
+        config_path = Path("../config/modelConfig_llamacpp.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")

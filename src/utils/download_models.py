@@ -12,7 +12,7 @@ Usage examples:
     python download_models.py --all
     python download_models.py --only llama3.2-3b-instruct --target-dir models
     python download_models.py --only llama3.2-3b-instruct --revision main
-    python download_models.py --all --test --config config/modelConfig.yaml --prompt "Hello there!"
+    python download_models.py --all --test --config config/modelConfig_llamacpp.yaml --prompt "Hello there!"
 
 Env token: set HUGGINGFACE_HUB_TOKEN (preferred) or HF_TOKEN / HF_API_TOKEN to access gated/private repos.
 Note: The official Meta LLaMA 3.2 text-only sizes are 1B and 3B; 8B is available in LLaMA 3/3.1 series.
@@ -55,6 +55,15 @@ class ModelManager:
             # "mistral-7b-instruct": "mistralai/Mistral-7B-Instruct-v0.3",
             # "qwen2.5-7b-instruct": "Qwen/Qwen2.5-7B-Instruct",
         }
+        
+        # GGUF Registry: alias -> HF repo with GGUF models
+        self.GGUF_MODEL_REGISTRY = {
+            "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+            "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+            "llama3.1-8b-instruct-gguf": "bartowski/Llama-3.1-8B-Instruct-GGUF",
+            "mistral-7b-instruct-gguf": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+            "qwen2.5-7b-instruct-gguf": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+        }
         self.DEFAULT_TARGET_DIR = default_target_dir or Path("models")
         self.REGISTRY_FILE = registry_file or Path("models/models_registry.json")
 
@@ -82,6 +91,11 @@ class ModelManager:
         # Heuristic: presence of tokenizer + model files
         required = ["config.json", "tokenizer.json", "tokenizer_config.json"]
         return path.exists() and any((path / r).exists() for r in required)
+    
+    def gguf_model_already_present(self, path: Path) -> bool:
+        # Check for GGUF files
+        gguf_files = list(path.glob("*.gguf"))
+        return path.exists() and len(gguf_files) > 0
 
     def repo_exists(self, repo_id: str, revision: Optional[str] = None) -> bool:
         api = HfApi(token=self.get_env_token())
@@ -101,11 +115,16 @@ class ModelManager:
         repo_id: str,
         target_dir: Path,
         revision: Optional[str] = None,
+        gguf: bool = False,
     ) -> Path:
         out_dir = self.local_model_dir(target_dir, alias)
         self.ensure_dir(out_dir)
 
-        if self.model_already_present(out_dir):
+        # Check if model already present
+        if gguf and self.gguf_model_already_present(out_dir):
+            print(f"[skip] GGUF {alias} already present at {out_dir}")
+            return out_dir
+        elif not gguf and self.model_already_present(out_dir):
             print(f"[skip] {alias} already present at {out_dir}")
             return out_dir
 
@@ -115,14 +134,25 @@ class ModelManager:
             return out_dir
 
         print(f"[download] {alias} ← {repo_id} -> {out_dir}")
-        snapshot_download(
-            repo_id=repo_id,
-            local_dir=str(out_dir),
-            revision=revision,
-            token=self.get_env_token(),
-            # You can further filter files here if you want:
-            # allow_patterns=["*.json","*.safetensors","tokenizer*","merges.txt","*.model"]
-        )
+        
+        if gguf:
+            # Download only GGUF files
+            snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(out_dir),
+                revision=revision,
+                token=self.get_env_token(),
+                allow_patterns=["*.gguf", "*.json", "tokenizer*"]
+            )
+        else:
+            # Download all files
+            snapshot_download(
+                repo_id=repo_id,
+                local_dir=str(out_dir),
+                revision=revision,
+                token=self.get_env_token(),
+            )
+        
         print(f"[ok] Saved {alias} at {out_dir}")
         return out_dir
 
@@ -166,29 +196,33 @@ class ModelManager:
         target_dir: Optional[Path] = None,
         revision: Optional[str] = None,
         login_flag: bool = False,
+        gguf: bool = False,
     ) -> None:
         self.maybe_login(login_flag)
 
         target_dir = (target_dir or self.DEFAULT_TARGET_DIR).resolve()
         self.ensure_dir(target_dir)
 
+        # Choose registry based on GGUF flag
+        registry = self.GGUF_MODEL_REGISTRY if gguf else self.MODEL_REGISTRY
+        
         if all_models:
-            to_get = list(self.MODEL_REGISTRY.keys())
+            to_get = list(registry.keys())
         else:
             to_get = only or []
 
         # Validate aliases
-        missing = [a for a in to_get if a not in self.MODEL_REGISTRY]
+        missing = [a for a in to_get if a not in registry]
         if missing:
             print(f"[error] Unknown model alias(es): {missing}")
-            print("Available aliases:", ", ".join(self.MODEL_REGISTRY.keys()))
+            print("Available aliases:", ", ".join(registry.keys()))
             sys.exit(1)
 
         # Download loop
         resolved = {}
         for alias in to_get:
-            repo_id = self.MODEL_REGISTRY[alias]
-            path = self.download_one(alias, repo_id, target_dir, revision=revision)
+            repo_id = registry[alias]
+            path = self.download_one(alias, repo_id, target_dir, revision=revision, gguf=gguf)
             resolved[alias] = str(path)
 
         # Write/update registry mapping alias -> local path
@@ -225,7 +259,7 @@ class ModelManager:
         )
         return tok, model
 
-    def load_config(self, config_path="config/modelConfig.yaml") -> dict:
+    def load_config(self, config_path="config/modelConfig_llamacpp.yaml") -> dict:
         with open(config_path, "r") as f:
             return yaml.safe_load(f)
 
@@ -266,8 +300,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--target-dir", default=None, help="Where to store models (default: ./models)")
     p.add_argument("--revision", default=None, help="Optional HF revision (branch/tag/commit) for all downloads.")
     p.add_argument("--login", action="store_true", help="Run huggingface login first (useful for gated models).")
+    p.add_argument("--gguf", action="store_true", help="Download GGUF models instead of standard models.")
     p.add_argument("--test", action="store_true", help="After download, run a quick generation test using the config.")
-    p.add_argument("--config", default="config/modelConfig.yaml", help="Path to YAML config for --test.")
+    p.add_argument("--config", default="config/modelConfig_llamacpp.yaml", help="Path to YAML config for --test.")
     p.add_argument("--prompt", default="Hello, how are you today?", help="Test prompt for --test mode.")
     return p.parse_args()
 
@@ -282,6 +317,7 @@ if __name__ == "__main__":
         target_dir=Path(args.target_dir) if args.target_dir else None,
         revision=args.revision,
         login_flag=args.login,
+        gguf=args.gguf,
     )
 
     if args.test:

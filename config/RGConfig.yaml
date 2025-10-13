@@ -1,0 +1,53 @@
+# Response Generation Model Configuration (RGConfig.yaml)
+# Configuration for the model used to generate responses to prompts
+# This model uses prompt_template for response generation only
+
+# Device configuration
+device_config:
+  # Device priority order: mps (Apple Silicon), cuda (NVIDIA), cpu (fallback)
+  auto_detect: true
+  preferred_device: null  # null for auto-detection, or specify "mps", "cuda", "cpu"
+  fallback_to_cpu: true
+  enable_mixed_precision: true  # Enable autocast for GPU devices
+  
+  # Device-specific optimizations
+  cuda:
+    enable_tf32: true
+    enable_cudnn_benchmark: true
+    memory_fraction: 0.8  # Use 80% of GPU memory
+  
+  mps:
+    enable_metal_performance_shaders: true
+    memory_pressure_relief: true
+  
+  cpu:
+    num_threads: null  # null for auto-detection
+    enable_mkl: true
+
+# Response Generation Model Configuration
+response_generator:
+  generation_args:
+    max_new_tokens: 2048
+    temperature: 0.7
+    top_k: 40
+    top_p: 0.9
+    repetition_penalty: 1.1
+  use_simulation: false
+  log_failing_prompts: true
+  name: ./models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+  prompt_template:
+    assistant_prefix: ''                    # No prefix for instruction-following
+    format: '{{prompt}}'                   # Direct instruction format
+    style: chat                      # Instruction-following style
+    user_prefix: 'Adult User'                        # No user prefix for instructions
+  provider: local
+  strategy: local
+  task_type: text-generation
+  # Memory management settings
+  enable_memory_cleanup: true  # Enable automatic memory cleanup
+  max_memory_usage_gb: 12.0  # Maximum memory usage in GB (reduced for llama.cpp)
+  # Model loading settings
+  model_loading_timeout: 300  # 5 minutes timeout for model loading
+  enable_cpu_fallback: true  # Fallback to CPU if GPU loading fails
+  enable_model_caching: true  # Cache loaded models in memory
+

@@ -244,7 +244,7 @@ class InstructionPreservingCrossover(VariationOperator):
 
             try:
                 # Generate response using local LLM with unified task parameters
-                response = self.generator.generate_response(crossover_prompt, task_type="crossover")
+                response = self.generator.generate_prompt(crossover_prompt, "crossover")
                 self._last_raw_response = str(response) if response else ""
                 
                 if response:

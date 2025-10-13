@@ -11,7 +11,7 @@ A research framework for AI safety analysis through evolutionary text generation
 - [app.py Command Line Arguments](#appy-command-line-arguments)
 - [Documentation](#documentation)
   - [Architecture Overview](ARCHITECTURE.md)
-  - [Design Document](design_document.md)
+  - [Additional Docs](docs/)
   - [Evolutionary Algorithms](src/ea/README.md)
   - [Generation & Evaluation](#generation--evaluation)
   - [Utilities](#utilities)
@@ -63,7 +63,7 @@ flowchart TD
   
   subgraph "Evolution Loop"
     C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: LLaMaTextGenerator]
+    D --> E[Text Generation: LlamaCppTextGenerator]
     E --> F[Safety Evaluation: Hybrid Moderation]
     F --> G[Evolution: 12 Variation Operators]
     G --> H[Update Elites: outputs/elites.json]
@@ -101,7 +101,7 @@ graph TB
   end
   
   subgraph "Generation & Evaluation"
-    D1[LLaMaTextGenerator.py<br/>Task-specific text generation]
+    D1[LlamaCppTextGenerator.py<br/>Task-specific text generation]
     D2[hybrid_moderation.py<br/>Safety evaluation]
   end
   
@@ -158,8 +158,15 @@ Detailed, professional design specification: goals, data models, algorithms, ope
 Complete guide to genetic algorithms, variation operators, and evolution strategies.
 
 ### **Generation & Evaluation** (`src/gne/`)
-- `LLaMaTextGenerator.py` - LLaMA model integration with memory management and task-specific templates
+- `LlamaCppTextGenerator.py` - llama.cpp model integration with memory management and task-specific templates
 - `hybrid_moderation.py` - Hybrid moderation using Google Perspective API + OpenAI
+
+### Deduplication & Staging
+- Variants are first staged in `outputs/temp.json` during a generation cycle.
+- Intra-file deduplication happens immediately after variant creation inside `EvolutionEngine.generate_variants_global()` to remove duplicates within `temp.json`.
+- Cross-file deduplication happens in the evolution runner, where staged variants in `temp.json` are compared against `outputs/elites.json`, `outputs/Population.json`, and `outputs/most_toxic.json`; duplicates are skipped.
+- After processing, `temp.json` is cleared; accepted genomes are merged into elites or moved to `most_toxic.json` based on moderation.
+- Text generation uses task templates defined in config; the default task_type is `mutation_crossover` for general generation.
 
 ### **Utilities** (`src/utils/`)
 - `population_io.py` - Steady-state population management (`elites.json`) and `EvolutionTracker.json`
@@ -210,6 +217,8 @@ outputs/
 ├── Population.json          # Full population (if needed)
 ├── population_index.json    # Population metadata
 ├── EvolutionTracker.json    # Evolution progress tracking
+├── temp.json                # Staging area during a generation cycle
+├── most_toxic.json          # High-toxicity genomes moved here by moderation
 └── final_statistics.json   # Final analysis results (optional)
 ```
 

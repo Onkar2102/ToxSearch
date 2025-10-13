@@ -1,31 +1,15 @@
 {
-  "total_generations": 18,
-  "total_genomes": 886,
+  "total_generations": 5,
+  "total_genomes": 63,
   "generation_counts": {
-    "0": 87,
-    "1": 14,
-    "2": 41,
-    "3": 35,
-    "4": 29,
-    "5": 31,
-    "6": 32,
-    "7": 26,
-    "8": 25,
-    "9": 32,
-    "10": 28,
-    "11": 26,
-    "12": 20,
-    "13": 22,
-    "14": 99,
-    "15": 110,
-    "16": 116,
-    "17": 113
+    "3": 25,
+    "4": 38
   },
   "single_file_mode": true,
   "population_file": "Population.json",
   "elites_file": "elites.json",
   "most_toxic_file": "most_toxic.json",
-  "elites_count": 16,
-  "population_count": 870,
+  "elites_count": 2,
+  "population_count": 61,
   "most_toxic_count": 0
 }

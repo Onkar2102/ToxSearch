@@ -35,7 +35,7 @@ def get_project_root():
 
 def get_config_path():
     """Get the absolute path to the config directory"""
-    return get_project_root() / "config" / "modelConfig.yaml"
+    return get_project_root() / "config" / "modelConfig_llamacpp.yaml"
 
 def get_data_path():
     """Get the absolute path to the data directory"""
@@ -109,19 +109,25 @@ def initialize_system(logger, log_file):
     
     # Import required modules
     from utils import get_population_io
-    from gne import get_LLaMaTextGenerator
+    from gne import get_ResponseGenerator, get_PromptGenerator
     
     # Get population IO functions
     load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, load_elites, save_elites, get_population_stats_steady_state, finalize_initial_population = get_population_io()
     
-    # Initialize LLaMA generator
-    LlaMaTextGenerator = get_LLaMaTextGenerator()
-    generator = LlaMaTextGenerator(config_path=str(get_config_path()), log_file=log_file)
+    # Initialize Response Generator (for generating responses to prompts)
+    ResponseGenerator = get_ResponseGenerator()
+    response_generator = ResponseGenerator(model_key="response_generator", config_path="config/RGConfig.yaml", log_file=log_file)
+    logger.info("Response generator initialized for response generation")
     
-    # Set the global generator for all operators to use
-    from ea.EvolutionEngine import set_global_generator
-    set_global_generator(generator)
-    logger.info("Global generator set for all operators")
+    # Initialize Prompt Generator (for operators and evolutionary algorithms)
+    PromptGenerator = get_PromptGenerator()
+    prompt_generator = PromptGenerator(model_key="prompt_generator", config_path="config/PGConfig.yaml", log_file=log_file)
+    logger.info("Prompt generator initialized for prompt generation")
+    
+    # Set the global generators for different purposes
+    from ea.EvolutionEngine import set_global_generators
+    set_global_generators(response_generator, prompt_generator)
+    logger.info("Global generators set: response_generator for responses, prompt_generator for operators")
     
     # Check if population already exists (steady state: check elites.json)
     population_file = get_outputs_path() / "elites.json"
@@ -168,7 +174,7 @@ def initialize_system(logger, log_file):
         except Exception as e:
             logger.warning("Could not read existing population info: %s", e)
     
-    return generator
+    return response_generator, prompt_generator
 
 
 def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:

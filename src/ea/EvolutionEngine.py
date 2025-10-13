@@ -28,20 +28,34 @@ from .llm_back_translation_operators import (
 from .semantic_similarity_crossover import SemanticSimilarityCrossover
 from .instruction_preserving_crossover import InstructionPreservingCrossover
 
-# Global generator instance - will be set by main.py
-_global_generator = None
+# Global generator instances - will be set by main.py
+_global_response_generator = None
+_global_prompt_generator = None
 
-def set_global_generator(generator):
-    """Set the global generator instance to be used by all operators."""
-    global _global_generator
-    _global_generator = generator
+def set_global_generators(response_generator, prompt_generator):
+    """Set the global generator instances to be used by the system."""
+    global _global_response_generator, _global_prompt_generator
+    _global_response_generator = response_generator
+    _global_prompt_generator = prompt_generator
 
+def get_response_generator():
+    """Get the shared response generator instance."""
+    global _global_response_generator
+    if _global_response_generator is None:
+        raise RuntimeError("No global response generator set. Call set_global_generators() first from main.py")
+    return _global_response_generator
+
+def get_prompt_generator():
+    """Get the shared prompt generator instance."""
+    global _global_prompt_generator
+    if _global_prompt_generator is None:
+        raise RuntimeError("No global prompt generator set. Call set_global_generators() first from main.py")
+    return _global_prompt_generator
+
+# Legacy function for backward compatibility
 def get_generator():
-    """Get the shared LLaMA text generator instance."""
-    global _global_generator
-    if _global_generator is None:
-        raise RuntimeError("No global generator set. Call set_global_generator() first from main.py")
-    return _global_generator
+    """Get the shared prompt generator instance (legacy function)."""
+    return get_prompt_generator()
 
 class EvolutionEngine:
 
@@ -56,8 +70,9 @@ class EvolutionEngine:
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file, adaptive_selection_after=adaptive_selection_after, max_num_parents=max_num_parents)
-        # Initialize the shared generator instance
-        self.generator = self._get_generator()
+        # Initialize the shared generator instances
+        self.prompt_generator = get_prompt_generator()
+        self.response_generator = get_response_generator()
         
         self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}, max_variants={max_variants}, adaptive_selection_after={adaptive_selection_after}, max_num_parents={max_num_parents}, use_steady_state=True")
 
@@ -86,9 +101,6 @@ class EvolutionEngine:
             self.next_id = 1
         self.logger.debug(f"Updated next_id to {self.next_id}")
     
-    def _get_generator(self):
-        """Get the shared LLaMA text generator instance."""
-        return get_generator()
 
     def _count_variants_from_temp(self) -> Dict[str, int]:
         """Count variants in temp.json by type (mutation/crossover)."""
@@ -351,23 +363,23 @@ class EvolutionEngine:
     def _get_single_parent_operators(self):
         """Return list of mutation operators that require only a single parent."""
         return [
-            LLM_POSAwareSynonymReplacement(log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.generator),
-            MLMOperator(log_file=self.log_file, generator=self.generator),
-            LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.generator),
-            LLM_POSAwareAntonymReplacement(log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.generator),
-            StylisticMutator(log_file=self.log_file, generator=self.generator),
-            LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.generator),
-            LLMBackTranslationFROperator(log_file=self.log_file, generator=self.generator),
-            LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.generator),
-            LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.generator),
-            LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.generator),
+            LLM_POSAwareSynonymReplacement(log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
+            MLMOperator(log_file=self.log_file, generator=self.prompt_generator),
+            LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+            LLM_POSAwareAntonymReplacement(log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
+            StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
+            LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
+            LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
+            LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
+            LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
+            LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
         ]
 
     def _get_multi_parent_operators(self):
         """Return list of crossover operators that require multiple parents."""
         return [
             SemanticSimilarityCrossover(log_file=self.log_file),
-            InstructionPreservingCrossover(north_star_metric=self.north_star_metric, log_file=self.log_file, generator=self.generator)
+            InstructionPreservingCrossover(north_star_metric=self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator)
         ]
 
     def _update_evolution_tracker_with_parents(self, evolution_tracker: Dict[str, Any], parents: List[Dict]) -> None:

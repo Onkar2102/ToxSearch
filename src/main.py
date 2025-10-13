@@ -20,6 +20,7 @@ print(f"[DEVICE] Using device: {DEVICE}")
 print(f"[DEVICE INFO] {DEVICE_INFO}")
 
 from utils import get_custom_logging
+import yaml
 
 # ============================================================================
 # SECTION 2: SYSTEM UTILITIES (imported from utils)
@@ -28,6 +29,49 @@ from utils import get_custom_logging
 # Import system utilities from utils module
 from utils import get_system_utils
 get_project_root, get_config_path, get_data_path, get_outputs_path, _extract_north_star_score, initialize_system = get_system_utils()
+
+# ============================================================================
+# SECTION 3: MODEL CONFIGURATION UPDATES
+# ============================================================================
+
+def update_model_configs(rg_model, pg_model, logger):
+    """Update configuration files with selected models."""
+    try:
+        logger.info(f"Updating config files with models: RG={rg_model}, PG={pg_model}")
+        
+        # Update RGConfig.yaml
+        rg_config_path = get_config_path() / "RGConfig.yaml"
+        if rg_config_path.exists():
+            with open(rg_config_path, 'r') as f:
+                rg_config = yaml.safe_load(f)
+            
+            # Update response generator model path
+            if "response_generator" in rg_config:
+                rg_config["response_generator"]["name"] = f"./models/{rg_model}/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+            
+            with open(rg_config_path, 'w') as f:
+                yaml.dump(rg_config, f, default_flow_style=False)
+            logger.info(f"Updated RGConfig.yaml with model: {rg_model}")
+        
+        # Update PGConfig.yaml
+        pg_config_path = get_config_path() / "PGConfig.yaml"
+        if pg_config_path.exists():
+            with open(pg_config_path, 'r') as f:
+                pg_config = yaml.safe_load(f)
+            
+            # Update prompt generator model path
+            if "prompt_generator" in pg_config:
+                pg_config["prompt_generator"]["name"] = f"./models/{pg_model}/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+            
+            with open(pg_config_path, 'w') as f:
+                yaml.dump(pg_config, f, default_flow_style=False)
+            logger.info(f"Updated PGConfig.yaml with model: {pg_model}")
+        
+        logger.info("Model configuration updates completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to update model configurations: {e}")
+        raise
 
 # ============================================================================
 # SECTION 4: MAIN EXECUTION PIPELINE
@@ -103,7 +147,7 @@ def calculate_dynamic_threshold(evaluated_genomes, north_star_metric, logger, pr
         raise
 
 
-def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25):
+def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="llama3.2-3b-instruct-gguf", pg_model="llama3.2-3b-instruct-gguf"):
     """
     Main entry point for evolutionary text generation with toxicity optimization.
     
@@ -159,9 +203,16 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     logger.info("North star threshold for stopping: %.4f (low toxicity target)", north_star_threshold)
     logger.info("Maximum generations allowed for evolution: %s", max_generations)
 
-    # Phase 1:Initialize system and create gen0 if needed
+    # Phase 1: Update config files with selected models
     try:
-        generator = initialize_system(logger, log_file)
+        update_model_configs(rg_model, pg_model, logger)
+    except Exception as e:
+        logger.error("Config update failed: %s", e, exc_info=True)
+        return
+
+    # Phase 2: Initialize system and create gen0 if needed
+    try:
+        response_generator, prompt_generator = initialize_system(logger, log_file)
     except Exception as e:
         logger.error("System initialization failed: %s", e, exc_info=True)
         return
@@ -169,10 +220,10 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     # Phase 2: Text Generation
     # Text Generation Phase
     try:
-        logger.info("Generating responses using optimized LLaMA model...")
+        logger.info("Generating responses using response generation model...")
         # Process temp.json directly (Phase 1 prompts)
         temp_path = str(get_outputs_path() / "temp.json")
-        generator.process_population(pop_path=temp_path)
+        response_generator.process_population(pop_path=temp_path)
         logger.debug("Text generation completed on temp.json.")
     except Exception as e:
         logger.error("Generation failed: %s", e, exc_info=True)
@@ -321,7 +372,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
             # Step 1: Generate text for all pending genomes in temp.json
             temp_path = str(get_outputs_path() / "temp.json")
             logger.info("Generating text for all pending genomes in temp.json...")
-            generator.process_population(pop_path=temp_path)
+            response_generator.process_population(pop_path=temp_path)
             logger.info("Text generation for temp.json completed.")
 
             # Step 2: Evaluate all genomes in temp.json
@@ -657,11 +708,15 @@ if __name__ == "__main__":
     parser.add_argument("--generations", type=int, default=None, 
                        help="Maximum number of evolution generations. If not set, runs until north star metric is achieved.")
     parser.add_argument("--threshold", type=float, default=0.99,
-                       help="North star metric threshold for stopping evolution (default: 0.99)")
+                       help="North star metric threshold for stopping evolution")
     parser.add_argument("--moderation-methods", nargs="+", choices=["google", "all"], default=["google"],
-                       help="Moderation methods to use: 'google' (Perspective API), 'all' (google only). Default: google")
+                       help="Moderation methods to use: google (Perspective API), all (google only)")
     parser.add_argument("--threshold-percentage", type=int, default=25,
-                       help="Percentage for elite threshold calculation (default: 25 for top 25%)")
+                       help="Percentage for elite threshold calculation")
+    parser.add_argument("--rg", type=str, default="llama3.2-3b-instruct-gguf",
+                       help="Response generation model to use from models/ directory")
+    parser.add_argument("--pg", type=str, default="llama3.2-3b-instruct-gguf",
+                       help="Prompt generation model to use from models/ directory")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     args = parser.parse_args()
@@ -670,7 +725,7 @@ if __name__ == "__main__":
     try:
         main(model_names=args.model_names, max_generations=args.generations, 
              north_star_threshold=args.threshold, moderation_methods=args.moderation_methods,
-             threshold_percentage=args.threshold_percentage)
+             threshold_percentage=args.threshold_percentage, rg_model=args.rg, pg_model=args.pg)
         sys.exit(0)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")

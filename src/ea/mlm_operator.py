@@ -144,7 +144,7 @@ Reply with just one replacement word:"""
             self.logger.debug(f"{self.name}: Asking for replacement of {mask_token} (original: '{original_word}')")
             
             try:
-                response = self.generator.generate_response(prompt, task_type="single_word_replacement")
+                response = self.generator.generate_prompt(prompt, "single_word_replacement")
                 all_responses.append(f"{mask_token}: {response}")
                 
                 if response:

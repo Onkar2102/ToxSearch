@@ -9,7 +9,7 @@ flowchart TD
   
   subgraph "Evolution Loop"
     C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: gne.LLaMaTextGenerator]
+    D --> E[Text Generation: gne.LlamaCppTextGenerator]
     E --> F[Safety Evaluation: gne.hybrid_moderation]
     F --> G[Evolution: 12 Text Variation Operators]
     G --> H[Update Elites: outputs/elites.json]
@@ -20,6 +20,9 @@ flowchart TD
   
   F --> K[Tracking: outputs/EvolutionTracker.json]
   H --> L[Redistribution: elites ↔ Population.json]
+  G --> M1[Staging: outputs/temp.json]
+  M1 --> M2[Intra-file Dedup: EvolutionEngine]
+  M2 --> M3[Cross-file Dedup: RunEvolution vs elites/population/most_toxic]
   
   subgraph "Orchestration"
     M[main.py / app.py]
@@ -77,6 +80,9 @@ flowchart LR
   C --> I
   D --> J
   E --> K
+  D --> L1[Staging to temp.json]
+  L1 --> L2[Intra-temp Dedup (EvolutionEngine)]
+  L2 --> L3[Cross-file Dedup (RunEvolution)]
   
   style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
   style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
@@ -134,7 +140,7 @@ flowchart LR
 │  │   Engine        │  │   Management    │  │   & Logging     │           │
 │  │                 │  │                 │  │                 │           │
 │  │ • Genetic Algo  │  │ • Steady State  │  │ • Performance   │           │
-│  │ • 16 Operators  │  │ • Elite Track   │  │   Monitoring    │           │
+│  │ • 12 Operators  │  │ • Elite Track   │  │   Monitoring    │           │
 │  │ • Mutation      │  │ • Status Track  │  │ • Memory Stats  │           │
 │  │ • Crossover     │  │ • Lineage       │  │ • Error Logs    │           │
 │  │ • Selection     │  │ • Deduplication │  │ • Evolution     │           │
@@ -150,7 +156,7 @@ flowchart LR
 ```mermaid
 graph TB
   subgraph "Text Variation Operators (12 Total)"
-    subgraph "Mutation Operators (13)"
+    subgraph "Mutation Operators (10)"
       A1[Core LLM Operators]
       A2[BERT-based Operators]
       A3[OpenAI Operators]
@@ -184,8 +190,7 @@ graph TB
       A1 --> B2
     end
     
-    subgraph "Crossover Operators (3)"
-      D1[One-Point Crossover<br/>Single split, Random point]
+    subgraph "Crossover Operators (2)"
       D2[Semantic Similarity Crossover<br/>Embedding-based, Similarity threshold]
       D3[Instruction Preserving Crossover<br/>Structure-aware, Maintain instructions]
     end
@@ -208,13 +213,13 @@ sequenceDiagram
   participant M as main.py/app.py
   participant PS as ParentSelector
   participant TV as TextVariationOperators
-  participant TG as LLaMaTextGenerator
+  participant TG as LlamaCppTextGenerator
   participant HM as hybrid_moderation
   participant EE as EvolutionEngine
   participant PO as population_io
   
   M->>PS: Select parents (steady-state)
-  PS->>TV: Apply operators (16 total)
+  PS->>TV: Apply operators (12 total)
   TV->>TG: Generate text variants
   TG->>HM: Evaluate safety scores
   HM->>EE: Process results
@@ -332,7 +337,7 @@ graph TB
     A[app.py<br/>Main entry point with setup and monitoring]
     
     subgraph "Configuration"
-      B[config/modelConfig.yaml<br/>Model, task templates, and memory settings]
+      B[config/modelConfig_llamacpp.yaml<br/>Model, task templates, and memory settings]
     end
     
     subgraph "Data"
@@ -343,7 +348,7 @@ graph TB
       D[main.py<br/>Core evolution pipeline]
       
       subgraph "Generation & Evaluation (gne/)"
-        E1[LLaMaTextGenerator.py<br/>LLaMA integration with task-specific templates]
+        E1[LlamaCppTextGenerator.py<br/>llama.cpp integration with task-specific templates]
         E2[hybrid_moderation.py<br/>Hybrid safety evaluation (Google + OpenAI)]
         E3[__init__.py<br/>Lazy import functions]
       end
@@ -445,3 +450,29 @@ graph TB
 - Benefits: Lower memory usage, faster execution, better scalability
 
 This enhanced architecture provides a robust, scalable, and memory-efficient framework for evolutionary text generation with comprehensive operator support, steady-state population management, and multi-language capabilities.
+
+## Deduplication Flow
+
+```mermaid
+flowchart TD
+  A[Operators Generate Variants] --> B[Stage to outputs/temp.json]
+  B --> C[Intra-File Deduplication<br/>EvolutionEngine.generate_variants_global]
+  C --> D[Cross-File Deduplication<br/>RunEvolution._check_and_move_genomes_from_temp]
+  D --> E{Moderation Outcome}
+  E -->|Toxic| F[Move to outputs/most_toxic.json]
+  E -->|Accepted| G[Merge into outputs/elites.json]
+  F --> H[Clear temp.json]
+  G --> H
+
+  style B fill:#bbdefb,stroke:#1e88e5,stroke-width:2px,color:#000
+  style C fill:#c8e6c9,stroke:#43a047,stroke-width:2px,color:#000
+  style D fill:#ffe0b2,stroke:#fb8c00,stroke-width:2px,color:#000
+  style F fill:#ef9a9a,stroke:#e53935,stroke-width:2px,color:#000
+  style G fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px,color:#000
+```
+
+Key points:
+- Staging occurs in `outputs/temp.json` for the current generation cycle.
+- Intra-file dedup removes duplicate prompts/IDs within `temp.json` (EvolutionEngine).
+- Cross-file dedup removes items already present in `elites.json`, `Population.json`, and `most_toxic.json` (RunEvolution).
+- After processing and routing, `temp.json` is cleared for the next cycle.

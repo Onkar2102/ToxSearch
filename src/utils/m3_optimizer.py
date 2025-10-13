@@ -76,25 +76,23 @@ def optimize_config_for_m3() -> Dict:
     system_info = get_system_info()
     
     config = {
-        "llama": {
-            "provider": "huggingface",
-            "name": "meta-llama/Llama-3.2-3B-instruct",
+        "llamacpp": {
+            "provider": "local",
+            "name": "./models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
             "strategy": "local",
             "task_type": "text-generation",
             "generation_args": {
                 "max_new_tokens": 512,  # Balanced speed/quality
-                "do_sample": False,
-                "temperature": 0.8,
+                "temperature": 0.7,
+                "top_k": 40,
                 "top_p": 0.9,
-                "num_return_sequences": 1,
-                "repetition_penalty": 1.1,
-                "pad_token_id": 128001
+                "repetition_penalty": 1.1
             },
             "prompt_template": {
                 "style": "chat",
-                "user_prefix": "User:",
-                "assistant_prefix": "System:",
-                "format": "{{user_prefix}} {{prompt}}\n{{assistant_prefix}}"
+                "user_prefix": "Adult User",
+                "assistant_prefix": "",
+                "format": "{{prompt}}"
             }
         }
     }
@@ -102,10 +100,10 @@ def optimize_config_for_m3() -> Dict:
     # Adjust based on available memory
     if system_info["memory_available_gb"] < 8:
         # Low memory - conservative settings
-        config["llama"]["generation_args"]["max_new_tokens"] = 256
+        config["llamacpp"]["generation_args"]["max_new_tokens"] = 256
     elif system_info["memory_available_gb"] > 16:
         # High memory - aggressive settings
-        config["llama"]["generation_args"]["max_new_tokens"] = 1024
+        config["llamacpp"]["generation_args"]["max_new_tokens"] = 1024
     
     return config
 
@@ -134,7 +132,7 @@ def main():
         print("2. Optimizing Configuration:")
         print("=" * 50)
         config = optimize_config_for_m3()
-        config_path = Path("../config/modelConfig.yaml")
+        config_path = Path("../config/modelConfig_llamacpp.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
@@ -150,7 +148,7 @@ def main():
         config = optimize_config_for_m3()
         
         # Save optimized config
-        config_path = Path("../config/modelConfig.yaml")
+        config_path = Path("../config/modelConfig_llamacpp.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         

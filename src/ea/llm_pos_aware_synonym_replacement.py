@@ -345,7 +345,7 @@ Synonyms for {pos_tag}:
             self.logger.debug(f"{self.name}: Prompt: {prompt[:200]}...")
             
             # Get LLM response with unified task parameters
-            response = self.generator.generate_response(prompt, task_type="synonym_generation")
+            response = self.generator.generate_prompt(prompt, "synonym_generation")
             
             if not response:
                 self.logger.warning(f"{self.name}: Empty LLM response for {pos_tag}")

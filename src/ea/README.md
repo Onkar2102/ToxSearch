@@ -80,8 +80,8 @@ Comprehensive implementation of mutation and crossover operators as separate mod
 **Recent Improvements:**
 - **12 Total Operators**: 10 mutation + 2 crossover (consolidated and cleaned up)
 - **Multi-Language Support**: 5 languages (Hindi, French, German, Japanese, Chinese)
-- **LLM-Only Back-Translation**: Moved to LLaMA-based translation only
-- **Deprecated Legacy Operators**: Removed classic POS-aware and point crossover
+- **LLM-Only Back-Translation**: Active back-translation operators use LLaMA-based translation
+- **Deprecated Legacy Operators**: Classic POS-aware synonym replacement, point crossover, and model-based back-translation moved to deprecated status
 - **Standardized Imports**: Eliminated try-except import patterns
 - Lazy Initialization
 - Memory Management
@@ -90,7 +90,7 @@ Comprehensive implementation of mutation and crossover operators as separate mod
 
 ## 🔄 **Variation Operators**
 
-### **Mutation Operators (10)**
+### **Mutation Operators (10 Active)**
 
 #### **Core LLM Operators**
 - **`LLM_POSAwareSynonymReplacement`**: LLaMA-based synonym replacement using POS tagging (classic POS-aware operator deprecated)
@@ -110,12 +110,7 @@ Comprehensive implementation of mutation and crossover operators as separate mod
   - Optimized for paraphrasing tasks
   - High-quality text variations
 
-#### **Model-Based Back-Translation Operators (5)**
-- **`BackTranslationHIOperator`**: Hindi back-translation (Helsinki-NLP)
-- **`BackTranslationFROperator`**: French back-translation (Helsinki-NLP)
-- **`BackTranslationDEOperator`**: German back-translation (Helsinki-NLP)
-- **`BackTranslationJAOperator`**: Japanese back-translation (Helsinki-NLP)
-- **`BackTranslationZHOperator`**: Chinese back-translation (Helsinki-NLP)
+<!-- Model-based back-translation operators are deprecated and no longer active -->
 
 #### **LLM-Based Back-Translation Operators (5)**
 - **`LLMBackTranslationHIOperator`**: Hindi back-translation (LLaMA)
@@ -124,7 +119,7 @@ Comprehensive implementation of mutation and crossover operators as separate mod
 - **`LLMBackTranslationJAOperator`**: Japanese back-translation (LLaMA)
 - **`LLMBackTranslationZHOperator`**: Chinese back-translation (LLaMA)
 
-### **Crossover Operators (2)**
+### **Crossover Operators (2 Active)**
 
 #### **Semantic Crossover**
 - **`SemanticSimilarityCrossover`**: Crossover based on semantic similarity
@@ -144,7 +139,7 @@ Comprehensive implementation of mutation and crossover operators as separate mod
 #### **Removed from Active Use**
 - **`POSAwareSynonymReplacement`**: Classic BERT-based POS synonym replacement (replaced by LLM version)
 - **`PointCrossover`**: Single-point sentence crossover (deprecated and commented out)
-- **`BackTranslation*Operators`**: Helsinki-NLP based back-translation (replaced by LLM versions)
+- **`BackTranslation*Operators`**: Helsinki-NLP/model-based back-translation (replaced by LLM-based versions)
 
 > **Note**: Deprecated operators are retained in codebase for reference but are not loaded or used in evolution.
 
@@ -177,7 +172,6 @@ flowchart TD
   
   D --> F1
   D --> F2
-  D --> F3
   
   E1 --> G[Generate Variants<br/>Max 5 per operator]
   E2 --> G
@@ -185,7 +179,6 @@ flowchart TD
   E4 --> G
   F1 --> G
   F2 --> G
-  F3 --> G
   
   style B fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
   style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
@@ -215,7 +208,7 @@ translation_methods = ['model_based', 'llm_based']  # Dual approaches
 
 1) **Population Initialization** → `elites.json`
 2) **Parent Selection** → Steady-state selection from elites
-3) **Variant Generation** → 16 operators, capped variants, deduplicated
+3) **Variant Generation** → 12 operators (10 mutation + 2 crossover), capped variants, deduplicated
 4) **Tracker Update** → Per-generation best score, counts, parent information
 
 ### Steady-State Evolution Loop
@@ -224,8 +217,8 @@ translation_methods = ['model_based', 'llm_based']  # Dual approaches
 flowchart TD
   A[elites.json<br/>Steady-State Population] --> B[Parent Selection<br/>Top Elite + Random]
   B --> C{Number of Parents?}
-  C -->|1 Parent| D[Mutation Operators<br/>13 Total]
-  C -->|2+ Parents| E[Crossover Operators<br/>3 Total]
+  C -->|1 Parent| D[Mutation Operators<br/>10 Total]
+  C -->|2+ Parents| E[Crossover Operators<br/>2 Total]
   
   D --> F[Generate Variants<br/>Max 5 per operator]
   E --> F
@@ -288,22 +281,20 @@ graph TB
     B5 --> C1
     B5 --> C2
     
-    C1 --> D1
-    C2 --> D1
-    D1 --> D2
-    D2 --> D3
-  end
+    C --> E1
+    C --> E2
+    C --> E3
+    C --> E4
   
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style C1 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style C2 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+    D --> F1
+    D --> F2
+  
   style D3 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
 ```
 
 ### **Translation Approaches**
 1. **Model-Based**: Helsinki-NLP translation models
    - Specialized translation models
-   - Fast and efficient
    - Reliable for common language pairs
 
 2. **LLM-Based**: LLaMA model translation
@@ -339,7 +330,7 @@ graph TB
   
   subgraph "Key Dependencies"
     I[utils.population_io<br/>Steady-state population management]
-    J[gne.LLaMaTextGenerator<br/>Text generation]
+    J[gne.LlamaCppTextGenerator<br/>Text generation]
     K[gne.hybrid_moderation<br/>Safety evaluation]
     L[utils.custom_logging<br/>Performance tracking]
   end
@@ -366,7 +357,7 @@ graph TB
 - torch, transformers, spacy, nltk, openai
 - sentence-transformers (for semantic crossover)
 - huggingface-hub (for model downloads)
-- utils.custom_logging, utils.population_io, gne.LLaMaTextGenerator
+- utils.custom_logging, utils.population_io, gne.LlamaCppTextGenerator
 
 ## 📝 **Recent Updates and Fixes**
 
@@ -388,6 +379,10 @@ graph TB
 - Enhanced parent selection strategies
 - Improved error handling and recovery
 - Layered architecture: main.py → RunEvolution.py → EvolutionEngine.py
+
+### **Two-tier Deduplication in EA**
+- EvolutionEngine performs intra-file deduplication of staged variants within `outputs/temp.json` immediately after generation.
+- RunEvolution performs cross-file deduplication, comparing `temp.json` against `elites.json`, `Population.json`, and `most_toxic.json` before merging/clearing.
 
 ## 🚀 **Usage Examples**
 
