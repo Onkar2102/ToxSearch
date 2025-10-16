@@ -27,6 +27,10 @@ from .back_translation import (
 )
 from .semantic_similarity_crossover import SemanticSimilarityCrossover
 from .fusion_crossover import SemanticFusionCrossover
+from .negation_operator import NegationOperator
+from .typographical_errors import TypographicalErrorsOperator
+from .concept_addition import ConceptAdditionOperator
+from .InformedEvolution import InformedEvolutionOperator
 
 # Global generator instances - will be set by main.py
 _global_response_generator = None
@@ -367,16 +371,27 @@ class EvolutionEngine:
     def _get_single_parent_operators(self):
         """Return list of mutation operators that require only a single parent."""
         return [
+            # LLM-based POS-aware operators
             LLM_POSAwareSynonymReplacement(self.north_star_metric, log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
+            LLM_POSAwareAntonymReplacement(self.north_star_metric, log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
+            
+            # LLM-based text transformation operators
             MLMOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
             LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-            LLM_POSAwareAntonymReplacement(self.north_star_metric, log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
             StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
+            
+            # Back translation operators
             LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
             LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
             LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
             LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
             LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
+            
+            # New mutation operators
+            NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+            TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+            ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+            InformedEvolutionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
         ]
 
     def _get_multi_parent_operators(self):

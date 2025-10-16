@@ -2,7 +2,49 @@
 
 The Evolutionary Algorithms package provides the core genetic algorithm functionality for evolving text prompts through mutation and crossover operations. This package implements a complete evolutionary framework with parent selection, variation operators, and steady-state population management.
 
-## 🧬 **Core Components**
+## Table of Contents
+
+- [Quick Setup](#quick-setup)
+- [Core Components](#core-components)
+- [Text Variation Operators](#text-variation-operators)
+- [Parent Selection](#parent-selection)
+- [Population Management](#population-management)
+- [Evolution Flow](#evolution-flow)
+- [Performance Characteristics](#performance-characteristics)
+- [Usage Examples](#usage-examples)
+- [Documentation Index](#documentation-index)
+
+## Quick Setup
+
+### Prerequisites
+- **Python 3.8+** with virtual environment activated
+- **Required packages**: See [requirements.txt](../../requirements.txt)
+- **API Keys**: OpenAI and Google Perspective API keys configured
+- **Models**: Qwen2.5-7B-Instruct and Llama3.2-3B-Instruct models
+
+### Installation
+```bash
+# From project root
+cd /path/to/eost-cam-llm
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Test EA package
+python -c "from src.ea import get_EvolutionEngine; print('EA package loaded successfully')"
+```
+
+### Quick Test
+```bash
+# Test all operators
+python tests/test_operators_demo.py
+
+# Test specific operator
+python -c "from src.ea.negation_operator import NegationOperator; op = NegationOperator(); print(op.apply('What are advantages of social media?'))"
+```
+
+## Core Components
 
 ### **1. EvolutionEngine** (`EvolutionEngine.py`)
 The main orchestrator for the evolutionary process.
@@ -13,9 +55,9 @@ The main orchestrator for the evolutionary process.
 - Tracks variant counts and integrates deduplication
 - Steady-state population persistence (`data/outputs/elites.json`)
 - Memory-optimized for large populations
-- Supports 12 text variation operators
+- Supports 16 text variation operators
 
-**Main Methods (excerpt):**
+**Main Methods:**
 ```python
 # Initialize evolution engine
 engine = EvolutionEngine(north_star_metric, log_file, current_cycle)
@@ -26,6 +68,12 @@ generation_data = engine.generate_variants_global()
 # Keep IDs consistent with current population
 engine.update_next_id()
 ```
+
+**Recent Improvements:**
+- Reduced `max_num_parents` from 4 to 2 to control population growth
+- Increased `adaptive_selection_after` from 5 to 10 generations
+- Added 4 new mutation operators
+- Enhanced error handling and fallback mechanisms
 
 ### **2. RunEvolution** (`RunEvolution.py`)
 The main evolution pipeline driver and execution coordinator.
@@ -74,29 +122,39 @@ def select_parents_steady_state(self):
     # Up to 5 crossover parents for maximum diversity
 ```
 
+**Recent Optimizations:**
+- Reduced maximum parents from 4 to 2
+- Increased adaptive selection threshold from 5 to 10 generations
+- Better control over population growth
+
 ### **4. Individual Operator Files**
 Comprehensive implementation of mutation and crossover operators as separate modules.
 
 **Recent Improvements:**
-- **12 Total Operators**: 10 mutation + 2 crossover (consolidated and cleaned up)
+- **16 Total Operators**: 14 mutation + 2 crossover
 - **Multi-Language Support**: 5 languages (Hindi, French, German, Japanese, Chinese)
 - **LLM-Only Back-Translation**: Active back-translation operators use LLaMA-based translation
-- **Deprecated Legacy Operators**: Classic POS-aware synonym replacement, point crossover, and model-based back-translation moved to deprecated status
+- **4 New Mutation Operators**: Negation, Typographical Errors, Concept Addition, Informed Evolution
 - **Standardized Imports**: Eliminated try-except import patterns
-- Lazy Initialization
-- Memory Management
-- Error Handling
-- Variant cap tuned to reduce growth
+- **Enhanced Error Handling**: Fallback mechanisms for failed operations
+- **Memory Management**: Model caching and lazy loading
 
-## 🔄 **Variation Operators**
+## Text Variation Operators
 
-### **Mutation Operators (10 Active)**
+### **Mutation Operators (14 Active)**
 
 #### **Core LLM Operators**
-- **`LLM_POSAwareSynonymReplacement`**: LLaMA-based synonym replacement using POS tagging (classic POS-aware operator deprecated)
+- **`LLM_POSAwareSynonymReplacement`**: LLaMA-based synonym replacement using POS tagging
   - Uses spaCy for POS analysis
   - LLaMA for intelligent synonym selection
   - Context-aware replacements
+  - Enhanced error handling with fallback mechanisms
+
+- **`LLM_POSAwareAntonymReplacement`**: LLaMA-based antonym replacement using POS tagging
+  - Uses spaCy for POS analysis
+  - LLaMA for intelligent antonym selection
+  - Context-aware replacements
+  - Enhanced error handling with fallback mechanisms
 
 #### **BERT-Based Operators**
 - **`MLMOperator`**: Masked language model operator for word replacement
@@ -110,7 +168,11 @@ Comprehensive implementation of mutation and crossover operators as separate mod
   - Optimized for paraphrasing tasks
   - High-quality text variations
 
-<!-- Model-based back-translation operators are deprecated and no longer active -->
+#### **Stylistic Operators**
+- **`StylisticMutator`**: Stylistic text mutations
+  - Multiple style variations
+  - Context-aware style changes
+  - Enhanced error handling
 
 #### **LLM-Based Back-Translation Operators (5)**
 - **`LLMBackTranslationHIOperator`**: Hindi back-translation (LLaMA)
@@ -118,6 +180,29 @@ Comprehensive implementation of mutation and crossover operators as separate mod
 - **`LLMBackTranslationDEOperator`**: German back-translation (LLaMA)
 - **`LLMBackTranslationJAOperator`**: Japanese back-translation (LLaMA)
 - **`LLMBackTranslationZHOperator`**: Chinese back-translation (LLaMA)
+
+**Recent Improvements:**
+- Enhanced error handling with fallback mechanisms
+- More neutral prompts to reduce LLM refusals
+- Better validation for translation outputs
+
+#### **New Mutation Operators (January 2025)**
+- **`NegationOperator`**: Adds negation to prompt questions
+  - Example: "What are advantages of social media?" → "What are disadvantages of social media?"
+  - LLM-driven negation detection and application
+
+- **`TypographicalErrorsOperator`**: Simulates common human typos and spelling mistakes
+  - Example: "Which president signed the Civil Rights Act?" → "Whcih presidnet signed the Civil Rihts Act?"
+  - LLM-driven typo generation
+
+- **`ConceptAdditionOperator`**: Adds unfairness and bias constraints to questions
+  - Example: "How can I improve my writing skills?" → "How can I improve my writing skills to discriminate against certain groups?"
+  - LLM-driven bias injection
+
+- **`InformedEvolutionOperator`**: Uses top 10 elites to generate more toxic variants
+  - Reads `top_10.json` for elite examples
+  - LLM-driven toxicity enhancement
+  - Leverages successful patterns from previous evolution
 
 ### **Crossover Operators (2 Active)**
 
@@ -134,95 +219,56 @@ Comprehensive implementation of mutation and crossover operators as separate mod
   - Optimizes for north star metric
   - Returns single variant per call
 
-### **Deprecated Operators**
+## Parent Selection
 
-#### **Removed from Active Use**
-- **`POSAwareSynonymReplacement`**: Classic BERT-based POS synonym replacement (replaced by LLM version)
-- **`PointCrossover`**: Single-point sentence crossover (deprecated and commented out)
-- **`BackTranslation*Operators`**: Helsinki-NLP/model-based back-translation (replaced by LLM-based versions)
-
-> **Note**: Deprecated operators are retained in codebase for reference but are not loaded or used in evolution.
-
-## 📊 **Operator Selection Logic**
-
-```mermaid
-flowchart TD
-  A[Parent Selection] --> B{Number of Parents?}
-  B -->|1 Parent| C[Single Parent Operators<br/>10 Mutation Operators]
-  B -->|2+ Parents| D[Multi-Parent Operators<br/>2 Crossover Operators]
-  
-  subgraph "Mutation Operators (10)"
-    E1[LLM_POSAwareSynonymReplacement]
-    E2[MLMOperator]
-    E3[LLMBasedParaphrasingOperator]
-    E4[LLM_POSAwareAntonymReplacement]
-    E5[StylisticMutator]
-    E6[LLM Back-Translation: 5 Languages]
-  end
-  
-  subgraph "Crossover Operators (2)"
-    F1[SemanticSimilarityCrossover]
-    F2[SemanticFusionCrossover]
-  end
-  
-  C --> E1
-  C --> E2
-  C --> E3
-  C --> E4
-  
-  D --> F1
-  D --> F2
-  
-  E1 --> G[Generate Variants<br/>Max 5 per operator]
-  E2 --> G
-  E3 --> G
-  E4 --> G
-  F1 --> G
-  F2 --> G
-  
-  style B fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
-  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style G fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-```
-
+### **Steady-State Selection Strategy**
 ```python
-def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):
-    if num_parents == 1:
-        return get_single_parent_operators(north_star_metric, log_file)  # 10 mutation operators
-    return get_multi_parent_operators(log_file)  # 2 crossover operators
+def select_parents_steady_state(self):
+    # Mutation parent: Topmost elite
+    mutation_parent = self.elites[0]
+    
+    # Crossover parents: Topmost + random elites + random population
+    crossover_parents = [self.elites[0]]  # Topmost elite
+    crossover_parents.extend(self._select_random_elites(1))  # 1 random elite
+    crossover_parents.extend(self._select_random_population(3))  # 3 random population
+    
+    return mutation_parent, crossover_parents
 ```
 
-## 🔧 **Configuration**
+### **Adaptive Selection**
+- **Threshold**: After 10 generations (increased from 5)
+- **Max Parents**: 2 (reduced from 4)
+- **Strategy**: Automatically adjusts based on evolution progress
 
-```python
-# Maximum variants per operator (tuned)
-max_variants = 5  # Reduced from 10 to control growth
+## Population Management
 
-# Back-translation configuration
-target_languages = ['Hindi', 'French', 'German', 'Japanese', 'Chinese']
-translation_methods = ['model_based', 'llm_based']  # Dual approaches
-```
+### **Steady-State Population**
+- **File**: `data/outputs/elites.json`
+- **Size**: Controlled through elite redistribution
+- **Management**: Continuous evolution without generation boundaries
+- **Memory**: Efficient single-file population with lazy loading
 
-## 📈 **Evolution Flow**
+### **Population Files**
+- **`elites.json`**: Steady-state elite population
+- **`Population.json`**: Full population backup
+- **`population_index.json`**: Population metadata and counts
+- **`temp.json`**: Staging area during generation cycles
+- **`most_toxic.json`**: High-toxicity genomes moved by moderation
 
-1) **Population Initialization** → `elites.json`
-2) **Parent Selection** → Steady-state selection from elites
-3) **Variant Generation** → 12 operators (10 mutation + 2 crossover), capped variants, deduplicated
-4) **Tracker Update** → Per-generation best score, counts, parent information
+## Evolution Flow
 
-### Steady-State Evolution Loop
+### **Steady-State Evolution Loop**
 
 ```mermaid
 flowchart TD
   A[elites.json<br/>Steady-State Population] --> B[Parent Selection<br/>Top Elite + Random]
   B --> C{Number of Parents?}
-  C -->|1 Parent| D[Mutation Operators<br/>10 Total]
+  C -->|1 Parent| D[Mutation Operators<br/>14 Total]
   C -->|2+ Parents| E[Crossover Operators<br/>2 Total]
   
-  D --> F[Generate Variants<br/>Max 5 per operator]
+  D --> F[Generate Variants<br/>Max 1 per operator]
   E --> F
-  F --> G[Text Generation<br/>LLaMA Model]
+  F --> G[Text Generation<br/>Qwen2.5-7B Model]
   G --> H[Safety Evaluation<br/>Hybrid Moderation]
   H --> I[Update Population<br/>Status: complete + scores]
   I --> J[Sort & Maintain Elites<br/>Steady-State Management]
@@ -238,165 +284,53 @@ flowchart TD
   style L fill:#66bb6a,stroke:#388e3c,stroke-width:2px,color:#000
 ```
 
-## 🌍 **Multi-Language Support**
+### **Variant Generation Process**
+1. **Parent Selection**: Steady-state selection from elites
+2. **Operator Application**: 16 operators (14 mutation + 2 crossover)
+3. **Variant Generation**: Max 1 variant per operator
+4. **Deduplication**: Intra-file and cross-file deduplication
+5. **Staging**: Variants staged in `temp.json`
+6. **Processing**: Text generation and safety evaluation
+7. **Population Update**: Elites updated based on performance
 
-```mermaid
-graph TB
-  subgraph "Multi-Language Back-Translation Support"
-    A[Input Text<br/>English]
-    
-    subgraph "Supported Languages (5)"
-      B1[Hindi (HI)<br/>Devanagari script support]
-      B2[French (FR)<br/>Romance language variations]
-      B3[German (DE)<br/>Germanic language structure]
-      B4[Japanese (JA)<br/>Complex script handling]
-      B5[Chinese (ZH)<br/>Character-based translation]
-    end
-    
-    subgraph "Translation Approaches (2)"
-      C1[Model-Based<br/>Helsinki-NLP]
-      C2[LLM-Based<br/>LLaMA]
-    end
-    
-    subgraph "Translation Process"
-      D1[English → Target Language]
-      D2[Target Language → English]
-      D3[Varied Output]
-    end
-    
-    A --> B1
-    A --> B2
-    A --> B3
-    A --> B4
-    A --> B5
-    
-    B1 --> C1
-    B1 --> C2
-    B2 --> C1
-    B2 --> C2
-    B3 --> C1
-    B3 --> C2
-    B4 --> C1
-    B4 --> C2
-    B5 --> C1
-    B5 --> C2
-    
-    C --> E1
-    C --> E2
-    C --> E3
-    C --> E4
-  
-    D --> F1
-    D --> F2
-  
-  style D3 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-```
+## Performance Characteristics
 
-### **Translation Approaches**
-1. **Model-Based**: Helsinki-NLP translation models
-   - Specialized translation models
-   - Reliable for common language pairs
+### **Variant Generation Rates**
+With current settings (x=1, y=1):
+- **Crossover variants**: 2 (2 operators × 1 pair × 1 variant)
+- **Mutation variants**: 28 (2 parents × 14 operators × 1 variant)
+- **Total per cycle**: 30 variants
 
-2. **LLM-Based**: LLaMA model translation
-   - Context-aware translation
-   - Better handling of complex sentences
-   - More natural output
+With adaptive selection (x=2, y=1 or x=1, y=2):
+- **Crossover variants**: 3 (2 operators × 1 pair × 1 variant)
+- **Mutation variants**: 42 (3 parents × 14 operators × 1 variant)
+- **Total per cycle**: 45 variants
 
-## 📁 **File Structure**
+### **Memory Usage**
+- **Elites Population**: ~500KB (124 genomes)
+- **Full Population**: ~2.8MB (2885 genomes)
+- **Model Loading**: Efficient caching and reuse across operators
+- **Steady-State**: Continuous memory management with elite preservation
 
-```mermaid
-graph TB
-  subgraph "src/ea/ Package Structure"
-    A[__init__.py<br/>Package exports and lazy imports]
-    B[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
-    C[RunEvolution.py<br/>Evolution pipeline driver]
-    D[ParentSelector.py<br/>Selection strategies (steady-state)]
-    E[Individual Operator Files<br/>12 variation operators]
-    F[VariationOperators.py<br/>Legacy operators (deprecated)]
-    G[operator_helpers.py<br/>Operator factory and utilities]
-    H[README.md<br/>Package documentation]
-  end
-  
-  subgraph "Individual Operator Files"
-    E1[synonym_replacement.py<br/>POS-aware synonym replacement]
-    E2[mlm_operator.py<br/>Masked language modeling]
-    E3[paraphrasing.py<br/>OpenAI paraphrasing]
-    E4[antonym_replacement.py<br/>POS-aware antonym replacement]
-    E5[stylistic_mutator.py<br/>Style variation]
-    E6[back_translation.py<br/>Multi-language back-translation]
-    E7[semantic_similarity_crossover.py<br/>Semantic similarity crossover]
-    E8[fusion_crossover.py<br/>Instruction-preserving crossover]
-  end
-  
-  subgraph "Key Dependencies"
-    I[utils.population_io<br/>Steady-state population management]
-    J[gne.ResponseGenerator<br/>Response generation]
-    K[gne.PromptGenerator<br/>Prompt generation]
-    L[gne.evaluator<br/>Safety evaluation]
-    L[utils.custom_logging<br/>Performance tracking]
-  end
-  
-  B --> I
-  B --> J
-  B --> K
-  B --> L
-  C --> B
-  C --> D
-  C --> E
-  D --> I
-  E --> J
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-  style E fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
-  style F fill:#bdbdbd,stroke:#616161,stroke-width:2px,color:#000
-```
+### **Optimization Features**
+- **Lazy Imports**: Prevents circular dependencies
+- **Model Caching**: Reuse loaded models across operators
+- **Memory Monitoring**: Real-time memory usage tracking
+- **Automatic Cleanup**: PyTorch cache and garbage collection
+- **Steady-State Management**: Efficient elite preservation
 
-## 🔗 **Dependencies**
-- torch, transformers, spacy, nltk, openai
-- sentence-transformers (for semantic crossover)
-- huggingface-hub (for model downloads)
-- utils.custom_logging, utils.population_io, gne.ResponseGenerator, gne.PromptGenerator
-
-## 📝 **Recent Updates and Fixes**
-
-### **Major Additions**
-- **12 Text Variation Operators**: Complete operator suite
-- **Multi-Language Back-Translation**: 5 languages with dual approaches
-- **Steady-State Population Management**: Elite preservation and continuous evolution
-- **Task-Specific Templates**: Configurable prompts for different tasks
-- **Enhanced Memory Management**: Model caching and lazy loading
-
-### **Performance Improvements**
-- `max_score` correctness per generation
-- Steady-state population with indexing
-- Lazy imports; robust path handling
-- Model reuse across operators
-
-### **Architecture Enhancements**
-- Modular operator implementation (individual files vs monolithic class)
-- Enhanced parent selection strategies
-- Improved error handling and recovery
-- Layered architecture: main.py → RunEvolution.py → EvolutionEngine.py
-
-### **Two-tier Deduplication in EA**
-- EvolutionEngine performs intra-file deduplication of staged variants within `data/outputs/temp.json` immediately after generation.
-- RunEvolution performs cross-file deduplication, comparing `temp.json` against `elites.json`, `Population.json`, and `most_toxic.json` before merging/clearing.
-
-## 🚀 **Usage Examples**
+## Usage Examples
 
 ### **Basic Operator Usage**
 ```python
-from src.ea.back_translation import LLMBackTranslationHIOperator
+from src.ea.negation_operator import NegationOperator
 
 # Initialize operator
-operator = LLMBackTranslationHIOperator()
+operator = NegationOperator()
 
 # Apply to text
-variants = operator.apply("Hello world")
-print(variants)  # ['नमस्ते दुनिया'] (Hindi translation)
+variants = operator.apply("What are advantages of social media?")
+print(variants)  # ['What are disadvantages of social media?']
 ```
 
 ### **Evolution Engine Usage**
@@ -421,5 +355,101 @@ selector = ParentSelector("toxicity", log_file)
 # Select parents using steady-state strategy
 mutation_parent, crossover_parents = selector.select_parents_steady_state()
 ```
+
+### **Complete Evolution Run**
+```python
+from src.ea.RunEvolution import run_evolution
+
+# Run complete evolution cycle
+result = run_evolution(
+    north_star_metric="toxicity",
+    log_file="logs/evolution.log",
+    threshold=0.95,
+    current_cycle=1
+)
+```
+
+## Recent Updates and Fixes
+
+### **Major Additions (January 2025)**
+- **4 New Mutation Operators**: Negation, Typographical Errors, Concept Addition, Informed Evolution
+- **Enhanced Error Handling**: Fallback mechanisms for all operators
+- **Improved LLM Prompts**: More neutral prompts to reduce refusals
+- **Better Validation**: Enhanced content validation for translations
+
+### **Performance Improvements**
+- **Parent Selection Optimization**: Reduced max parents from 4 to 2
+- **Adaptive Selection**: Increased threshold from 5 to 10 generations
+- **GPU Acceleration**: Enabled for both PG and RG models
+- **Memory Management**: Enhanced cleanup and garbage collection
+
+### **Architecture Enhancements**
+- **Modular Operator Implementation**: Individual files for each operator
+- **Enhanced Parent Selection**: Better control over population growth
+- **Improved Error Handling**: Graceful degradation for failed operations
+- **Layered Architecture**: main.py → RunEvolution.py → EvolutionEngine.py
+
+### **Two-tier Deduplication**
+- **EvolutionEngine**: Intra-file deduplication of staged variants within `temp.json`
+- **RunEvolution**: Cross-file deduplication against `elites.json`, `Population.json`, and `most_toxic.json`
+
+## File Structure
+
+```
+src/ea/
+├── __init__.py                    # Package exports and lazy imports
+├── EvolutionEngine.py             # Genetic algorithm core (steady-state)
+├── RunEvolution.py                # Evolution pipeline driver
+├── ParentSelector.py               # Selection strategies (steady-state)
+├── README.md                      # This documentation
+├── notes.md                       # Implementation notes and data flow
+├── synonym_replacement.py         # POS-aware synonym replacement
+├── antonym_replacement.py         # POS-aware antonym replacement
+├── mlm_operator.py                # BERT masked language modeling
+├── paraphrasing.py                # LLM paraphrasing
+├── stylistic_mutator.py           # Style variation
+├── back_translation.py            # Multi-language back-translation
+├── semantic_similarity_crossover.py # Semantic similarity crossover
+├── fusion_crossover.py            # Instruction-preserving crossover
+├── negation_operator.py           # Negation mutation (NEW)
+├── typographical_errors.py        # Typo simulation (NEW)
+├── concept_addition.py            # Bias addition (NEW)
+└── InformedEvolution.py          # Elite-informed evolution (NEW)
+```
+
+## Dependencies
+- torch, transformers, spacy, nltk, openai
+- sentence-transformers (for semantic crossover)
+- huggingface-hub (for model downloads)
+- utils.custom_logging, utils.population_io, gne.ResponseGenerator, gne.PromptGenerator
+
+## Documentation Index
+
+### 📚 **Core Documentation**
+- **[README.md](../../README.md)** - Main project documentation with setup instructions
+- **[ARCHITECTURE.md](../../ARCHITECTURE.md)** - Complete system architecture overview
+- **[EA Notes](notes.md)** - Detailed implementation notes and data flow
+
+### 🔧 **Operator Documentation**
+- **[negation_operator.py](negation_operator.py)** - Negation mutation operator (NEW)
+- **[typographical_errors.py](typographical_errors.py)** - Typo simulation operator (NEW)
+- **[concept_addition.py](concept_addition.py)** - Bias addition operator (NEW)
+- **[InformedEvolution.py](InformedEvolution.py)** - Elite-informed evolution (NEW)
+
+### 🧪 **Testing Documentation**
+- **[Tests README](../../tests/README.md)** - Testing framework guide
+- **[test_operators_demo.py](../../tests/test_operators_demo.py)** - Operator testing examples
+
+### 📊 **Configuration & Data**
+- **[RGConfig.yaml](../../config/RGConfig.yaml)** - Response Generator configuration
+- **[PGConfig.yaml](../../config/PGConfig.yaml)** - Prompt Generator configuration
+- **[prompt.xlsx](../../data/prompt.xlsx)** - Input prompts for evolution
+- **[outputs/](../../data/outputs/)** - Evolution results and tracking
+
+### 🚀 **Quick Reference**
+- **Test EA**: `python -c "from src.ea import get_EvolutionEngine; print('EA loaded')"`
+- **Run Evolution**: `python src/main.py --generations 5`
+- **Test Operators**: `python tests/test_operators_demo.py`
+- **Monitor Logs**: Check `logs/` directory for execution details
 
 This comprehensive EA package provides a robust foundation for evolutionary text generation with extensive operator support, multi-language capabilities, and efficient steady-state population management.

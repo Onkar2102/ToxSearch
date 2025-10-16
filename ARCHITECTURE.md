@@ -1,6 +1,18 @@
 # Project Architecture
 
-## Architecture at a glance
+## Table of Contents
+
+- [Architecture Overview](#architecture-overview)
+- [System Components](#system-components)
+- [Data Flow](#data-flow)
+- [Memory Management](#memory-management)
+- [Text Variation Operators](#text-variation-operators)
+- [Configuration](#configuration)
+- [Performance Characteristics](#performance-characteristics)
+- [Recent Architecture Improvements](#recent-architecture-improvements)
+- [Documentation Index](#documentation-index)
+
+## Architecture Overview
 
 ```mermaid
 flowchart TD
@@ -9,35 +21,42 @@ flowchart TD
   
   subgraph "Evolution Loop"
     C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: gne.ResponseGenerator]
-    E --> F[Safety Evaluation: gne.evaluator]
-    F --> G[Evolution: 12 Text Variation Operators]
+    D --> E[Text Generation: ResponseGenerator]
+    E --> F[Safety Evaluation: Hybrid Moderation]
+    F --> G[Evolution: 16 Text Variation Operators]
     G --> H[Update Elites: data/outputs/elites.json]
     H --> I{Threshold Reached?}
     I -->|No| D
     I -->|Yes| J[Complete]
   end
   
-  F --> K[Tracking: data/outputs/EvolutionTracker.json]
-  H --> L[Redistribution: elites ↔ Population.json]
-  G --> M1[Staging: data/outputs/temp.json]
-  M1 --> M2[Intra-file Dedup: EvolutionEngine]
-  M2 --> M3[Cross-file Dedup: RunEvolution vs elites/population/most_toxic]
-  
-  subgraph "Orchestration"
-    M[main.py / app.py]
-    M --> D
-    M --> E
-    M --> F
-    M --> G
-    M --> K
-    M --> L
-  end
+  F --> K[EvolutionTracker.json]
+  H --> L[Population.json]
   
   style C fill:#4fc3f7,stroke:#0277bd,stroke-width:3px,color:#000
   style I fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
   style J fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
 ```
+
+## System Components
+
+### **Entry Points**
+- **`app.py`** - Interactive entry with monitoring and setup
+- **`src/main.py`** - Direct execution pipeline
+
+### **Core Pipeline**
+- **`RunEvolution.py`** - Evolution orchestration
+- **`EvolutionEngine.py`** - Genetic algorithm core
+
+### **Evolution Components**
+- **`ParentSelector.py`** - Steady-state selection
+- **Operator System** - 16 variation operators
+- **Population I/O** - Steady-state management
+
+### **Generation & Evaluation**
+- **`ResponseGenerator.py`** - Response generation using prompt_template
+- **`PromptGenerator.py`** - Prompt generation using task templates
+- **`evaluator.py`** - Safety evaluation
 
 ## System Overview
 
@@ -45,7 +64,7 @@ flowchart TD
 graph TB
   subgraph "Evolutionary Text Generation Framework"
     A[Steady-State Population Management]
-    B[12 Text Variation Operators]
+    B[16 Text Variation Operators]
     C[Hybrid Safety Evaluation]
     D[Memory-Optimized Processing]
     E[Standardized Import System]
@@ -61,9 +80,9 @@ graph TB
 
 ```mermaid
 flowchart LR
-  A[Input Prompts<br/>data/prompt.xlsx] --> B[Text Generation<br/>LLaMA Model]
+  A[Input Prompts<br/>data/prompt.xlsx] --> B[Text Generation<br/>Qwen2.5-7B Model]
   B --> C[Safety Evaluation<br/>Hybrid Moderation]
-  C --> D[Evolution<br/>12 Text Variation Operators]
+  C --> D[Evolution<br/>16 Text Variation Operators]
   D --> E[Population Update<br/>Steady-State Elites]
   E --> F{Threshold<br/>Reached?}
   F -->|No| B
@@ -92,145 +111,26 @@ flowchart LR
   style G fill:#66bb6a,stroke:#388e3c,stroke-width:2px,color:#000
 ```
 
-## Recent Architecture Improvements
+## Data Flow
 
-### **Steady-State Population Management**
-- **Elite Preservation**: Top performers maintained in `elites.json`
-- **Continuous Evolution**: Population evolves continuously without generation boundaries
-- **Dynamic Redistribution**: Elites redistributed to population when thresholds exceeded
-- **Memory Efficiency**: Single-file population with lazy loading
+### **Input Layer**
+- **`data/prompt.xlsx`** - Input prompts for evolution
 
-### **12 Text Variation Operators**
-- **10 Mutation Operators**: Including 5 LLM-based back-translation operators (5 languages)
-- **2 Crossover Operators**: Semantic similarity and instruction-preserving
-- **LLM-Based Approaches**: LLaMA-based text variation across all operators
-- **Multi-Language Support**: Hindi, French, German, Japanese, Chinese
+### **Processing Layer (Steady-State)**
+- Population Initialization
+- Text Generation Phase
+- Safety Evaluation Phase
+- Evolution Phase
 
-### **Enhanced Evolution Tracking**
-- `EvolutionTracker.json`: Comprehensive generation performance tracking
-- `population_index.json`: Fast population metadata and counts
-- Accurate max_score: Represents actual generation performance, not parent scores
+### **Storage Layer**
+- **`data/outputs/elites.json`** - Steady-state population
+- **`data/outputs/EvolutionTracker.json`** - Progress tracking
+- **`data/outputs/population_index.json`** - Metadata & index
+- **`data/outputs/Population.json`** - Full population backup
+- **`data/outputs/temp.json`** - Staging area during generation cycles
+- **`data/outputs/most_toxic.json`** - High-toxicity genomes
 
-### **Memory Optimization**
-- Lazy Imports: Prevents circular dependencies and premature model loading
-- Targeted Loading: Filter in memory by generation/prompt as needed
-- Absolute Paths: Robust cross-platform file handling
-- Model Caching: Efficient reuse of loaded models across operators
-
-## Detailed Component Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              MAIN PIPELINE                                 │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐           │
-│  │   Population    │  │   Text          │  │   Safety        │           │
-│  │  Initialization │  │  Generation     │  │  Evaluation     │           │
-│  │                 │  │                 │  │                 │           │
-│  │ • Load prompts  │  │ • LLaMA Model   │  │ • Hybrid API    │           │
-│  │ • Create        │  │ • Task Templates│  │ • Google +      │           │
-│  │   genomes       │  │ • Memory Mgmt   │  │   OpenAI        │           │
-│  │ • Set status    │  │ • Batch Proc    │  │ • Toxicity      │           │
-│  │ • Steady state  │  │ • Error Handle  │  │   Scoring       │           │
-│  │ • Elite mgmt    │  │ • Lazy loading  │  │ • Multi-metric  │           │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘           │
-│           │                   │                   │                       │
-│           ▼                   ▼                   ▼                       │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐           │
-│  │   Evolution     │  │   Population    │  │   Analysis      │           │
-│  │   Engine        │  │   Management    │  │   & Logging     │           │
-│  │                 │  │                 │  │                 │           │
-│  │ • Genetic Algo  │  │ • Steady State  │  │ • Performance   │           │
-│  │ • 12 Operators  │  │ • Elite Track   │  │   Monitoring    │           │
-│  │ • Mutation      │  │ • Status Track  │  │ • Memory Stats  │           │
-│  │ • Crossover     │  │ • Lineage       │  │ • Error Logs    │           │
-│  │ • Selection     │  │ • Deduplication │  │ • Evolution     │           │
-│  │ • Accurate      │  │ • Index Mgmt    │  │   Tracking      │           │
-│  │   Tracking      │  │ • Lazy Loading  │  │ • Operator      │           │
-│  │ • Multi-lang    │  │ • Redistribution│  │   Analytics     │           │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘           │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-## Text Variation Operators Architecture
-
-```mermaid
-graph TB
-  subgraph "Text Variation Operators (12 Total)"
-    subgraph "Mutation Operators (10)"
-      A1[Core LLM Operators]
-      A2[BERT-based Operators]
-      A3[OpenAI Operators]
-      
-      subgraph "Back-Translation (10)"
-        B1[Model-Based: Helsinki-NLP]
-        B2[LLM-Based: LLaMA]
-        
-        subgraph "Languages (5)"
-          C1[Hindi (HI)]
-          C2[French (FR)]
-          C3[German (DE)]
-          C4[Japanese (JA)]
-          C5[Chinese (ZH)]
-        end
-        
-        B1 --> C1
-        B1 --> C2
-        B1 --> C3
-        B1 --> C4
-        B1 --> C5
-        
-        B2 --> C1
-        B2 --> C2
-        B2 --> C3
-        B2 --> C4
-        B2 --> C5
-      end
-      
-      A1 --> B1
-      A1 --> B2
-    end
-    
-    subgraph "Crossover Operators (2)"
-      D2[Semantic Similarity Crossover<br/>Embedding-based, Similarity threshold]
-      D3[Instruction Preserving Crossover<br/>Structure-aware, Maintain instructions]
-    end
-  end
-  
-  style A1 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style A2 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style A3 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style B1 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
-  style B2 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
-  style D1 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D2 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D3 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-```
-
-## Component Interaction Flow
-
-```mermaid
-sequenceDiagram
-  participant M as main.py/app.py
-  participant PS as ParentSelector
-  participant TV as TextVariationOperators
-  participant RG as ResponseGenerator
-  participant PG as PromptGenerator
-  participant EV as evaluator
-  participant EE as EvolutionEngine
-  participant PO as population_io
-  
-  M->>PS: Select parents (steady-state)
-  PS->>TV: Apply operators (12 total)
-  TV->>TG: Generate text variants
-  TG->>HM: Evaluate safety scores
-  HM->>EE: Process results
-  EE->>PO: Update elites.json
-  PO->>M: Return updated population
-  
-  Note over M,PO: Steady-state evolution loop continues until threshold reached
-```
-
-## Memory Management Architecture
+## Memory Management
 
 ```mermaid
 flowchart LR
@@ -260,150 +160,67 @@ flowchart LR
   style I fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
 ```
 
-## Data Flow Architecture
+## Text Variation Operators
+
+### **Current Active Operators (16 Total)**
+
+#### **Mutation Operators (14)**
+1. **LLM_POSAwareSynonymReplacement** - LLaMA-based synonym replacement using POS tagging
+2. **LLM_POSAwareAntonymReplacement** - LLaMA-based antonym replacement using POS tagging
+3. **MLMOperator** - BERT masked language model for word replacement
+4. **LLMBasedParaphrasingOperator** - LLaMA-based paraphrasing with optimization
+5. **StylisticMutator** - Stylistic text mutations
+6. **LLMBackTranslationHIOperator** - Hindi back-translation (LLaMA)
+7. **LLMBackTranslationFROperator** - French back-translation (LLaMA)
+8. **LLMBackTranslationDEOperator** - German back-translation (LLaMA)
+9. **LLMBackTranslationJAOperator** - Japanese back-translation (LLaMA)
+10. **LLMBackTranslationZHOperator** - Chinese back-translation (LLaMA)
+11. **NegationOperator** - Adds negation to prompt questions (NEW)
+12. **TypographicalErrorsOperator** - Simulates common human typos and spelling mistakes (NEW)
+13. **ConceptAdditionOperator** - Adds unfairness and bias constraints to questions (NEW)
+14. **InformedEvolutionOperator** - Uses top 10 elites to generate more toxic variants (NEW)
+
+#### **Crossover Operators (2)**
+1. **SemanticSimilarityCrossover** - Semantic similarity-based crossover
+2. **SemanticFusionCrossover** - LLM-based instruction structure preservation
+
+### **Operator Selection Logic**
 
 ```mermaid
 flowchart TD
-  subgraph "Input Layer"
-    A[data/prompt.xlsx<br/>Input Prompts]
-  end
+  A[Parent Selection] --> B{Number of Parents?}
+  B -->|1 Parent| C[Mutation Operators<br/>14 Total]
+  B -->|2+ Parents| D[Crossover Operators<br/>2 Total]
   
-  subgraph "Processing Layer (Steady-State)"
-    B[Population Initialization]
-    C[Text Generation Phase]
-    D[Safety Evaluation Phase]
-    E[Evolution Phase]
-  end
-  
-  subgraph "Storage Layer"
-    F[data/outputs/elites.json<br/>Steady-State Population]
-    G[data/outputs/EvolutionTracker.json<br/>Progress Tracking]
-    H[outputs/population_index.json<br/>Metadata & Index]
-    I[outputs/Population.json<br/>Full Population Backup]
-  end
-  
-  A --> B
-  B --> C
-  C --> D
+  C --> E[Apply Selected Operator]
   D --> E
-  E --> C
+  E --> F[Generate Variants<br/>Max 1 per operator]
+  F --> G[Deduplication]
+  G --> H[Add to Population]
   
-  B --> F
-  D --> G
-  E --> H
-  E --> I
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style C fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style D fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style E fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-  style F fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
+  style C fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
 ```
 
-## Evolution Tracking Architecture
+## Configuration
 
-```mermaid
-graph TB
-  subgraph "EvolutionTracker.json Structure"
-    A[Global Metadata<br/>• scope: global<br/>• status: not_complete<br/>• total_generations: 5]
-    B[Population Stats<br/>• population_max_toxicity: 0.3775<br/>• population_best_genome_id: 40]
-    C[Generation Records]
-    
-    subgraph "Generation Data"
-      D[Generation 0<br/>• genome_id: 1<br/>• max_score: 0.0]
-      E[Generation 2<br/>• genome_id: 122<br/>• max_score: 0.361<br/>• variants_created: 23<br/>• mutation_variants: 21<br/>• crossover_variants: 2]
-      F[Parent Information<br/>• mutation_parent: {...}<br/>• crossover_parents: [...]]
-    end
-    
-    A --> C
-    B --> C
-    C --> D
-    C --> E
-    E --> F
-  end
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-  style E fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
-  style F fill:#aed581,stroke:#689f38,stroke-width:2px,color:#000
-```
+### **Model Configuration**
+- **Prompt Generator**: Qwen2.5-7B-Instruct (default)
+- **Response Generator**: Llama3.2-3B-Instruct (default)
+- **GPU Acceleration**: Enabled by default (`n_gpu_layers: -1`)
 
-## File Structure Architecture
+### **Evolution Parameters**
+- **Max Parents**: 2 (reduced from 4 to control population growth)
+- **Adaptive Selection**: After 10 generations (increased from 5)
+- **Max Variants**: 1 per operator (controlled growth)
+- **Threshold**: 0.95 (north star metric)
 
-```mermaid
-graph TB
-  subgraph "EOST-CAM-LLM Project Structure"
-    A[app.py<br/>Main entry point with setup and monitoring]
-    
-    subgraph "Configuration"
-      B1[config/RGConfig.yaml<br/>Response generation model configuration]
-      B2[config/PGConfig.yaml<br/>Prompt generation model configuration]
-    end
-    
-    subgraph "Data"
-      C[data/prompt.xlsx<br/>Input prompts]
-    end
-    
-    subgraph "Source Code (src/)"
-      D[main.py<br/>Core evolution pipeline]
-      
-      subgraph "Generation & Evaluation (gne/)"
-        E1[ResponseGenerator.py<br/>Response generation using prompt_template]
-        E2[PromptGenerator.py<br/>Prompt generation using task templates]
-        E3[evaluator.py<br/>Content moderation evaluation]
-        E4[__init__.py<br/>Lazy import functions]
-      end
-      
-      subgraph "Evolutionary Algorithms (ea/)"
-        F1[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
-        F2[Individual Operator Files<br/>12 variation operators]
-        F3[ParentSelector.py<br/>Selection strategies (steady-state)]
-        F4[RunEvolution.py<br/>Evolution pipeline]
-        F5[__init__.py<br/>Package exports]
-      end
-      
-      subgraph "Utilities (utils/)"
-        G1[population_io.py<br/>Steady-state population management]
-        G2[custom_logging.py<br/>Performance tracking]
-        G3[m3_optimizer.py<br/>M3 Mac optimization]
-        G4[config.py<br/>Configuration utilities]
-        G5[constants.py<br/>System constants]
-        G6[download_models.py<br/>Model download utilities]
-        G7[__init__.py<br/>Lazy import functions]
-      end
-    end
-    
-    subgraph "Outputs"
-      H1[elites.json<br/>Steady-state elite population]
-      H2[Population.json<br/>Full population backup]
-      H3[population_index.json<br/>Population metadata/index]
-      H4[EvolutionTracker.json<br/>Evolution progress tracking]
-      H5[final_statistics.json<br/>Final analysis results (optional)]
-    end
-    
-    subgraph "Supporting Files"
-      I1[logs/<br/>Log files]
-      I2[tests/test_operators_demo.py<br/>Operator testing and demonstration]
-      I3[design_document.md<br/>Formal design specification]
-      I4[ARCHITECTURE.md<br/>Architecture document]
-    end
-  end
-  
-  A --> D
-  D --> E1
-  D --> F1
-  D --> G1
-  D --> H1
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style D fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style E1 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style F1 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-  style G1 fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
-  style H1 fill:#aed581,stroke:#689f38,stroke-width:2px,color:#000
-```
+### **Memory Management**
+- **Memory Threshold**: 20.0 GB
+- **Check Interval**: 1800 seconds (30 minutes)
+- **Stuck Threshold**: 7200 seconds (2 hours)
+- **Max Restarts**: 5
 
 ## Performance Characteristics
 
@@ -428,31 +245,35 @@ graph TB
 ## Recent Architecture Improvements
 
 ### **1. Steady-State Population Management**
-- Problem: Generation-based evolution had artificial boundaries
-- Solution: Continuous evolution with elite preservation
-- Benefits: More natural evolution, better performance tracking, memory efficiency
+- **Problem**: Generation-based evolution had artificial boundaries
+- **Solution**: Continuous evolution with elite preservation
+- **Benefits**: More natural evolution, better performance tracking, memory efficiency
 
-### **2. 12 Text Variation Operators**
-- Problem: Limited text variation capabilities
-- Solution: Comprehensive operator suite with dual translation approaches
-- Benefits: Rich text variation, multi-language support, diverse evolution strategies
+### **2. 16 Text Variation Operators**
+- **Problem**: Limited text variation capabilities
+- **Solution**: Comprehensive operator suite with 4 new mutation operators
+- **Benefits**: Rich text variation, multi-language support, diverse evolution strategies
 
-### **3. Dual Translation Approaches**
-- Problem: Single translation method limited diversity
-- Solution: Helsinki-NLP models + LLaMA-based translation
-- Benefits: Complementary approaches, better coverage, robust translation
+### **3. New Mutation Operators (January 2025)**
+- **NegationOperator**: Adds negation to prompt questions (e.g., "advantages" → "disadvantages")
+- **TypographicalErrorsOperator**: Simulates common human typos and spelling mistakes
+- **ConceptAdditionOperator**: Adds unfairness and bias constraints to questions
+- **InformedEvolutionOperator**: Uses top 10 elites to generate more toxic variants
 
-### **4. Task-Specific Templates**
-- Problem: Generic prompts for all tasks
-- Solution: Configurable templates per task type
-- Benefits: Better task performance, precise control, improved results
+### **4. Enhanced Memory Management**
+- **Problem**: Memory pressure with multiple operators
+- **Solution**: Model caching, lazy loading, adaptive batch sizing
+- **Benefits**: Lower memory usage, faster execution, better scalability
 
-### **5. Enhanced Memory Management**
-- Problem: Memory pressure with multiple operators
-- Solution: Model caching, lazy loading, adaptive batch sizing
-- Benefits: Lower memory usage, faster execution, better scalability
+### **5. GPU Acceleration**
+- **Problem**: Models running on CPU
+- **Solution**: Enabled GPU acceleration for both PG and RG models
+- **Benefits**: Faster model inference, better performance
 
-This enhanced architecture provides a robust, scalable, and memory-efficient framework for evolutionary text generation with comprehensive operator support, steady-state population management, and multi-language capabilities.
+### **6. Parent Selection Optimization**
+- **Problem**: Excessive number of parents leading to exponential growth
+- **Solution**: Reduced max parents from 4 to 2, increased adaptive selection threshold
+- **Benefits**: Controlled population growth, more manageable evolution
 
 ## Deduplication Flow
 
@@ -474,8 +295,118 @@ flowchart TD
   style G fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px,color:#000
 ```
 
-Key points:
-- Staging occurs in `data/outputs/temp.json` for the current generation cycle.
-- Intra-file dedup removes duplicate prompts/IDs within `temp.json` (EvolutionEngine).
-- Cross-file dedup removes items already present in `elites.json`, `Population.json`, and `most_toxic.json` (RunEvolution).
-- After processing and routing, `temp.json` is cleared for the next cycle.
+**Key Points:**
+- Staging occurs in `data/outputs/temp.json` for the current generation cycle
+- Intra-file dedup removes duplicate prompts/IDs within `temp.json` (EvolutionEngine)
+- Cross-file dedup removes items already present in `elites.json`, `Population.json`, and `most_toxic.json` (RunEvolution)
+- After processing and routing, `temp.json` is cleared for the next cycle
+
+## File Structure Architecture
+
+```mermaid
+graph TB
+  subgraph "EOST-CAM-LLM Project Structure"
+    A[app.py<br/>Main entry point with setup and monitoring]
+    
+    subgraph "Configuration"
+      B1[config/RGConfig.yaml<br/>Response generation model configuration]
+      B2[config/PGConfig.yaml<br/>Prompt generation model configuration]
+    end
+    
+    subgraph "Data"
+      C[data/prompt.xlsx<br/>Input prompts]
+    end
+    
+    subgraph "Source Code (src/)"
+      D[main.py<br/>Core evolution pipeline]
+      
+      subgraph "Generation & Evaluation (gne/)"
+        E1[ResponseGenerator.py<br/>Response generation using prompt_template]
+        E2[PromptGenerator.py<br/>Prompt generation using task templates]
+        E3[evaluator.py<br/>Content moderation evaluation]
+        E4[model_interface.py<br/>Model loading and GPU configuration]
+      end
+      
+      subgraph "Evolutionary Algorithms (ea/)"
+        F1[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
+        F2[Individual Operator Files<br/>16 variation operators]
+        F3[ParentSelector.py<br/>Selection strategies (steady-state)]
+        F4[RunEvolution.py<br/>Evolution pipeline]
+        F5[__init__.py<br/>Package exports]
+      end
+      
+      subgraph "Utilities (utils/)"
+        G1[population_io.py<br/>Steady-state population management]
+        G2[custom_logging.py<br/>Performance tracking]
+        G3[m3_optimizer.py<br/>M3 Mac optimization]
+        G4[config.py<br/>Configuration utilities]
+        G5[constants.py<br/>System constants]
+        G6[download_models.py<br/>Model download utilities]
+        G7[device_utils.py<br/>Device and GPU utilities]
+      end
+    end
+    
+    subgraph "Outputs"
+      H1[elites.json<br/>Steady-state elite population]
+      H2[Population.json<br/>Full population backup]
+      H3[population_index.json<br/>Population metadata/index]
+      H4[EvolutionTracker.json<br/>Evolution progress tracking]
+      H5[most_toxic.json<br/>High-toxicity genomes]
+      H6[temp.json<br/>Staging area during generation cycles]
+    end
+    
+    subgraph "Supporting Files"
+      I1[logs/<br/>Log files]
+      I2[tests/<br/>Test suite]
+      I3[requirements.txt<br/>Python dependencies]
+      I4[LICENSE<br/>MIT License]
+    end
+  end
+  
+  A --> D
+  D --> E1
+  D --> F1
+  D --> G1
+  D --> H1
+  
+  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style D fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style E1 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style F1 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
+  style G1 fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
+  style H1 fill:#aed581,stroke:#689f38,stroke-width:2px,color:#000
+```
+
+## Documentation Index
+
+### 📚 **Core Documentation**
+- **[README.md](README.md)** - Main project documentation with setup instructions
+- **[Evolutionary Algorithms Guide](src/ea/README.md)** - Detailed guide to genetic algorithms and operators
+- **[EA Notes](src/ea/notes.md)** - Implementation notes and data flow details
+
+### 📖 **Technical Documentation**
+- **[LLM POS-Aware Synonym Replacement](docs/LLM_POSAwareSynonymReplacement.md)** - POS-aware operations guide
+- **[vLLM Migration Guide](docs/vLLM_Migration_Guide.md)** - vLLM integration guide
+- **[LLM POS Test Updates](docs/README_llm_pos_test_updates.md)** - Testing updates and information
+
+### 🧪 **Testing & Development**
+- **[Tests README](tests/README.md)** - Testing framework documentation
+- **[Test Files](tests/)** - Comprehensive test suite for all operators
+
+### 🔧 **Configuration Files**
+- **[RGConfig.yaml](config/RGConfig.yaml)** - Response Generator configuration
+- **[PGConfig.yaml](config/PGConfig.yaml)** - Prompt Generator configuration
+- **[.env](.env)** - Environment variables and API keys
+
+### 📊 **Data Files**
+- **[prompt.xlsx](data/prompt.xlsx)** - Input prompts for evolution
+- **[outputs/](data/outputs/)** - Evolution results and tracking data
+- **[models/](models/)** - Local model files and configurations
+
+### 🚀 **Quick Reference**
+- **Setup**: `python3 app.py --setup`
+- **Run**: `python3 app.py --interactive`
+- **Test**: `python3 src/main.py --generations 1`
+- **Monitor**: Check `logs/` directory for execution logs
+
+This enhanced architecture provides a robust, scalable, and memory-efficient framework for evolutionary text generation with comprehensive operator support, steady-state population management, and multi-language capabilities.

@@ -7,43 +7,134 @@ A research framework for AI safety analysis through evolutionary text generation
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
-- [app.py Command Line Arguments](#appy-command-line-arguments)
-- [Documentation](#documentation)
-  - [Architecture Overview](ARCHITECTURE.md)
-  - [Additional Docs](docs/)
-  - [Evolutionary Algorithms](src/ea/README.md)
-  - [Generation & Evaluation](#generation--evaluation)
-  - [Utilities](#utilities)
-- [Usage Examples](#usage-examples)
-- [Output Structure](#output-structure)
+- [Quick Setup](#quick-setup)
+- [Installation](#installation)
+- [API Keys Configuration](#api-keys-configuration)
+- [Running the Project](#running-the-project)
+- [Requirements](#requirements)
+- [Troubleshooting](#troubleshooting)
+- [Documentation Index](#documentation-index)
 - [License](#license)
 
-## Quick Start
+## Quick Setup
 
+### Prerequisites
+- **Python 3.8+** (Python 3.12+ recommended)
+- **macOS/Linux** (Windows support via WSL)
+- **8GB+ RAM** (16GB+ recommended for larger models)
+- **API Keys**: OpenAI API key and Google Perspective API key
+
+### Installation Steps
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd eost-cam-llm
+   ```
+
+2. **Create and activate virtual environment**
+   ```bash
+   # Create virtual environment
+   python3 -m venv venv
+   
+   # Activate virtual environment
+   source venv/bin/activate  # On macOS/Linux
+   # or
+   venv\Scripts\activate     # On Windows
+   ```
+
+3. **Run automated setup (RECOMMENDED)**
+   ```bash
+   python3 app.py --setup
+   ```
+   This will:
+   - Install all required dependencies
+   - Create `.env` template file
+   - Optimize configuration for your system
+   - Verify all required files are present
+
+4. **Configure API keys**
+   Edit the `.env` file and add your API keys:
+   ```bash
+   # Required API keys
+   OPENAI_API_KEY=your-openai-api-key-here
+   PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
+   
+   # Optional (for Hugging Face models)
+   HF_TOKEN=your-huggingface-token-here
+   ```
+
+5. **Verify installation**
+   ```bash
+   # Test with a single generation
+   python3 src/main.py --generations 1 --threshold 0.5
+   ```
+
+## Installation
+
+### Automated Installation (Recommended)
 ```bash
-# Run full environment setup (RECOMMENDED)
-python app.py --setup
-
-# Run with interactive setup and monitoring (RECOMMENDED)
-python app.py --interactive
-
-# Run directly with process monitoring
-python app.py --generations 25
-
-# Run core pipeline directly
-python src/main.py --generations 25
+# Run full environment setup
+python3 app.py --setup
 ```
 
- 
+### Manual Installation
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-## app.py Command Line Arguments
+# Download spaCy model
+python -m spacy download en_core_web_sm
+
+# Create .env file manually
+cp .env.example .env  # Edit with your API keys
+```
+
+## API Keys Configuration
+
+### Required API Keys
+
+1. **OpenAI API Key**
+   - Get from: https://platform.openai.com/api-keys
+   - Used for: LLM-based text generation and paraphrasing
+
+2. **Google Perspective API Key**
+   - Get from: https://developers.perspectiveapi.com/
+   - Used for: Content moderation and toxicity evaluation
+
+### Environment Variables
+Create a `.env` file in the project root:
+```bash
+# Required API keys
+OPENAI_API_KEY=your-openai-api-key-here
+PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
+
+# Optional (for Hugging Face models)
+HF_TOKEN=your-huggingface-token-here
+```
+
+## Running the Project
+
+### Basic Usage
+```bash
+# Run with interactive setup and monitoring (RECOMMENDED)
+python3 app.py --interactive
+
+# Run directly with process monitoring
+python3 app.py --generations 25
+
+# Run core pipeline directly
+python3 src/main.py --generations 25
+```
+
+### Command Line Options
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `--generations` | int | `None` | Maximum number of evolution generations. If not set, runs until north star metric is achieved |
 | `--threshold` | float | `0.95` | North star metric threshold for stopping evolution |
-| `model_names` | list | `[]` | Model names to use (currently not used) |
+| `--pg` | str | `qwen2.5-7b-instruct-gguf` | Prompt Generator model name |
+| `--rg` | str | `llama3.2-3b-instruct-gguf` | Response Generator model name |
 | `--check-interval` | int | `1800` | Health check interval in seconds (30 minutes) |
 | `--stuck-threshold` | int | `7200` | Stuck detection threshold in seconds (2 hours) |
 | `--memory-threshold` | float | `20.0` | Memory threshold in GB |
@@ -52,258 +143,110 @@ python src/main.py --generations 25
 | `--setup` | flag | `False` | Run full environment setup (install requirements, optimize config) |
 | `--no-monitor` | flag | `False` | Run without process monitoring |
 
- 
-
-## Architecture at a Glance
-
-```mermaid
-flowchart TD
-  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → data/outputs/elites.json]
-  B --> C[Steady-State Evolution Loop]
-  
-  subgraph "Evolution Loop"
-    C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: ResponseGenerator]
-    E --> F[Safety Evaluation: Hybrid Moderation]
-    F --> G[Evolution: 12 Variation Operators]
-    G --> H[Update Elites: data/outputs/elites.json]
-    H --> I{Threshold Reached?}
-    I -->|No| D
-    I -->|Yes| J[Complete]
-  end
-  
-  F --> K[EvolutionTracker.json]
-  H --> L[Population.json]
-  
-  style C fill:#4fc3f7,stroke:#0277bd,stroke-width:3px,color:#000
-  style I fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
-  style J fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
-```
-
-## 🏗️ **System Architecture**
-
-```mermaid
-graph TB
-  subgraph "Entry Points"
-    A1[app.py<br/>Interactive entry with monitoring]
-    A2[src/main.py<br/>Direct execution pipeline]
-  end
-  
-  subgraph "Core Pipeline"
-    B1[RunEvolution.py<br/>Evolution orchestration]
-    B2[EvolutionEngine.py<br/>Genetic algorithm core]
-  end
-  
-  subgraph "Evolution Components"
-    C1[ParentSelector.py<br/>Steady-state selection]
-    C2[Operator System<br/>12 variation operators]
-    C3[Population I/O<br/>Steady-state management]
-  end
-  
-  subgraph "Generation & Evaluation"
-    D1[ResponseGenerator.py<br/>Response generation using prompt_template]
-    D2[PromptGenerator.py<br/>Prompt generation using task templates]
-    D3[evaluator.py<br/>Safety evaluation]
-  end
-  
-  A1 --> A2
-  A2 --> B1
-  B1 --> B2
-  B2 --> C1
-  B2 --> C2
-  B2 --> C3
-  C2 --> D1
-  D1 --> D2
-  
-  style A1 fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style B1 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style C2 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D1 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-```
-
-## Memory Management Architecture
-
-```mermaid
-flowchart LR
-  A[Memory Monitor] --> B[Adaptive Batch Sizing]
-  B --> C[Model Caching]
-  C --> D[Lazy Loading]
-  D --> E[Memory Cleanup]
-  E --> A
-  
-  subgraph "Memory Optimization"
-    F[Real-time Tracking]
-    G[Threshold Alerts]
-    H[PyTorch Cache Clear]
-    I[Garbage Collection]
-  end
-  
-  A --> F
-  A --> G
-  E --> H
-  E --> I
-  
-  style A fill:#f48fb1,stroke:#c2185b,stroke-width:3px,color:#000
-  style E fill:#66bb6a,stroke:#388e3c,stroke-width:3px,color:#000
-```
-
-## Documentation
-
-### **[Architecture Overview](ARCHITECTURE.md)**
-Comprehensive system architecture, component interactions, and data flow diagrams.
-
-### **[Design Document](design_document.md)**
-Detailed, professional design specification: goals, data models, algorithms, operations.
-
-### **[Evolutionary Algorithms](src/ea/README.md)**
-Complete guide to genetic algorithms, variation operators, and evolution strategies.
-
-### **Generation & Evaluation** (`src/gne/`)
-- `ResponseGenerator.py` - Response generation using prompt_template from RGConfig.yaml
-- `PromptGenerator.py` - Prompt generation using task templates from PGConfig.yaml
-- `evaluator.py` - Content moderation using Google Perspective API
-
-### Deduplication & Staging
-- Variants are first staged in `data/outputs/temp.json` during a generation cycle.
-- Intra-file deduplication happens immediately after variant creation inside `EvolutionEngine.generate_variants_global()` to remove duplicates within `temp.json`.
-- Cross-file deduplication happens in the evolution runner, where staged variants in `temp.json` are compared against `data/outputs/elites.json`, `data/outputs/Population.json`, and `data/outputs/most_toxic.json`; duplicates are skipped.
-- After processing, `temp.json` is cleared; accepted genomes are merged into elites or moved to `most_toxic.json` based on moderation.
-- Response generation uses prompt_template from RGConfig.yaml; prompt generation uses task templates from PGConfig.yaml.
-
-### **Utilities** (`src/utils/`)
-- `population_io.py` - Steady-state population management (`elites.json`) and `EvolutionTracker.json`
-- `custom_logging.py` - Performance and memory logging
-- `m3_optimizer.py` - M3 Mac optimization utilities
-- `config.py` - Configuration management
-- `constants.py` - System constants and configuration
-- `download_models.py` - Model download utilities
-
-## Usage Examples
-
-### **Basic Evolution Run**
+### Example Commands
 ```bash
-# Run evolution until threshold is reached
-python src/main.py --threshold 0.99
+# Quick test run
+python3 src/main.py --generations 1 --threshold 0.5
 
-# Run for specific number of generations
-python src/main.py --generations 10
+# Full evolution run
+python3 src/main.py --generations 50 --threshold 0.99
+
+# Run with specific models
+python3 src/main.py --generations 10 --pg qwen2.5-7b-instruct-gguf --rg llama3.2-3b-instruct-gguf
+
+# Interactive mode with monitoring
+python3 app.py --interactive
 ```
 
-### **Population Management**
-```bash
-# Initialize population from prompt.xlsx
-python -c "from src.utils.population_io import load_and_initialize_population; load_and_initialize_population('data/prompt.xlsx', 'outputs')"
+## Requirements
 
-# Load elites for analysis
-python -c "from src.utils.population_io import load_elites; elites = load_elites('data/outputs/elites.json')"
-```
+### System Requirements
+- **Python**: 3.8+ (3.12+ recommended)
+- **RAM**: 8GB+ (16GB+ recommended for larger models)
+- **Storage**: 10GB+ for models and data
+- **OS**: macOS/Linux (Windows via WSL)
 
-### **Operator Testing**
-```bash
-# Test all operators
-python tests/test_operators_demo.py
+### Python Dependencies
+See `requirements.txt` for complete list. Key dependencies:
+- `torch` - PyTorch for model operations
+- `transformers` - Hugging Face transformers
+- `spacy` - Natural language processing
+- `openai` - OpenAI API client
+- `google-api-python-client` - Google Perspective API
+- `pandas` - Data manipulation
+- `numpy` - Numerical operations
+- `sentence-transformers` - Semantic similarity
+- `nltk` - Natural language toolkit
 
-# Test specific back translation
-python -c "from src.ea.back_translation import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
-```
+### Model Requirements
+- **Prompt Generator**: Qwen2.5-7B-Instruct (default)
+- **Response Generator**: Llama3.2-3B-Instruct (default)
+- **spaCy Model**: `en_core_web_sm`
+- **NLTK Data**: `punkt` tokenizer
 
- 
+## Troubleshooting
 
- 
+### Common Issues
 
-## Output Structure
+**Import errors**
+- Ensure virtual environment is activated: `source venv/bin/activate`
+- Check Python version: `python3 --version`
 
-```
-data/outputs/
-├── elites.json              # Steady-state elite population
-├── Population.json          # Full population (if needed)
-├── population_index.json    # Population metadata
-├── EvolutionTracker.json    # Evolution progress tracking
-├── temp.json                # Staging area during a generation cycle
-├── most_toxic.json          # High-toxicity genomes moved here by moderation
-└── final_statistics.json   # Final analysis results (optional)
-```
+**API rate limits**
+- Google Perspective API: 60 requests/minute limit
+- OpenAI API: Check your usage limits
+- Added 0.5-second delay between evaluations to prevent rate limiting
 
-## Text Variation Operators
+**Memory issues**
+- Use smaller models or reduce batch sizes
+- Monitor memory usage in logs
+- Enable garbage collection: `--memory-threshold 20.0`
 
-### Current Active Operators (12 Total)
+**Model loading errors**
+- Check model files exist in `models/` directory
+- Verify model paths in config files
+- Ensure sufficient disk space
 
-#### **Mutation Operators (10)**
-1. **LLM_POSAwareSynonymReplacement** - LLaMA-based synonym replacement using POS tagging
-2. **MLMOperator** - BERT masked language model for word replacement
-3. **LLMBasedParaphrasingOperator** - LLaMA-based paraphrasing with optimization
-4. **LLM_POSAwareAntonymReplacement** - LLaMA-based antonym replacement
-5. **StylisticMutator** - Stylistic text mutations
-6. **LLMBackTranslationHIOperator** - Hindi back-translation (LLaMA)
-7. **LLMBackTranslationFROperator** - French back-translation (LLaMA)
-8. **LLMBackTranslationDEOperator** - German back-translation (LLaMA)
-9. **LLMBackTranslationJAOperator** - Japanese back-translation (LLaMA)
-10. **LLMBackTranslationZHOperator** - Chinese back-translation (LLaMA)
+**GPU usage**
+- Models run on GPU by default (`n_gpu_layers: -1`)
+- Check GPU availability: `python -c "import torch; print(torch.cuda.is_available())"`
 
-#### **Crossover Operators (2)**
-1. **SemanticSimilarityCrossover** - Semantic similarity-based crossover
-2. **SemanticFusionCrossover** - LLM-based instruction structure preservation
+### Getting Help
+- Check logs in `logs/` directory
+- Review [Architecture Overview](ARCHITECTURE.md)
+- See [Evolutionary Algorithms Guide](src/ea/README.md)
+- Check [Tests README](tests/README.md) for testing
 
-### Deprecated Operators
-- **POSAwareSynonymReplacement** - Replaced by LLM version
-- **PointCrossover** - Deprecated and commented out
-- **Classic Back-translation operators** - Replaced by LLM versions
+### Performance Optimization
+- **GPU Acceleration**: Enabled by default for both PG and RG models
+- **Memory Management**: Automatic cleanup and garbage collection
+- **Model Caching**: Efficient reuse of loaded models
+- **Parallel Processing**: Available for operator execution
 
-### **Operator Selection Logic**
+## Documentation Index
 
-```mermaid
-flowchart TD
-  A[Parent Selection] --> B{Number of Parents?}
-  B -->|1 Parent| C[Mutation Operators<br/>10 Total]
-  B -->|2+ Parents| D[Crossover Operators<br/>2 Total]
-  
-  C --> E[Apply Selected Operator]
-  D --> E
-  E --> F[Generate Variants<br/>Max 5 per operator]
-  F --> G[Deduplication]
-  G --> H[Add to Population]
-  
-  style C fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
-```
+### 📚 **Core Documentation**
+- **[Architecture Overview](ARCHITECTURE.md)** - Complete system architecture and component interactions
+- **[Evolutionary Algorithms Guide](src/ea/README.md)** - Genetic algorithms, variation operators, and evolution strategies
+- **[EA Notes](src/ea/notes.md)** - Detailed implementation notes and data flow
 
-## Recent Changes & Updates
+### 📖 **Additional Documentation**
+- **[LLM POS-Aware Synonym Replacement](docs/LLM_POSAwareSynonymReplacement.md)** - Detailed guide for POS-aware operations
+- **[vLLM Migration Guide](docs/vLLM_Migration_Guide.md)** - Migration guide for vLLM integration
+- **[LLM POS Test Updates](docs/README_llm_pos_test_updates.md)** - Updates and testing information
 
-### Import System Refactoring (October 2025)
-- ✅ **Eliminated all try-except import patterns** for cleaner, faster imports
-- ✅ **Standardized import conventions** throughout the project
-- ✅ **Fixed relative/absolute import inconsistencies**
-- ✅ **Improved error messages** when dependencies are missing
+### 🧪 **Testing Documentation**
+- **[Tests README](tests/README.md)** - Testing framework and test execution guide
 
-### Operator Consolidation
-- ✅ **Removed classic POS-aware synonym replacement** - now using LLM version only
-- ✅ **Deprecated point crossover operator** - commented out but retained for reference
-- ✅ **Deprecated classic back-translation** - now using LLM-based versions only
-- ✅ **Updated to 12 active operators** (10 mutation + 2 crossover)
+### 🔧 **Configuration Files**
+- **[RGConfig.yaml](config/RGConfig.yaml)** - Response Generator configuration
+- **[PGConfig.yaml](config/PGConfig.yaml)** - Prompt Generator configuration
+- **[requirements.txt](requirements.txt)** - Python dependencies
 
-### Architecture Improvements
-- ✅ **Layered Architecture**: app.py → src/main.py → src/ea/RunEvolution.py → src/ea/EvolutionEngine.py
-- ✅ **Modular Operator Design**: Individual operator files for better maintainability
-- ✅ **Enhanced Import System**: Lazy imports and improved dependency management
-- ✅ **Steady-State Population Management**: Continuous evolution with elite preservation
-
-### Current Active Operators
-**Mutation Operators (10):**
-1. LLM_POSAwareSynonymReplacement
-2. MLMOperator
-3. LLMBasedParaphrasingOperator
-4. LLM_POSAwareAntonymReplacement
-5. StylisticMutator
-6. LLMBackTranslationHIOperator
-7. LLMBackTranslationFROperator
-8. LLMBackTranslationDEOperator
-9. LLMBackTranslationJAOperator
-10. LLMBackTranslationZHOperator
-
-**Crossover Operators (2):**
-1. SemanticSimilarityCrossover
-2. SemanticFusionCrossover
+### 📊 **Data Files**
+- **[prompt.xlsx](data/prompt.xlsx)** - Input prompts for evolution
+- **[outputs/](data/outputs/)** - Evolution results and tracking data
+- **[models/](models/)** - Local model files and configurations
 
 ## License
 

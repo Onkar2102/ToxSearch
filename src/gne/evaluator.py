@@ -424,6 +424,10 @@ class HybridModerationEvaluator:
                     # Save this genome immediately after evaluation
                     self._save_single_genome(genome, pop_path)
                     self.logger.debug("Saved genome %s immediately after evaluation", genome_id)
+                    
+                    # Add delay to prevent Google API rate limiting
+                    import time
+                    time.sleep(0.5)
                         
                 except Exception as e:
                     self.logger.error("Failed to process evaluation for genome %s: %s", genome.get('id'), e, exc_info=True)

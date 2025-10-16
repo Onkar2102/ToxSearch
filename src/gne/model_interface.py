@@ -113,11 +113,11 @@ class LlamaCppChatInterface(ModelInterface):
                 "model_path": model_path,
                 "n_ctx": 2048,  # Context window
                 "n_threads": None,  # Auto-detect
-                "n_gpu_layers": 0,  # Use CPU for now, can be optimized later
+                "n_gpu_layers": -1,  # Use all available GPU layers (MPS on Apple Silicon)
                 "verbose": False,
                 "use_mmap": True,  # Memory mapping for efficiency
                 "use_mlock": False,  # Don't lock memory
-                "low_vram": False,  # Not needed for CPU
+                "low_vram": False,  # Not needed for MPS
             }
             
             # Load model
