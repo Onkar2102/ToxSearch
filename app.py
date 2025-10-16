@@ -48,7 +48,7 @@ def check_requirements():
     # Check for required files
     required_files = [
         "src/main.py",
-        "config/modelConfig_llamacpp.yaml", 
+        "config/RGConfig.yaml", 
         "data/prompt.xlsx"
     ]
     
@@ -129,10 +129,10 @@ def print_results_summary():
     
     # Check for results files
     results_files = [
-        ("outputs/Population.json", "Final population"),
-        ("outputs/EvolutionTracker.json", "Evolution tracker"),
-        ("outputs/final_statistics.json", "Final statistics"),
-        ("outputs/successful_genomes_gen_*.json", "Successful genomes")
+        ("data/outputs/Population.json", "Final population"),
+        ("data/outputs/EvolutionTracker.json", "Evolution tracker"),
+        ("data/outputs/final_statistics.json", "Final statistics"),
+        ("data/outputs/successful_genomes_gen_*.json", "Successful genomes")
     ]
     
     for file_pattern, description in results_files:
@@ -152,7 +152,7 @@ def print_results_summary():
                 print(f"INFO: {description}: Not found")
     
     print("\nNext steps:")
-    print("1. Check outputs/ directory for detailed results")
+    print("1. Check data/outputs/ directory for detailed results")
     print("2. Open experiments/experiments.ipynb for analysis")
     print("3. Run python src/utils/m3_optimizer.py --report for performance report")
 
@@ -411,6 +411,12 @@ def main():
                        help="Moderation methods to use: 'google' (Perspective API), 'openai' (OpenAI Moderation), 'all' (both). Default: google")
     parser.add_argument("--steady-state", action="store_true", default=False,
                        help="Enable steady state population management (top 100 + remaining)")
+    parser.add_argument("--rg", type=str, default="llama3.2-3b-instruct-gguf",
+                       help="Response generation model to use from models/ directory")
+    parser.add_argument("--pg", type=str, default="llama3.2-3b-instruct-gguf",
+                       help="Prompt generation model to use from models/ directory")
+    parser.add_argument("--interactive-models", action="store_true", default=False,
+                       help="Enable interactive model selection mode")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     
@@ -473,7 +479,7 @@ def main():
             sys.exit(1)
         
         # Check data files
-        required_files = ["data/prompt.xlsx", "config/modelConfig_llamacpp.yaml"]
+        required_files = ["data/prompt.xlsx", "config/RGConfig.yaml", "config/PGConfig.yaml"]
         missing_files = []
         for file_path in required_files:
             if not Path(file_path).exists():
@@ -532,14 +538,24 @@ def main():
     if args.steady_state:
         cmd.extend(["--steady-state"])
     
+    # Add model selection arguments
+    cmd.extend(["--rg", args.rg])
+    cmd.extend(["--pg", args.pg])
+    
+    # Add interactive flag if requested
+    if args.interactive_models:
+        cmd.append("--interactive")
+    
     print(f"\nStarting evolutionary pipeline...")
     print(f"Generations: {generations if generations else 'unlimited'}")
     print(f"Threshold: {threshold}")
     print(f"Moderation methods: {', '.join(moderation_methods) if moderation_methods != ['google'] else 'Google Perspective API'}")
     print(f"Steady state: {'Enabled' if args.steady_state else 'Disabled'}")
+    print(f"Response Generator: {args.rg}")
+    print(f"Prompt Generator: {args.pg}")
     print(f"Check interval: {args.check_interval/60:.1f} minutes")
     print(f"Stuck threshold: {args.stuck_threshold/3600:.1f} hours")
-    print("Monitor progress in the logs and outputs/ directory")
+    print("Monitor progress in the logs and data/outputs/ directory")
     print("This may take several minutes to hours depending on your settings")
     print()
     

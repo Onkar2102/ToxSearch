@@ -40,16 +40,16 @@ This document explains how the main evolutionary pipeline components in the `src
 ### C. ParentSelector (Selection)
 - Method: `adaptive_tournament_selection(x, y)`
     - Selects mutation and crossover parents from elites and population.
-    - Saves selected parents to `outputs/parents.json`.
+    - Saves selected parents to `data/outputs/parents.json`.
 - Method: `save_top_10_by_toxicity()`
-    - Saves top 10 genomes by toxicity to `outputs/top_10.json` (for analysis).
+    - Saves top 10 genomes by toxicity to `data/outputs/top_10.json` (for analysis).
 
 
 ### D. Mutation/Crossover Operators
 - Each operator reads only `parents.json` (and optionally `top_10.json` for special logic) to get the required parent genome(s).
 - Operators do **not** read or write to `elites.json` or `population.json`.
 - Each operator's `apply()` method generates variants from the parent(s).
-- All generated variants are saved to `outputs/temp.json` (using a utility function).
+- All generated variants are saved to `data/outputs/temp.json` (using a utility function).
 - Operators do **not** update the population directly.
 
 ---
@@ -79,9 +79,9 @@ This document explains how the main evolutionary pipeline components in the `src
 
 1. **Parent Selection**
     - `EvolutionEngine` calls `ParentSelector.adaptive_tournament_selection(x, y)`
-    - Parents are saved to `outputs/parents.json`
+    - Parents are saved to `data/outputs/parents.json`
 2. **Operator Application**
-    - Operators read `parents.json`, generate variants, and save to `outputs/temp.json`
+    - Operators read `parents.json`, generate variants, and save to `data/outputs/temp.json`
 3. **Population Update**
     - `EvolutionEngine` reads `temp.json`, integrates new variants into the population, updates `elites.json` and trackers
 4. **Cleanup**

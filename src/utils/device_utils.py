@@ -37,9 +37,9 @@ class DeviceManager:
             self._load_config()
     
     def _load_config(self):
-        """Load device configuration from modelConfig_llamacpp.yaml"""
+        """Load device configuration from RGConfig.yaml"""
         try:
-            with open("config/modelConfig_llamacpp.yaml", 'r') as f:
+            with open("config/RGConfig.yaml", 'r') as f:
                 config = yaml.safe_load(f)
             self._config_cache = config.get("device_config", {})
             self.logger.debug("Device configuration loaded successfully")

@@ -11,7 +11,7 @@ The main orchestrator for the evolutionary process.
 - Manages genome populations and evolution cycles (steady-state evolution)
 - Coordinates parent selection and variant generation
 - Tracks variant counts and integrates deduplication
-- Steady-state population persistence (`outputs/elites.json`)
+- Steady-state population persistence (`data/outputs/elites.json`)
 - Memory-optimized for large populations
 - Supports 12 text variation operators
 
@@ -128,7 +128,7 @@ Comprehensive implementation of mutation and crossover operators as separate mod
   - Meaning-preserving combinations
 
 #### **Instruction-Aware Crossover**
-- **`InstructionPreservingCrossover`**: Crossover that preserves instruction structure
+- **`SemanticFusionCrossover`**: Crossover that preserves instruction structure
   - Uses config-driven prompt templates
   - Preserves command/question structure
   - Optimizes for north star metric
@@ -162,7 +162,7 @@ flowchart TD
   
   subgraph "Crossover Operators (2)"
     F1[SemanticSimilarityCrossover]
-    F2[InstructionPreservingCrossover]
+    F2[SemanticFusionCrossover]
   end
   
   C --> E1
@@ -318,20 +318,21 @@ graph TB
   end
   
   subgraph "Individual Operator Files"
-    E1[llm_pos_aware_synonym_replacement.py<br/>POS-aware synonym replacement]
+    E1[synonym_replacement.py<br/>POS-aware synonym replacement]
     E2[mlm_operator.py<br/>Masked language modeling]
-    E3[paraphrasing_operator.py<br/>OpenAI paraphrasing]
-    E4[llm_pos_aware_antonym_replacement.py<br/>POS-aware antonym replacement]
+    E3[paraphrasing.py<br/>OpenAI paraphrasing]
+    E4[antonym_replacement.py<br/>POS-aware antonym replacement]
     E5[stylistic_mutator.py<br/>Style variation]
-    E6[llm_back_translation_operators.py<br/>Multi-language back-translation]
+    E6[back_translation.py<br/>Multi-language back-translation]
     E7[semantic_similarity_crossover.py<br/>Semantic similarity crossover]
-    E8[instruction_preserving_crossover.py<br/>Instruction-preserving crossover]
+    E8[fusion_crossover.py<br/>Instruction-preserving crossover]
   end
   
   subgraph "Key Dependencies"
     I[utils.population_io<br/>Steady-state population management]
-    J[gne.LlamaCppTextGenerator<br/>Text generation]
-    K[gne.hybrid_moderation<br/>Safety evaluation]
+    J[gne.ResponseGenerator<br/>Response generation]
+    K[gne.PromptGenerator<br/>Prompt generation]
+    L[gne.evaluator<br/>Safety evaluation]
     L[utils.custom_logging<br/>Performance tracking]
   end
   
@@ -357,7 +358,7 @@ graph TB
 - torch, transformers, spacy, nltk, openai
 - sentence-transformers (for semantic crossover)
 - huggingface-hub (for model downloads)
-- utils.custom_logging, utils.population_io, gne.LlamaCppTextGenerator
+- utils.custom_logging, utils.population_io, gne.ResponseGenerator, gne.PromptGenerator
 
 ## 📝 **Recent Updates and Fixes**
 
@@ -381,14 +382,14 @@ graph TB
 - Layered architecture: main.py → RunEvolution.py → EvolutionEngine.py
 
 ### **Two-tier Deduplication in EA**
-- EvolutionEngine performs intra-file deduplication of staged variants within `outputs/temp.json` immediately after generation.
+- EvolutionEngine performs intra-file deduplication of staged variants within `data/outputs/temp.json` immediately after generation.
 - RunEvolution performs cross-file deduplication, comparing `temp.json` against `elites.json`, `Population.json`, and `most_toxic.json` before merging/clearing.
 
 ## 🚀 **Usage Examples**
 
 ### **Basic Operator Usage**
 ```python
-from src.ea.llm_back_translation_operators import LLMBackTranslationHIOperator
+from src.ea.back_translation import LLMBackTranslationHIOperator
 
 # Initialize operator
 operator = LLMBackTranslationHIOperator()

@@ -58,15 +58,15 @@ python src/main.py --generations 25
 
 ```mermaid
 flowchart TD
-  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → outputs/elites.json]
+  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → data/outputs/elites.json]
   B --> C[Steady-State Evolution Loop]
   
   subgraph "Evolution Loop"
     C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: LlamaCppTextGenerator]
+    D --> E[Text Generation: ResponseGenerator]
     E --> F[Safety Evaluation: Hybrid Moderation]
     F --> G[Evolution: 12 Variation Operators]
-    G --> H[Update Elites: outputs/elites.json]
+    G --> H[Update Elites: data/outputs/elites.json]
     H --> I{Threshold Reached?}
     I -->|No| D
     I -->|Yes| J[Complete]
@@ -101,8 +101,9 @@ graph TB
   end
   
   subgraph "Generation & Evaluation"
-    D1[LlamaCppTextGenerator.py<br/>Task-specific text generation]
-    D2[hybrid_moderation.py<br/>Safety evaluation]
+    D1[ResponseGenerator.py<br/>Response generation using prompt_template]
+    D2[PromptGenerator.py<br/>Prompt generation using task templates]
+    D3[evaluator.py<br/>Safety evaluation]
   end
   
   A1 --> A2
@@ -158,15 +159,16 @@ Detailed, professional design specification: goals, data models, algorithms, ope
 Complete guide to genetic algorithms, variation operators, and evolution strategies.
 
 ### **Generation & Evaluation** (`src/gne/`)
-- `LlamaCppTextGenerator.py` - llama.cpp model integration with memory management and task-specific templates
-- `hybrid_moderation.py` - Hybrid moderation using Google Perspective API + OpenAI
+- `ResponseGenerator.py` - Response generation using prompt_template from RGConfig.yaml
+- `PromptGenerator.py` - Prompt generation using task templates from PGConfig.yaml
+- `evaluator.py` - Content moderation using Google Perspective API
 
 ### Deduplication & Staging
-- Variants are first staged in `outputs/temp.json` during a generation cycle.
+- Variants are first staged in `data/outputs/temp.json` during a generation cycle.
 - Intra-file deduplication happens immediately after variant creation inside `EvolutionEngine.generate_variants_global()` to remove duplicates within `temp.json`.
-- Cross-file deduplication happens in the evolution runner, where staged variants in `temp.json` are compared against `outputs/elites.json`, `outputs/Population.json`, and `outputs/most_toxic.json`; duplicates are skipped.
+- Cross-file deduplication happens in the evolution runner, where staged variants in `temp.json` are compared against `data/outputs/elites.json`, `data/outputs/Population.json`, and `data/outputs/most_toxic.json`; duplicates are skipped.
 - After processing, `temp.json` is cleared; accepted genomes are merged into elites or moved to `most_toxic.json` based on moderation.
-- Text generation uses task templates defined in config; the default task_type is `mutation_crossover` for general generation.
+- Response generation uses prompt_template from RGConfig.yaml; prompt generation uses task templates from PGConfig.yaml.
 
 ### **Utilities** (`src/utils/`)
 - `population_io.py` - Steady-state population management (`elites.json`) and `EvolutionTracker.json`
@@ -193,7 +195,7 @@ python src/main.py --generations 10
 python -c "from src.utils.population_io import load_and_initialize_population; load_and_initialize_population('data/prompt.xlsx', 'outputs')"
 
 # Load elites for analysis
-python -c "from src.utils.population_io import load_elites; elites = load_elites('outputs/elites.json')"
+python -c "from src.utils.population_io import load_elites; elites = load_elites('data/outputs/elites.json')"
 ```
 
 ### **Operator Testing**
@@ -202,7 +204,7 @@ python -c "from src.utils.population_io import load_elites; elites = load_elites
 python tests/test_operators_demo.py
 
 # Test specific back translation
-python -c "from src.ea.llm_back_translation_operators import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
+python -c "from src.ea.back_translation import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
 ```
 
  
@@ -212,7 +214,7 @@ python -c "from src.ea.llm_back_translation_operators import LLMBackTranslationH
 ## Output Structure
 
 ```
-outputs/
+data/outputs/
 ├── elites.json              # Steady-state elite population
 ├── Population.json          # Full population (if needed)
 ├── population_index.json    # Population metadata
@@ -240,7 +242,7 @@ outputs/
 
 #### **Crossover Operators (2)**
 1. **SemanticSimilarityCrossover** - Semantic similarity-based crossover
-2. **InstructionPreservingCrossover** - LLM-based instruction structure preservation
+2. **SemanticFusionCrossover** - LLM-based instruction structure preservation
 
 ### Deprecated Operators
 - **POSAwareSynonymReplacement** - Replaced by LLM version
@@ -301,7 +303,7 @@ flowchart TD
 
 **Crossover Operators (2):**
 1. SemanticSimilarityCrossover
-2. InstructionPreservingCrossover
+2. SemanticFusionCrossover
 
 ## License
 

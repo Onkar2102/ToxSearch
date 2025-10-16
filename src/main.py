@@ -34,41 +34,153 @@ get_project_root, get_config_path, get_data_path, get_outputs_path, _extract_nor
 # SECTION 3: MODEL CONFIGURATION UPDATES
 # ============================================================================
 
+def list_available_models():
+    """List all available models in the models directory."""
+    models_dir = get_project_root() / "models"
+    if not models_dir.exists():
+        return []
+    
+    available_models = []
+    for model_dir in models_dir.iterdir():
+        if model_dir.is_dir():
+            # Check if directory contains GGUF files
+            gguf_files = list(model_dir.glob("*.gguf"))
+            if gguf_files:
+                available_models.append(model_dir.name)
+    
+    return sorted(available_models)
+
+def interactive_model_selection():
+    """Interactive model selection for PG and RG."""
+    available_models = list_available_models()
+    
+    if not available_models:
+        print("❌ No models found in models/ directory!")
+        return None, None
+    
+    print("\n🤖 Available Models:")
+    print("=" * 50)
+    for i, model in enumerate(available_models, 1):
+        print(f"{i:2d}. {model}")
+    
+    print("\n" + "=" * 50)
+    
+    # Select Response Generator (RG)
+    while True:
+        try:
+            rg_choice = input(f"\n📝 Select Response Generator (RG) model [1-{len(available_models)}] (default: 1): ").strip()
+            if not rg_choice:
+                rg_choice = "1"
+            
+            rg_index = int(rg_choice) - 1
+            if 0 <= rg_index < len(available_models):
+                rg_model = available_models[rg_index]
+                break
+            else:
+                print(f"❌ Please enter a number between 1 and {len(available_models)}")
+        except ValueError:
+            print("❌ Please enter a valid number")
+    
+    # Select Prompt Generator (PG)
+    while True:
+        try:
+            pg_choice = input(f"🔧 Select Prompt Generator (PG) model [1-{len(available_models)}] (default: 2): ").strip()
+            if not pg_choice:
+                pg_choice = "2"
+            
+            pg_index = int(pg_choice) - 1
+            if 0 <= pg_index < len(available_models):
+                pg_model = available_models[pg_index]
+                break
+            else:
+                print(f"❌ Please enter a number between 1 and {len(available_models)}")
+        except ValueError:
+            print("❌ Please enter a valid number")
+    
+    print(f"\n✅ Selected Models:")
+    print(f"   📝 Response Generator (RG): {rg_model}")
+    print(f"   🔧 Prompt Generator (PG): {pg_model}")
+    
+    return rg_model, pg_model
+
 def update_model_configs(rg_model, pg_model, logger):
-    """Update configuration files with selected models."""
+    """Update configuration files with selected models.
+
+    Resolves the concrete .gguf file for each alias by scanning models/{alias}.
+    Preference order: Q4_K_M → Q4_K_S → Q4_0 → any .gguf (first sorted).
+    """
     try:
         logger.info(f"Updating config files with models: RG={rg_model}, PG={pg_model}")
-        
+
+        def resolve_model_file(alias: str) -> Optional[str]:
+            base_dir = get_project_root() / "models" / alias
+            if not base_dir.exists():
+                logger.warning("Model alias directory not found: %s", base_dir)
+                return None
+            # Collect all gguf files
+            ggufs = sorted([p for p in base_dir.glob("*.gguf")], key=lambda p: p.name)
+            if not ggufs:
+                logger.warning("No GGUF files found under: %s", base_dir)
+                return None
+            # Preference list
+            pref_order = [
+                "Q4_K_M", "Q4_K_S", "Q4_0", "Q5_K_M", "Q3_K_M", "Q3_K_L", "Q2_K"
+            ]
+            # Try to find the first matching by preference
+            for pref in pref_order:
+                for f in ggufs:
+                    if pref in f.name:
+                        rel = Path("./models") / alias / f.name
+                        logger.info("Resolved %s -> %s", alias, rel)
+                        return str(rel)
+            # Fallback to the first gguf
+            rel = Path("./models") / alias / ggufs[0].name
+            logger.info("Resolved (fallback) %s -> %s", alias, rel)
+            return str(rel)
+
+        # Resolve concrete files
+        rg_file = resolve_model_file(rg_model)
+        pg_file = resolve_model_file(pg_model)
+
+        # Validate that we have at least one model resolved
+        if not rg_file and not pg_file:
+            logger.error("No models could be resolved for RG=%s, PG=%s", rg_model, pg_model)
+            raise ValueError(f"No models could be resolved for RG={rg_model}, PG={pg_model}")
+
         # Update RGConfig.yaml
         rg_config_path = get_config_path() / "RGConfig.yaml"
         if rg_config_path.exists():
             with open(rg_config_path, 'r') as f:
-                rg_config = yaml.safe_load(f)
-            
-            # Update response generator model path
-            if "response_generator" in rg_config:
-                rg_config["response_generator"]["name"] = f"./models/{rg_model}/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
-            
-            with open(rg_config_path, 'w') as f:
-                yaml.dump(rg_config, f, default_flow_style=False)
-            logger.info(f"Updated RGConfig.yaml with model: {rg_model}")
-        
+                rg_config = yaml.safe_load(f) or {}
+
+            if rg_file:
+                rg_section = rg_config.get("response_generator", {})
+                rg_section["name"] = rg_file
+                rg_config["response_generator"] = rg_section
+                with open(rg_config_path, 'w') as f:
+                    yaml.dump(rg_config, f, default_flow_style=False)
+                logger.info("Updated RGConfig.yaml with file: %s", rg_file)
+            else:
+                logger.warning("Skipped RGConfig.yaml update; no file resolved for alias '%s'", rg_model)
+
         # Update PGConfig.yaml
         pg_config_path = get_config_path() / "PGConfig.yaml"
         if pg_config_path.exists():
             with open(pg_config_path, 'r') as f:
-                pg_config = yaml.safe_load(f)
-            
-            # Update prompt generator model path
-            if "prompt_generator" in pg_config:
-                pg_config["prompt_generator"]["name"] = f"./models/{pg_model}/Llama-3.2-3B-Instruct-Q4_K_M.gguf"
-            
-            with open(pg_config_path, 'w') as f:
-                yaml.dump(pg_config, f, default_flow_style=False)
-            logger.info(f"Updated PGConfig.yaml with model: {pg_model}")
-        
+                pg_config = yaml.safe_load(f) or {}
+
+            if pg_file:
+                pg_section = pg_config.get("prompt_generator", {})
+                pg_section["name"] = pg_file
+                pg_config["prompt_generator"] = pg_section
+                with open(pg_config_path, 'w') as f:
+                    yaml.dump(pg_config, f, default_flow_style=False)
+                logger.info("Updated PGConfig.yaml with file: %s", pg_file)
+            else:
+                logger.warning("Skipped PGConfig.yaml update; no file resolved for alias '%s'", pg_model)
+
         logger.info("Model configuration updates completed successfully")
-        
+
     except Exception as e:
         logger.error(f"Failed to update model configurations: {e}")
         raise
@@ -147,7 +259,7 @@ def calculate_dynamic_threshold(evaluated_genomes, north_star_metric, logger, pr
         raise
 
 
-def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="llama3.2-3b-instruct-gguf", pg_model="llama3.2-3b-instruct-gguf"):
+def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="llama3.2-3b-instruct-gguf", pg_model="llama3.2-3b-instruct-gguf", interactive=False):
     """
     Main entry point for evolutionary text generation with toxicity optimization.
     
@@ -202,6 +314,16 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
     logger.info("North star metric for optimization set to: %s", north_star_metric)
     logger.info("North star threshold for stopping: %.4f (low toxicity target)", north_star_threshold)
     logger.info("Maximum generations allowed for evolution: %s", max_generations)
+
+    # Interactive model selection if requested
+    if interactive:
+        print("\n🎯 Interactive Model Selection Mode")
+        print("=" * 50)
+        rg_model, pg_model = interactive_model_selection()
+        if rg_model is None or pg_model is None:
+            logger.error("Model selection failed or cancelled")
+            return
+        logger.info("Interactive model selection completed: RG=%s, PG=%s", rg_model, pg_model)
 
     # Phase 1: Update config files with selected models
     try:
@@ -355,7 +477,7 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                 log_file=log_file,
                 threshold=north_star_threshold,
                 current_cycle=generation_count,
-                max_variants=5
+                max_variants=1
             )
 
             logger.info("Evolution generation completed successfully")
@@ -466,75 +588,9 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                     logger.error("Population redistribution failed: %s", e, exc_info=True)
                     # Continue execution even if redistribution fails
                 
-                # Update EvolutionTracker with best genome from current generation
-                try:
-                    from ea.RunEvolution import _extract_north_star_score
-                    from pathlib import Path
-                    
-                    # Find best genome from temp.json variants (before distribution)
-                    temp_path = Path("outputs/temp.json")
-                    best_genome_id = None
-                    best_score = 0.0
-                    
-                    if temp_path.exists():
-                        with open(temp_path, 'r', encoding='utf-8') as f:
-                            temp_variants = json.load(f)
-                        
-                        # Find best genome from current generation variants
-                        for variant in temp_variants:
-                            if variant and variant.get("moderation_result"):
-                                score = _extract_north_star_score(variant, north_star_metric)
-                                if score > best_score:
-                                    best_score = score
-                                    best_genome_id = variant.get("id")
-                    
-                    # Update EvolutionTracker
-                    evolution_tracker_path = Path("outputs/EvolutionTracker.json")
-                    if evolution_tracker_path.exists():
-                        with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                            evolution_tracker = json.load(f)
-                        
-                        # Find current generation
-                        current_generation = len(evolution_tracker.get("generations", []))
-                        
-                        # Update or add generation data
-                        generation_data = {
-                            "generation_number": current_generation,
-                            "genome_id": best_genome_id,
-                            "max_score": best_score,
-                            "parents": [],
-                            "elites_threshold": threshold_results["elite_threshold"]
-                        }
-                        
-                        # Check if this generation already exists
-                        existing_gen = None
-                        for gen in evolution_tracker.get("generations", []):
-                            if gen.get("generation_number") == current_generation:
-                                existing_gen = gen
-                                break
-                        
-                        if existing_gen:
-                            # Update existing generation
-                            existing_gen.update(generation_data)
-                            logger.info("Updated existing generation %d in EvolutionTracker", current_generation)
-                        else:
-                            # Add new generation
-                            evolution_tracker["generations"].append(generation_data)
-                            evolution_tracker["total_generations"] = max(evolution_tracker.get("total_generations", 0), current_generation + 1)
-                            logger.info("Added new generation %d to EvolutionTracker", current_generation)
-                        
-                        # Sort generations by generation number
-                        evolution_tracker["generations"].sort(key=lambda x: x.get("generation_number", 0))
-                        
-                        # Save updated EvolutionTracker
-                        with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
-                            json.dump(evolution_tracker, f, indent=2, ensure_ascii=False)
-                        
-                        logger.info("Updated EvolutionTracker with generation %d: max_score=%.4f, genome_id=%s", 
-                                   current_generation, best_score, best_genome_id)
-                    
-                except Exception as e:
-                    logger.error("Failed to update EvolutionTracker: %s", e, exc_info=True)
+                # EvolutionTracker is already updated by EvolutionEngine with proper parent and variant data
+                # No need to override it here
+                logger.info("EvolutionTracker already updated by EvolutionEngine with parent and variant information")
                 
             except Exception as e:
                 logger.error("Threshold recalculation and distribution failed: %s", e, exc_info=True)
@@ -717,6 +773,8 @@ if __name__ == "__main__":
                        help="Response generation model to use from models/ directory")
     parser.add_argument("--pg", type=str, default="llama3.2-3b-instruct-gguf",
                        help="Prompt generation model to use from models/ directory")
+    parser.add_argument("--interactive", action="store_true", default=False,
+                       help="Enable interactive model selection mode")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     args = parser.parse_args()
@@ -725,7 +783,8 @@ if __name__ == "__main__":
     try:
         main(model_names=args.model_names, max_generations=args.generations, 
              north_star_threshold=args.threshold, moderation_methods=args.moderation_methods,
-             threshold_percentage=args.threshold_percentage, rg_model=args.rg, pg_model=args.pg)
+             threshold_percentage=args.threshold_percentage, rg_model=args.rg, pg_model=args.pg,
+             interactive=args.interactive)
         sys.exit(0)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")

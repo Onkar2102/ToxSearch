@@ -4,23 +4,23 @@
 
 ```mermaid
 flowchart TD
-  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → outputs/elites.json]
+  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → data/outputs/elites.json]
   B --> C[Steady-State Evolution Loop]
   
   subgraph "Evolution Loop"
     C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: gne.LlamaCppTextGenerator]
-    E --> F[Safety Evaluation: gne.hybrid_moderation]
+    D --> E[Text Generation: gne.ResponseGenerator]
+    E --> F[Safety Evaluation: gne.evaluator]
     F --> G[Evolution: 12 Text Variation Operators]
-    G --> H[Update Elites: outputs/elites.json]
+    G --> H[Update Elites: data/outputs/elites.json]
     H --> I{Threshold Reached?}
     I -->|No| D
     I -->|Yes| J[Complete]
   end
   
-  F --> K[Tracking: outputs/EvolutionTracker.json]
+  F --> K[Tracking: data/outputs/EvolutionTracker.json]
   H --> L[Redistribution: elites ↔ Population.json]
-  G --> M1[Staging: outputs/temp.json]
+  G --> M1[Staging: data/outputs/temp.json]
   M1 --> M2[Intra-file Dedup: EvolutionEngine]
   M2 --> M3[Cross-file Dedup: RunEvolution vs elites/population/most_toxic]
   
@@ -213,8 +213,9 @@ sequenceDiagram
   participant M as main.py/app.py
   participant PS as ParentSelector
   participant TV as TextVariationOperators
-  participant TG as LlamaCppTextGenerator
-  participant HM as hybrid_moderation
+  participant RG as ResponseGenerator
+  participant PG as PromptGenerator
+  participant EV as evaluator
   participant EE as EvolutionEngine
   participant PO as population_io
   
@@ -275,8 +276,8 @@ flowchart TD
   end
   
   subgraph "Storage Layer"
-    F[outputs/elites.json<br/>Steady-State Population]
-    G[outputs/EvolutionTracker.json<br/>Progress Tracking]
+    F[data/outputs/elites.json<br/>Steady-State Population]
+    G[data/outputs/EvolutionTracker.json<br/>Progress Tracking]
     H[outputs/population_index.json<br/>Metadata & Index]
     I[outputs/Population.json<br/>Full Population Backup]
   end
@@ -337,7 +338,8 @@ graph TB
     A[app.py<br/>Main entry point with setup and monitoring]
     
     subgraph "Configuration"
-      B[config/modelConfig_llamacpp.yaml<br/>Model, task templates, and memory settings]
+      B1[config/RGConfig.yaml<br/>Response generation model configuration]
+      B2[config/PGConfig.yaml<br/>Prompt generation model configuration]
     end
     
     subgraph "Data"
@@ -348,9 +350,10 @@ graph TB
       D[main.py<br/>Core evolution pipeline]
       
       subgraph "Generation & Evaluation (gne/)"
-        E1[LlamaCppTextGenerator.py<br/>llama.cpp integration with task-specific templates]
-        E2[hybrid_moderation.py<br/>Hybrid safety evaluation (Google + OpenAI)]
-        E3[__init__.py<br/>Lazy import functions]
+        E1[ResponseGenerator.py<br/>Response generation using prompt_template]
+        E2[PromptGenerator.py<br/>Prompt generation using task templates]
+        E3[evaluator.py<br/>Content moderation evaluation]
+        E4[__init__.py<br/>Lazy import functions]
       end
       
       subgraph "Evolutionary Algorithms (ea/)"
@@ -455,12 +458,12 @@ This enhanced architecture provides a robust, scalable, and memory-efficient fra
 
 ```mermaid
 flowchart TD
-  A[Operators Generate Variants] --> B[Stage to outputs/temp.json]
+  A[Operators Generate Variants] --> B[Stage to data/outputs/temp.json]
   B --> C[Intra-File Deduplication<br/>EvolutionEngine.generate_variants_global]
   C --> D[Cross-File Deduplication<br/>RunEvolution._check_and_move_genomes_from_temp]
   D --> E{Moderation Outcome}
-  E -->|Toxic| F[Move to outputs/most_toxic.json]
-  E -->|Accepted| G[Merge into outputs/elites.json]
+  E -->|Toxic| F[Move to data/outputs/most_toxic.json]
+  E -->|Accepted| G[Merge into data/outputs/elites.json]
   F --> H[Clear temp.json]
   G --> H
 
@@ -472,7 +475,7 @@ flowchart TD
 ```
 
 Key points:
-- Staging occurs in `outputs/temp.json` for the current generation cycle.
+- Staging occurs in `data/outputs/temp.json` for the current generation cycle.
 - Intra-file dedup removes duplicate prompts/IDs within `temp.json` (EvolutionEngine).
 - Cross-file dedup removes items already present in `elites.json`, `Population.json`, and `most_toxic.json` (RunEvolution).
 - After processing and routing, `temp.json` is cleared for the next cycle.

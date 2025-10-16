@@ -15,18 +15,18 @@ from utils import get_custom_logging
 from .ParentSelector import ParentSelector
 from itertools import combinations
 from pathlib import Path
-from .llm_pos_aware_synonym_replacement import LLM_POSAwareSynonymReplacement
+from .synonym_replacement import LLM_POSAwareSynonymReplacement
 from .mlm_operator import MLMOperator
-from .paraphrasing_operator import LLMBasedParaphrasingOperator
-from .llm_pos_aware_antonym_replacement import LLM_POSAwareAntonymReplacement
+from .paraphrasing import LLMBasedParaphrasingOperator
+from .antonym_replacement import LLM_POSAwareAntonymReplacement
 from .stylistic_mutator import StylisticMutator
-from .llm_back_translation_operators import (
+from .back_translation import (
     LLMBackTranslationHIOperator, LLMBackTranslationFROperator, 
     LLMBackTranslationDEOperator, LLMBackTranslationJAOperator, 
     LLMBackTranslationZHOperator
 )
 from .semantic_similarity_crossover import SemanticSimilarityCrossover
-from .instruction_preserving_crossover import InstructionPreservingCrossover
+from .fusion_crossover import SemanticFusionCrossover
 
 # Global generator instances - will be set by main.py
 _global_response_generator = None
@@ -59,7 +59,7 @@ def get_generator():
 
 class EvolutionEngine:
 
-    def __init__(self, north_star_metric, log_file, current_cycle=None, max_variants=3, adaptive_selection_after=5, max_num_parents=4):
+    def __init__(self, north_star_metric, log_file, current_cycle=None, max_variants=1, adaptive_selection_after=5, max_num_parents=4):
         self.genomes: List[Dict] = []
         self.next_id = 0
         self.north_star_metric = north_star_metric
@@ -105,7 +105,7 @@ class EvolutionEngine:
     def _count_variants_from_temp(self) -> Dict[str, int]:
         """Count variants in temp.json by type (mutation/crossover)."""
         try:
-            temp_path = Path("outputs/temp.json")
+            temp_path = Path("data/outputs/temp.json")
             if not temp_path.exists():
                 return {"mutation_variants": 0, "crossover_variants": 0, "variants_created": 0}
             
@@ -273,10 +273,14 @@ class EvolutionEngine:
         generation_data = self._analyze_generation_data(parents, variant_counts)
         self._last_generation_data = generation_data  # Store for later retrieval
 
-        # Step 9: Clean up transient selection artifacts
+        # Step 9: Update EvolutionTracker with final variant counts
+        self.logger.debug(f"Updating EvolutionTracker with variant counts: {generation_data}")
+        self._update_evolution_tracker_with_variants(evolution_tracker, generation_data)
+        
+        # Step 10: Clean up transient selection artifacts
         self.clean_parents_file()
         
-        # Step 10: Final logging summary
+        # Step 11: Final logging summary
         self.logger.info(
             "Generated %d unique variants (mutation: %d, crossover: %d) for evolution cycle %d.",
             generation_data["variants_created"],
@@ -293,7 +297,7 @@ class EvolutionEngine:
             List[Dict]: List of parent genomes
         """
         try:
-            parents_path = Path("outputs/parents.json")
+            parents_path = Path("data/outputs/parents.json")
             if not parents_path.exists():
                 self.logger.warning("Parents file not found: %s", parents_path)
                 return []
@@ -320,7 +324,7 @@ class EvolutionEngine:
             variants: List of variant genomes to append
         """
         try:
-            temp_path = Path("outputs/temp.json")
+            temp_path = Path("data/outputs/temp.json")
             
             # Load existing variants
             if temp_path.exists():
@@ -345,8 +349,8 @@ class EvolutionEngine:
     def clean_parents_file(self) -> None:
         """Empty the parents.json and top_10.json files after all operators have processed the parents."""
         try:
-            parents_path = Path("outputs/parents.json")
-            top10_path = Path("outputs/top_10.json")
+            parents_path = Path("data/outputs/parents.json")
+            top10_path = Path("data/outputs/top_10.json")
             emptied = []
             for path in [parents_path, top10_path]:
                 # Ensure parent directory exists
@@ -363,10 +367,10 @@ class EvolutionEngine:
     def _get_single_parent_operators(self):
         """Return list of mutation operators that require only a single parent."""
         return [
-            LLM_POSAwareSynonymReplacement(log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
-            MLMOperator(log_file=self.log_file, generator=self.prompt_generator),
+            LLM_POSAwareSynonymReplacement(self.north_star_metric, log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
+            MLMOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
             LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-            LLM_POSAwareAntonymReplacement(log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
+            LLM_POSAwareAntonymReplacement(self.north_star_metric, log_file=self.log_file, max_variants=self.max_variants, num_POS_tags=1, generator=self.prompt_generator),
             StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
             LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
             LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
@@ -379,7 +383,7 @@ class EvolutionEngine:
         """Return list of crossover operators that require multiple parents."""
         return [
             SemanticSimilarityCrossover(log_file=self.log_file),
-            InstructionPreservingCrossover(north_star_metric=self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator)
+            SemanticFusionCrossover(north_star_metric=self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator)
         ]
 
     def _update_evolution_tracker_with_parents(self, evolution_tracker: Dict[str, Any], parents: List[Dict]) -> None:
@@ -397,10 +401,14 @@ class EvolutionEngine:
             # Extract parent information with scores
             parent_info = []
             for parent in parents:
+                # Use scores from slimmed parent data, fallback to extraction if available
+                scores = parent.get("scores", {})
+                north_star_score = scores.get(self.north_star_metric, 0.0)
+                
                 parent_data = {
                     "id": parent.get("id"),
                     "generation": parent.get("generation", 0),
-                    "north_star_score": parent.get("scores", {}).get("toxicity", 0.0)
+                    "north_star_score": north_star_score
                 }
                 parent_info.append(parent_data)
             
@@ -442,7 +450,7 @@ class EvolutionEngine:
             
             # Save updated evolution tracker
             from pathlib import Path
-            outputs_path = Path("outputs")
+            outputs_path = Path("data/outputs")
             evolution_tracker_path = outputs_path / "EvolutionTracker.json"
             
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
@@ -452,6 +460,60 @@ class EvolutionEngine:
             
         except Exception as e:
             self.logger.error(f"Failed to update EvolutionTracker with parent information: {e}")
+
+    def _update_evolution_tracker_with_variants(self, evolution_tracker: Dict[str, Any], generation_data: Dict[str, Any]) -> None:
+        """
+        Update EvolutionTracker with variant counts after variant generation is complete.
+        
+        Args:
+            evolution_tracker: Evolution tracker dictionary to update
+            generation_data: Generation data containing variant counts
+        """
+        try:
+            if not evolution_tracker or not generation_data:
+                self.logger.warning("Cannot update EvolutionTracker: evolution_tracker or generation_data is None")
+                return
+            
+            self.logger.debug(f"Updating EvolutionTracker with variant counts for generation {self.current_cycle}")
+            
+            # Find the current generation entry
+            current_generation = self.current_cycle if self.current_cycle is not None else len(evolution_tracker.get("generations", []))
+            
+            current_gen = None
+            for gen in evolution_tracker.get("generations", []):
+                if gen.get("generation_number") == current_generation:
+                    current_gen = gen
+                    break
+            
+            if current_gen is None:
+                self.logger.warning(f"Generation {current_generation} not found in EvolutionTracker for variant update, creating it")
+                # Create the generation entry if it doesn't exist
+                current_gen = {
+                    "generation_number": current_generation,
+                    "genome_id": None,
+                    "max_score": 0.0,
+                    "parents": [],
+                    "elites_threshold": 0.0
+                }
+                evolution_tracker.setdefault("generations", []).append(current_gen)
+            
+            # Update variant counts
+            current_gen["variants_created"] = generation_data.get("variants_created", 0)
+            current_gen["mutation_variants"] = generation_data.get("mutation_variants", 0)
+            current_gen["crossover_variants"] = generation_data.get("crossover_variants", 0)
+            
+            # Save updated evolution tracker
+            from pathlib import Path
+            outputs_path = Path("data/outputs")
+            evolution_tracker_path = outputs_path / "EvolutionTracker.json"
+            
+            with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                json.dump(evolution_tracker, f, indent=2, ensure_ascii=False)
+            
+            self.logger.info(f"Updated EvolutionTracker with variant counts: {generation_data['variants_created']} total ({generation_data['mutation_variants']} mutation, {generation_data['crossover_variants']} crossover)")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to update EvolutionTracker with variant information: {e}")
 
     def get_last_generation_data(self) -> Dict[str, Any]:
         """Get the generation data from the last run for tracking purposes."""
@@ -465,14 +527,14 @@ class EvolutionEngine:
 
     def _deduplicate_temp_json(self) -> int:
         """
-        Remove duplicate variants within outputs/temp.json based on normalized prompt.
+        Remove duplicate variants within data/outputs/temp.json based on normalized prompt.
         Keeps the first occurrence and discards subsequent duplicates.
         
         Returns:
             int: Number of duplicates removed
         """
         try:
-            temp_path = Path("outputs/temp.json")
+            temp_path = Path("data/outputs/temp.json")
             if not temp_path.exists():
                 return 0
 

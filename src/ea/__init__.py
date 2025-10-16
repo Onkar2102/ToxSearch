@@ -5,7 +5,6 @@
 #  - EvolutionEngine: the core EA loop (selection + variation)
 #  - run_evolution: driver for one EA generation
 #  - TextVariationOperators: concrete mutation operators
-#  - get_applicable_operators: helper to pick operators based on parent count
 
 # Lazy imports to avoid torch dependency issues
 def get_EvolutionEngine():
@@ -28,11 +27,29 @@ def get_update_evolution_tracker_with_generation_global():
     from ea.RunEvolution import update_evolution_tracker_with_generation_global
     return update_evolution_tracker_with_generation_global
 
+# New mutation operators
+def get_NegationOperator():
+    """Lazy import of NegationOperator to avoid torch dependency issues"""
+    from ea.negation_operator import NegationOperator
+    return NegationOperator
 
-def get_applicable_operators():
-    """Lazy import of get_applicable_operators to avoid torch dependency issues"""
-    # This function is deprecated - operator logic is now in EvolutionEngine.py
-    raise DeprecationWarning("get_applicable_operators is deprecated. Operator logic is now in EvolutionEngine.py")
+def get_TypographicalErrorsOperator():
+    """Lazy import of TypographicalErrorsOperator to avoid torch dependency issues"""
+    from ea.typographical_errors import TypographicalErrorsOperator
+    return TypographicalErrorsOperator
+
+def get_ConceptAdditionOperator():
+    """Lazy import of ConceptAdditionOperator to avoid torch dependency issues"""
+    from ea.concept_addition import ConceptAdditionOperator
+    return ConceptAdditionOperator
+
+def get_InformedEvolutionOperator():
+    """Lazy import of InformedEvolutionOperator to avoid torch dependency issues"""
+    from ea.InformedEvolution import InformedEvolutionOperator
+    return InformedEvolutionOperator
+
+
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -42,5 +59,8 @@ __all__ = [
     "get_run_evolution",
     "get_create_final_statistics_with_tracker",
     "get_update_evolution_tracker_with_generation_global",
-    "get_applicable_operators",
+    "get_NegationOperator",
+    "get_TypographicalErrorsOperator",
+    "get_ConceptAdditionOperator",
+    "get_InformedEvolutionOperator",
 ]

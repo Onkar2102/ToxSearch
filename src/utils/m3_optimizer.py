@@ -132,7 +132,7 @@ def main():
         print("2. Optimizing Configuration:")
         print("=" * 50)
         config = optimize_config_for_m3()
-        config_path = Path("../config/modelConfig_llamacpp.yaml")
+        config_path = Path("../config/RGConfig.yaml")
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         print(f"Optimized configuration saved to {config_path}")
@@ -148,7 +148,8 @@ def main():
         config = optimize_config_for_m3()
         
         # Save optimized config
-        config_path = Path("../config/modelConfig_llamacpp.yaml")
+        config_path = Path("config/RGConfig.yaml")
+        config_path.parent.mkdir(exist_ok=True)
         with open(config_path, 'w') as f:
             yaml.dump(config, f, default_flow_style=False)
         

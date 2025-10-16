@@ -1,5 +1,5 @@
 """
-hybrid_moderation.py
+evaluator.py
 
 Content moderation system using Google Perspective API.
 
@@ -22,7 +22,7 @@ load_dotenv()
 
 # Module-level logger initialization
 get_logger, get_log_filename, _, _ = get_custom_logging()
-logger = get_logger("hybrid_moderation", get_log_filename())
+logger = get_logger("evaluator", get_log_filename())
 
 # Simple in-memory cache for moderation results
 _moderation_cache = {}
@@ -60,7 +60,7 @@ def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=Non
         
         # Check all relevant JSON files for toxic genomes
         files_to_check = ["elites.json", "Population.json", "temp.json"]
-        most_toxic_path = Path("outputs/most_toxic.json")
+        most_toxic_path = Path("data/outputs/most_toxic.json")
         
         # Load existing most_toxic.json
         if most_toxic_path.exists():
@@ -73,7 +73,7 @@ def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=Non
         moved_count = 0
         
         for filename in files_to_check:
-            file_path = Path(f"outputs/{filename}")
+            file_path = Path(f"data/outputs/{filename}")
             if not file_path.exists():
                 continue
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -114,7 +114,7 @@ def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=Non
         if moved_count > 0 and logger:
             logger.info(f"Moved {moved_count} toxic/complete genomes to most_toxic.json (total: {len(most_toxic_genomes)})")
         # Update EvolutionTracker.json with most_toxic_counts
-        evolution_tracker_path = Path("outputs/EvolutionTracker.json")
+        evolution_tracker_path = Path("data/outputs/EvolutionTracker.json")
         if evolution_tracker_path.exists():
             try:
                 with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
@@ -170,7 +170,7 @@ class HybridModerationEvaluator:
         Args:
             log_file (str, optional): Path to log file for debugging.
             config_path (str, optional): Path to model configuration YAML file.
-                If None, uses default config/modelConfig_llamacpp.yaml.
+                If None, uses default config/RGConfig.yaml.
         """
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("HybridModerationEvaluator", log_file)

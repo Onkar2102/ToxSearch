@@ -35,7 +35,7 @@ def get_project_root():
 
 def get_config_path():
     """Get the absolute path to the config directory"""
-    return get_project_root() / "config" / "modelConfig_llamacpp.yaml"
+    return get_project_root() / "config"
 
 def get_data_path():
     """Get the absolute path to the data directory"""
@@ -43,8 +43,8 @@ def get_data_path():
 
 def get_outputs_path():
     """Get the absolute path to the outputs directory"""
-    # Create the full path: outputs/
-    outputs_dir = get_project_root() / "outputs"
+    # Create the full path: data/outputs/
+    outputs_dir = get_project_root() / "data" / "outputs"
     
     # Ensure the directory exists
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -448,7 +448,7 @@ def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = 
 # Main Population I/O Functions (Unified API)
 # ============================================================================
 
-def load_population(pop_path: str = "outputs/Population.json", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+def load_population(pop_path: str = "data/outputs/Population.json", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Load population with automatic detection of split vs monolithic format
     
@@ -537,7 +537,7 @@ def load_population(pop_path: str = "outputs/Population.json", *, logger=None, l
             raise
 
 
-def save_population(population: List[Dict[str, Any]], pop_path: str = "outputs/Population.json", 
+def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outputs/Population.json", 
                    *, logger=None, log_file: Optional[str] = None, preserve_sort_order: bool = False) -> None:
     """
     Save entire population to single Population.json file
@@ -1539,7 +1539,7 @@ def get_elite_population_stats(elites_file_path: str = FileConstants.DEFAULT_ELI
 
 
 
-def load_elites(elites_file_path: str = "outputs/elites.json", 
+def load_elites(elites_file_path: str = "data/outputs/elites.json", 
                 *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Load elites from elites.json file.
@@ -1575,7 +1575,7 @@ def load_elites(elites_file_path: str = "outputs/elites.json",
         return []
 
 
-def save_elites(elites: List[Dict[str, Any]], elites_file_path: str = "outputs/elites.json",
+def save_elites(elites: List[Dict[str, Any]], elites_file_path: str = "data/outputs/elites.json",
                 *, logger=None, log_file: Optional[str] = None) -> None:
     """
     Save elites to elites.json file.

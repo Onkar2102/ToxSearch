@@ -675,7 +675,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
-def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=5, max_num_parents=4):
+def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=1, max_num_parents=4):
     """Run one evolution generation with comprehensive logging and steady state support"""
     # Set up dynamic paths for this run
     outputs_path = get_outputs_path()

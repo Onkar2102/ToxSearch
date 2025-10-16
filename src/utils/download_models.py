@@ -12,10 +12,12 @@ Usage examples:
     python download_models.py --all
     python download_models.py --only llama3.2-3b-instruct --target-dir models
     python download_models.py --only llama3.2-3b-instruct --revision main
-    python download_models.py --all --test --config config/modelConfig_llamacpp.yaml --prompt "Hello there!"
+    python download_models.py --all --test --config config/RGConfig.yaml --prompt "Hello there!"
+    python download_models.py --only qwen2.5-7b-instruct-gguf --gguf
 
 Env token: set HUGGINGFACE_HUB_TOKEN (preferred) or HF_TOKEN / HF_API_TOKEN to access gated/private repos.
 Note: The official Meta LLaMA 3.2 text-only sizes are 1B and 3B; 8B is available in LLaMA 3/3.1 series.
+Also available (transformers): Llama-3.3-70B-Instruct; plus recent families like Mistral-7B-Instruct-v0.3, Qwen2.5-7B(-1M)-Instruct, Gemma-2-9B-IT, Phi-3.5-mini-instruct, and DeepSeek-Coder-V2-Instruct.
 """
 
 import argparse
@@ -29,7 +31,8 @@ from typing import Dict, Optional, Tuple
 try:
     from dotenv import load_dotenv  # type: ignore
     load_dotenv()
-except Exception:
+except ImportError:
+    # python-dotenv not installed, that's fine
     pass
 
 import yaml
@@ -47,22 +50,50 @@ class ModelManager:
     ):
         # Registry: alias -> HF repo
         self.MODEL_REGISTRY = model_registry or {
-            # Meta LLaMA 3.2 official text-only sizes are 1B and 3B;
-            # 8B is available in LLaMA 3/3.1 series.
+            # Meta Llama families (transformers)
+            "llama3.2-1b-instruct": "meta-llama/Llama-3.2-1B-Instruct",
             "llama3.2-3b-instruct": "meta-llama/Llama-3.2-3B-Instruct",
-            # "llama3.1-8b-instruct": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-            # Add more here as needed:
-            # "mistral-7b-instruct": "mistralai/Mistral-7B-Instruct-v0.3",
-            # "qwen2.5-7b-instruct": "Qwen/Qwen2.5-7B-Instruct",
+            "llama3.1-8b-instruct": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+            "llama3.3-70b-instruct": "meta-llama/Llama-3.3-70B-Instruct",
+
+            # Mistral (transformers)
+            "mistral-7b-instruct": "mistralai/Mistral-7B-Instruct-v0.3",
+
+            # Qwen (transformers)
+            "qwen2.5-7b-instruct": "Qwen/Qwen2.5-7B-Instruct",
+            "qwen2.5-7b-instruct-1m": "Qwen/Qwen2.5-7B-Instruct-1M",
+
+            # Gemma (transformers)
+            "gemma-2-9b-it": "google/gemma-2-9b-it",
+
+            # Microsoft Phi (transformers)
+            "phi-3.5-mini-instruct": "microsoft/Phi-3.5-mini-instruct",
+
+            # DeepSeek (transformers)
+            "deepseek-coder-v2-instruct": "deepseek-ai/DeepSeek-Coder-V2-Instruct",
         }
         
-        # GGUF Registry: alias -> HF repo with GGUF models
         self.GGUF_MODEL_REGISTRY = {
+            # Meta Llama (GGUF)
             "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
             "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
-            "llama3.1-8b-instruct-gguf": "bartowski/Llama-3.1-8B-Instruct-GGUF",
+            "llama3.1-8b-instruct-gguf": "MaziyarPanahi/Meta-Llama-3.1-8B-Instruct-GGUF",
+
+            # Mistral (GGUF)
             "mistral-7b-instruct-gguf": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+
+            # Qwen (GGUF)
             "qwen2.5-7b-instruct-gguf": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+            "qwen2.5-7b-instruct-1m-gguf": "bartowski/Qwen2.5-7B-Instruct-1M-GGUF",
+
+            # Gemma (GGUF)
+            "gemma-2-9b-it-gguf": "bartowski/gemma-2-9b-it-GGUF",
+
+            # Microsoft Phi (GGUF)
+            "phi-3.5-mini-instruct-gguf": "bartowski/Phi-3.5-mini-instruct-GGUF",
+
+            # DeepSeek (GGUF)
+            "deepseek-coder-v2-instruct-gguf": "bartowski/DeepSeek-Coder-V2-Instruct-GGUF",
         }
         self.DEFAULT_TARGET_DIR = default_target_dir or Path("models")
         self.REGISTRY_FILE = registry_file or Path("models/models_registry.json")
@@ -162,7 +193,8 @@ class ModelManager:
         if registry_path.exists():
             try:
                 existing = json.loads(registry_path.read_text())
-            except Exception:
+            except (json.JSONDecodeError, FileNotFoundError, PermissionError):
+                # Corrupted registry or file issues - start fresh
                 pass
         existing.update(mapping)
         tmp = registry_path.with_suffix(".json.tmp")
@@ -259,7 +291,7 @@ class ModelManager:
         )
         return tok, model
 
-    def load_config(self, config_path="config/modelConfig_llamacpp.yaml") -> dict:
+    def load_config(self, config_path="config/RGConfig.yaml") -> dict:
         with open(config_path, "r") as f:
             return yaml.safe_load(f)
 
@@ -302,7 +334,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--login", action="store_true", help="Run huggingface login first (useful for gated models).")
     p.add_argument("--gguf", action="store_true", help="Download GGUF models instead of standard models.")
     p.add_argument("--test", action="store_true", help="After download, run a quick generation test using the config.")
-    p.add_argument("--config", default="config/modelConfig_llamacpp.yaml", help="Path to YAML config for --test.")
+    p.add_argument("--config", default="config/RGConfig.yaml", help="Path to YAML config for --test.")
     p.add_argument("--prompt", default="Hello, how are you today?", help="Test prompt for --test mode.")
     return p.parse_args()
 

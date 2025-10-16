@@ -67,10 +67,10 @@ class ParentSelector:
             generations = evolution_tracker.get("generations", [])
             total_generations = len(generations)
             
-            # Initial selection: x=2, y=0 (top performing + 1 random from elites)
+            # Initial selection: x=1, y=1 (1 random from elites + 1 random from population)
             if total_generations <= self.adaptive_selection_after:
-                self.logger.debug(f"Within initial window ({total_generations} <= {self.adaptive_selection_after}), using x=2, y=0")
-                return 2, 0
+                self.logger.debug(f"Within initial window ({total_generations} <= {self.adaptive_selection_after}), using x=1, y=1")
+                return 1, 1
             
             # After initial window, check for stagnation by looking at score progression
             # Check if max_score has increased in the last adaptive_selection_after generations
@@ -111,14 +111,14 @@ class ParentSelector:
                         break
             
             if found_improvement:
-                # Recent improvement detected, fallback to original logic (2, 0)
-                self.logger.info(f"Recent score improvement detected, falling back to x=2, y=0")
-                return 2, 0
+                # Recent improvement detected, fallback to default logic (1, 1)
+                self.logger.info(f"Recent score improvement detected, falling back to x=1, y=1")
+                return 1, 1
             else:
                 # Stagnation detected, increase parent counts
                 stagnation_windows = (total_generations - self.adaptive_selection_after) // self.adaptive_selection_after + 1
-                x = 2 + (stagnation_windows + 1) // 2
-                y = stagnation_windows // 2
+                x = 1 + (stagnation_windows + 1) // 2
+                y = 1 + stagnation_windows // 2
                 
                 # Cap at max limits: x=1+max_num_parents, y=max_num_parents
                 # (where 1 is the topmost performing genome)
@@ -146,8 +146,8 @@ class ParentSelector:
                 x, y = self._determine_parent_counts(evolution_tracker)
                 self.logger.info(f"Determined parent counts: x={x} (elites), y={y} (population)")
             else:
-                x, y = 2, 0
-                self.logger.warning("No evolution tracker provided, using default parent counts: x=2, y=0")
+                x, y = 1, 1
+                self.logger.warning("No evolution tracker provided, using default parent counts: x=1, y=1")
             
             # Load elites and population
             elites = load_elites(log_file=None)
@@ -234,7 +234,7 @@ class ParentSelector:
             }
             
             # Save to parents.json in outputs directory
-            parents_path = Path("outputs/parents.json")
+            parents_path = Path("data/outputs/parents.json")
             parents_path.parent.mkdir(exist_ok=True)
             
             with open(parents_path, 'w', encoding='utf-8') as f:
@@ -247,7 +247,7 @@ class ParentSelector:
             raise
     
     
-    def _save_top_10_by_toxicity(self, elites_path: str = "outputs/elites.json", output_path: str = "outputs/top_10.json") -> None:
+    def _save_top_10_by_toxicity(self, elites_path: str = "data/outputs/elites.json", output_path: str = "data/outputs/top_10.json") -> None:
         """
         Save the top 10 genomes from elites.json by their toxicity score to top_10.json.
         Only saves essential fields: id, prompt, generated_text, generation, and scores.

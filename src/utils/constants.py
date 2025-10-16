@@ -25,6 +25,7 @@ class ModelConstants:
 
 class FileConstants:
     """Constants related to file operations"""
-    DEFAULT_ELITES_FILE = "outputs/elites.json"
-    DEFAULT_POPULATION_FILE = "outputs/Population.json"
-    DEFAULT_EVOLUTION_TRACKER_FILE = "outputs/EvolutionTracker.json"
+    # Default file paths for population management
+    DEFAULT_ELITES_FILE = "data/outputs/elites.json"
+    DEFAULT_POPULATION_FILE = "data/outputs/Population.json"
+    DEFAULT_EVOLUTION_TRACKER_FILE = "data/outputs/EvolutionTracker.json"

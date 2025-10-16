@@ -1,5 +1,5 @@
 """
-LlamaCppTextGenerator.py
+ResponseGenerator.py
 
 A specialized text generator for response generation using prompt templates.
 This class is used to generate responses to prompts using the prompt_template configuration.
@@ -13,19 +13,18 @@ import psutil
 from typing import List, Dict, Any, Optional
 from llama_cpp import Llama
 from utils import get_custom_logging
+from .model_interface import LlamaCppChatInterface
 
 # Get the functions at module level to avoid repeated calls
 get_logger, _, _, _ = get_custom_logging()
 
 class ResponseGenerator:
     """
-    Response generator using llama.cpp for efficient inference.
+    Response generator using v1/chat/completions interface for efficient inference.
     
     This class is specifically designed for generating responses to prompts
-    using the prompt_template configuration from RGConfig.yaml.
+    using the prompt_template configuration from RGConfig.yaml with chat completions.
     """
-    
-    _MODEL_CACHE = {}
     
     def __init__(self, model_key="response_generator", config_path="config/RGConfig.yaml", log_file: Optional[str] = None):
         self.log_file = log_file
@@ -33,184 +32,89 @@ class ResponseGenerator:
         self.logger.debug(f"Logger correctly initialized with log_file: {self.log_file}")
 
         # Load model config
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
-        if model_key not in config:
-            raise ValueError(f"Model '{model_key}' not found in configuration.")
-        self.model_cfg = config[model_key]
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+            if not config:
+                raise ValueError(f"Configuration file is empty: {config_path}")
+            if model_key not in config:
+                raise ValueError(f"Model '{model_key}' not found in configuration. Available keys: {list(config.keys())}")
+            self.model_cfg = config[model_key]
+            
+            # Validate model configuration
+            if not self.model_cfg.get("name"):
+                raise ValueError(f"Model configuration missing 'name' field for {model_key}")
+                
+        except FileNotFoundError:
+            self.logger.error(f"Configuration file not found: {config_path}")
+            raise
+        except yaml.YAMLError as e:
+            self.logger.error(f"Failed to parse YAML configuration: {e}")
+            raise
+        except Exception as e:
+            self.logger.error(f"Failed to load model configuration: {e}")
+            raise
 
-        # Response generator only needs its own config
-
-        # Memory management settings
-        self.enable_memory_cleanup = self.model_cfg.get("enable_memory_cleanup", True)
-        self.max_memory_usage_gb = self.model_cfg.get("max_memory_usage_gb", 12.0)
-
+        # Initialize chat interface
+        try:
+            self.model_interface = LlamaCppChatInterface(self.model_cfg, log_file)
+        except Exception as e:
+            self.logger.error(f"Failed to initialize model interface: {e}")
+            raise
+        
+        # Prompt template support (for chat completions)
+        tmpl = self.model_cfg.get("prompt_template", {})
+        self.prompt_messages = tmpl.get("messages", [])
+        
         # Performance tracking attributes
         self.generation_count = 0
         self.total_tokens_generated = 0
         self.total_generation_time = 0.0
+
+    def _build_messages(self, raw_prompt: str) -> List[Dict[str, str]]:
+        """Build messages array from prompt template and user input."""
+        messages = []
         
-        # Load model
-        model_path = self.model_cfg["name"]
-        if model_path not in self._MODEL_CACHE:
-            self.logger.info(f"Loading llama.cpp model: {model_path}")
-            self._load_model(model_path)
-        else:
-            self.logger.info(f"Using cached llama.cpp model: {model_path}")
-
-        self.model = self._MODEL_CACHE[model_path]
-        self.generation_args = self.model_cfg.get("generation_args", {})
-
-        # Prompt template support (for text-generation task)
-        tmpl = self.model_cfg.get("prompt_template", {})
-        self.prompt_format = tmpl.get("format", "{{prompt}}")
-        self.user_prefix = tmpl.get("user_prefix", "")
-        self.assistant_prefix = tmpl.get("assistant_prefix", "")
+        # Add template messages
+        for msg_template in self.prompt_messages:
+            role = msg_template.get("role", "user")
+            content = msg_template.get("content", "")
+            
+            # Replace placeholders in content
+            if "{{prompt}}" in content:
+                content = content.replace("{{prompt}}", raw_prompt)
+            
+            if content.strip():  # Only add non-empty messages
+                messages.append({"role": role, "content": content})
         
-        # Response generator only uses prompt_template for response generation
-
-        # Memory monitoring
-        self.last_memory_check = time.time()
-        self.memory_check_interval = 60  # Check memory every 60 seconds
-
-    def _load_model(self, model_path: str):
-        """Load model using llama.cpp with optimizations."""
-        try:
-            # Check if model file exists
-            if not os.path.exists(model_path):
-                # Try to find GGUF file
-                gguf_path = f"{model_path}.gguf"
-                if os.path.exists(gguf_path):
-                    model_path = gguf_path
-                else:
-                    # For now, create a mock model for testing
-                    self.logger.warning(f"Model file not found: {model_path}")
-                    self.logger.info("Creating mock model for testing purposes")
-                    mock_model = self._create_mock_model()
-                    self._MODEL_CACHE[model_path] = mock_model
-                    return
-            
-            # Configure llama.cpp parameters
-            llama_params = {
-                "model_path": model_path,
-                "n_ctx": 2048,  # Context window
-                "n_threads": None,  # Auto-detect
-                "n_gpu_layers": 0,  # Use CPU for now, can be optimized later
-                "verbose": False,
-                "use_mmap": True,  # Memory mapping for efficiency
-                "use_mlock": False,  # Don't lock memory
-                "low_vram": False,  # Not needed for CPU
-            }
-            
-            # Load model
-            self.logger.info("Loading model with llama.cpp...")
-            model = Llama(**llama_params)
-            
-            self._MODEL_CACHE[model_path] = model
-            self.logger.info(f"Model loaded successfully: {model_path}")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to load model: {e}")
-            # Create mock model as fallback
-            self.logger.info("Creating mock model as fallback")
-            mock_model = self._create_mock_model()
-            self._MODEL_CACHE[model_path] = mock_model
-
-    def _create_mock_model(self):
-        """Create a mock model for testing when real model is not available."""
-        class MockModel:
-            def __call__(self, prompt, **kwargs):
-                # Return a mock response
-                return {
-                    'choices': [{
-                        'text': f"Mock response to: {prompt[:50]}... [This is a test response from llama.cpp integration]"
-                    }]
-                }
+        # If no template messages, create a simple user message
+        if not messages:
+            messages.append({"role": "user", "content": raw_prompt})
         
-        return MockModel()
-
-    def _check_memory_usage(self):
-        """Check memory usage and perform cleanup if needed."""
-        current_time = time.time()
-        if current_time - self.last_memory_check > self.memory_check_interval:
-            try:
-                memory_percent = psutil.virtual_memory().percent
-                available_memory_gb = psutil.virtual_memory().available / (1024**3)
-                
-                self.logger.debug(f"Memory usage: {memory_percent:.1f}%, Available: {available_memory_gb:.1f}GB")
-                
-                # Perform cleanup if memory usage is high
-                if memory_percent > 85:
-                    self.logger.warning(f"High memory usage detected: {memory_percent:.1f}%")
-                    self._perform_memory_cleanup()
-                
-                self.last_memory_check = current_time
-            except ImportError:
-                self.logger.debug("psutil not available for memory monitoring")
-            except Exception as e:
-                self.logger.warning(f"Memory check failed: {e}")
-    
-    def _perform_memory_cleanup(self):
-        """Perform memory cleanup."""
-        try:
-            import gc
-            # Force garbage collection
-            gc.collect()
-            self.logger.info("Memory cleanup performed")
-        except Exception as e:
-            self.logger.warning(f"Memory cleanup failed: {e}")
-
-    def format_prompt(self, raw_prompt: str) -> str:
-        """Format prompt using the configured template."""
-        return (
-            self.prompt_format
-            .replace("{{user_prefix}}", self.user_prefix)
-            .replace("{{assistant_prefix}}", self.assistant_prefix)
-            .replace("{{prompt}}", raw_prompt)
-        )
+        return messages
 
     def generate_response(self, prompt: str, **kwargs) -> str:
-        """Generate a response to a prompt using the prompt_template configuration."""
+        """Generate a response to a prompt using chat completions interface."""
         start_time = time.time()
         
         try:
-            # Use the prompt_template for response generation
-            formatted_prompt = self.format_prompt(prompt)
-            # Use generation args from RGConfig.yaml
-            generation_kwargs = self.generation_args.copy()
+            # Build messages from template and user input
+            messages = self._build_messages(prompt)
             
-            # Generate response using llama.cpp
-            self.logger.debug(f"Generating response for prompt: {formatted_prompt[:100]}...")
+            # Generate response using chat completions
+            self.logger.debug(f"Generating response for prompt: {prompt[:100]}...")
             
-            response = self.model(
-                formatted_prompt,
-                max_tokens=generation_kwargs.get("max_new_tokens", 2048),
-                temperature=generation_kwargs.get("temperature", 0.7),
-                top_p=generation_kwargs.get("top_p", 0.9),
-                top_k=generation_kwargs.get("top_k", 40),
-                repeat_penalty=generation_kwargs.get("repetition_penalty", 1.1),
-                stop=["</s>", "<|endoftext|>"],  # Stop tokens
-                echo=False,  # Don't echo the input
-            )
+            generated_text = self.model_interface.chat_completion(messages, **kwargs)
             
-            # Extract text from response
-            if isinstance(response, dict) and 'choices' in response:
-                generated_text = response['choices'][0]['text']
-            elif isinstance(response, str):
-                generated_text = response
-            else:
-                self.logger.warning(f"Unexpected response format: {type(response)}")
-                generated_text = str(response)
-            
-            # Clean up the response
-            generated_text = generated_text.strip()
+            # Filter out safety disclaimers and unwanted prefixes
+            filtered_text = self._filter_response(generated_text)
             
             # Update performance metrics
             self.generation_count += 1
-            self.total_tokens_generated += len(generated_text.split())
+            self.total_tokens_generated += len(filtered_text.split())
             
-            self.logger.debug(f"Generated response: {generated_text[:100]}...")
-            return generated_text
+            self.logger.debug(f"Generated response: {filtered_text[:100]}...")
+            return filtered_text
             
         except Exception as e:
             self.logger.error(f"Generation failed: {e}", exc_info=True)
@@ -218,12 +122,103 @@ class ResponseGenerator:
         finally:
             end_time = time.time()
             generation_time = end_time - start_time
-            # Store timing information
-            if not hasattr(self, '_last_generation_time'):
-                self._last_generation_time = {}
-            self._last_generation_time['start_time'] = start_time
-            self._last_generation_time['end_time'] = end_time
-            self._last_generation_time['duration'] = generation_time
+            self.total_generation_time += generation_time
+
+    def _filter_response(self, response: str) -> str:
+        """Filter out safety disclaimers and unwanted prefixes from responses."""
+        if not response:
+            return response
+        
+        # Common safety disclaimer patterns to remove
+        safety_patterns = [
+            "I can provide information on a wide range of topics, but please note that",
+            "I understand you're asking about",
+            "I can help you with information about",
+            "I'm here to provide information, but",
+            "I can discuss this topic, but",
+            "I understand your question about",
+            "I can provide information about",
+            "I'm happy to help with information about",
+            "I can share information about",
+            "I understand you want to know about",
+            "I can provide details about",
+            "I'm here to help with information about",
+            "I can give you information about",
+            "I understand you're interested in",
+            "I can provide guidance on",
+            "I'm here to assist with information about",
+            "I can offer information about",
+            "I understand you need information about",
+            "I can provide details on",
+            "I'm here to help you with information about"
+        ]
+        
+        # Remove safety disclaimers
+        filtered_response = response
+        for pattern in safety_patterns:
+            if pattern.lower() in filtered_response.lower():
+                # Find the pattern and remove everything before the actual content
+                pattern_start = filtered_response.lower().find(pattern.lower())
+                if pattern_start != -1:
+                    # Look for the actual content after the disclaimer
+                    remaining_text = filtered_response[pattern_start + len(pattern):]
+                    # Find the first sentence that doesn't start with safety language
+                    sentences = remaining_text.split('.')
+                    for i, sentence in enumerate(sentences):
+                        sentence = sentence.strip()
+                        if sentence and not any(safety_word in sentence.lower() for safety_word in 
+                                              ['please note', 'but please', 'however', 'but', 'however,']):
+                            # Found the actual content, reconstruct from this point
+                            filtered_response = '.'.join(sentences[i:]).strip()
+                            break
+                    break
+        
+        # Remove common refusal patterns
+        refusal_patterns = [
+            "I'm sorry, but I cannot",
+            "I cannot provide",
+            "I'm not able to",
+            "I'm unable to",
+            "I can't help with",
+            "I cannot help with",
+            "I'm not allowed to",
+            "I cannot assist with",
+            "I'm sorry, I cannot",
+            "I cannot give you",
+            "I cannot share",
+            "I cannot discuss",
+            "I cannot provide information about",
+            "I cannot help you with",
+            "I cannot assist you with",
+            "I cannot provide details about",
+            "I cannot give you information about",
+            "I cannot share information about",
+            "I cannot discuss this topic",
+            "I cannot provide guidance on"
+        ]
+        
+        for pattern in refusal_patterns:
+            if pattern.lower() in filtered_response.lower():
+                # If we find a refusal, try to extract any actual content that might follow
+                pattern_start = filtered_response.lower().find(pattern.lower())
+                if pattern_start != -1:
+                    # Look for content after the refusal
+                    remaining_text = filtered_response[pattern_start + len(pattern):]
+                    # Try to find actual content
+                    if remaining_text.strip():
+                        # If there's content after refusal, use it
+                        filtered_response = remaining_text.strip()
+                    else:
+                        # If no content after refusal, return empty
+                        return ""
+        
+        # Clean up the response
+        filtered_response = filtered_response.strip()
+        
+        # Remove leading/trailing whitespace and common prefixes
+        filtered_response = filtered_response.lstrip('.,!?;: ')
+        
+        return filtered_response
 
 
     def get_current_memory_stats(self) -> Dict[str, float]:
@@ -237,18 +232,18 @@ class ResponseGenerator:
                 'total_memory_gb': process_memory.rss / (1024**3),
                 'available_system_gb': memory_info.available / (1024**3),
                 'system_memory_percent': memory_info.percent,
-                'max_memory_limit_gb': self.max_memory_usage_gb,
-                'memory_usage_percent': (process_memory.rss / (1024**3)) / self.max_memory_usage_gb * 100,
-                'memory_cleanup_enabled': self.enable_memory_cleanup
+                'max_memory_limit_gb': self.model_interface.max_memory_usage_gb,
+                'memory_usage_percent': (process_memory.rss / (1024**3)) / self.model_interface.max_memory_usage_gb * 100,
+                'memory_cleanup_enabled': self.model_interface.enable_memory_cleanup
             }
         except Exception as e:
             self.logger.warning(f"Failed to get memory stats: {e}")
             return {}
 
-    def process_population(self, pop_path: str = "outputs/Population.json") -> None:
+    def process_population(self, pop_path: str = "data/outputs/Population.json") -> None:
         """Process entire population for text generation one genome at a time."""
         try:
-            self.logger.info("Starting population processing for text generation with llama.cpp")
+            self.logger.info("Starting population processing for text generation with chat completions")
             
             # Load population
             from utils.population_io import load_population
@@ -278,10 +273,6 @@ class ResponseGenerator:
                         genome['model_name'] = self.model_cfg.get("name", "")
                         genome['generated_output'] = response
                         genome['status'] = 'pending_evaluation'
-                        
-                        # Add timing information to genome
-                        if hasattr(self, '_last_generation_time'):
-                            genome['generation_timing'] = self._last_generation_time.copy()
                         
                         total_processed += 1
                         self.logger.debug("Generated response for genome %s", genome_id)
