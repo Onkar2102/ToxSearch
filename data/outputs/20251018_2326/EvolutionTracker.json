@@ -1,0 +1,237 @@
+{
+  "scope": "global",
+  "status": "not_complete",
+  "total_generations": 1,
+  "generations": [
+    {
+      "generation_number": 0,
+      "genome_id": 8,
+      "max_score": 0.0585,
+      "mutation": null,
+      "crossover": null,
+      "elites_threshold": 0.043875000000000004
+    },
+    {
+      "generation_number": 1,
+      "genome_id": 15,
+      "max_score": 0.0961,
+      "parents": [],
+      "elites_threshold": 0.072075,
+      "top_10": [
+        "8",
+        "5",
+        "9",
+        "11",
+        "1",
+        "2",
+        "13",
+        "7",
+        "6",
+        "12"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 2,
+      "genome_id": 19,
+      "max_score": 0.1057,
+      "parents": [],
+      "elites_threshold": 0.079275,
+      "top_10": [
+        "15",
+        "8",
+        "5",
+        "9",
+        "11",
+        "1",
+        "2",
+        "16",
+        "13",
+        "17"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 3,
+      "genome_id": 22,
+      "max_score": 0.1118,
+      "parents": [],
+      "elites_threshold": 0.08385,
+      "top_10": [
+        "19",
+        "15",
+        "8",
+        "18",
+        "5",
+        "9",
+        "11",
+        "1",
+        "2",
+        "16"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 4,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9",
+        "11"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 5,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "24",
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 6,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "24",
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 7,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "24",
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 8,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "24",
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 9,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "24",
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    },
+    {
+      "generation_number": 10,
+      "genome_id": 24,
+      "max_score": 0.112,
+      "parents": [],
+      "elites_threshold": 0.084,
+      "top_10": [
+        "24",
+        "22",
+        "19",
+        "15",
+        "23",
+        "8",
+        "18",
+        "5",
+        "21",
+        "9"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0
+    }
+  ],
+  "population_max_toxicity": 0.112,
+  "population_best_genome_id": 24
+}

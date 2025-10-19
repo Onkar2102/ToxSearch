@@ -33,10 +33,10 @@ def get_LLM_POSAwareSynonymReplacement():
     from ea.synonym_replacement import LLM_POSAwareSynonymReplacement
     return LLM_POSAwareSynonymReplacement
 
-def get_LLM_POSAwareAntonymReplacement():
-    """Lazy import of LLM_POSAwareAntonymReplacement to avoid torch dependency issues"""
-    from ea.antonym_replacement import LLM_POSAwareAntonymReplacement
-    return LLM_POSAwareAntonymReplacement
+def get_POSAwareAntonymReplacement():
+    """Lazy import of POSAwareAntonymReplacement to avoid torch dependency issues"""
+    from ea.antonym_replacement import POSAwareAntonymReplacement
+    return POSAwareAntonymReplacement
 
 def get_MLMOperator():
     """Lazy import of MLMOperator to avoid torch dependency issues"""

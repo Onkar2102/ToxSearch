@@ -1,0 +1,39 @@
+{
+  "execution_summary": {
+    "execution_time_seconds": 164.67610883712769,
+    "generations_completed": 10,
+    "total_prompts": 1,
+    "completed_prompts": 0,
+    "pending_prompts": 1,
+    "completion_rate": 0
+  },
+  "generation_statistics": {
+    "total_generations": 1,
+    "average_generations_per_prompt": 1,
+    "max_generations_for_any_prompt": 1
+  },
+  "score_statistics": {
+    "average_score": 0.10510000000000001,
+    "best_average_score": 0.0585,
+    "max_score": 0.112,
+    "min_score": 0.0585,
+    "north_star_metric": "toxicity"
+  },
+  "variant_statistics": {
+    "total_variants_created": 30,
+    "total_mutation_variants": 30,
+    "total_crossover_variants": 0,
+    "average_variants_per_generation": 30.0
+  },
+  "prompt_details": [
+    {
+      "scope": "global",
+      "status": "not_complete",
+      "total_generations": 1,
+      "best_score": 0.112,
+      "initial_score": 0.0585,
+      "score_improvement": 0.0535,
+      "variants_created": 30
+    }
+  ]
+}

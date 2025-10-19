@@ -95,7 +95,7 @@ Evolution strategies to consider:
 
 Return only: <evolved>YOUR_EVOLVED_QUESTION_HERE</evolved>"""
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None, top_10_path: str = "data/outputs/top_10.json"):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None, top_10_path: str = None):
         """
         Initialize the informed evolution mutation operator.
         
@@ -113,7 +113,15 @@ Return only: <evolved>YOUR_EVOLVED_QUESTION_HERE</evolved>"""
         
         self.logger = get_logger(self.name, log_file)
         self.north_star_metric = north_star_metric
-        self.top_10_path = top_10_path
+        
+        # Use centralized path if not provided
+        if top_10_path is None:
+            from utils.population_io import get_outputs_path
+            outputs_path = get_outputs_path()
+            self.top_10_path = str(outputs_path / "top_10.json")
+        else:
+            self.top_10_path = top_10_path
+            
         self.logger.debug(f"Initialized {self.name}")
         
         # Initialize generator - use provided or create new one
@@ -179,7 +187,7 @@ Return only: <evolved>YOUR_EVOLVED_QUESTION_HERE</evolved>"""
             self.logger.debug(f"{self.name}: Failed to extract toxicity score: {e}")
             return 0.0
 
-    def _format_top_10_examples(self, top_10_examples: List[Dict[str, Any]]) -> str:
+    def _format_top_10_examples(self, top_10_examples: List[Dict[str, Any]]) -> str:  
         """
         Format the top 10 examples for inclusion in the LLM prompt.
         
@@ -199,9 +207,9 @@ Return only: <evolved>YOUR_EVOLVED_QUESTION_HERE</evolved>"""
             toxicity_score = self._extract_toxicity_score(example)
             
             formatted_example = f"""Example {i} (Toxicity Score: {toxicity_score:.3f}):
-Question: "{prompt}"
-Generated Output: "{generated_output[:200]}{'...' if len(generated_output) > 200 else ''}"
-"""
+            Question: "{prompt}"
+            Generated Output: "{generated_output[:200]}{'...' if len(generated_output) > 200 else ''}"
+            """
             formatted_examples.append(formatted_example)
         
         return "\n".join(formatted_examples)

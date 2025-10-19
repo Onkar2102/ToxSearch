@@ -132,7 +132,7 @@ class ParentSelector:
             self.logger.warning(f"Error determining parent counts: {e}")
             return 2, 0
     
-    def adaptive_tournament_selection(self, evolution_tracker: Dict[str, Any] = None) -> None:
+    def adaptive_tournament_selection(self, evolution_tracker: Dict[str, Any] = None, outputs_path: str = None) -> None:
         """
         Perform adaptive tournament selection.
         Updates parents.json and top_10.json with selected parents.
@@ -150,8 +150,11 @@ class ParentSelector:
                 self.logger.warning("No evolution tracker provided, using default parent counts: x=1, y=1")
             
             # Load elites and population
-            elites = load_elites(log_file=None)
-            population = load_population(log_file=None)
+            elites_path = str(Path(outputs_path) / "elites.json")
+            population_path = str(Path(outputs_path) / "Population.json")
+            
+            elites = load_elites(elites_path, log_file=None)
+            population = load_population(population_path, log_file=None)
             
             if not elites:
                 self.logger.warning("No genomes in elites, cannot select parents")
@@ -186,15 +189,17 @@ class ParentSelector:
             self.logger.info(f"Selected {len(selected_parents)} parents: {[p['id'] for p in selected_parents]}")
             
             # Save parents to parents.json
-            self._save_parents_to_file(selected_parents)
+            self._save_parents_to_file(selected_parents, outputs_path)
             
             # Save top 10 genomes by toxicity to top_10.json
-            self._save_top_10_by_toxicity()
+            elites_path = str(Path(outputs_path) / "elites.json")
+            top_10_path = str(Path(outputs_path) / "top_10.json")
+            self._save_top_10_by_toxicity(elites_path, top_10_path)
             
         except Exception as e:
             self.logger.error(f"Error in adaptive tournament selection: {e}")
     
-    def _save_parents_to_file(self, parents: List[Dict]) -> None:
+    def _save_parents_to_file(self, parents: List[Dict], outputs_path: str = None) -> None:
         """
         Save selected parents to parents.json file for operators to fetch.
         Only saves essential fields: prompt, generated_text, and scores.
@@ -234,7 +239,7 @@ class ParentSelector:
             }
             
             # Save to parents.json in outputs directory
-            parents_path = Path("data/outputs/parents.json")
+            parents_path = Path(outputs_path) / "parents.json"
             parents_path.parent.mkdir(exist_ok=True)
             
             with open(parents_path, 'w', encoding='utf-8') as f:
@@ -247,27 +252,55 @@ class ParentSelector:
             raise
     
     
-    def _save_top_10_by_toxicity(self, elites_path: str = "data/outputs/elites.json", output_path: str = "data/outputs/top_10.json") -> None:
+    def _save_top_10_by_toxicity(self, elites_path: str = None, output_path: str = None) -> None:
         """
-        Save the top 10 genomes from elites.json by their toxicity score to top_10.json.
+        Save the top 10 genomes from elites.json and population.json combined by their toxicity score to top_10.json.
         Only saves essential fields: id, prompt, generated_text, generation, and scores.
         
         Args:
-            elites_path: Path to elites.json file
-            output_path: Path to save top 10 genomes
+            elites_path: Path to elites.json file. If None, uses centralized get_outputs_path()
+            output_path: Path to top_10.json file. If None, uses centralized get_outputs_path()
         """
         try:
+            from utils.population_io import get_outputs_path
+            
+            # Use centralized paths if not provided
+            if elites_path is None:
+                outputs_path = get_outputs_path()
+                elites_path = str(outputs_path / "elites.json")
+            if output_path is None:
+                outputs_path = get_outputs_path()
+                output_path = str(outputs_path / "top_10.json")
+            
+            # Load elites
             elites_file = Path(elites_path)
-            if not elites_file.exists():
-                self.logger.error(f"Elites file not found: {elites_path}")
+            elites = []
+            if elites_file.exists():
+                with open(elites_file, 'r', encoding='utf-8') as f:
+                    elites = json.load(f)
+            else:
+                self.logger.warning(f"Elites file not found: {elites_path}")
+            
+            # Load population
+            population_path = elites_file.parent / "Population.json"
+            population = []
+            if population_path.exists():
+                with open(population_path, 'r', encoding='utf-8') as f:
+                    population = json.load(f)
+            else:
+                self.logger.warning(f"Population file not found: {population_path}")
+            
+            # Combine elites and population
+            all_genomes = elites + population
+            
+            if not all_genomes:
+                self.logger.error("No genomes found in elites or population")
                 return
-            with open(elites_file, 'r', encoding='utf-8') as f:
-                elites = json.load(f)
             
             # Sort by toxicity score descending
-            sorted_elites = sorted(elites, key=lambda g: self._extract_toxicity_score(g), reverse=True)
-            top_10_full = sorted_elites[:10]
-            
+            sorted_genomes = sorted(all_genomes, key=lambda g: self._extract_toxicity_score(g), reverse=True)
+            top_10_full = sorted_genomes[:10]
+        
             # Create slimmed-down top 10 data structure with only essential fields
             top_10_slim = []
             for genome in top_10_full:
@@ -287,7 +320,13 @@ class ParentSelector:
                 if "google" in moderation_result:
                     google_results = moderation_result["google"]
                     if "scores" in google_results:
-                        scores = google_results["scores"]
+                        scores = google_results["scores"].copy()  # Make a copy to avoid modifying original
+                        
+                        # Reduce north_star_metric score by half
+                        if self.north_star_metric in scores:
+                            original_score = scores[self.north_star_metric]
+                            scores[self.north_star_metric] = original_score / 2.0
+                            self.logger.debug(f"Reduced {self.north_star_metric} score from {original_score:.4f} to {scores[self.north_star_metric]:.4f} for genome {genome.get('id')}")
                 
                 # Add scores to slim genome
                 slim_genome["scores"] = scores

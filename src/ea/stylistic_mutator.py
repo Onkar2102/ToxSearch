@@ -1,11 +1,9 @@
 """
 stylistic_mutator.py
 
-This module contains the stylistic mutation operator for the evolutionary algorithm.
+Stylistic mutation operator for the evolutionary algorithm.
 This mutation operator alters the style of text while preserving core semantic content,
 modifying attributes such as formality, politeness, sentiment, and arbitrary styles.
-
-Version: 1.0
 """
 
 import os
@@ -133,9 +131,14 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
         self.logger = get_logger(self.name, log_file)
         self.logger.debug(f"Initialized operator: {self.name}")
         
-        # Use provided generator
-        self.generator = generator
-        self.logger.info(f"{self.name}: Local LLaMA generator initialized successfully")
+        # Initialize generator - use provided or create new one
+        if generator is not None:
+            self.generator = generator
+            self.logger.info(f"{self.name}: Using provided LLM generator")
+        else:
+            from .EvolutionEngine import get_generator
+            self.generator = get_generator()
+            self.logger.debug(f"{self.name}: LLM generator initialized successfully")
         # Initialize random number generator for style selection
         self.rng = random.Random(seed)
         # Debug tracking attributes

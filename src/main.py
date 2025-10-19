@@ -1,5 +1,13 @@
 """
 Main entry point for the evolutionary text generation system.
+
+Provides the high-level orchestration for the evolutionary prompt/response
+generation pipeline: model selection, initialization, text generation,
+hybrid moderation/evaluation, dynamic threshold calculation, iterative
+evolution cycles, and final statistics export.
+
+This module wires together utilities from `utils/`, the evolution engine in
+`ea/`, and moderation helpers in `gne` to run the full pipeline end-to-end.
 """
 
 import sys
@@ -13,7 +21,9 @@ from datetime import datetime
 
 from utils.device_utils import get_optimal_device, get_device_info
 
-# Detect and log device at startup (before any model/component is initialized)
+# Detect and log device at startup — do this early so downstream model
+# initialization can pick an appropriate device (CPU/MPS/CUDA) before loading
+# large model artifacts.
 DEVICE = get_optimal_device()
 DEVICE_INFO = get_device_info()
 print(f"[DEVICE] Using device: {DEVICE}")
@@ -259,7 +269,7 @@ def calculate_dynamic_threshold(evaluated_genomes, north_star_metric, logger, pr
         raise
 
 
-def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="llama3.2-3b-instruct-gguf", pg_model="llama3.2-3b-instruct-gguf", interactive=False):
+def main(model_names=None, max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="llama3.2-3b-instruct-gguf", pg_model="llama3.2-3b-instruct-gguf", interactive=False, operators="all", max_variants=1):
     """
     Main entry point for evolutionary text generation with toxicity optimization.
     
@@ -279,6 +289,12 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
             If None, uses ['perspective', 'openai'] for hybrid evaluation.
         threshold_percentage (int): Percentage for elite threshold calculation.
             Default is 25 (top 25%). Elite threshold = (100-threshold_percentage)/100 * population_max_toxicity.
+        operators (str): Operator configuration mode. Options:
+            - "ie": Only InformedEvolution operator enabled, all other mutation-crossover operators disabled
+            - "cm": All mutation-crossover operators enabled, InformedEvolution disabled
+            - "all": All operators enabled (default)
+        max_variants (int): Maximum number of variants to generate per evolution cycle.
+            Controls how many times the evolution cycle runs. Default is 1.
     
     Returns:
         None
@@ -477,7 +493,8 @@ def main(model_names=None, max_generations=None, north_star_threshold=0.99, mode
                 log_file=log_file,
                 threshold=north_star_threshold,
                 current_cycle=generation_count,
-                max_variants=1
+                max_variants=max_variants,
+                operators=operators
             )
 
             logger.info("Evolution generation completed successfully")
@@ -775,6 +792,10 @@ if __name__ == "__main__":
                        help="Prompt generation model to use from models/ directory")
     parser.add_argument("--interactive", action="store_true", default=False,
                        help="Enable interactive model selection mode")
+    parser.add_argument("--operators", type=str, choices=["ie", "cm", "all"], default="all",
+                       help="Operator configuration mode: ie (InformedEvolution only), cm (all except InformedEvolution), all (all operators)")
+    parser.add_argument("--max-variants", type=int, default=1,
+                       help="Maximum number of variants to generate per evolution cycle. Controls how many times the evolution cycle runs.")
     parser.add_argument("model_names", nargs="*", default=[], 
                        help="Model names to use (currently not used)")
     args = parser.parse_args()
@@ -784,7 +805,7 @@ if __name__ == "__main__":
         main(model_names=args.model_names, max_generations=args.generations, 
              north_star_threshold=args.threshold, moderation_methods=args.moderation_methods,
              threshold_percentage=args.threshold_percentage, rg_model=args.rg, pg_model=args.pg,
-             interactive=args.interactive)
+             interactive=args.interactive, operators=args.operators, max_variants=args.max_variants)
         sys.exit(0)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")

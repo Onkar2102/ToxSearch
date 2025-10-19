@@ -60,7 +60,9 @@ def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=Non
         
         # Check all relevant JSON files for toxic genomes
         files_to_check = ["elites.json", "Population.json", "temp.json"]
-        most_toxic_path = Path("data/outputs/most_toxic.json")
+        from utils.population_io import get_outputs_path
+        outputs_path = get_outputs_path()
+        most_toxic_path = outputs_path / "most_toxic.json"
         
         # Load existing most_toxic.json
         if most_toxic_path.exists():
@@ -73,7 +75,7 @@ def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=Non
         moved_count = 0
         
         for filename in files_to_check:
-            file_path = Path(f"data/outputs/{filename}")
+            file_path = outputs_path / filename
             if not file_path.exists():
                 continue
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -114,7 +116,7 @@ def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=Non
         if moved_count > 0 and logger:
             logger.info(f"Moved {moved_count} toxic/complete genomes to most_toxic.json (total: {len(most_toxic_genomes)})")
         # Update EvolutionTracker.json with most_toxic_counts
-        evolution_tracker_path = Path("data/outputs/EvolutionTracker.json")
+        evolution_tracker_path = Path(outputs_path) / "EvolutionTracker.json"
         if evolution_tracker_path.exists():
             try:
                 with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
@@ -541,7 +543,7 @@ class HybridModerationEvaluator:
             raise
 
 def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None, 
-                               north_star_metric: str = "toxicity", moderation_methods: List[str] = None) -> None:
+                               north_star_metric: str = "toxicity", moderation_methods: List[str] = None, outputs_path: str = None) -> None:
     """Convenience function to run hybrid moderation on population"""
     get_logger, _, _, _ = get_custom_logging()
     logger = get_logger("run_moderation", log_file)

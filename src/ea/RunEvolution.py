@@ -675,7 +675,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 
 ## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
 # @return None
-def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=1, max_num_parents=4):
+def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=1, max_num_parents=4, operators="all"):
     """Run one evolution generation with comprehensive logging and steady state support"""
     # Set up dynamic paths for this run
     outputs_path = get_outputs_path()
@@ -717,7 +717,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
     # Phase 5: Initialize evolution engine
     try:
         EvolutionEngine = get_EvolutionEngine()
-        engine = EvolutionEngine(north_star_metric, log_file, current_cycle=current_cycle, max_variants=max_variants, adaptive_selection_after=5, max_num_parents=max_num_parents)
+        engine = EvolutionEngine(north_star_metric, log_file, current_cycle=current_cycle, max_variants=max_variants, adaptive_selection_after=5, max_num_parents=max_num_parents, operators=operators, outputs_path=outputs_path)
         engine.genomes = population
         engine.update_next_id()
         logger.debug("EvolutionEngine next_id set to %d", engine.next_id)

@@ -1,7 +1,7 @@
 """
 back_translation.py
 
-LLM-based back-translation operators for text mutation through language round-trips.
+Back-translation operators for text mutation through language round-trips.
 
 This module implements mutation operators that translate text from English to
 various target languages and back to English, creating paraphrased variants
@@ -22,7 +22,7 @@ from typing import List, Dict, Any
 get_logger = logging.getLogger
 
 class _GenericLLMBackTranslationOperator(VariationOperator):
-    """Generic LLaMA-based back-translation operator for text mutation."""
+    """Generic back-translation operator for text mutation."""
     
     # System prompt templates moved from PGConfig.yaml
     EN_TO_TARGET_PROMPT = """You are a professional {target_language} translator. Translate the following question from English to {target_language}.
@@ -62,7 +62,15 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
         self.logger = get_logger(self.name)
         self.target_lang = target_lang
         self.target_lang_code = target_lang_code
-        self.generator = generator
+        
+        # Initialize generator - use provided or create new one
+        if generator is not None:
+            self.generator = generator
+            self.logger.info(f"{self.name}: Using provided LLM generator")
+        else:
+            from .EvolutionEngine import get_generator
+            self.generator = get_generator()
+            self.logger.debug(f"{self.name}: LLM generator initialized successfully")
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """Generate back-translated variant using LLaMA model."""

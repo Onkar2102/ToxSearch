@@ -1,0 +1,18 @@
+{
+  "total_generations": 5,
+  "total_genomes": 24,
+  "generation_counts": {
+    "0": 14,
+    "1": 3,
+    "2": 3,
+    "3": 3,
+    "4": 1
+  },
+  "single_file_mode": true,
+  "population_file": "Population.json",
+  "elites_file": "elites.json",
+  "most_toxic_file": "most_toxic.json",
+  "elites_count": 5,
+  "population_count": 19,
+  "most_toxic_count": 0
+}

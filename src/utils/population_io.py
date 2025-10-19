@@ -41,13 +41,30 @@ def get_data_path():
     """Get the absolute path to the data directory"""
     return get_project_root() / "data" / "prompt.xlsx"
 
+# Global variable to store the outputs path for the current run
+_current_outputs_path = None
+
 def get_outputs_path():
     """Get the absolute path to the outputs directory"""
-    # Create the full path: data/outputs/
-    outputs_dir = get_project_root() / "data" / "outputs"
+    global _current_outputs_path
+    
+    # If we already have a path for this run, use it
+    if _current_outputs_path is not None:
+        return _current_outputs_path
+    
+    from datetime import datetime
+    
+    # Create timestamp string
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    
+    # Create the full path: data/outputs/YYYYMMDD_HHMM/
+    outputs_dir = get_project_root() / "data" / "outputs" / timestamp
     
     # Ensure the directory exists
     outputs_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Store the path for this run
+    _current_outputs_path = outputs_dir
     
     return outputs_dir
 
@@ -241,13 +258,10 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             info["population_count"] = len(population)
             
             # Count genomes by generation
-            generation_counts = {}
             for genome in population:
                 if genome and "generation" in genome:
-                    gen_num = genome["generation"]
-                    generation_counts[gen_num] = generation_counts.get(gen_num, 0) + 1
-            
-            info["generation_counts"] = generation_counts
+                    gen_num = str(genome["generation"])
+                    info["generation_counts"][gen_num] = info["generation_counts"].get(gen_num, 0) + 1
             
         except Exception as e:
             # Silently fail if we can't read the file
@@ -264,7 +278,7 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             # Add elite genomes to generation counts
             for genome in elites:
                 if genome and "generation" in genome:
-                    gen_num = genome["generation"]
+                    gen_num = str(genome["generation"])
                     info["generation_counts"][gen_num] = info["generation_counts"].get(gen_num, 0) + 1
             
         except Exception as e:
@@ -282,7 +296,7 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             # Add most_toxic genomes to generation counts
             for genome in most_toxic:
                 if genome and "generation" in genome:
-                    gen_num = genome["generation"]
+                    gen_num = str(genome["generation"])
                     info["generation_counts"][gen_num] = info["generation_counts"].get(gen_num, 0) + 1
             
         except Exception as e:
@@ -291,7 +305,17 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
     
     # Calculate total genomes and generations
     info["total_genomes"] = info["population_count"] + info["elites_count"] + info["most_toxic_count"]
-    info["total_generations"] = max(info["generation_counts"].keys()) + 1 if info["generation_counts"] else 0
+    
+    # Ensure all generations from 0 to max are represented, even if they have 0 variants
+    if info["generation_counts"]:
+        max_generation = max(int(k) for k in info["generation_counts"].keys())
+        # Fill in missing generations with 0 counts
+        for gen_num in range(max_generation + 1):
+            if str(gen_num) not in info["generation_counts"]:
+                info["generation_counts"][str(gen_num)] = 0
+        info["total_generations"] = max_generation + 1
+    else:
+        info["total_generations"] = 0
     
     return info
 
@@ -560,14 +584,9 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outp
             # Clean the population before saving
             cleaned_population = clean_population(population, logger=_logger, log_file=log_file)
             
-            # Resolve the path
+            # Resolve the path - always use Population.json as filename
             pop_path_obj = Path(pop_path)
-            
-            # If pop_path is a directory, save as Population.json in it
-            if pop_path_obj.is_dir():
-                output_file = pop_path_obj / "Population.json"
-            else:
-                output_file = pop_path_obj
+            output_file = pop_path_obj if pop_path_obj.suffix else pop_path_obj / "Population.json"
             
             # Ensure directory exists
             output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1238,8 +1257,8 @@ from .constants import EvolutionConstants, FileConstants
 
 
 
-def redistribute_population_with_threshold(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE, 
-                                          elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+def redistribute_population_with_threshold(population_file_path: str = None, 
+                                          elites_file_path: str = None,
                                           elite_threshold: float = None,
                                           north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
                                           *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
@@ -1269,6 +1288,14 @@ def redistribute_population_with_threshold(population_file_path: str = FileConst
         Statistics about the redistribution process
     """
     _logger = logger or get_logger("population_io", log_file)
+    
+    # Use centralized paths if not provided
+    if population_file_path is None:
+        outputs_path = get_outputs_path()
+        population_file_path = str(outputs_path / "Population.json")
+    if elites_file_path is None:
+        outputs_path = get_outputs_path()
+        elites_file_path = str(outputs_path / "elites.json")
     
     with PerformanceLogger(_logger, "Redistribute Population with Threshold", 
                          population_file=population_file_path, elites_file=elites_file_path, 

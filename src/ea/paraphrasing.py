@@ -1,10 +1,8 @@
 """
 paraphrasing.py
 
-This module contains the LLM-based paraphrasing operator for the evolutionary algorithm.
+LLM-based paraphrasing operator for the evolutionary algorithm.
 This mutation operator generates paraphrased variants using the local LLaMA model's paraphrase method.
-
-Version: 3.0
 """
 
 import os

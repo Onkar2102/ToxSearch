@@ -111,7 +111,7 @@ class LlamaCppChatInterface(ModelInterface):
             # Configure llama.cpp parameters
             llama_params = {
                 "model_path": model_path,
-                "n_ctx": 2048,  # Context window
+                "n_ctx": 4096,  # Context window
                 "n_threads": None,  # Auto-detect
                 "n_gpu_layers": -1,  # Use all available GPU layers (MPS on Apple Silicon)
                 "verbose": False,
