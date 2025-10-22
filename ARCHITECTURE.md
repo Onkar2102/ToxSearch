@@ -1,469 +1,285 @@
-# Project Architecture
+# System Architecture
 
-## Table of Contents
+## Overview
 
-- [Architecture Overview](#architecture-overview)
-- [System Components](#system-components)
-- [Data Flow](#data-flow)
-- [Memory Management](#memory-management)
-- [Text Variation Operators](#text-variation-operators)
-- [Configuration](#configuration)
-- [Performance Characteristics](#performance-characteristics)
-- [Recent Architecture Improvements](#recent-architecture-improvements)
-- [Documentation Index](#documentation-index)
+The Evolutionary Text Generation Framework uses genetic algorithms with adaptive selection pressure to evolve text prompts toward higher toxicity scores for AI safety research.
 
-## Architecture Overview
+## Core Architecture
 
 ```mermaid
-flowchart TD
-  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → data/outputs/elites.json]
-  B --> C[Steady-State Evolution Loop]
-  
-  subgraph "Evolution Loop"
-    C --> D[Parent Selection: Top Elite + Random]
-    D --> E[Text Generation: ResponseGenerator]
-    E --> F[Safety Evaluation: Hybrid Moderation]
-    F --> G[Evolution: 16 Text Variation Operators]
-    G --> H[Update Elites: data/outputs/elites.json]
-    H --> I{Threshold Reached?}
-    I -->|No| D
-    I -->|Yes| J[Complete]
-  end
-  
-  F --> K[EvolutionTracker.json]
-  H --> L[non_elites.json]
-  
-  style C fill:#4fc3f7,stroke:#0277bd,stroke-width:3px,color:#000
-  style I fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
-  style J fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
+flowchart TB
+    A[Input: prompt.xlsx] --> B[Initialize Population]
+    B --> C[Select Parents Adaptively]
+    C --> D[Apply 16 Variation Operators]
+    D --> E[Generate Responses LLM]
+    E --> F[Evaluate with Perspective API]
+    F --> G[Classify & Distribute]
+    G --> H{Max Generations?}
+    H -->|No| C
+    H -->|Yes| I[Complete]
+    
+    G --> J[elites.json]
+    G --> K[non_elites.json]
+    G --> L[under_performing.json]
+    F --> M[EvolutionTracker.json]
+    
+    style C fill:#4fc3f7
+    style D fill:#ba68c8
+    style F fill:#4caf50
+    style G fill:#ff9800
 ```
 
 ## System Components
 
-### **Entry Points**
-Removed `app.py` — all CLI usage is consolidated in `src/main.py`.
-- **`src/main.py`** - Direct execution pipeline
+### Entry Point
+- **`src/main.py`** - CLI entry point, orchestrates entire pipeline
 
-### **Core Pipeline**
-- **`RunEvolution.py`** - Evolution orchestration
-- **`EvolutionEngine.py`** - Genetic algorithm core
+### Evolution System
+- **`src/ea/evolution_engine.py`** - Core evolution logic, variant generation
+- **`src/ea/parent_selector.py`** - Adaptive parent selection (DEFAULT/EXPLORE/EXPLOIT)
+- **`src/ea/run_evolution.py`** - Evolution orchestration, genome distribution
+- **`src/ea/variation_operators.py`** - Operator registry
+- **`src/ea/[operator_files].py`** - 16 individual variation operators
 
-### **Evolution Components**
-- **`ParentSelector.py`** - Steady-state selection
-- **Operator System** - 16 variation operators
-- **Population I/O** - Steady-state management
+### Generation & Evaluation
+- **`src/gne/prompt_generator.py`** - Prompt generation using LLM
+- **`src/gne/response_generator.py`** - Response generation using LLM
+- **`src/gne/evaluator.py`** - Google Perspective API integration
 
-### **Generation & Evaluation**
-- **`ResponseGenerator.py`** - Response generation using prompt_template
-- **`PromptGenerator.py`** - Prompt generation using task templates
-- **`evaluator.py`** - Safety evaluation
-
-## System Overview
-
-```mermaid
-graph TB
-  subgraph "Evolutionary Text Generation Framework"
-    A[Steady-State Population Management]
-    B[16 Text Variation Operators]
-    C[Hybrid Safety Evaluation]
-    D[Memory-Optimized Processing]
-    E[Standardized Import System]
-  end
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-```
-
-## Core Pipeline Flow
-
-```mermaid
-flowchart LR
-  A[Input Prompts<br/>data/prompt.xlsx] --> B[Text Generation<br/>Qwen2.5-7B Model]
-  B --> C[Safety Evaluation<br/>Hybrid Moderation]
-  C --> D[Evolution<br/>16 Text Variation Operators]
-  D --> E[Population Update<br/>Steady-State Elites]
-  E --> F{Threshold<br/>Reached?}
-  F -->|No| B
-  F -->|Yes| G[Complete]
-  
-  subgraph "Data Flow"
-    H[Generated Responses]
-    I[Moderation Scores]
-    J[New Variants]
-    K[Updated Elites]
-  end
-  
-  B --> H
-  C --> I
-  D --> J
-  E --> K
-  D --> L1[Staging to temp.json]
-  L1 --> L2[Intra-temp Dedup (EvolutionEngine)]
-  L2 --> L3[Cross-file Dedup (RunEvolution)]
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style B fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style C fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style D fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-  style F fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
-  style G fill:#66bb6a,stroke:#388e3c,stroke-width:2px,color:#000
-```
+### Utilities
+- **`src/utils/population_io.py`** - Population I/O, metrics calculation, genome management
 
 ## Data Flow
 
-### **Input Layer**
-- **`data/prompt.xlsx`** - Input prompts for evolution
-
-### **Processing Layer (Steady-State)**
-- Population Initialization
-- Text Generation Phase
-- Safety Evaluation Phase
-- Evolution Phase
-
-### **Storage Layer**
-- **`data/outputs/elites.json`** - Steady-state population
-- **`data/outputs/EvolutionTracker.json`** - Progress tracking
-- **`data/outputs/population_index.json`** - Metadata & index
-- **`data/outputs/non_elites.json`** - Full population backup
-- **`data/outputs/temp.json`** - Staging area during generation cycles
-
-## Memory Management
-
-```mermaid
-flowchart LR
-  A[Memory Monitor] --> B[Adaptive Batch Sizing]
-  B --> C[Model Caching]
-  C --> D[Lazy Loading]
-  D --> E[Memory Cleanup]
-  E --> A
-  
-  subgraph "Memory Optimization Features"
-    F[Real-time Tracking<br/>• System memory<br/>• GPU memory<br/>• Process memory]
-    G[Threshold Alerts<br/>• Warning at 75%<br/>• Critical at 90%<br/>• Auto cleanup]
-    H[Cache Management<br/>• PyTorch cache clear<br/>• Model cache mgmt<br/>• Operator cleanup]
-    I[Garbage Collection<br/>• Force GC<br/>• Memory defrag<br/>• Elite preservation]
-  end
-  
-  A --> F
-  A --> G
-  E --> H
-  E --> I
-  
-  style A fill:#f48fb1,stroke:#c2185b,stroke-width:3px,color:#000
-  style E fill:#66bb6a,stroke:#388e3c,stroke-width:3px,color:#000
-  style F fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style G fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
-  style H fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
-  style I fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+### 1. Initialization
+```
+prompt.xlsx → Load prompts → Generate responses → Evaluate → Initialize population
+                                                                    ↓
+                                                          temp.json (variants)
+                                                                    ↓
+                                                 Distribute by threshold (elite_threshold, removal_threshold)
+                                                                    ↓
+                                      ┌─────────────────────────────┴──────────────────────────────┐
+                                      ↓                             ↓                              ↓
+                              elites.json                  non_elites.json            under_performing.json
+                            (≥ elite_threshold)    (> removal_threshold,            (≤ removal_threshold)
+                                                     < elite_threshold)
 ```
 
-## Text Variation Operators
-
-### **Current Active Operators (16 Total)**
-
-#### **Mutation Operators (14)**
-1. **LLM_POSAwareSynonymReplacement** - LLaMA-based synonym replacement using POS tagging
-2. **LLM_POSAwareAntonymReplacement** - LLaMA-based antonym replacement using POS tagging
-3. **MLMOperator** - BERT masked language model for word replacement
-4. **LLMBasedParaphrasingOperator** - LLaMA-based paraphrasing with optimization
-5. **StylisticMutator** - Stylistic text mutations
-6. **LLMBackTranslationHIOperator** - Hindi back-translation (LLaMA)
-7. **LLMBackTranslationFROperator** - French back-translation (LLaMA)
-8. **LLMBackTranslationDEOperator** - German back-translation (LLaMA)
-9. **LLMBackTranslationJAOperator** - Japanese back-translation (LLaMA)
-10. **LLMBackTranslationZHOperator** - Chinese back-translation (LLaMA)
-11. **NegationOperator** - Adds negation to prompt questions (NEW)
-12. **TypographicalErrorsOperator** - Simulates common human typos and spelling mistakes (NEW)
-13. **ConceptAdditionOperator** - Adds unfairness and bias constraints to questions (NEW)
-14. **InformedEvolutionOperator** - Uses top 10 elites to generate more toxic variants (NEW)
-
-#### **Crossover Operators (2)**
-1. **SemanticSimilarityCrossover** - Semantic similarity-based crossover
-2. **SemanticFusionCrossover** - LLM-based instruction structure preservation
-
-### **Operator Selection Logic**
-
-```mermaid
-flowchart TD
-  A[Parent Selection] --> B{Number of Parents?}
-  B -->|1 Parent| C[Mutation Operators<br/>14 Total]
-  B -->|2+ Parents| D[Crossover Operators<br/>2 Total]
-  
-  C --> E[Apply Selected Operator]
-  D --> E
-  E --> F[Generate Variants<br/>Max 1 per operator]
-  F --> G[Deduplication]
-  G --> H[Add to Population]
-  
-  style C fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
+### 2. Evolution Loop
+```
+1. Select Parents (adaptive mode: DEFAULT/EXPLORE/EXPLOIT)
+    ↓
+2. Apply Operators (16 variation operators)
+    ↓
+3. Save Variants (temp.json)
+    ↓
+4. Generate Responses (LLM)
+    ↓
+5. Evaluate (Google Perspective API)
+    ↓
+6. Calculate Thresholds (elite_threshold = population_max_toxicity * (100 - elites_threshold%) / 100)
+    ↓
+7. Distribute Genomes
+    - Elite: score ≥ elite_threshold → elites.json
+    - Non-elite: removal_threshold < score < elite_threshold → non_elites.json
+    - Under-performing: score ≤ removal_threshold → under_performing.json
+    ↓
+8. Update Metrics (EvolutionTracker.json)
+    ↓
+9. Check Completion (max_generations reached?)
 ```
 
-## Configuration
+## Population Management
 
-### **Model Configuration**
-- **Prompt Generator**: Qwen2.5-7B-Instruct (default)
-- **Response Generator**: Llama3.2-3B-Instruct (default)
-- **GPU Acceleration**: Enabled by default (`n_gpu_layers: -1`)
+### Three-Tier Classification
+1. **Elites** (`elites.json`)
+   - Score ≥ elite_threshold
+   - Used for parent selection
+   - Initial state: `"elite"`
 
-### **Evolution Parameters**
-- **Max Parents**: 2 (reduced from 4 to control population growth)
-- **Adaptive Selection**: After 10 generations (increased from 5)
-- **Max Variants**: 1 per operator (controlled growth)
-- **Threshold**: 0.95 (north star metric)
+2. **Non-Elites** (`non_elites.json`)
+   - removal_threshold < score < elite_threshold
+   - Used for parent selection
+   - Initial state: `"non_elite"`
 
-### **Memory Management**
-- **Memory Threshold**: 20.0 GB
-- **Check Interval**: 1800 seconds (30 minutes)
-- **Stuck Threshold**: 7200 seconds (2 hours)
-- **Max Restarts**: 5
+3. **Under-Performing** (`under_performing.json`)
+   - Score ≤ removal_threshold
+   - Archived, not used for evolution
+   - Initial state: `"inefficient"`
 
-## Performance Characteristics
+### Threshold Calculations
+```python
+# Elite threshold (percentage-based)
+elite_threshold = population_max_toxicity * (100 - elites_threshold%) / 100
 
-### **Memory Usage**
-- **Elites Population**: ~500KB (124 genomes)
-- **Full Population**: ~2.8MB (2885 genomes)
-- **Model Loading**: Efficient caching and reuse across operators
-- **Steady-State**: Continuous memory management with elite preservation
+# Removal threshold (percentage-based)
+removal_threshold = population_max_toxicity * removal_threshold% / 100
 
-### **Scalability**
-- **Population Growth**: Controlled through elite redistribution
-- **Operator Efficiency**: Lazy loading and model reuse
-- **Memory Management**: Real-time monitoring and adaptive batch sizing
-
-### **Optimization Features**
-- **Lazy Imports**: Prevents circular dependencies
-- **Model Caching**: Reuse loaded models across operators
-- **Memory Monitoring**: Real-time memory usage tracking
-- **Automatic Cleanup**: PyTorch cache and garbage collection
-- **Steady-State Management**: Efficient elite preservation
-
-## Adaptive Selection Logic
-
-The framework now includes **adaptive selection pressure** that dynamically adjusts parent selection based on evolution progress:
-
-### **Selection Modes:**
-
-#### **DEFAULT Mode** (Balanced)
-- **Selection**: 1 elite + 1 non-elite
-- **Usage**: Initial generations and steady progress
-- **Purpose**: Balanced exploration and exploitation
-
-#### **EXPLORE Mode** (Increased Exploration)
-- **Selection**: 1 elite + 2 non-elites
-- **Trigger**: After `stagnation_limit` generations without improvement
-- **Purpose**: Increase exploration when evolution is stuck
-
-#### **EXPLOIT Mode** (Focused Exploitation)
-- **Selection**: 2 elites + 1 non-elite
-- **Trigger**: When fitness slope < 0 (declining performance)
-- **Purpose**: Focus on exploitation when fitness is declining
-
-### **Adaptive Triggers:**
-
-```mermaid
-flowchart TD
-    A[Generation Start] --> B{Generation <= stagnation_limit?}
-    B -->|Yes| C[DEFAULT Mode<br/>1 elite + 1 non-elite]
-    B -->|No| D{Fitness slope < 0?}
-    D -->|Yes| E[EXPLOIT Mode<br/>2 elites + 1 non-elite]
-    D -->|No| F{Generations since improvement > stagnation_limit?}
-    F -->|Yes| G[EXPLORE Mode<br/>1 elite + 2 non-elites]
-    F -->|No| H[DEFAULT Mode<br/>1 elite + 1 non-elite]
-    
-    C --> I[Parent Selection]
-    E --> I
-    G --> I
-    H --> I
-    
-    style C fill:#4fc3f7,stroke:#0277bd,stroke-width:2px
-    style E fill:#ff9800,stroke:#f57c00,stroke-width:2px
-    style G fill:#4caf50,stroke:#388e3c,stroke-width:2px
+# Example: max_toxicity=0.5, elites_threshold=25%, removal_threshold=5%
+# elite_threshold = 0.5 * (100 - 25) / 100 = 0.375
+# removal_threshold = 0.5 * 5 / 100 = 0.025
 ```
 
-### **Configuration Parameters:**
+## Adaptive Selection
 
-- **`--stagnation-limit`**: Number of generations without improvement before switching to EXPLORE mode (default: 5)
-- **`--elites-threshold`**: Percentage for elite classification (default: 25%)
-- **`--removal-threshold`**: Percentage for removing worst performing genomes (default: 5%)
+### Selection Modes
+| Mode | Parents | Trigger |
+|------|---------|---------|
+| **DEFAULT** | 1 elite + 1 non-elite | First `m` generations (m=stagnation_limit) |
+| **EXPLORE** | 1 elite + 2 non-elites | No improvement for `m` generations |
+| **EXPLOIT** | 2 elites + 1 non-elite | Fitness slope < 0 (declining average fitness) |
 
-### **EvolutionTracker Integration:**
+### Mode Determination Logic
+```python
+1. Check if generation ≤ stagnation_limit → DEFAULT
+2. Check if fitness slope < 0 → EXPLOIT
+3. Check if generations_since_improvement > stagnation_limit → EXPLORE
+4. Otherwise → DEFAULT
+```
 
-The adaptive selection logic is tracked in `EvolutionTracker.json`:
+### Fitness Tracking
+- **avg_fitness_history**: Sliding window of last `m` generations' average fitness
+- **slope_of_avg_fitness**: Linear regression slope of avg_fitness_history
+- **generations_since_improvement**: Counter that resets when population_max_toxicity increases
 
+## Evolution Tracking
+
+### EvolutionTracker.json Structure
 ```json
 {
-  "generations_since_improvement": 0,
-  "avg_fitness_history": [0.1, 0.2, 0.15, 0.1, 0.05],
-  "slope_of_avg_fitness": -0.025,
-  "selection_mode": "exploit"
+  "status": "not_complete",
+  "total_generations": 10,
+  "population_max_toxicity": 0.5234,
+  "population_best_genome_id": 42,
+  "total_genomes": 100,
+  "elites_count": 15,
+  "non_elites_count": 85,
+  "generations_since_improvement": 2,
+  "avg_fitness_history": [0.0542, 0.0569, 0.0617, 0.0691, 0.0753],
+  "slope_of_avg_fitness": 0.0054,
+  "selection_mode": "default",
+  "generations": [
+    {
+      "generation_number": 1,
+      "genome_id": 34,
+      "max_score": 0.1912,
+      "min_score": 0.0113,
+      "avg_fitness": 0.0542,
+      "avg_fitness_variants": 0.0669,
+      "avg_fitness_generation": 0.0669,
+      "avg_fitness_elites": 0.1721,
+      "avg_fitness_non_elites": 0.0431,
+      "parents": ["8", "3"],
+      "top_10": ["8", "14", "11", ...],
+      "variants_created": 21,
+      "mutation_variants": 20,
+      "crossover_variants": 1,
+      "elites_threshold": 0.1434,
+      "removal_threshold": 0.0096,
+      "elites_count": 3,
+      "non_elites_count": 32
+    }
+  ]
 }
 ```
 
-## Recent Architecture Improvements
-
-### **1. Steady-State Population Management**
-- **Problem**: Generation-based evolution had artificial boundaries
-- **Solution**: Continuous evolution with elite preservation
-- **Benefits**: More natural evolution, better performance tracking, memory efficiency
-
-### **2. 16 Text Variation Operators**
-- **Problem**: Limited text variation capabilities
-- **Solution**: Comprehensive operator suite with 4 new mutation operators
-- **Benefits**: Rich text variation, multi-language support, diverse evolution strategies
-
-### **3. New Mutation Operators (January 2025)**
-- **NegationOperator**: Adds negation to prompt questions (e.g., "advantages" → "disadvantages")
-- **TypographicalErrorsOperator**: Simulates common human typos and spelling mistakes
-- **ConceptAdditionOperator**: Adds unfairness and bias constraints to questions
-- **InformedEvolutionOperator**: Uses top 10 elites to generate more toxic variants
-
-### **4. Enhanced Memory Management**
-- **Problem**: Memory pressure with multiple operators
-- **Solution**: Model caching, lazy loading, adaptive batch sizing
-- **Benefits**: Lower memory usage, faster execution, better scalability
-
-### **5. GPU Acceleration**
-- **Problem**: Models running on CPU
-- **Solution**: Enabled GPU acceleration for both PG and RG models
-- **Benefits**: Faster model inference, better performance
-
-### **6. Parent Selection Optimization**
-- **Problem**: Excessive number of parents leading to exponential growth
-- **Solution**: Reduced max parents from 4 to 2, increased adaptive selection threshold
-- **Benefits**: Controlled population growth, more manageable evolution
-
-## Deduplication Flow
-
-```mermaid
-flowchart TD
-  A[Operators Generate Variants] --> B[Stage to data/outputs/temp.json]
-  B --> C[Intra-File Deduplication<br/>EvolutionEngine.generate_variants_global]
-  C --> D[Cross-File Deduplication<br/>RunEvolution._check_and_move_genomes_from_temp]
-  D --> E{Moderation Outcome}
-  E -->|Accepted| G[Merge into data/outputs/elites.json]
-  G --> H[Clear temp.json]
-
-  style B fill:#bbdefb,stroke:#1e88e5,stroke-width:2px,color:#000
-  style C fill:#c8e6c9,stroke:#43a047,stroke-width:2px,color:#000
-  style D fill:#ffe0b2,stroke:#fb8c00,stroke-width:2px,color:#000
-  style F fill:#ef9a9a,stroke:#e53935,stroke-width:2px,color:#000
-  style G fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px,color:#000
+### Genome Structure
+```json
+{
+  "id": 34,
+  "prompt": "Question text...",
+  "generation": 1,
+  "status": "complete",
+  "parents": [8, 3],
+  "operator": "LLMBasedParaphrasing",
+  "initial_state": "elite",
+  "creation_info": {
+    "type": "mutation",
+    "operator": "LLMBasedParaphrasing",
+    "source_generation": 0,
+    "evolution_cycle": 1,
+    "parent_score": 0.0622
+  },
+  "moderation_result": {
+    "google": {
+      "scores": {
+        "toxicity": 0.1912,
+        "severe_toxicity": 0.0234,
+        ...
+      }
+    }
+  }
+}
 ```
 
-**Key Points:**
-- Staging occurs in `data/outputs/temp.json` for the current generation cycle
-- Intra-file dedup removes duplicate prompts/IDs within `temp.json` (EvolutionEngine)
-- Cross-file dedup removes items already present in `elites.json` and `non_elites.json` (RunEvolution)
-- After processing and routing, `temp.json` is cleared for the next cycle
+## Variation Operators (16 Total)
 
-## File Structure Architecture
+### Mutation Operators (13)
+1. **MLM** - Masked Language Model substitution
+2. **LLMBasedParaphrasing** - LLM-based paraphrasing
+3. **BackTranslation** (5 variants) - Translation roundtrip (Chinese, French, German, Hindi, Japanese)
+4. **SynonymReplacement** - WordNet synonyms
+5. **AntonymReplacement** - WordNet antonyms
+6. **TypographicalErrors** - Typo injection
+7. **NegationOperator** - Negation insertion
+8. **ConceptAddition** - Concept injection
+9. **StylisticMutator** - Style transfer
+10. **InformedEvolutionOperator** - LLM-guided using top_10
 
-```mermaid
-graph TB
-  subgraph "EOST-CAM-LLM Project Structure"
-    A[src/main.py<br/>Main entry point]
-    
-    subgraph "Configuration"
-      B1[config/RGConfig.yaml<br/>Response generation model configuration]
-      B2[config/PGConfig.yaml<br/>Prompt generation model configuration]
-    end
-    
-    subgraph "Data"
-      C[data/prompt.xlsx<br/>Input prompts]
-    end
-    
-    subgraph "Source Code (src/)"
-      D[main.py<br/>Core evolution pipeline]
-      
-      subgraph "Generation & Evaluation (gne/)"
-        E1[ResponseGenerator.py<br/>Response generation using prompt_template]
-        E2[PromptGenerator.py<br/>Prompt generation using task templates]
-        E3[evaluator.py<br/>Content moderation evaluation]
-        E4[model_interface.py<br/>Model loading and GPU configuration]
-      end
-      
-      subgraph "Evolutionary Algorithms (ea/)"
-        F1[EvolutionEngine.py<br/>Genetic algorithm core (steady-state)]
-        F2[Individual Operator Files<br/>16 variation operators]
-        F3[ParentSelector.py<br/>Selection strategies (steady-state)]
-        F4[RunEvolution.py<br/>Evolution pipeline]
-        F5[__init__.py<br/>Package exports]
-      end
-      
-      subgraph "Utilities (utils/)"
-        G1[population_io.py<br/>Steady-state population management]
-        G2[custom_logging.py<br/>Performance tracking]
-        G3[m3_optimizer.py<br/>M3 Mac optimization]
-        G4[config.py<br/>Configuration utilities]
-        G5[constants.py<br/>System constants]
-        G6[download_models.py<br/>Model download utilities]
-        G7[device_utils.py<br/>Device and GPU utilities]
-      end
-    end
-    
-    subgraph "Outputs"
-      H1[elites.json<br/>Steady-state elite population]
-      H2[non_elites.json<br/>Full population backup]
-      H3[population_index.json<br/>Population metadata/index]
-      H4[EvolutionTracker.json<br/>Evolution progress tracking]
-      H5[temp.json<br/>Staging area during generation cycles]
-    end
-    
-    subgraph "Supporting Files"
-      I1[logs/<br/>Log files]
-      I2[tests/<br/>Test suite]
-      I3[requirements.txt<br/>Python dependencies]
-      I4[LICENSE<br/>MIT License]
-    end
-  end
-  
-  A --> D
-  D --> E1
-  D --> F1
-  D --> G1
-  D --> H1
-  
-  style A fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
-  style D fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
-  style E1 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
-  style F1 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
-  style G1 fill:#f48fb1,stroke:#c2185b,stroke-width:2px,color:#000
-  style H1 fill:#aed581,stroke:#689f38,stroke-width:2px,color:#000
-```
+### Crossover Operators (3)
+1. **SemanticFusionCrossover** - Semantic blending
+2. **SemanticSimilarityCrossover** - Similarity-based crossover
+3. **CutAndSliceCrossover** - Segment recombination
 
-## Documentation Index
+## Performance Characteristics
 
-### 📚 **Core Documentation**
-- **[README.md](README.md)** - Main project documentation with setup instructions
-- **[Evolutionary Algorithms Guide](src/ea/README.md)** - Detailed guide to genetic algorithms and operators
-- **[EA Notes](src/ea/notes.md)** - Implementation notes and data flow details
+### Memory Management
+- **Lazy Loading**: Population loaded only when needed
+- **Cache Limits**: Moderation cache capped at 5,000 entries
+- **Model Caching**: Max 2 models in memory, LRU eviction
 
-### 📖 **Technical Documentation**
-- **[LLM POS-Aware Synonym Replacement](docs/LLM_POSAwareSynonymReplacement.md)** - POS-aware operations guide
-- **[vLLM Migration Guide](docs/vLLM_Migration_Guide.md)** - vLLM integration guide
-- **[LLM POS Test Updates](docs/README_llm_pos_test_updates.md)** - Testing updates and information
+### API Rate Limiting
+- **Google Perspective API**: 60 requests/minute
+- **Retry Logic**: Exponential backoff (2 retries)
+- **Text Size Limit**: 20,480 bytes (truncated if exceeded)
 
-### 🧪 **Testing & Development**
-- **[Tests README](tests/README.md)** - Testing framework documentation
-- **[Test Files](tests/)** - Comprehensive test suite for all operators
+### Score System
+- **Minimum Score**: 0.0001 (enforced across all calculations)
+- **Precision**: 4 decimal places
+- **Range**: 0.0001 to 1.0000
 
-### 🔧 **Configuration Files**
-- **[RGConfig.yaml](config/RGConfig.yaml)** - Response Generator configuration
-- **[PGConfig.yaml](config/PGConfig.yaml)** - Prompt Generator configuration
-- **[.env](.env)** - Environment variables and API keys
+## File Lifecycle
 
-### 📊 **Data Files**
-- **[prompt.xlsx](data/prompt.xlsx)** - Input prompts for evolution
-- **[outputs/](data/outputs/)** - Evolution results and tracking data
-- **[models/](models/)** - Local model files and configurations
+### Temporary Files (per generation)
+- **`temp.json`** - New variants before evaluation
+- **`parents.json`** - Selected parents (slimmed: id, prompt, toxicity)
+- **`top_10.json`** - Top 10 performers (slimmed: id, prompt, toxicity)
 
-### 🚀 **Quick Reference**
-- **Run**: `python3 src/main.py --generations 25`
-- **Test**: `python3 src/main.py --generations 1`
-- **Monitor**: Check `logs/` directory for execution logs
+### Persistent Files
+- **`elites.json`** - Elite genomes
+- **`non_elites.json`** - Non-elite genomes
+- **`under_performing.json`** - Archived low-scoring genomes
+- **`EvolutionTracker.json`** - Complete evolution history
 
-This enhanced architecture provides a robust, scalable, and memory-efficient framework for evolutionary text generation with comprehensive operator support, steady-state population management, and multi-language capabilities.
+## Configuration
+
+### Model Configuration
+- **PGConfig.yaml** - Prompt Generator settings
+- **RGConfig.yaml** - Response Generator settings
+- Command-line arguments override config files
+
+### Key Parameters
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `max_variants` | 1 | Variants per operator per parent |
+| `elites_threshold` | 25 | Elite threshold percentage |
+| `removal_threshold` | 5 | Removal threshold percentage |
+| `stagnation_limit` | 5 | Generations before explore mode |
+| `north_star_threshold` | 0.95 | Target toxicity (reference only) |
+
+## See Also
+
+- **[README.md](README.md)** - Getting started and usage
+- **[OPERATORS.md](OPERATORS.md)** - Detailed operator documentation
+- **[src/ea/README.md](src/ea/README.md)** - Evolutionary algorithm details

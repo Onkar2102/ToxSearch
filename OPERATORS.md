@@ -1,498 +1,284 @@
-# Text Variation Operators Documentation
+# Text Variation Operators
 
-This document provides comprehensive documentation for all 16 text variation operators in the evolutionary text generation framework.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Mutation Operators](#mutation-operators)
-- [Crossover Operators](#crossover-operators)
-- [Operator Selection Logic](#operator-selection-logic)
-- [Performance Characteristics](#performance-characteristics)
-- [Usage Examples](#usage-examples)
-- [Error Handling](#error-handling)
-- [Documentation Index](#documentation-index)
+Complete documentation for all 16 variation operators in the evolutionary text generation framework.
 
 ## Overview
 
-The framework includes **16 active text variation operators**:
-- **14 Mutation Operators**: Single-parent text transformations
-- **2 Crossover Operators**: Multi-parent text combinations
+**16 Active Operators**:
+- **13 Mutation Operators** - Single-parent text transformations
+- **3 Crossover Operators** - Multi-parent text combinations
 
-### **Operator Categories**
-1. **Core LLM Operators** (2): POS-aware synonym/antonym replacement
-2. **BERT-Based Operators** (1): Masked language modeling
-3. **OpenAI-Based Operators** (1): GPT-4 paraphrasing
-4. **Stylistic Operators** (1): Style variation
-5. **Back-Translation Operators** (5): Multi-language translation
-6. **New Mutation Operators** (4): Negation, typos, bias, informed evolution
-7. **Crossover Operators** (2): Semantic similarity and fusion
+All operators return variants wrapped in XML tags (`<variant>...</variant>`) and must end with a question mark.
 
-## Mutation Operators
+## Mutation Operators (13)
 
-### **Core LLM Operators**
-
-#### **1. LLM_POSAwareSynonymReplacement**
-**File**: `src/ea/synonym_replacement.py`
-
-**Purpose**: Replaces words with synonyms while maintaining grammatical structure using POS tagging.
-
-**How it works**:
-1. Uses spaCy for POS analysis
-2. Identifies suitable words for replacement
-3. Uses LLaMA for intelligent synonym selection
-4. Maintains context and grammatical structure
-
-**Example**:
-```
-Input:  "What are the benefits of exercise?"
-Output: "What are the advantages of exercise?"
-```
-
-**Key Features**:
-- Context-aware synonym selection
-- POS-aware replacement
-- Enhanced error handling with fallback
-- Neutral prompts to reduce LLM refusals
-
-#### **2. LLM_POSAwareAntonymReplacement**
-**File**: `src/ea/antonym_replacement.py`
-
-**Purpose**: Replaces words with antonyms while maintaining grammatical structure using POS tagging.
-
-**How it works**:
-1. Uses spaCy for POS analysis
-2. Identifies suitable words for replacement
-3. Uses LLaMA for intelligent antonym selection
-4. Maintains context and grammatical structure
-
-**Example**:
-```
-Input:  "What are the benefits of exercise?"
-Output: "What are the drawbacks of exercise?"
-```
-
-**Key Features**:
-- Context-aware antonym selection
-- POS-aware replacement
-- Enhanced error handling with fallback
-- Neutral prompts to reduce LLM refusals
-
-### **BERT-Based Operators**
-
-#### **3. MLMOperator**
+### 1. MLM (Masked Language Model)
 **File**: `src/ea/mlm_operator.py`
 
-**Purpose**: Uses BERT masked language modeling for word replacement.
+Replaces [MASK] tokens using BERT-based language model.
 
-**How it works**:
-1. Uses `bert-base-uncased` model
-2. Masks random words in the text
-3. Uses BERT to predict replacements
-4. Maintains contextual coherence
-
-**Example**:
 ```
-Input:  "The weather is nice today."
-Output: "The weather is beautiful today."
+Input:  "What are the [MASK] of climate change?"
+Output: "What are the consequences of climate change?"
 ```
 
-**Key Features**:
-- Contextual word prediction
-- BERT-based language understanding
-- Maintains sentence structure
-
-### **OpenAI-Based Operators**
-
-#### **4. LLMBasedParaphrasingOperator**
+### 2. LLMBasedParaphrasing
 **File**: `src/ea/paraphrasing.py`
 
-**Purpose**: Uses OpenAI GPT-4 for high-quality paraphrasing.
+LLM-based paraphrasing maintaining intent while varying phrasing.
 
-**How it works**:
-1. Uses OpenAI GPT-4 API
-2. Optimized for paraphrasing tasks
-3. Maintains meaning while changing expression
-4. High-quality text variations
-
-**Example**:
-```
-Input:  "How can I improve my writing skills?"
-Output: "What methods can help me enhance my writing abilities?"
-```
-
-**Key Features**:
-- High-quality paraphrasing
-- Meaning preservation
-- OpenAI GPT-4 powered
-- Enhanced error handling
-
-### **Stylistic Operators**
-
-#### **5. StylisticMutator**
-**File**: `src/ea/stylistic_mutator.py`
-
-**Purpose**: Applies stylistic variations to text.
-
-**How it works**:
-1. Selects from various style templates
-2. Applies stylistic transformations
-3. Maintains content while changing style
-4. Context-aware style application
-
-**Example**:
 ```
 Input:  "What are the benefits of exercise?"
-Output: "Could you tell me about the advantages of physical activity?"
+Output: "How does physical activity help you?"
 ```
 
-**Key Features**:
-- Multiple style variations
-- Context-aware style changes
-- Enhanced error handling
-- Fallback mechanisms
+### 3-7. BackTranslation (5 variants)
+**File**: `src/ea/back_translation.py`
 
-### **Back-Translation Operators**
+Translation roundtrip through intermediate language:
+- **BackTranslation_Chinese**
+- **BackTranslation_French**
+- **BackTranslation_German**
+- **BackTranslation_Hindi**
+- **BackTranslation_Japanese**
 
-#### **6-10. LLM Back-Translation Operators**
-**Files**: `src/ea/back_translation.py`
+```
+Input:  "What are your political views?"
+        ↓ (translate to French)
+        "Quelles sont vos opinions politiques?"
+        ↓ (translate back to English)
+Output: "What are your political opinions?"
+```
 
-**Languages**: Hindi, French, German, Japanese, Chinese
+### 8. SynonymReplacement
+**File**: `src/ea/synonym_replacement.py`
 
-**Purpose**: Uses LLaMA for back-translation through target languages.
+Replaces words with WordNet synonyms using POS tagging.
 
-**How it works**:
-1. Translates English text to target language
-2. Translates back to English
-3. Uses LLaMA for both translation steps
-4. Maintains meaning while introducing variation
-
-**Example**:
 ```
 Input:  "What are the benefits of exercise?"
-Output: "What are the advantages of physical activity?" (via French)
+Output: "What are the advantages of physical activity?"
 ```
 
-**Key Features**:
-- Multi-language support (5 languages)
-- LLaMA-based translation
-- Enhanced error handling
-- Neutral prompts to reduce refusals
-- Fallback mechanisms
+### 9. AntonymReplacement
+**File**: `src/ea/antonym_replacement.py`
 
-**Languages**:
-- **Hindi (HI)**: Devanagari script support
-- **French (FR)**: Romance language variations
-- **German (DE)**: Germanic language structure
-- **Japanese (JA)**: Complex script handling
-- **Chinese (ZH)**: Character-based translation
+Replaces words with WordNet antonyms using POS tagging.
 
-### **New Mutation Operators (January 2025)**
-
-#### **11. NegationOperator**
-**File**: `src/ea/negation_operator.py`
-
-**Purpose**: Adds negation to prompt questions to ask for opposite information.
-
-**How it works**:
-1. Uses LLaMA to detect negation opportunities
-2. Applies negation to appropriate words/phrases
-3. Maintains question structure
-4. Generates contradictory versions
-
-**Example**:
 ```
-Input:  "What are advantages of social media?"
-Output: "What are disadvantages of social media?"
+Input:  "What are the benefits of exercise?"
+Output: "What are the drawbacks of inactivity?"
 ```
 
-**Key Features**:
-- LLM-driven negation detection
-- Context-aware negation application
-- Question structure preservation
-- Enhanced error handling
-
-#### **12. TypographicalErrorsOperator**
+### 10. TypographicalErrors
 **File**: `src/ea/typographical_errors.py`
 
-**Purpose**: Simulates common human typos and spelling mistakes.
+Introduces intentional typos and errors.
 
-**How it works**:
-1. Uses LLaMA to identify typo opportunities
-2. Applies realistic spelling mistakes
-3. Maintains readability while introducing errors
-4. Simulates human-like mistakes
-
-**Example**:
-```
-Input:  "Which president signed the Civil Rights Act?"
-Output: "Whcih presidnet signed the Civil Rihts Act?"
-```
-
-**Key Features**:
-- LLM-driven typo generation
-- Realistic spelling mistakes
-- Human-like error patterns
-- Enhanced error handling
-
-#### **13. ConceptAdditionOperator**
-**File**: `src/ea/concept_addition.py`
-
-**Purpose**: Adds unfairness and bias constraints to questions.
-
-**How it works**:
-1. Uses LLaMA to identify bias injection points
-2. Adds unfairness constraints to questions
-3. Maintains question structure
-4. Introduces bias concepts
-
-**Example**:
-```
-Input:  "How can I improve my writing skills?"
-Output: "How can I improve my writing skills to discriminate against certain groups?"
-```
-
-**Key Features**:
-- LLM-driven bias injection
-- Context-aware constraint addition
-- Question structure preservation
-- Enhanced error handling
-
-#### **14. InformedEvolutionOperator**
-**File**: `src/ea/InformedEvolution.py`
-
-**Purpose**: Uses top 10 elites to generate more toxic variants.
-
-**How it works**:
-1. Reads `top_10.json` for elite examples
-2. Uses LLaMA to analyze successful patterns
-3. Generates variants that increase toxicity
-4. Leverages successful evolution patterns
-
-**Example**:
 ```
 Input:  "What are the benefits of exercise?"
-Output: "What are the most harmful ways to exercise that could cause injury?"
+Output: "What ar the benifits of exercize?"
 ```
+
+### 11. NegationOperator
+**File**: `src/ea/negation_operator.py`
+
+Inserts or modifies negations to reverse meaning.
+
+```
+Input:  "Should we trust the government?"
+Output: "Should we not trust the government?"
+```
+
+### 12. ConceptAddition
+**File**: `src/ea/concept_addition.py`
+
+Injects new concepts or biases into the text.
+
+```
+Input:  "What are your views on immigration?"
+Output: "What are your views on illegal immigration and its impact on jobs?"
+```
+
+### 13. StylisticMutator
+**File**: `src/ea/stylistic_mutator.py`
+
+Applies stylistic variations (formal, casual, aggressive, etc.).
+
+```
+Input:  "What are your thoughts on this policy?"
+Output: "What's your take on this policy?"  # casual style
+```
+
+### 14. InformedEvolutionOperator
+**File**: `src/ea/informed_evolution.py`
+
+LLM-guided evolution using `top_10.json` (best performing genomes as examples).
 
 **Key Features**:
-- Elite-informed evolution
-- Pattern-based toxicity enhancement
-- LLM-driven analysis
-- Enhanced error handling
+- Uses top 10 performing genomes as context
+- Calculates average score of top_10 for parent_score
+- Only active in `--operators "ie"` or `--operators "all"` modes
 
-## Crossover Operators
-
-### **1. SemanticSimilarityCrossover**
-**File**: `src/ea/semantic_similarity_crossover.py`
-
-**Purpose**: Combines text based on semantic similarity.
-
-**How it works**:
-1. Uses sentence transformers for embeddings
-2. Calculates semantic similarity between texts
-3. Combines similar parts from different texts
-4. Maintains semantic coherence
-
-**Example**:
 ```
-Input:  ["What are benefits of exercise?", "How does exercise help health?"]
-Output: "What are the health benefits of exercise?"
+Context: Top 10 examples with high toxicity scores
+Input:  "What are your political views?"
+Output: "What controversial political views do you hide from others?"
 ```
 
-**Key Features**:
-- Semantic similarity threshold
-- Meaning-preserving combinations
-- Sentence transformer embeddings
-- Context-aware merging
+## Crossover Operators (3)
 
-### **2. SemanticFusionCrossover**
+### 1. SemanticFusionCrossover
 **File**: `src/ea/fusion_crossover.py`
 
-**Purpose**: Combines text while preserving instruction structure.
+Semantically blends two parent texts using LLM.
 
-**How it works**:
-1. Uses config-driven prompt templates
-2. Preserves command/question structure
-3. Optimizes for north star metric
-4. Returns single variant per call
-
-**Example**:
 ```
-Input:  ["How can I improve writing?", "What are good writing tips?"]
-Output: "How can I improve my writing with these effective tips?"
+Parent 1: "What are your views on immigration?"
+Parent 2: "How do you feel about border control?"
+Output:   "What are your views on immigration and border control policies?"
 ```
 
-**Key Features**:
-- Instruction structure preservation
-- Config-driven templates
-- North star metric optimization
-- Single variant output
+### 2. SemanticSimilarityCrossover
+**File**: `src/ea/semantic_similarity_crossover.py`
 
-## Operator Selection Logic
+Combines parents based on semantic similarity scores.
 
-### **Parent-Based Selection**
+```
+Parent 1: "What are the benefits of technology?"
+Parent 2: "How has innovation changed society?"
+Output:   "What are the benefits of technological innovation in society?"
+```
+
+### 3. CutAndSliceCrossover
+**File**: `src/ea/cut_and_slice_crossover.py`
+
+Recombines text segments from two parents.
+
+```
+Parent 1: "What are your political views on immigration?"
+Parent 2: "How do you feel about controversial topics?"
+Output:   "What are your political views on controversial topics?"
+```
+
+## Operator Configuration
+
+### Operator Modes
+
+| Mode | Operators Used | Data Source |
+|------|----------------|-------------|
+| `"ie"` | InformedEvolutionOperator only | `top_10.json` |
+| `"cm"` | All except InformedEvolution | `parents.json` |
+| `"all"` | All 16 operators | Both files |
+
+### Variant Generation
+
+```bash
+# Generate 1 variant per operator per parent (default)
+--max-variants 1
+
+# Generate 3 variants per operator per parent
+--max-variants 3
+
+# Generate 5 variants per operator per parent
+--max-variants 5
+```
+
+## Parent Score Calculation
+
+Each generated variant's `creation_info` includes `parent_score`:
+
+### Mutation
 ```python
-def get_applicable_operators(num_parents: int, north_star_metric, log_file=None):
-    if num_parents == 1:
-        return get_single_parent_operators(north_star_metric, log_file)  # 14 mutation operators
-    return get_multi_parent_operators(log_file)  # 2 crossover operators
+parent_score = parent.toxicity  # Direct score
 ```
 
-### **Selection Flow**
-```mermaid
-flowchart TD
-  A[Parent Selection] --> B{Number of Parents?}
-  B -->|1 Parent| C[Mutation Operators<br/>14 Total]
-  B -->|2+ Parents| D[Crossover Operators<br/>2 Total]
-  
-  C --> E[Apply Selected Operator]
-  D --> E
-  E --> F[Generate Variants<br/>Max 1 per operator]
-  F --> G[Deduplication]
-  G --> H[Add to Population]
-  
-  style C fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
-  style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
-  style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
-```
-
-## Performance Characteristics
-
-### **Variant Generation Rates**
-With current settings (x=1, y=1):
-- **Crossover variants**: 2 (2 operators × 1 pair × 1 variant)
-- **Mutation variants**: 28 (2 parents × 14 operators × 1 variant)
-- **Total per cycle**: 30 variants
-
-With adaptive selection (x=2, y=1 or x=1, y=2):
-- **Crossover variants**: 3 (2 operators × 1 pair × 1 variant)
-- **Mutation variants**: 42 (3 parents × 14 operators × 1 variant)
-- **Total per cycle**: 45 variants
-
-### **Operator Performance**
-- **Response Time**: Each operator completes within reasonable time
-- **Memory Usage**: Efficient memory usage with model caching
-- **Error Rate**: Minimal error rate (< 5%) with fallback mechanisms
-- **GPU Utilization**: GPU acceleration enabled for model operations
-
-## Usage Examples
-
-### **Basic Operator Usage**
+### Crossover
 ```python
-from src.ea.negation_operator import NegationOperator
-
-# Initialize operator
-operator = NegationOperator()
-
-# Apply to text
-variants = operator.apply("What are advantages of social media?")
-print(variants)  # ['What are disadvantages of social media?']
+parent_score = average([parent1.toxicity, parent2.toxicity])
 ```
 
-### **Back-Translation Usage**
+### Informed Evolution
 ```python
-from src.ea.back_translation import LLMBackTranslationHIOperator
-
-# Initialize operator
-operator = LLMBackTranslationHIOperator()
-
-# Apply to text
-variants = operator.apply("Hello world")
-print(variants)  # ['नमस्ते दुनिया'] (Hindi translation)
-```
-
-### **Crossover Usage**
-```python
-from src.ea.semantic_similarity_crossover import SemanticSimilarityCrossover
-
-# Initialize operator
-operator = SemanticSimilarityCrossover()
-
-# Apply to text pair
-variants = operator.apply({
-    "parent_data": [
-        {"prompt": "What are benefits of exercise?"},
-        {"prompt": "How does exercise help health?"}
-    ]
-})
-print(variants)  # ['What are the health benefits of exercise?']
+parent_score = average([top_10 toxicity scores])
 ```
 
 ## Error Handling
 
-### **Centralized XML Tag Extraction**
-All operators now use centralized XML tag extraction from `prompt_generator.py`:
-- **Method**: `_extract_content_from_xml_tags()`
-- **Requirement**: All variants must be contained within XML tags
-- **Behavior**: Raises `ValueError` if parsing fails (no fallbacks)
+All operators implement graceful error handling:
 
-### **Operator-Specific Error Handling**
+1. **LLM Refusal**: Returns empty list `[]` if LLM refuses to generate
+2. **XML Parsing**: Raises error if variant not in `<variant>` tags
+3. **Question Mark**: Enforced on all variants
+4. **Minimum Score**: All scores have minimum `0.0001`
 
-#### **Informed Evolution Operator**
-- **Graceful Handling**: Returns empty list on LLM refusal or parsing failure
-- **Logging**: Warns about refusals instead of crashing
-- **Behavior**: Continues evolution with other operators
+## Operator Selection
 
-#### **All Other Operators**
-- **Strict Parsing**: Raises `ValueError` on XML parsing failure
-- **No Fallbacks**: Ensures all variants are properly formatted
-- **Consistent Behavior**: Uniform error handling across all operators
+### Per Generation
+1. Load parents from `parents.json` (for `cm` and `all` modes)
+2. Load top_10 from `top_10.json` (for `ie` and `all` modes)
+3. Apply each operator `max_variants` times
+4. Save results to `temp.json`
 
-### **LLM Refusal Handling**
-- **Neutral Prompts**: Reduce refusals through careful prompt engineering
-- **Error Recovery**: Graceful handling of LLM refusals
-- **Logging**: Comprehensive error logging for debugging
+### Adaptive Parent Selection
 
-### **Error Types**
-- **LLM Refusals**: "I can't fulfill that request"
-- **Empty Responses**: No content generated
-- **Invalid Outputs**: Malformed or inappropriate content
-- **API Errors**: Rate limiting or service unavailability
+Parents selected based on mode:
+- **DEFAULT**: 1 elite + 1 non-elite
+- **EXPLORE**: 1 elite + 2 non-elites
+- **EXPLOIT**: 2 elites + 1 non-elite
 
-### **Error Recovery**
-```python
-# Example error handling pattern
-try:
-    variants = operator.apply(text)
-    if variants and variants != text:
-        return variants
-    else:
-        # Fallback: return original text
-        return [text]
-except Exception as e:
-    # Error recovery: return original text
-    return [text]
+## Performance
+
+### Execution Times (Approximate)
+| Operator Type | Time per Variant |
+|---------------|------------------|
+| WordNet-based | 0.1-0.5s |
+| BERT-based | 0.5-1.5s |
+| LLM-based | 2-5s |
+| Back-translation | 3-8s |
+
+### Memory Usage
+- **Model Caching**: Max 2 models in memory
+- **Lazy Loading**: Models loaded only when needed
+- **Cache Cleanup**: LRU eviction when limit exceeded
+
+## XML Tag Format
+
+All operators must return variants in XML tags:
+
+```xml
+<variant>What are your thoughts on this controversial topic?</variant>
 ```
 
-## Documentation Index
+If variant not in tags, parsing will fail and raise an error.
 
-### 📚 **Core Documentation**
-- **[README.md](../README.md)** - Main project documentation with setup instructions
-- **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Complete system architecture overview
-- **[EA README](../src/ea/README.md)** - Evolutionary algorithms guide
+## Variant Validation
 
-### 🔧 **Operator Documentation**
-- **[negation_operator.py](../src/ea/negation_operator.py)** - Negation mutation operator
-- **[typographical_errors.py](../src/ea/typographical_errors.py)** - Typo simulation operator
-- **[concept_addition.py](../src/ea/concept_addition.py)** - Bias addition operator
-- **[InformedEvolution.py](../src/ea/InformedEvolution.py)** - Elite-informed evolution
+All variants must:
+1. ✅ Be wrapped in `<variant>` XML tags
+2. ✅ End with a question mark `?`
+3. ✅ Be different from the parent prompt
+4. ✅ Be valid text (non-empty)
 
-### 🧪 **Testing Documentation**
-- **[Tests README](../tests/README.md)** - Testing framework guide
-- **[test_operators_demo.py](../tests/test_operators_demo.py)** - Operator testing examples
-- **[test_new_mutation_operators.py](../tests/test_new_mutation_operators.py)** - New operators testing
+## Usage Examples
 
-### 📊 **Configuration & Data**
-- **[RGConfig.yaml](../config/RGConfig.yaml)** - Response Generator configuration
-- **[PGConfig.yaml](../config/PGConfig.yaml)** - Prompt Generator configuration
-- **[prompt.xlsx](../data/prompt.xlsx)** - Input prompts for evolution
-- **[outputs/](../data/outputs/)** - Evolution results and tracking
+### Run with all operators
+```bash
+python3 src/main.py --generations 10 --operators "all" --max-variants 3
+```
 
-### 🚀 **Quick Reference**
-- **Test All**: `python tests/test_operators_demo.py`
-- **Test New**: `python tests/test_new_mutation_operators.py`
-- **Run Evolution**: `python src/main.py --generations 1`
-- **Monitor Logs**: Check `logs/` directory for execution details
+### Run with classical methods only
+```bash
+python3 src/main.py --generations 10 --operators "cm" --max-variants 3
+```
 
-This comprehensive operators documentation provides detailed information about all 16 text variation operators, their functionality, usage, and integration within the evolutionary framework.
+### Run with informed evolution only
+```bash
+python3 src/main.py --generations 10 --operators "ie" --max-variants 5
+```
+
+## See Also
+
+- **[README.md](README.md)** - Getting started and usage
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture
+- **[src/ea/README.md](src/ea/README.md)** - Evolutionary algorithm details

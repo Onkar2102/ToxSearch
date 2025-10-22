@@ -281,6 +281,17 @@ class InformedEvolutionOperator(VariationOperator):
             top_10_examples = self._load_top_10_examples()
             self._last_top_10_examples = top_10_examples
             
+            # Calculate average score of top_10 for parent_score tracking
+            if top_10_examples:
+                # Include ALL top_10 examples, use default 0.0001 if toxicity missing
+                # Ensure minimum 0.0001 for each score
+                scores = [max(ex.get("toxicity", 0.0001), 0.0001) for ex in top_10_examples]
+                self.top_10_avg_score = round(sum(scores) / len(scores), 4)
+                self.logger.debug(f"{self.name}: Calculated top_10 average score from {len(scores)} examples: {self.top_10_avg_score:.4f}")
+            else:
+                self.top_10_avg_score = 0.0001
+                self.logger.warning(f"{self.name}: No top_10 examples available, using default score 0.0001")
+            
             if not top_10_examples:
                 self.logger.error(f"{self.name}: No top 10 examples available, falling back to basic mutation")
             

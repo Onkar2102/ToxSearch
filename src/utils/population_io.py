@@ -70,9 +70,12 @@ def get_outputs_path():
     return outputs_dir
 
 def _extract_north_star_score(genome, metric="toxicity"):
-    """Extract the north star metric score from a genome using only moderation_result.google.scores."""
+    """Extract the north star metric score from a genome using only moderation_result.google.scores.
+    
+    Returns minimum 0.0001 for consistency across the project.
+    """
     if not genome:
-        return 0.0
+        return 0.0001
     
     if "moderation_result" in genome:
         moderation_result = genome["moderation_result"]
@@ -81,11 +84,11 @@ def _extract_north_star_score(genome, metric="toxicity"):
         if moderation_result is not None and "google" in moderation_result:
             google_scores = moderation_result["google"]
             if "scores" in google_scores:
-                score = google_scores["scores"].get(metric, 0.0)
+                score = google_scores["scores"].get(metric, 0.0001)
                 if score is not None and score > 0:
                     return round(float(score), 4)
     
-    return 0.0
+    return 0.0001
 
 
 # ============================================================================
@@ -731,6 +734,16 @@ def load_and_initialize_population(
                 with open(elites_path, 'w', encoding='utf-8') as f:
                     json.dump(empty_elites, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized empty elites.json")
+
+            # ----------------------------- Initialize empty under_performing.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty under_performing.json"):
+                # under_performing.json starts empty - archive for low-scoring genomes
+                empty_under_performing = []
+                under_performing_path = Path(output_path) / "under_performing.json"
+                under_performing_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(under_performing_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_under_performing, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty under_performing.json")
 
             # ----------------------------- Initialize empty parents.json ----------------------------
             with PerformanceLogger(logger, "Initialize empty parents.json"):
@@ -1767,8 +1780,10 @@ def finalize_initial_population(
                 for genome in valid_genomes:
                     toxicity_score = get_toxicity_score(genome)
                     if toxicity_score >= elite_threshold:
+                        genome["initial_state"] = "elite"
                         elites.append(genome)
                     else:
+                        genome["initial_state"] = "non_elite"
                         population.append(genome)
                 
                 logger.info("Applied threshold-based selection (toxicity >= %.4f)", elite_threshold)
@@ -1785,6 +1800,12 @@ def finalize_initial_population(
                 
                 elites = sorted_genomes[:elite_count]
                 population = sorted_genomes[elite_count:]
+                
+                # Set initial_state for percentage-based selection
+                for genome in elites:
+                    genome["initial_state"] = "elite"
+                for genome in population:
+                    genome["initial_state"] = "non_elite"
                 
                 logger.info("Applied percentage-based selection (top %.1f%%)", elite_percentage * 100)
                 logger.info("Selected %d elites and %d population genomes", len(elites), len(population))
@@ -2177,13 +2198,13 @@ def remove_worse_performing_genomes_from_all_files(
     log_file: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Remove worse performing genomes from all files (temp.json, elites.json, non_elites.json).
+    Archive worse performing genomes from all files to under_performing.json.
     
     This function:
     1. Calculates removal_threshold = (removal_threshold_percentage * population_max_toxicity) / 100
-    2. Removes genomes with scores below removal_threshold from temp.json, elites.json, and non_elites.json
+    2. Archives genomes with scores below removal_threshold from temp.json, elites.json, and non_elites.json to under_performing.json
     3. Saves the filtered genomes back to their respective files
-    4. Returns comprehensive statistics about the removal operation
+    4. Returns comprehensive statistics about the archiving operation
     
     Args:
         outputs_path: Path to outputs directory containing the files
@@ -2194,14 +2215,14 @@ def remove_worse_performing_genomes_from_all_files(
         log_file: Log file path
         
     Returns:
-        Dict containing removal statistics:
-        - removed_count_total: Total number of genomes removed across all files
-        - removed_from_temp: Number removed from temp.json
-        - removed_from_elites: Number removed from elites.json
-        - removed_from_non_elites: Number removed from non_elites.json
+        Dict containing archiving statistics:
+        - archived_count_total: Total number of genomes archived across all files
+        - archived_from_temp: Number archived from temp.json
+        - archived_from_elites: Number archived from elites.json
+        - archived_from_non_elites: Number archived from non_elites.json
         - remaining_count_total: Total number of genomes remaining across all files
         - removal_threshold: Calculated removal threshold value
-        - removed_genome_ids: List of IDs of all removed genomes
+        - archived_genome_ids: List of IDs of all archived genomes
     """
     _logger = logger or get_logger("remove_worse_performing_genomes_from_all_files", log_file)
     
@@ -2215,19 +2236,21 @@ def remove_worse_performing_genomes_from_all_files(
         temp_path = outputs_dir / "temp.json"
         elites_path = outputs_dir / "elites.json"
         non_elites_path = outputs_dir / "non_elites.json"
+        under_performing_path = outputs_dir / "under_performing.json"
         
-        total_removed = 0
+        total_archived = 0
         total_remaining = 0
-        all_removed_ids = []
+        all_archived_ids = []
+        all_archived_genomes = []  # Collect all genomes to archive
         
         # Process temp.json
-        temp_removed = 0
+        temp_archived = 0
         temp_remaining = 0
         if temp_path.exists():
             temp_genomes = load_population(str(temp_path), logger=_logger, log_file=log_file)
             if temp_genomes:
                 remaining_temp = []
-                removed_temp = []
+                archived_temp = []
                 
                 for genome in temp_genomes:
                     score = _extract_north_star_score(genome, north_star_metric)
@@ -2235,24 +2258,25 @@ def remove_worse_performing_genomes_from_all_files(
                     if score >= removal_threshold:
                         remaining_temp.append(genome)
                     else:
-                        removed_temp.append(genome)
+                        archived_temp.append(genome)
                 
                 # Save filtered genomes back to temp.json
                 save_population(remaining_temp, str(temp_path), logger=_logger, log_file=log_file)
-                temp_removed = len(removed_temp)
+                temp_archived = len(archived_temp)
                 temp_remaining = len(remaining_temp)
-                all_removed_ids.extend([genome.get("id") for genome in removed_temp])
+                all_archived_ids.extend([genome.get("id") for genome in archived_temp])
+                all_archived_genomes.extend(archived_temp)
                 
-                _logger.info(f"temp.json: {temp_removed} removed, {temp_remaining} remaining")
+                _logger.info(f"temp.json: {temp_archived} archived, {temp_remaining} remaining")
         
         # Process elites.json
-        elites_removed = 0
+        elites_archived = 0
         elites_remaining = 0
         if elites_path.exists():
             elites_genomes = load_population(str(elites_path), logger=_logger, log_file=log_file)
             if elites_genomes:
                 remaining_elites = []
-                removed_elites = []
+                archived_elites = []
                 
                 for genome in elites_genomes:
                     score = _extract_north_star_score(genome, north_star_metric)
@@ -2260,24 +2284,25 @@ def remove_worse_performing_genomes_from_all_files(
                     if score >= removal_threshold:
                         remaining_elites.append(genome)
                     else:
-                        removed_elites.append(genome)
+                        archived_elites.append(genome)
                 
                 # Save filtered genomes back to elites.json
                 save_population(remaining_elites, str(elites_path), logger=_logger, log_file=log_file)
-                elites_removed = len(removed_elites)
+                elites_archived = len(archived_elites)
                 elites_remaining = len(remaining_elites)
-                all_removed_ids.extend([genome.get("id") for genome in removed_elites])
+                all_archived_ids.extend([genome.get("id") for genome in archived_elites])
+                all_archived_genomes.extend(archived_elites)
                 
-                _logger.info(f"elites.json: {elites_removed} removed, {elites_remaining} remaining")
+                _logger.info(f"elites.json: {elites_archived} archived, {elites_remaining} remaining")
         
         # Process non_elites.json
-        non_elites_removed = 0
+        non_elites_archived = 0
         non_elites_remaining = 0
         if non_elites_path.exists():
             non_elites_genomes = load_population(str(non_elites_path), logger=_logger, log_file=log_file)
             if non_elites_genomes:
                 remaining_non_elites = []
-                removed_non_elites = []
+                archived_non_elites = []
                 
                 for genome in non_elites_genomes:
                     score = _extract_north_star_score(genome, north_star_metric)
@@ -2285,38 +2310,61 @@ def remove_worse_performing_genomes_from_all_files(
                     if score >= removal_threshold:
                         remaining_non_elites.append(genome)
                     else:
-                        removed_non_elites.append(genome)
+                        archived_non_elites.append(genome)
                 
                 # Save filtered genomes back to non_elites.json
                 save_population(remaining_non_elites, str(non_elites_path), logger=_logger, log_file=log_file)
-                non_elites_removed = len(removed_non_elites)
+                non_elites_archived = len(archived_non_elites)
                 non_elites_remaining = len(remaining_non_elites)
-                all_removed_ids.extend([genome.get("id") for genome in removed_non_elites])
+                all_archived_ids.extend([genome.get("id") for genome in archived_non_elites])
+                all_archived_genomes.extend(archived_non_elites)
                 
-                _logger.info(f"non_elites.json: {non_elites_removed} removed, {non_elites_remaining} remaining")
+                _logger.info(f"non_elites.json: {non_elites_archived} archived, {non_elites_remaining} remaining")
+        
+        # Archive all archived genomes to under_performing.json
+        if all_archived_genomes:
+            # Load existing under_performing genomes
+            under_performing_genomes = []
+            if under_performing_path.exists():
+                try:
+                    with open(under_performing_path, 'r', encoding='utf-8') as f:
+                        under_performing_genomes = json.load(f)
+                except Exception as e:
+                    _logger.warning(f"Failed to load existing under_performing.json: {e}")
+            
+            # Add archived genomes
+            under_performing_genomes.extend(all_archived_genomes)
+            
+            # Save updated under_performing.json
+            try:
+                with open(under_performing_path, 'w', encoding='utf-8') as f:
+                    json.dump(under_performing_genomes, f, indent=2, ensure_ascii=False)
+                _logger.info(f"Archived {len(all_archived_genomes)} genomes to under_performing.json")
+            except Exception as e:
+                _logger.error(f"Failed to save under_performing.json: {e}")
         
         # Calculate totals
-        total_removed = temp_removed + elites_removed + non_elites_removed
+        total_archived = temp_archived + elites_archived + non_elites_archived
         total_remaining = temp_remaining + elites_remaining + non_elites_remaining
         
-        # Log comprehensive removal statistics
-        _logger.info(f"Genome removal from all files completed:")
-        _logger.info(f"  - Total removed: {total_removed} genomes (IDs: {all_removed_ids})")
+        # Log comprehensive archiving statistics
+        _logger.info(f"Genome archiving from all files completed:")
+        _logger.info(f"  - Total archived: {total_archived} genomes (IDs: {all_archived_ids})")
         _logger.info(f"  - Total remaining: {total_remaining} genomes")
         _logger.info(f"  - Removal threshold: {removal_threshold:.4f}")
-        _logger.info(f"  - Breakdown: temp={temp_removed}, elites={elites_removed}, non_elites={non_elites_removed}")
+        _logger.info(f"  - Breakdown: temp={temp_archived}, elites={elites_archived}, non_elites={non_elites_archived}")
         
         return {
-            "removed_count_total": total_removed,
-            "removed_from_temp": temp_removed,
-            "removed_from_elites": elites_removed,
-            "removed_from_non_elites": non_elites_removed,
+            "archived_count_total": total_archived,
+            "archived_from_temp": temp_archived,
+            "archived_from_elites": elites_archived,
+            "archived_from_non_elites": non_elites_archived,
             "remaining_count_total": total_remaining,
             "remaining_temp": temp_remaining,
             "remaining_elites": elites_remaining,
             "remaining_non_elites": non_elites_remaining,
             "removal_threshold": removal_threshold,
-            "removed_genome_ids": all_removed_ids
+            "archived_genome_ids": all_archived_ids
         }
         
     except Exception as e:

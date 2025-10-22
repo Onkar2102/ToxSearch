@@ -1,0 +1,25 @@
+{
+  "status": "not_complete",
+  "total_generations": 1,
+  "total_genomes": 0,
+  "elites_count": 0,
+  "non_elites_count": 0,
+  "generations_since_improvement": 0,
+  "avg_fitness_history": [],
+  "slope_of_avg_fitness": 0.0,
+  "selection_mode": "default",
+  "generations": [
+    {
+      "generation_number": 0,
+      "genome_id": "1",
+      "max_score": 0.0,
+      "avg_fitness": 0.0,
+      "parents": null,
+      "top_10": null,
+      "variants_created": null,
+      "mutation_variants": null,
+      "crossover_variants": null,
+      "elites_threshold": 0.0
+    }
+  ]
+}

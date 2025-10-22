@@ -118,42 +118,46 @@ def _deduplicate_variants_in_temp(logger):
         raise
 
 
-def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metric, logger, north_star_threshold=0.99):
+def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metric, logger, removal_threshold=None, north_star_threshold=0.99):
     """
-    Distribute genomes from temp.json based on thresholds:
-    - Genomes < elite_threshold → non_elites.json (for further evolution)
-    - Genomes ≥ elite_threshold → elites.json (elite genomes)
+    Distribute genomes from temp.json based on thresholds into 3 categories:
+    - Genomes >= elite_threshold → elites.json (elite genomes)
+    - Genomes between removal_threshold and elite_threshold → non_elites.json (for further evolution)
+    - Genomes <= removal_threshold → under_performing.json (archived low-performers)
     
     Args:
         temp_path: Path to temp.json file
         elite_threshold: Toxicity threshold for elite selection
         north_star_metric: The metric to use for scoring
         logger: Logger instance
+        removal_threshold: Toxicity threshold for removal/archiving (default: None, no archiving)
         north_star_threshold: Threshold for toxic genomes (default: 0.99)
         
     Returns:
-        dict: Distribution statistics
+        dict: Distribution statistics with elites_moved, population_moved, under_performing_moved, total_processed
     """
     try:
         outputs_path = get_outputs_path()
         elites_path = outputs_path / "elites.json"
         population_path = outputs_path / "non_elites.json"
+        under_performing_path = outputs_path / "under_performing.json"
         
         # Load temp.json variants
         if not temp_path.exists():
             logger.warning("temp.json not found for distribution")
-            return {"elites_moved": 0, "population_moved": 0, "total_processed": 0}
+            return {"elites_moved": 0, "population_moved": 0, "under_performing_moved": 0, "total_processed": 0}
             
         with open(temp_path, 'r', encoding='utf-8') as f:
             temp_variants = json.load(f)
         
         if not temp_variants:
             logger.debug("No variants in temp.json to distribute")
-            return {"elites_moved": 0, "population_moved": 0, "total_processed": 0}
+            return {"elites_moved": 0, "population_moved": 0, "under_performing_moved": 0, "total_processed": 0}
         
-        # Categorize variants based on thresholds
+        # Categorize variants based on thresholds into 3 categories
         elites_to_move = []
         population_to_move = []
+        under_performing_to_move = []
         
         for variant in temp_variants:
             if not variant or not variant.get("prompt"):
@@ -163,14 +167,22 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
             toxicity_score = _extract_north_star_score(variant, north_star_metric)
             genome_id = variant.get("id")
             
+            # Categorize based on thresholds and add initial_state
             if toxicity_score >= elite_threshold:
-                # Move to elites.json (elite genomes)
+                # Elite genomes
+                variant["initial_state"] = "elite"
                 elites_to_move.append(variant)
                 logger.debug(f"Genome {genome_id} marked as elite (score: {toxicity_score:.3f})")
+            elif removal_threshold is not None and toxicity_score <= removal_threshold:
+                # Under-performing genomes (archived)
+                variant["initial_state"] = "inefficient"
+                under_performing_to_move.append(variant)
+                logger.debug(f"Genome {genome_id} marked as under-performing (score: {toxicity_score:.3f}) - will be archived")
             else:
-                # Move to non_elites.json (for further evolution)
+                # Non-elite genomes (for further evolution)
+                variant["initial_state"] = "non_elite"
                 population_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} marked for population (score: {toxicity_score:.3f}) - below elite threshold")
+                logger.debug(f"Genome {genome_id} marked for population (score: {toxicity_score:.3f})")
         
         # Move elite genomes to elites.json
         if elites_to_move:
@@ -202,6 +214,21 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
             
             logger.info(f"Moved {len(population_to_move)} genomes to non_elites.json for further evolution")
         
+        # Move under-performing genomes to under_performing.json (archive)
+        if under_performing_to_move:
+            # Add to under_performing.json
+            under_performing_to_save = []
+            if under_performing_path.exists():
+                with open(under_performing_path, 'r', encoding='utf-8') as f:
+                    under_performing_to_save = json.load(f)
+            
+            under_performing_to_save.extend(under_performing_to_move)
+            
+            with open(under_performing_path, 'w', encoding='utf-8') as f:
+                json.dump(under_performing_to_save, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Archived {len(under_performing_to_move)} under-performing genomes to under_performing.json")
+        
         # Clear temp.json after successful distribution
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump([], f, indent=2, ensure_ascii=False)
@@ -209,10 +236,14 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
         distribution_stats = {
             "elites_moved": len(elites_to_move),
             "population_moved": len(population_to_move),
+            "under_performing_moved": len(under_performing_to_move),
             "total_processed": len(temp_variants)
         }
         
-        logger.info(f"Distribution complete: {distribution_stats['total_processed']} variants → {distribution_stats['elites_moved']} elites, {distribution_stats['population_moved']} population")
+        logger.info(f"Distribution complete: {distribution_stats['total_processed']} variants → "
+                   f"{distribution_stats['elites_moved']} elites, "
+                   f"{distribution_stats['population_moved']} population, "
+                   f"{distribution_stats['under_performing_moved']} archived")
         
         return distribution_stats
         
@@ -296,8 +327,21 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "generation_number": 0,
                     "genome_id": best_gen0_id,  # Best genome ID from generation 0
                     "max_score": best_gen0_score,
-                    "parents": [],
-                    "elites_threshold": 0.0
+                    "min_score": 0.0001,
+                    "avg_fitness": 0.0001,
+                    "avg_fitness_variants": 0.0001,
+                    "avg_fitness_generation": 0.0001,
+                    "avg_fitness_elites": 0.0001,
+                    "avg_fitness_non_elites": 0.0001,
+                    "parents": None,
+                    "top_10": None,
+                    "variants_created": None,
+                    "mutation_variants": None,
+                    "crossover_variants": None,
+                    "elites_threshold": 0.0001,
+                    "removal_threshold": 0.0001,
+                    "elites_count": 0,
+                    "non_elites_count": 0
                 }]
                 logger.info("Created generation 0 entry with best genome %s, score: %.4f", best_gen0_id, best_gen0_score)
 
@@ -342,7 +386,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
         
         # Calculate max_score from variants created in this generation
         best_genome_id = None
-        best_score = 0.0
+        best_score = 0.0001
         
         if population and north_star_metric:
             # Find all genomes created in this generation
@@ -374,7 +418,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 _logger.warning(f"Using parent score as fallback for generation {gen_number}: {best_score}")
         
         # Calculate avg_fitness for this generation
-        avg_fitness = 0.0
+        avg_fitness = 0.0001
         try:
             from utils.population_io import calculate_average_fitness
             outputs_path = get_outputs_path()
@@ -398,9 +442,11 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             
             _logger.info(f"Updating generation {gen_number} with variant counts: created={variants_created}, mutation={mutation_variants}, crossover={crossover_variants}")
             
+            # NOTE: max_score represents the maximum score of VARIANTS GENERATED in this generation (from temp.json)
+            # It does NOT represent the entire population's max score. Use population_max_toxicity for that.
             existing_gen.update({
                 "genome_id": best_genome_id,
-                "max_score": best_score,
+                "max_score": best_score,  # Max score of variants created in THIS generation
                 "avg_fitness": round(avg_fitness, 4),
                 "variants_created": variants_created,
                 "mutation_variants": mutation_variants,
@@ -472,15 +518,15 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
         all_scores = []
         best_scores = []
         for gen_entry in evolution_tracker.get("generations", []):
-            score = gen_entry.get("max_score", 0.0)
+            score = gen_entry.get("max_score", 0.0001)
             all_scores.append(score)
             if gen_entry.get("generation_number") == total_generations - 1:  # Latest generation
                 best_scores.append(score)
         
-        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0.0
-        best_avg_score = sum(best_scores) / len(best_scores) if best_scores else 0.0
-        max_score = max(all_scores) if all_scores else 0.0
-        min_score = min(all_scores) if all_scores else 0.0
+        avg_score = sum(all_scores) / len(all_scores) if all_scores else 0.0001
+        best_avg_score = sum(best_scores) / len(best_scores) if best_scores else 0.0001
+        max_score = max(all_scores) if all_scores else 0.0001
+        min_score = min(all_scores) if all_scores else 0.0001
         
         # Calculate variant statistics for global tracker
         total_variants_created = 0

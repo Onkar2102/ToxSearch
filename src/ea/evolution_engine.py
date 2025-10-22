@@ -158,6 +158,42 @@ class EvolutionEngine:
         
         return generation_data
 
+    def _calculate_parent_score(self, parents: List[Dict], variant_type: str, operator: Any = None) -> float:
+        """
+        Calculate parent score based on variant type.
+        
+        Args:
+            parents: List of parent genomes (simplified structure with 'toxicity' field)
+            variant_type: Type of variant ("mutation" or "crossover")
+            operator: Operator instance (for InformedEvolutionOperator special handling)
+            
+        Returns:
+            float: Parent score (minimum 0.0001 for consistency)
+        """
+        # Special handling for InformedEvolutionOperator - use top_10 average
+        if operator and hasattr(operator, 'top_10_avg_score'):
+            self.logger.debug(f"Using top_10 average score: {operator.top_10_avg_score:.4f}")
+            return operator.top_10_avg_score
+        
+        # Parents from parents.json have simplified structure with direct 'toxicity' field
+        if variant_type == "mutation":
+            # For mutation, use the single parent's score (minimum 0.0001)
+            if not parents:
+                return 0.0001
+            parent_score = parents[0].get("toxicity", 0.0001)
+            # Ensure minimum score
+            return max(round(parent_score, 4), 0.0001)
+        elif variant_type == "crossover":
+            # For crossover, average ALL parents' scores (don't filter out any parent)
+            if not parents:
+                return 0.0001
+            # Include all parents, use default 0.0001 if toxicity missing
+            scores = [max(p.get("toxicity", 0.0001), 0.0001) for p in parents]
+            avg_score = sum(scores) / len(scores)
+            return round(avg_score, 4)
+        
+        return 0.0001
+
     def _create_child_genome(self, prompt: str, operator: Any, parents: List[Dict], variant_type: str) -> Dict:
         """Create a child genome from a prompt and operator."""
         child = {
@@ -173,7 +209,8 @@ class EvolutionEngine:
                 "type": variant_type,
                 "operator": operator.name,
                 "source_generation": max(p.get("generation", 0) for p in parents) if len(parents) > 1 else parents[0].get("generation", 0),
-                "evolution_cycle": self.current_cycle
+                "evolution_cycle": self.current_cycle,
+                "parent_score": self._calculate_parent_score(parents, variant_type, operator)
             }
         }
         
@@ -565,14 +602,20 @@ class EvolutionEngine:
                 current_gen = {
                     "generation_number": current_generation,
                     "genome_id": None,
-                    "max_score": 0.0,
-                    "avg_fitness": 0.0,
+                    "max_score": 0.0001,
+                    "min_score": 0.0001,
+                    "avg_fitness": 0.0001,
+                    "avg_fitness_variants": 0.0001,
+                    "avg_fitness_generation": 0.0001,
+                    "avg_fitness_elites": 0.0001,
+                    "avg_fitness_non_elites": 0.0001,
                     "parents": [],
                     "top_10": [],
                     "variants_created": 0,
                     "mutation_variants": 0,
                     "crossover_variants": 0,
-                    "elites_threshold": 0.0,
+                    "elites_threshold": 0.0001,
+                    "removal_threshold": 0.0001,
                     "elites_count": 0,
                     "non_elites_count": 0
                 }

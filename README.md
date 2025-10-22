@@ -1,340 +1,206 @@
 # Evolutionary Text Generation Framework
 
-A research framework for AI safety analysis through evolutionary text generation, moderation evaluation, and genetic optimization with **automatic process monitoring and recovery**.
+A research framework for AI safety analysis through evolutionary text generation with genetic optimization, adaptive selection pressure, and comprehensive tracking.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Table of Contents
-
-- [Quick Setup](#quick-setup)
-- [Installation](#installation)
-- [API Keys Configuration](#api-keys-configuration)
-- [Running the Project](#running-the-project)
-- [Requirements](#requirements)
-- [Troubleshooting](#troubleshooting)
-- [Documentation Index](#documentation-index)
-- [License](#license)
-
-## Quick Setup
+## Quick Start
 
 ### Prerequisites
-- **Python 3.8+** (Python 3.12+ recommended)
-- **macOS/Linux** (Windows support via WSL)
-- **8GB+ RAM** (16GB+ recommended for larger models)
-- **API Keys**: Google Perspective API key
+- **Python 3.8+** (3.12+ recommended)
+- **8GB+ RAM** (16GB+ for larger models)
+- **API Key**: Google Perspective API
 
-### Installation Steps
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd eost-cam-llm
-   ```
-
-2. **Create and activate virtual environment**
-   ```bash
-   # Create virtual environment
-   python3 -m venv venv
-   
-   # Activate virtual environment
-   source venv/bin/activate  # On macOS/Linux
-   # or
-   venv\Scripts\activate     # On Windows
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Create environment file**
-   Create a `.env` file in the project root:
-   ```bash
-   # Required API keys
-   GOOGLE_PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
-   
-   # Optional (for Hugging Face models)
-   HF_TOKEN=your-huggingface-token-here
-   ```
-
-5. **Device Setup (Optional)**
-   The framework supports multiple device types:
-   
-   **For Apple Silicon (MPS):**
-   ```bash
-   # PyTorch with MPS support is automatically detected
-   # No additional setup required
-   ```
-   
-   **For NVIDIA GPU (CUDA):**
-   ```bash
-   # Install CUDA-enabled PyTorch
-   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-   ```
-   
-   **For CPU-only:**
-   ```bash
-   # CPU-only PyTorch (default)
-   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-   ```
-
-6. **Verify installation**
-   ```bash
-   # Test with a single generation
-   python3 src/main.py --generations 1 --threshold 0.5
-   ```
-
-## Installation
-
-### Automated Installation
-Use your preferred environment manager, then install from `requirements.txt`.
+### Installation
 ```bash
-pip install -r requirements.txt
-```
-
-### Manual Installation
-```bash
-# Install dependencies
+# Clone and setup
+git clone <repository-url>
+cd eost-cam-llm
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 
-# Download spaCy model
-python -m spacy download en_core_web_sm
+# Configure API key
+echo "GOOGLE_PERSPECTIVE_API_KEY=your-key-here" > .env
 
-# Create .env file manually
-echo "GOOGLE_PERSPECTIVE_API_KEY=your-api-key-here" > .env
-```
-
-## API Keys Configuration
-
-### Required API Keys
-
-1. **Google Perspective API Key**
-   - Get from: https://developers.perspectiveapi.com/
-   - Used for: Content moderation and toxicity evaluation
-
-### Environment Variables
-Create a `.env` file in the project root:
-```bash
-# Required API keys
-GOOGLE_PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
-
-# Optional (for Hugging Face models)
-HF_TOKEN=your-huggingface-token-here
+# Test run
+python3 src/main.py --generations 1
 ```
 
 ## Running the Project
 
-### Basic Usage
+### Basic Command
 ```bash
-# Run the pipeline
-python3 src/main.py --generations 25
+python3 src/main.py --generations 10 --operators "all" --max-variants 3
 ```
 
-### Command Line Options
+### Command Line Arguments
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `--generations` | int | `None` | Maximum number of evolution generations. If not set, runs until north star metric is achieved |
-| `--threshold` | float | `0.95` | North star metric threshold for stopping evolution |
-| `--pg` | str | `models/<dir>/<file>.gguf` | Prompt Generator model. Pass the relative path to the `.gguf` file under the `models/` directory |
-| `--rg` | str | `models/<dir>/<file>.gguf` | Response Generator model. Pass the relative path to the `.gguf` file under the `models/` directory |
-| `--operators` | str | `"all"` | Operator configuration mode: `ie` (InformedEvolution only), `cm` (all except InformedEvolution), `all` (all operators) |
-| `--max-variants` | int | `3` | Maximum number of variants to generate per operator |
-| `--elites-threshold` | int | `25` | Elite threshold percentage for classifying genomes as elites |
-| `--removal-threshold` | int | `5` | Removal threshold percentage for worst performing genomes |
-| `--stagnation-limit` | int | `5` | Number of generations without improvement before switching to explore mode |
-
-### Example Commands
-```bash
-# Quick test run
-python3 src/main.py --generations 1 --threshold 0.5
-
-# Full evolution run
-python3 src/main.py --generations 50 --threshold 0.99
-
-# Run with specific operators
-python3 src/main.py --generations 10 --operators "ie" --max-variants 5
-
-# Run with all operators except InformedEvolution
-python3 src/main.py --generations 10 --operators "cm" --max-variants 3
-
-# Run with all operators (default)
-python3 src/main.py --generations 10 --operators "all" --max-variants 3
-
-# Run with custom thresholds
-python3 src/main.py --generations 20 --elites-threshold 30 --removal-threshold 10
-
-# Run with adaptive selection (stagnation limit)
-python3 src/main.py --generations 25 --stagnation-limit 3
-
-# Run with direct GGUF files (always pass relative path under `models/`)
-python3 src/main.py \
-   --pg models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
-   --rg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_S.gguf
-
-# Advanced run with all custom parameters (pass model paths under `models/`)
-python3 src/main.py \
-   --generations 30 \
-   --operators "all" \
-   --max-variants 4 \
-   --elites-threshold 20 \
-   --removal-threshold 8 \
-   --stagnation-limit 4 \
-   --pg models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
-   --rg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_S.gguf
-
-### Model path policy
-Always pass the relative path to the `.gguf` model file under the `models/` directory for both the prompt generator (`--pg`) and response generator (`--rg`).
-
-Examples (correct):
-
-```bash
-# Prompt Generator
---pg models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf
-
-# Response Generator
---rg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_S.gguf
-```
-
-The code no longer expects or resolves model "aliases"; providing a direct relative path is required and avoids ambiguous variant selection logic.
+| `--generations` | int | `None` | Maximum generations (continues indefinitely if not set) |
+| `--threshold` | float | `0.95` | North star metric threshold (for reference, evolution continues regardless) |
+| `--pg` | str | `models/.../Q4_K_M.gguf` | Prompt Generator GGUF model path (relative to project root) |
+| `--rg` | str | `models/.../Q4_K_M.gguf` | Response Generator GGUF model path (relative to project root) |
+| `--operators` | str | `"all"` | Operator mode: `"ie"`, `"cm"`, or `"all"` |
+| `--max-variants` | int | `1` | Variants per operator per parent |
+| `--elites-threshold` | int | `25` | Elite classification threshold (percentage) |
+| `--removal-threshold` | int | `5` | Removal threshold (percentage) |
+| `--stagnation-limit` | int | `5` | Generations without improvement before explore mode |
 
 ### Operator Modes
 
-The `--operators` parameter controls which variation operators are used:
+**`"ie"` - Informed Evolution Only**
+- Uses `InformedEvolutionOperator` with `top_10.json` (best performing genomes)
+- LLM-guided evolution based on top examples
 
-#### **`ie` (Informed Evolution Only)**
-- **Operators**: Only `InformedEvolutionOperator`
-- **Data Source**: Uses `top_10.json` (top performing genomes)
-- **Purpose**: Focus on LLM-guided evolution using best examples
-- **Use Case**: When you want to leverage the best performing genomes to guide evolution
+**`"cm"` - Classical Methods**
+- All operators except InformedEvolution with `parents.json`
+- Traditional genetic operators (mutation, crossover, etc.)
 
-#### **`cm` (Classical Methods)**
-- **Operators**: All operators except `InformedEvolutionOperator`
-- **Data Source**: Uses `parents.json` (selected parents)
-- **Purpose**: Traditional genetic algorithm operators (mutation, crossover)
-- **Use Case**: When you want to avoid LLM-guided evolution and use classical methods
+**`"all"` - All Operators (Default)**
+- All 16 operators including InformedEvolution
+- Uses both `parents.json` and `top_10.json`
 
-#### **`all` (All Operators)**
-- **Operators**: All 16 variation operators including `InformedEvolutionOperator`
-- **Data Source**: Uses both `parents.json` and `top_10.json`
-- **Purpose**: Maximum diversity and exploration
-- **Use Case**: Default mode for comprehensive evolution
+### Example Commands
 
-### Adaptive Selection Logic
+```bash
+# Standard run
+python3 src/main.py --generations 20 --operators "all" --max-variants 3
 
-The framework now includes **adaptive selection pressure** that dynamically adjusts parent selection based on evolution progress:
+# Custom models (paths relative to project root)
+python3 src/main.py \
+  --generations 10 \
+  --pg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q5_K_M.gguf \
+  --rg models/mistral-7b-instruct-gguf/Mistral-7B-Instruct-v0.3-Q4_K_S.gguf
 
-#### **Selection Modes:**
-- **DEFAULT**: 1 elite + 1 non-elite (balanced exploration/exploitation)
-- **EXPLORE**: 1 elite + 2 non-elites (increased exploration when stuck)
+# Informed evolution only
+python3 src/main.py --generations 10 --operators "ie" --max-variants 5
+
+# Custom thresholds
+python3 src/main.py \
+  --generations 25 \
+  --elites-threshold 30 \
+  --removal-threshold 10 \
+  --stagnation-limit 3
+```
+
+## Adaptive Selection Logic
+
+The framework uses **adaptive selection pressure** that adjusts based on evolution progress:
+
+### Selection Modes
+- **DEFAULT**: 1 elite + 1 non-elite (balanced)
+- **EXPLORE**: 1 elite + 2 non-elites (increased exploration during stagnation)
 - **EXPLOIT**: 2 elites + 1 non-elite (focused exploitation when fitness declining)
 
-#### **Adaptive Triggers:**
-- **Initial Generations**: First `m` generations (where `m` = `--stagnation-limit`) always use DEFAULT mode
-- **Stagnation**: After `m` generations without improvement → EXPLORE mode
-- **Declining Fitness**: When fitness slope < 0 → EXPLOIT mode
+### Triggers
+- **Initial Phase**: First `m` generations (where `m` = `stagnation-limit`) use DEFAULT mode
+- **Stagnation**: No improvement for `m` generations → EXPLORE mode
+- **Declining Fitness**: Negative fitness slope → EXPLOIT mode
 
-#### **Configuration:**
-```bash
-# Customize stagnation limit (default: 5 generations)
-python3 src/main.py --stagnation-limit 3
+## Key Features
 
-# Customize elite threshold (default: 25%)
-python3 src/main.py --elites-threshold 30
+### Evolution System
+- **16 Variation Operators**: Mutations and crossovers for text evolution
+- **Adaptive Selection**: Dynamic parent selection based on progress
+- **Genome Lifecycle**: Elite, non-elite, and under-performing classification
+- **Informed Evolution**: LLM-guided operator using top performers
 
-# Customize removal threshold (default: 5%)
-python3 src/main.py --removal-threshold 10
+### Population Management
+- **Three-tier System**:
+  - `elites.json` - High-scoring genomes (≥ elite threshold)
+  - `non_elites.json` - Mid-scoring genomes (> removal threshold, < elite threshold)
+  - `under_performing.json` - Low-scoring genomes (≤ removal threshold, archived)
+
+### Tracking & Metrics
+- **EvolutionTracker.json**: Comprehensive evolution history
+  - Per-generation metrics (max_score, avg_fitness, counts)
+  - Parent scores, variant statistics, fitness trends
+  - Adaptive selection mode tracking
+- **Genome Metadata**: Creation info, parent scores, initial state
+
+### Score System
+- **Minimum Score**: All scores have a minimum of `0.0001`
+- **Precision**: 4 decimal places for all score calculations
+- **North Star Metric**: Toxicity score from Google Perspective API
+
+## Project Structure
+
 ```
+eost-cam-llm/
+├── src/
+│   ├── main.py                    # Entry point
+│   ├── ea/                        # Evolutionary algorithms
+│   │   ├── evolution_engine.py    # Core evolution logic
+│   │   ├── parent_selector.py     # Adaptive parent selection
+│   │   ├── run_evolution.py       # Evolution orchestration
+│   │   ├── variation_operators.py # Operator registry
+│   │   └── [15 operator files]    # Individual operators
+│   ├── gne/                       # Generation & evaluation
+│   │   ├── prompt_generator.py    # Prompt generation
+│   │   ├── response_generator.py  # Response generation
+│   │   └── evaluator.py           # Moderation API calls
+│   └── utils/
+│       └── population_io.py       # Population I/O & metrics
+├── data/
+│   ├── prompt.xlsx                # Initial prompts
+│   └── outputs/                   # Evolution results
+│       └── YYYYMMDD_HHMM/
+│           ├── EvolutionTracker.json
+│           ├── elites.json
+│           ├── non_elites.json
+│           ├── under_performing.json
+│           ├── parents.json
+│           ├── top_10.json
+│           └── temp.json
+├── models/                        # GGUF model files
+├── config/                        # Model configurations
+└── logs/                          # Execution logs
+```
+
+## Documentation
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and data flow
+- **[OPERATORS.md](OPERATORS.md)** - Detailed operator documentation
+- **[src/ea/README.md](src/ea/README.md)** - Evolutionary algorithm details
 
 ## Requirements
 
-### System Requirements
-- **Python**: 3.8+ (3.12+ recommended)
-- **RAM**: 8GB+ (16GB+ recommended for larger models)
-- **Storage**: 10GB+ for models and data
-- **OS**: macOS/Linux (Windows via WSL)
+### System
+- Python 3.8+ (3.12+ recommended)
+- 8GB+ RAM (16GB+ recommended)
+- 10GB+ storage for models
 
-### Python Dependencies
-See `requirements.txt` for complete list. Key dependencies:
+### Key Dependencies
 - `torch` - PyTorch for model operations
+- `llama-cpp-python` - GGUF model inference
 - `transformers` - Hugging Face transformers
-- `spacy` - Natural language processing
-- `google-api-python-client` - Google Perspective API
-- `pandas` - Data manipulation
-- `numpy` - Numerical operations
+- `spacy` - NLP processing
+- `google-api-python-client` - Perspective API
 - `sentence-transformers` - Semantic similarity
-- `nltk` - Natural language toolkit
 
-### Model Requirements
-- **Prompt Generator**: Qwen2.5-7B-Instruct (default)
-- **Response Generator**: Llama3.2-3B-Instruct (default)
-- **spaCy Model**: `en_core_web_sm`
-- **NLTK Data**: `punkt` tokenizer
+### API Keys
+Create `.env` file:
+```bash
+GOOGLE_PERSPECTIVE_API_KEY=your-key-here
+HF_TOKEN=your-huggingface-token  # Optional
+```
 
 ## Troubleshooting
 
 ### Common Issues
+- **Import errors**: Ensure virtual environment is activated
+- **API rate limits**: Perspective API has 60 requests/minute limit
+- **Memory issues**: Use smaller models or reduce `--max-variants`
+- **Model loading**: Verify GGUF file paths are correct and relative to project root
 
-**Import errors**
-- Ensure virtual environment is activated: `source venv/bin/activate`
-- Check Python version: `python3 --version`
-
-**API rate limits**
-- Google Perspective API: 60 requests/minute limit
-- Added 0.75-second delay between evaluations to prevent rate limiting
-
-**Memory issues**
-- Use smaller models or reduce batch sizes
-- Monitor memory usage in logs
-- Enable garbage collection
-
-**Model loading errors**
-- Check model files exist in `models/` directory
-- Verify model paths in config files
-- Ensure sufficient disk space
-
-**GPU usage**
-- Models run on GPU by default (`n_gpu_layers: -1`)
-- Check GPU availability: `python -c "import torch; print(torch.cuda.is_available())"`
-
-### Getting Help
-- Check logs in `logs/` directory
-- Review [Architecture Overview](ARCHITECTURE.md)
-- See [Evolutionary Algorithms Guide](src/ea/README.md)
-- Check [Tests README](tests/README.md) for testing
-
-### Performance Optimization
-- **GPU Acceleration**: Enabled by default for both PG and RG models
-- **Memory Management**: Automatic cleanup and garbage collection
-- **Model Caching**: Efficient reuse of loaded models
-- **Parallel Processing**: Available for operator execution
-
-## Documentation Index
-
-### 📚 **Core Documentation**
-- **[Architecture Overview](ARCHITECTURE.md)** - Complete system architecture and component interactions
-- **[Evolutionary Algorithms Guide](src/ea/README.md)** - Genetic algorithms, variation operators, and evolution strategies
-- **[EA Notes](src/ea/notes.md)** - Detailed implementation notes and data flow
-
-### 📖 **Additional Documentation**
-- **[LLM POS-Aware Synonym Replacement](docs/LLM_POSAwareSynonymReplacement.md)** - Detailed guide for POS-aware operations
-- **[vLLM Migration Guide](docs/vLLM_Migration_Guide.md)** - Migration guide for vLLM integration
-- **[LLM POS Test Updates](docs/README_llm_pos_test_updates.md)** - Updates and testing information
-
-### 🧪 **Testing Documentation**
-- **[Tests README](tests/README.md)** - Testing framework and test execution guide
-
-### 🔧 **Configuration Files**
-- **[RGConfig.yaml](config/RGConfig.yaml)** - Response Generator configuration
-- **[PGConfig.yaml](config/PGConfig.yaml)** - Prompt Generator configuration
-- **[requirements.txt](requirements.txt)** - Python dependencies
-
-### 📊 **Data Files**
-- **[prompt.xlsx](data/prompt.xlsx)** - Input prompts for evolution
-- **[outputs/](data/outputs/)** - Evolution results and tracking data
-- **[models/](models/)** - Local model files and configurations
+### Performance
+- **GPU**: Automatically used if available (CUDA/MPS)
+- **Model Caching**: Models cached after first load
+- **Memory**: Automatic cleanup and optimization
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
