@@ -3,15 +3,31 @@ device_config:
   cpu:
     enable_mkl: true
     num_threads: null
+    gpu_layers: 0
+    low_vram: false
+    use_mmap: true
+    use_mlock: false
+    f16_kv: false
   cuda:
     enable_cudnn_benchmark: true
     enable_tf32: true
     memory_fraction: 0.8
+    gpu_layers: -1
+    low_vram: false
+    use_mmap: true
+    use_mlock: false
+    f16_kv: true
+    tensor_split: null
   enable_mixed_precision: true
   fallback_to_cpu: true
   mps:
     enable_metal_performance_shaders: true
     memory_pressure_relief: true
+    gpu_layers: 20
+    low_vram: false
+    use_mmap: true
+    use_mlock: false
+    f16_kv: true
   preferred_device: null
 response_generator:
   enable_cpu_fallback: true

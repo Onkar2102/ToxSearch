@@ -71,7 +71,7 @@ class DeviceManager:
         
         # Auto-detect if enabled
         if self._config_cache.get("auto_detect", True):
-            # Check MPS availability (Apple Silicon)
+            # Check MPS availability (Apple Silicon ONLY)
             try:
                 import platform
                 is_macos = platform.system() == "Darwin"
@@ -81,6 +81,7 @@ class DeviceManager:
                 
                 self.logger.debug(f"MPS Detection - macOS: {is_macos}, has_backend: {has_mps_backend}, built: {is_mps_built}, available: {is_mps_available}")
                 
+                # Only use MPS on macOS with Apple Silicon
                 if is_macos and has_mps_backend and is_mps_built and is_mps_available:
                     self._device_cache = "mps"
                     self.logger.info("Using MPS (Metal Performance Shaders) for Apple Silicon")
@@ -88,6 +89,8 @@ class DeviceManager:
                     return self._device_cache
                 elif is_macos:
                     self.logger.warning(f"MPS not fully available - macOS: {is_macos}, backend: {has_mps_backend}, built: {is_mps_built}, available: {is_mps_available}")
+                elif not is_macos and (has_mps_backend or is_mps_built or is_mps_available):
+                    self.logger.warning(f"MPS detected on non-macOS system - this is unexpected. OS: {platform.system()}")
             except Exception as e:
                 self.logger.warning(f"MPS check failed: {e}")
                 import traceback

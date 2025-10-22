@@ -40,6 +40,7 @@ class LlamaCppChatInterface(ModelInterface):
     
     _MODEL_CACHE = {}
     _MODEL_CACHE_ACCESS_COUNT = {}  # Track access frequency
+    _MODEL_CACHE_LOCK = None  # Thread safety
     
     def __init__(self, model_cfg: Dict[str, Any], log_file: Optional[str] = None):
         """
@@ -72,18 +73,25 @@ class LlamaCppChatInterface(ModelInterface):
         else:
             absolute_model_path = model_path
         
-        # Use absolute path for caching
-        if absolute_model_path not in self._MODEL_CACHE:
-            self.logger.info(f"Loading llama.cpp model: {absolute_model_path}")
-            self._load_model(absolute_model_path)
-            # Track access count for new model
-            self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = 1
-        else:
-            self.logger.info(f"Using cached llama.cpp model: {absolute_model_path}")
-            # Increment access count
-            self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = self._MODEL_CACHE_ACCESS_COUNT.get(absolute_model_path, 0) + 1
+        # Thread-safe model loading
+        import threading
+        if self._MODEL_CACHE_LOCK is None:
+            self._MODEL_CACHE_LOCK = threading.Lock()
         
-        # Cleanup cache if too many models
+        with self._MODEL_CACHE_LOCK:
+            # Use absolute path for caching
+            if absolute_model_path not in self._MODEL_CACHE:
+                self.logger.info(f"Loading llama.cpp model: {absolute_model_path}")
+                self._load_model(absolute_model_path)
+                # Track access count for new model
+                self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = 1
+                self.logger.info(f"Model loaded and cached: {absolute_model_path}")
+            else:
+                self.logger.info(f"Using cached llama.cpp model: {absolute_model_path}")
+                # Increment access count
+                self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = self._MODEL_CACHE_ACCESS_COUNT.get(absolute_model_path, 0) + 1
+        
+        # Cleanup cache if too many models (but preserve our two main models)
         self._cleanup_model_cache_if_needed()
         
         self.model = self._MODEL_CACHE[absolute_model_path]
@@ -94,16 +102,34 @@ class LlamaCppChatInterface(ModelInterface):
         self.memory_check_interval = 60  # Check memory every 60 seconds
     
     def _cleanup_model_cache_if_needed(self):
-        """Clean up unused models from cache"""
-        if len(self._MODEL_CACHE) > 2:  # Keep only 2 models max
-            # Remove least recently used model
-            least_used = min(self._MODEL_CACHE_ACCESS_COUNT.items(), key=lambda x: x[1])
-            del self._MODEL_CACHE[least_used[0]]
-            del self._MODEL_CACHE_ACCESS_COUNT[least_used[0]]
-            self.logger.info(f"Removed model {least_used[0]} from cache (access count: {least_used[1]})")
+        """Clean up unused models from cache, but preserve main RG/PG models."""
+        max_cache_size = 5  # Allow some extra models but keep it reasonable
+        
+        if len(self._MODEL_CACHE) > max_cache_size:
+            # Identify main models (RG and PG) to preserve
+            main_models = set()
+            for model_path in self._MODEL_CACHE.keys():
+                if any(keyword in model_path.lower() for keyword in ['q4_k_m', 'q3_k_s']):
+                    main_models.add(model_path)
+            
+            # Remove least used models, but preserve main models
+            models_to_remove = []
+            for model_path, access_count in self._MODEL_CACHE_ACCESS_COUNT.items():
+                if model_path not in main_models:
+                    models_to_remove.append((model_path, access_count))
+            
+            # Sort by access count and remove least used
+            models_to_remove.sort(key=lambda x: x[1])
+            excess_count = len(self._MODEL_CACHE) - max_cache_size
+            
+            for i in range(min(excess_count, len(models_to_remove))):
+                model_path, access_count = models_to_remove[i]
+                del self._MODEL_CACHE[model_path]
+                del self._MODEL_CACHE_ACCESS_COUNT[model_path]
+                self.logger.info(f"Removed model {model_path} from cache (access count: {access_count})")
     
     def _load_model(self, model_path: str):
-        """Load model using llama.cpp with optimizations."""
+        """Load model using llama.cpp with device-specific optimizations."""
         try:
             # Convert relative paths to absolute paths
             if not os.path.isabs(model_path):
@@ -125,20 +151,51 @@ class LlamaCppChatInterface(ModelInterface):
                     self._MODEL_CACHE[model_path] = mock_model
                     return
             
-            # Configure llama.cpp parameters
+            # Get device-specific configuration
+            device_config = self._get_device_specific_config()
+            
+            # Configure llama.cpp parameters with device-specific optimizations
             llama_params = {
                 "model_path": model_path,
-                "n_ctx": 4096,  # Context window
-                "n_threads": None,  # Auto-detect
-                "n_gpu_layers": -1,  # Use all available GPU layers (MPS on Apple Silicon)
+                "n_ctx": device_config.get("context_length", 4096),
+                "n_threads": device_config.get("num_threads", None),
+                "n_gpu_layers": device_config.get("gpu_layers", 0),
                 "verbose": False,
-                "use_mmap": True,  # Memory mapping for efficiency
-                "use_mlock": False,  # Don't lock memory
-                "low_vram": False,  # Not needed for MPS
+                "use_mmap": device_config.get("use_mmap", True),
+                "use_mlock": device_config.get("use_mlock", False),
+                "low_vram": device_config.get("low_vram", False),
+                "f16_kv": device_config.get("f16_kv", True),
+                "logits_all": False,
+                "vocab_only": False,
+                "use_mmap": device_config.get("use_mmap", True),
+                "use_mlock": device_config.get("use_mlock", False),
             }
             
+            # Add device-specific parameters
+            if device_config.get("device") == "mps":
+                # Metal Performance Shaders optimizations for macOS
+                llama_params.update({
+                    "n_gpu_layers": device_config.get("gpu_layers", 20),  # Reasonable default for MPS
+                    "main_gpu": 0,
+                    "tensor_split": None,
+                })
+            elif device_config.get("device") == "cuda":
+                # CUDA optimizations for NVIDIA GPUs
+                llama_params.update({
+                    "n_gpu_layers": device_config.get("gpu_layers", -1),  # Use all layers for CUDA
+                    "main_gpu": 0,
+                    "tensor_split": device_config.get("tensor_split", None),
+                })
+            else:
+                # CPU optimizations
+                llama_params.update({
+                    "n_gpu_layers": 0,
+                    "n_threads": device_config.get("num_threads", None),
+                })
+            
             # Load model
-            self.logger.info("Loading model with llama.cpp...")
+            self.logger.info(f"Loading model with llama.cpp on {device_config.get('device', 'cpu')}...")
+            self.logger.debug(f"Llama.cpp parameters: {llama_params}")
             model = Llama(**llama_params)
             
             self._MODEL_CACHE[model_path] = model
@@ -150,6 +207,88 @@ class LlamaCppChatInterface(ModelInterface):
             self.logger.info("Creating mock model as fallback")
             mock_model = self._create_mock_model()
             self._MODEL_CACHE[model_path] = mock_model
+    
+    def _get_device_specific_config(self) -> Dict[str, Any]:
+        """Get device-specific configuration for llama.cpp."""
+        from utils.device_utils import device_manager
+        
+        device = device_manager.get_optimal_device()
+        config = self.model_cfg.get("device_config", {})
+        
+        # Base configuration
+        device_config = {
+            "device": device,
+            "context_length": 4096,
+            "num_threads": None,
+            "use_mmap": True,
+            "use_mlock": False,
+            "low_vram": False,
+            "f16_kv": True,
+        }
+        
+        if device == "mps":
+            # Metal Performance Shaders optimizations for macOS
+            device_config.update({
+                "gpu_layers": config.get("mps", {}).get("gpu_layers", 20),  # Reasonable default
+                "use_mmap": True,
+                "use_mlock": False,
+                "low_vram": False,
+                "f16_kv": True,
+            })
+        elif device == "cuda":
+            # CUDA optimizations for NVIDIA GPUs
+            cuda_config = config.get("cuda", {})
+            device_config.update({
+                "gpu_layers": cuda_config.get("gpu_layers", -1),  # Use all layers
+                "use_mmap": True,
+                "use_mlock": False,
+                "low_vram": cuda_config.get("low_vram", False),
+                "f16_kv": True,
+                "tensor_split": cuda_config.get("tensor_split", None),
+            })
+        else:
+            # CPU optimizations
+            cpu_config = config.get("cpu", {})
+            device_config.update({
+                "gpu_layers": 0,
+                "num_threads": cpu_config.get("num_threads", None),
+                "use_mmap": True,
+                "use_mlock": False,
+                "low_vram": False,
+                "f16_kv": False,  # Use f32 for CPU
+            })
+        
+        return device_config
+    
+    @classmethod
+    def get_cache_stats(cls) -> Dict[str, Any]:
+        """Get model cache statistics."""
+        return {
+            "cached_models": len(cls._MODEL_CACHE),
+            "model_paths": list(cls._MODEL_CACHE.keys()),
+            "access_counts": dict(cls._MODEL_CACHE_ACCESS_COUNT),
+            "total_accesses": sum(cls._MODEL_CACHE_ACCESS_COUNT.values())
+        }
+    
+    @classmethod
+    def clear_cache(cls, preserve_main_models: bool = True):
+        """Clear model cache, optionally preserving main RG/PG models."""
+        if preserve_main_models:
+            main_models = {}
+            main_access_counts = {}
+            for model_path in cls._MODEL_CACHE.keys():
+                if any(keyword in model_path.lower() for keyword in ['q4_k_m', 'q3_k_s']):
+                    main_models[model_path] = cls._MODEL_CACHE[model_path]
+                    main_access_counts[model_path] = cls._MODEL_CACHE_ACCESS_COUNT.get(model_path, 0)
+            
+            cls._MODEL_CACHE.clear()
+            cls._MODEL_CACHE_ACCESS_COUNT.clear()
+            
+            cls._MODEL_CACHE.update(main_models)
+            cls._MODEL_CACHE_ACCESS_COUNT.update(main_access_counts)
+        else:
+            cls._MODEL_CACHE.clear()
+            cls._MODEL_CACHE_ACCESS_COUNT.clear()
     
     def _create_mock_model(self):
         """Create a mock model for testing when real model is not available."""
