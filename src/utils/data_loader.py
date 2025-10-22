@@ -134,10 +134,10 @@ def load_harmful_datasets():
 
 def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_questions.csv")):
     """
-    Save questions DataFrame to CSV and Excel files.
+    Save questions DataFrame to CSV files.
 
     Args:
-        questions_df: DataFrame with questions (should already be UNIQUE for prompt_extended.xlsx!)
+        questions_df: DataFrame with questions (should already be UNIQUE for prompt_extended.csv!)
         filename: Output filename (default: "data/harmful_questions.csv")
     """
     # Ensure the data/ directory exists
@@ -155,27 +155,27 @@ def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_
         logger.error(f"Failed to save questions to {filename}: {e}")
         success = False
 
-    # Save as Excel (.xlsx) - ensure prompt_extended.xlsx always contains the full combined unique DataFrame
-    excel_filename = "data/prompt_extended.xlsx"
+    # Save as CSV (extended) - ensure prompt_extended.csv always contains the full combined unique DataFrame
+    extended_filename = "data/prompt_extended.csv"
     try:
-        # Always save prompt_extended.xlsx as the full combined, deduplicated questions_df
-        questions_df[['questions']].to_excel(excel_filename, index=False, header=True)
-        logger.info(f"Saved {len(questions_df)} unique questions to {excel_filename} (combined/unique)")
+        # Always save prompt_extended.csv as the full combined, deduplicated questions_df
+        questions_df[['questions']].to_csv(extended_filename, index=False, header=True)
+        logger.info(f"Saved {len(questions_df)} unique questions to {extended_filename} (combined/unique)")
     except Exception as e:
-        logger.error(f"Failed to save questions to {excel_filename}: {e}")
+        logger.error(f"Failed to save questions to {extended_filename}: {e}")
         success = False
 
-    # Save 100 random questions to prompt.xlsx with column name 'questions'
+    # Save 100 random questions to prompt.csv with column name 'questions'
     # NOTE: These 100 are selected at random (using a fixed random_state for reproducibility).
     try:
-        prompt_filename = "data/prompt.xlsx"
+        prompt_filename = "data/prompt.csv"
         # The following line selects 100 random questions (or fewer if dataset < 100), at random
         sample_df = questions_df.sample(n=min(100, len(questions_df)), random_state=42)
         # Always save with column "questions" as requested
-        sample_df[['questions']].to_excel(prompt_filename, index=False, header=True)
+        sample_df[['questions']].to_csv(prompt_filename, index=False, header=True)
         logger.info(f"Saved {len(sample_df)} randomly selected questions to {prompt_filename}")
     except Exception as e:
-        logger.error(f"Failed to save prompt.xlsx: {e}")
+        logger.error(f"Failed to save prompt.csv: {e}")
         success = False
 
     return success
@@ -198,11 +198,11 @@ if __name__ == "__main__":
 
     if not all_questions.empty:
         logger.info(f"Number of unique questions: {len(all_questions)}")
-        # Save to data/harmful_questions.csv, data/prompt_extended.xlsx, and data/prompt.xlsx
+        # Save to data/harmful_questions.csv, data/prompt_extended.csv, and data/prompt.csv
         saved = save_questions_to_file(all_questions)
         if saved:
             print("="*50)
-            print("Saved questions to: data/harmful_questions.csv, data/prompt_extended.xlsx, and data/prompt.xlsx")
+            print("Saved questions to: data/harmful_questions.csv, data/prompt_extended.csv, and data/prompt.csv")
             print("="*50)
             print("SAMPLE QUESTIONS:")
             print("="*50)

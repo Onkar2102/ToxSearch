@@ -42,7 +42,7 @@ def get_config_path():
 
 def get_data_path():
     """Get the absolute path to the data directory"""
-    return get_project_root() / "data" / "prompt.xlsx"
+    return get_project_root() / "data" / "prompt.csv"
 
 # Global variable to store the outputs path for the current run
 _current_outputs_path = None
@@ -142,9 +142,9 @@ def initialize_system(logger, log_file):
     if should_initialize:
         try:
             if not population_file.exists():
-                logger.info("No population file found. Initializing population from prompt.xlsx...")
+                logger.info("No population file found. Initializing population from prompt.csv...")
             else:
-                logger.info("Population file exists but is empty. Initializing population from prompt.xlsx...")
+                logger.info("Population file exists but is empty. Initializing population from prompt.csv...")
             load_and_initialize_population(
                 input_path=str(get_data_path()),
                 output_path=str(get_outputs_path()),
@@ -672,19 +672,19 @@ def load_and_initialize_population(
                 logger.error("Input file not found: %s", input_path)
                 raise FileNotFoundError(f"Input file not found: {input_path}")
 
-            # ---------------------------- Load Excel -----------------------
-            with PerformanceLogger(logger, "Load Excel File"):
-                df = pd.read_excel(input_path)
+            # ---------------------------- Load CSV File -----------------------
+            with PerformanceLogger(logger, "Load CSV File"):
+                df = pd.read_csv(input_path)
                 logger.info(
-                    "Successfully loaded Excel file with %d rows and %d columns",
+                    "Successfully loaded CSV file with %d rows and %d columns",
                     len(df),
                     len(df.columns),
                 )
 
             # -------------------------- Extract prompts --------------------
-            # Only expect a "questions" column in the Excel file
+            # Only expect a "questions" column in the CSV file
             if "questions" not in df.columns:
-                raise ValueError("Required 'questions' column not found in Excel file")
+                raise ValueError("Required 'questions' column not found in CSV file")
             
             prompt_column = "questions"
             prompts = (

@@ -8,7 +8,7 @@ The Evolutionary Text Generation Framework uses genetic algorithms with adaptive
 
 ```mermaid
 flowchart TB
-    A[Input: prompt.xlsx] --> B[Initialize Population]
+    A[Input: prompt.csv] --> B[Initialize Population]
     B --> C[Select Parents Adaptively]
     C --> D[Apply 16 Variation Operators]
     D --> E[Generate Responses LLM]
@@ -53,7 +53,7 @@ flowchart TB
 
 ### 1. Initialization
 ```
-prompt.xlsx → Load prompts → Generate responses → Evaluate → Initialize population
+prompt.csv → Load prompts → Generate responses → Evaluate → Initialize population
                                                                     ↓
                                                           temp.json (variants)
                                                                     ↓

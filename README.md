@@ -207,7 +207,7 @@ eost-cam-llm/
 │   └── utils/
 │       └── population_io.py       # Population I/O & metrics
 ├── data/
-│   ├── prompt.xlsx                # Initial prompts
+│   ├── prompt.csv                 # Initial prompts (CSV format)
 │   └── outputs/                   # Evolution results
 │       └── YYYYMMDD_HHMM/
 │           ├── EvolutionTracker.json

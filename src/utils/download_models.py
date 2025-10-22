@@ -70,7 +70,7 @@ class ModelManager:
             "phi-3.5-mini-instruct": "microsoft/Phi-3.5-mini-instruct",
 
             # DeepSeek (transformers)
-            "deepseek-coder-v2-instruct": "deepseek-ai/DeepSeek-Coder-V2-Instruct",
+            # "deepseek-coder-v2-instruct": "deepseek-ai/DeepSeek-Coder-V2-Instruct",
         }
         
         self.GGUF_MODEL_REGISTRY = {
@@ -93,7 +93,7 @@ class ModelManager:
             "phi-3.5-mini-instruct-gguf": "bartowski/Phi-3.5-mini-instruct-GGUF",
 
             # DeepSeek (GGUF)
-            "deepseek-coder-v2-instruct-gguf": "bartowski/DeepSeek-Coder-V2-Instruct-GGUF",
+            # "deepseek-coder-v2-instruct-gguf": "bartowski/DeepSeek-Coder-V2-Instruct-GGUF",
         }
         self.DEFAULT_TARGET_DIR = default_target_dir or Path("models")
         self.REGISTRY_FILE = registry_file or Path("models/models_registry.json")

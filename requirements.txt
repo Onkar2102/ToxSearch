@@ -265,9 +265,9 @@ wordfreq==3.1.1
 ftfy==6.3.1
 sacremoses==0.1.1
 
-# Excel/Document Processing (not used in main code)
-openpyxl==3.1.5
-et_xmlfile==2.0.0
+# Excel/Document Processing (REMOVED - using CSV instead)
+# openpyxl==3.1.5  # Removed - project now uses CSV files
+# et_xmlfile==2.0.0  # Dependency of openpyxl, no longer needed
 
 # Model Quantization (not used - llama.cpp handles this)
 bitsandbytes==0.42.0
