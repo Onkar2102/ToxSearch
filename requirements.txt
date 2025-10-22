@@ -1,206 +1,327 @@
-accelerate==1.5.2
-aiohappyeyeballs==2.6.1
-aiohttp==3.12.7
-aiosignal==1.3.2
-annotated-types==0.7.0
-anyio==4.9.0
-appnope==0.1.4
-argon2-cffi==23.1.0
-argon2-cffi-bindings==21.2.0
-arrow==1.3.0
-asttokens==3.0.0
-async-lru==2.0.5
-attrs==25.3.0
-babel==2.17.0
-beautifulsoup4==4.13.3
-bitsandbytes==0.42.0
-bleach==6.2.0
-blis==1.3.0
-cachetools==5.5.2
-catalogue==2.0.10
-certifi==2025.1.31
-cffi==1.17.1
-charset-normalizer==3.4.1
-click==8.1.8
-cloudpathlib==0.21.0
-comm==0.2.2
-confection==0.1.5
-contourpy==1.3.2
-cycler==0.12.1
-cymem==2.0.11
-debugpy==1.8.13
-decorator==5.2.1
-defusedxml==0.7.1
-diskcache==5.6.3
-distro==1.9.0
-dotenv==0.9.9
+# ==============================================================================
+# SECTION 1: MAIN LIBRARIES (Directly Imported/Used in Project)
+# ==============================================================================
+#
+# IMPORTANT: GPU SUPPORT
+# ----------------------
+# This requirements.txt installs CPU-only versions by default.
+# 
+# For NVIDIA GPU (CUDA) support:
+# 1. First check your CUDA version: nvcc --version
+# 2. Uninstall CPU versions:
+#    pip uninstall torch torchvision torchaudio llama-cpp-python -y
+# 
+# 3. Install PyTorch with CUDA (choose your CUDA version):
+#    # For CUDA 12.1:
+#    pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu121
+#    # For CUDA 11.8:
+#    pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu118
+#
+# 4. Install llama-cpp-python with CUDA:
+#    CMAKE_ARGS="-DLLAMA_CUDA=on" pip install llama-cpp-python==0.3.16 --force-reinstall --no-cache-dir
+#
+# 5. Verify GPU detection:
+#    python3 -c "import torch; print('CUDA Available:', torch.cuda.is_available())"
+#
+# The code will automatically detect and use GPU - no code changes needed!
+# See README.md for detailed GPU setup instructions.
+# ==============================================================================
+
+# Deep Learning Framework (CPU version - see above for GPU installation)
+torch==2.8.0
+
+# Local LLM Inference (CPU version - see above for GPU installation)
+llama_cpp_python==0.3.16
+
+# Hugging Face Ecosystem
+transformers==4.52.4
+huggingface-hub==0.32.3
+datasets==4.2.0
+
+# NLP Processing
+spacy==3.8.5
 en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85
-et_xmlfile==2.0.0
-executing==2.2.0
-fastapi==0.119.0
-fastjsonschema==2.21.1
-filelock==3.19.1
-fonttools==4.58.1
-fqdn==1.5.1
-frozenlist==1.6.0
-fsspec==2025.7.0
-ftfy==6.3.1
-google-api-core==2.25.1
+
+# Semantic Similarity & Embeddings
+sentence-transformers==4.1.0
+
+# Data Processing & Analysis
+pandas==2.3.0
+numpy==2.2.4
+
+# Google Perspective API (Content Moderation)
 google-api-python-client==2.179.0
 google-auth==2.40.3
-google-auth-httplib2==0.2.0
-googleapis-common-protos==1.70.0
-h11==0.16.0
-hf-xet==1.1.2
-httpcore==1.0.9
-httplib2==0.22.0
-httpx==0.28.1
+
+# Configuration & Environment
+PyYAML==6.0.2
+python-dotenv==1.0.1
+
+# System Monitoring
+psutil==7.0.0
+
+# Testing
+pytest==8.4.2
+
+
+# ==============================================================================
+# SECTION 2: DEPENDENCIES (Required by Main Libraries Above)
+# ==============================================================================
+
+# PyTorch ecosystem dependencies
+torchaudio==2.8.0
+torchvision==0.23.0
+sympy==1.14.0
+mpmath==1.3.0
+networkx==3.5
+pillow==11.1.0
+filelock==3.19.1
+
+# Transformers & HuggingFace dependencies
+accelerate==1.5.2
+safetensors==0.5.3
+tokenizers==0.21.1
 huggingface-hub==0.32.3
-idna==3.10
-iniconfig==2.1.0
-ipykernel==6.29.5
-ipython==9.0.2
-ipython_pygments_lexers==1.1.1
-ipywidgets==8.1.5
-isoduration==20.11.0
-jedi==0.19.2
-Jinja2==3.1.6
-jiter==0.10.0
-joblib==1.4.2
-json5==0.10.0
-jsonpointer==3.0.0
-jsonschema==4.23.0
-jsonschema-specifications==2024.10.1
-jupyter==1.1.1
-jupyter-console==6.6.3
-jupyter-events==0.12.0
-jupyter-lsp==2.2.5
-jupyter_client==8.6.3
-jupyter_core==5.8.1
-jupyter_server==2.15.0
-jupyter_server_terminals==0.5.3
-jupyterlab==4.3.6
-jupyterlab_pygments==0.3.0
-jupyterlab_server==2.27.3
-jupyterlab_widgets==3.0.13
-kiwisolver==1.4.8
+hf-xet==1.1.2
+regex==2024.11.6
+
+# SpaCy dependencies
+spacy-legacy==3.0.12
+spacy-loggers==1.0.5
+thinc==8.3.6
+blis==1.3.0
+catalogue==2.0.10
+confection==0.1.5
+cymem==2.0.11
 langcodes==3.5.0
 language_data==1.3.0
-llama_cpp_python==0.3.16
-locate==1.1.1
-marisa-trie==1.2.1
-markdown-it-py==3.0.0
-MarkupSafe==3.0.2
-matplotlib==3.10.3
-matplotlib-inline==0.1.7
-mdurl==0.1.2
-mistune==3.1.3
-mpmath==1.3.0
-msgpack==1.1.0
-multidict==6.4.4
 murmurhash==1.0.12
-nbclient==0.10.2
-nbconvert==7.16.6
-nbformat==5.10.4
-nest-asyncio==1.6.0
-networkx==3.5
-nltk==3.9.1
-notebook==7.3.3
-notebook_shim==0.2.4
-numpy==2.2.4
-openpyxl==3.1.5
-overrides==7.7.0
-packaging==24.2
-pandas==2.3.0
-pandocfilters==1.5.1
-parso==0.8.4
-pexpect==4.9.0
-pillow==11.1.0
-platformdirs==4.3.7
-pluggy==1.6.0
 preshed==3.0.9
-prometheus_client==0.21.1
-prompt_toolkit==3.0.50
-propcache==0.3.1
+srsly==2.5.1
+wasabi==1.1.3
+weasel==0.4.1
+
+# Sentence-transformers dependencies
+sentencepiece==0.2.0
+
+# Google API dependencies
+google-api-core==2.25.1
+google-auth-httplib2==0.2.0
+googleapis-common-protos==1.70.0
+httplib2==0.22.0
+uritemplate==4.2.0
 proto-plus==1.26.1
 protobuf==6.31.1
-psutil==7.0.0
-ptyprocess==0.7.0
-pure_eval==0.2.3
+rsa==4.9.1
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
-pycparser==2.22
+
+# Pandas/Numpy dependencies
+pyarrow==21.0.0
+python-dateutil==2.9.0.post0
+pytz==2025.2
+tzdata==2025.2
+
+# HTTP and networking
+requests==2.32.4
+urllib3==2.5.0
+certifi==2025.1.31
+charset-normalizer==3.4.1
+idna==3.10
+
+# Async support
+aiohttp==3.12.7
+aiohappyeyeballs==2.6.1
+aiosignal==1.3.2
+frozenlist==1.6.0
+multidict==6.4.4
+yarl==1.20.0
+async-lru==2.0.5
+
+# Data validation and serialization
 pydantic==2.11.3
 pydantic-settings==2.11.0
 pydantic_core==2.33.1
-Pygments==2.19.1
-pyparsing==3.2.3
-pytest==8.4.2
-python-dateutil==2.9.0.post0
-python-dotenv==1.0.1
-python-json-logger==3.3.0
-pytz==2025.2
-PyYAML==6.0.2
-pyzmq==26.3.0
-referencing==0.36.2
-regex==2024.11.6
-requests==2.32.4
-rfc3339-validator==0.1.4
-rfc3986-validator==0.1.1
-rich==14.0.0
-rpds-py==0.23.1
-rsa==4.9.1
-sacremoses==0.1.1
-safetensors==0.5.3
-scikit-learn==1.6.1
-scipy==1.15.2
-seaborn==0.13.2
-Send2Trash==1.8.3
-sentence-transformers==4.1.0
-sentencepiece==0.2.0
+annotated-types==0.7.0
+typing_extensions==4.14.1
+types-python-dateutil==2.9.0.20241206
+
+# File and data handling
+fsspec==2025.7.0
+dill==0.4.0
+packaging==24.2
+cloudpathlib==0.21.0
+
+# Progress bars and CLI
+tqdm==4.67.1
+click==8.1.8
+
+# Testing dependencies
+pluggy==1.6.0
+iniconfig==2.1.0
+
+# General utilities
+wrapt==1.17.2
+attrs==25.3.0
 setuptools==80.9.0
-shellingham==1.5.4
 six==1.17.0
-smart-open==7.1.0
-sniffio==1.3.1
-soupsieve==2.6
-spacy==3.8.5
-spacy-legacy==3.0.12
-spacy-loggers==1.0.5
-srsly==2.5.1
-sse-starlette==3.0.2
-stack-data==0.6.3
+
+
+# ==============================================================================
+# SECTION 3: UNUSED LIBRARIES (Not Imported in Project Code)
+# ==============================================================================
+# These libraries are present in requirements.txt but not used in src/ or tests/
+# Consider removing them if they're not needed for experimentation/analysis
+
+# Web Framework (not used - no web server in code)
+fastapi==0.119.0
+uvicorn==0.37.0
 starlette==0.48.0
 starlette-context==0.3.6
-sympy==1.14.0
-terminado==0.18.1
-thinc==8.3.6
-threadpoolctl==3.6.0
-tinycss2==1.4.0
-tokenizers==0.21.1
-torch==2.8.0
-torchaudio==2.8.0
-torchvision==0.23.0
-tornado==6.5.1
-tqdm==4.67.1
-traitlets==5.14.3
-transformers==4.52.4
-typer==0.15.2
-types-python-dateutil==2.9.0.20241206
-typing-inspection==0.4.0
-typing_extensions==4.14.1
-tzdata==2025.2
-uri-template==1.3.0
-uritemplate==4.2.0
-urllib3==2.5.0
-uvicorn==0.37.0
-wasabi==1.1.3
-wcwidth==0.2.13
-weasel==0.4.1
-webcolors==24.11.1
-webencodings==0.5.1
-websocket-client==1.8.0
+sse-starlette==3.0.2
+httpx==0.28.1
+httpcore==1.0.9
+h11==0.16.0
+anyio==4.9.0
+sniffio==1.3.1
+
+# OpenAI API (not used - using local models only)
+openai==1.83.0
+
+# Jupyter/Notebook (not required for main code execution)
+jupyter==1.1.1
+jupyterlab==4.3.6
+notebook==7.3.3
+jupyter-console==6.6.3
+jupyter_server==2.15.0
+jupyter_server_terminals==0.5.3
+jupyterlab_server==2.27.3
+jupyter-lsp==2.2.5
+jupyter_core==5.8.1
+jupyter_client==8.6.3
+jupyter-events==0.12.0
+ipython==9.0.2
+ipykernel==6.29.5
+ipywidgets==8.1.5
+ipython_pygments_lexers==1.1.1
+nbclient==0.10.2
+nbconvert==7.16.6
+nbformat==5.10.4
+notebook_shim==0.2.4
+jupyterlab_pygments==0.3.0
+jupyterlab_server==2.27.3
+jupyterlab_widgets==3.0.13
 widgetsnbextension==4.0.13
+mistune==3.1.3
+pandocfilters==1.5.1
+tinycss2==1.4.0
+webencodings==0.5.1
+terminado==0.18.1
+Send2Trash==1.8.3
+prometheus_client==0.21.1
+pyzmq==26.3.0
+tornado==6.5.1
+traitlets==5.14.3
+nest-asyncio==1.6.0
+comm==0.2.2
+json5==0.10.0
+jsonpointer==3.0.0
+websocket-client==1.8.0
+
+# Jupyter/IPython display and formatting
+asttokens==3.0.0
+backcall==0.2.0
+decorator==5.2.1
+executing==2.2.0
+jedi==0.19.2
+matplotlib-inline==0.1.7
+parso==0.8.4
+pexpect==4.9.0
+ptyprocess==0.7.0
+appnope==0.1.4
+prompt_toolkit==3.0.50
+stack-data==0.6.3
+pure_eval==0.2.3
+wcwidth==0.2.13
+Pygments==2.19.1
+
+# Visualization Libraries (not used in main code)
+matplotlib==3.10.3
+seaborn==0.13.2
+contourpy==1.3.2
+cycler==0.12.1
+fonttools==4.58.1
+kiwisolver==1.4.8
+
+# ML Libraries (not imported in main code)
+scikit-learn==1.6.1
+scipy==1.15.2
+joblib==1.4.2
+threadpoolctl==3.6.0
+
+# NLP Libraries (not used)
+nltk==3.9.1
 wordfreq==3.1.1
-wrapt==1.17.2
-yarl==1.20.0
+ftfy==6.3.1
+sacremoses==0.1.1
+
+# Excel/Document Processing (not used in main code)
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+
+# Model Quantization (not used - llama.cpp handles this)
+bitsandbytes==0.42.0
+
+# Text Processing (not used)
+beautifulsoup4==4.13.3
+soupsieve==2.6
+bleach==6.2.0
+
+# Additional Environment/Config
+dotenv==0.9.9
+
+# Additional Validation
+jsonschema==4.23.0
+jsonschema-specifications==2024.10.1
+fastjsonschema==2.21.1
+referencing==0.36.2
+rpds-py==0.23.1
+rfc3339-validator==0.1.4
+rfc3986-validator==0.1.1
+webcolors==24.11.1
+isoduration==20.11.0
+fqdn==1.5.1
+uri-template==1.3.0
+
+# Additional utilities
+rich==14.0.0
+typer==0.15.2
+diskcache==5.6.3
+cachetools==5.5.2
+msgpack==1.1.0
+smart-open==7.1.0
+xxhash==3.6.0
+marisa-trie==1.2.1
+platformdirs==4.3.7
+MarkupSafe==3.0.2
+Jinja2==3.1.6
+arrow==1.3.0
+argon2-cffi==23.1.0
+argon2-cffi-bindings==21.2.0
+cffi==1.17.1
+pycparser==2.22
+defusedxml==0.7.1
+distro==1.9.0
+locate==1.1.1
+markdown-it-py==3.0.0
+mdurl==0.1.2
+multiprocess==0.70.16
+overrides==7.7.0
+python-json-logger==3.3.0
+shellingham==1.5.4
+typing-inspection==0.4.0
+debugpy==1.8.13
+propcache==0.3.1
+babel==2.17.0
+jiter==0.10.0
+pyparsing==3.2.3
