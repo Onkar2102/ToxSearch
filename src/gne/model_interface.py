@@ -39,6 +39,7 @@ class LlamaCppChatInterface(ModelInterface):
     """LlamaCpp implementation of chat completions interface."""
     
     _MODEL_CACHE = {}
+    _MODEL_CACHE_ACCESS_COUNT = {}  # Track access frequency
     
     def __init__(self, model_cfg: Dict[str, Any], log_file: Optional[str] = None):
         """
@@ -75,8 +76,15 @@ class LlamaCppChatInterface(ModelInterface):
         if absolute_model_path not in self._MODEL_CACHE:
             self.logger.info(f"Loading llama.cpp model: {absolute_model_path}")
             self._load_model(absolute_model_path)
+            # Track access count for new model
+            self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = 1
         else:
             self.logger.info(f"Using cached llama.cpp model: {absolute_model_path}")
+            # Increment access count
+            self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = self._MODEL_CACHE_ACCESS_COUNT.get(absolute_model_path, 0) + 1
+        
+        # Cleanup cache if too many models
+        self._cleanup_model_cache_if_needed()
         
         self.model = self._MODEL_CACHE[absolute_model_path]
         self.generation_args = model_cfg.get("generation_args", {})
@@ -84,6 +92,15 @@ class LlamaCppChatInterface(ModelInterface):
         # Memory monitoring
         self.last_memory_check = time.time()
         self.memory_check_interval = 60  # Check memory every 60 seconds
+    
+    def _cleanup_model_cache_if_needed(self):
+        """Clean up unused models from cache"""
+        if len(self._MODEL_CACHE) > 2:  # Keep only 2 models max
+            # Remove least recently used model
+            least_used = min(self._MODEL_CACHE_ACCESS_COUNT.items(), key=lambda x: x[1])
+            del self._MODEL_CACHE[least_used[0]]
+            del self._MODEL_CACHE_ACCESS_COUNT[least_used[0]]
+            self.logger.info(f"Removed model {least_used[0]} from cache (access count: {least_used[1]})")
     
     def _load_model(self, model_path: str):
         """Load model using llama.cpp with optimizations."""

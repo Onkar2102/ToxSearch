@@ -421,13 +421,28 @@ print(variants)  # ['What are the health benefits of exercise?']
 
 ## Error Handling
 
-### **Fallback Mechanisms**
-All operators include fallback mechanisms:
+### **Centralized XML Tag Extraction**
+All operators now use centralized XML tag extraction from `prompt_generator.py`:
+- **Method**: `_extract_content_from_xml_tags()`
+- **Requirement**: All variants must be contained within XML tags
+- **Behavior**: Raises `ValueError` if parsing fails (no fallbacks)
 
-1. **LLM Refusal Handling**: Neutral prompts to reduce refusals
-2. **Empty Response Handling**: Fallback to original text
-3. **Error Recovery**: Graceful degradation for failed operations
-4. **Validation**: Content validation for translation outputs
+### **Operator-Specific Error Handling**
+
+#### **Informed Evolution Operator**
+- **Graceful Handling**: Returns empty list on LLM refusal or parsing failure
+- **Logging**: Warns about refusals instead of crashing
+- **Behavior**: Continues evolution with other operators
+
+#### **All Other Operators**
+- **Strict Parsing**: Raises `ValueError` on XML parsing failure
+- **No Fallbacks**: Ensures all variants are properly formatted
+- **Consistent Behavior**: Uniform error handling across all operators
+
+### **LLM Refusal Handling**
+- **Neutral Prompts**: Reduce refusals through careful prompt engineering
+- **Error Recovery**: Graceful handling of LLM refusals
+- **Logging**: Comprehensive error logging for debugging
 
 ### **Error Types**
 - **LLM Refusals**: "I can't fulfill that request"

@@ -9,22 +9,22 @@
 # Lazy imports to avoid torch dependency issues
 def get_EvolutionEngine():
     """Lazy import of EvolutionEngine to avoid torch dependency issues"""
-    from ea.EvolutionEngine import EvolutionEngine
+    from ea.evolution_engine import EvolutionEngine
     return EvolutionEngine
 
 def get_run_evolution():
     """Lazy import of run_evolution to avoid torch dependency issues"""
-    from ea.RunEvolution import run_evolution
+    from ea.run_evolution import run_evolution
     return run_evolution
 
 def get_create_final_statistics_with_tracker():
     """Lazy import of create_final_statistics_with_tracker to avoid torch dependency issues"""
-    from ea.RunEvolution import create_final_statistics_with_tracker
+    from ea.run_evolution import create_final_statistics_with_tracker
     return create_final_statistics_with_tracker
 
 def get_update_evolution_tracker_with_generation_global():
     """Lazy import of update_evolution_tracker_with_generation_global to avoid torch dependency issues"""
-    from ea.RunEvolution import update_evolution_tracker_with_generation_global
+    from ea.run_evolution import update_evolution_tracker_with_generation_global
     return update_evolution_tracker_with_generation_global
 
 # Mutation operators
@@ -97,7 +97,7 @@ def get_ConceptAdditionOperator():
 
 def get_InformedEvolutionOperator():
     """Lazy import of InformedEvolutionOperator to avoid torch dependency issues"""
-    from ea.InformedEvolution import InformedEvolutionOperator
+    from ea.informed_evolution import InformedEvolutionOperator
     return InformedEvolutionOperator
 
 # Crossover operators

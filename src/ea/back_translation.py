@@ -16,7 +16,7 @@ Process for each operator:
 """
 
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 import logging
 from typing import List, Dict, Any
 get_logger = logging.getLogger
@@ -68,7 +68,7 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
             self.logger.debug(f"{self.name}: LLM generator initialized successfully")
 
@@ -119,8 +119,9 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
             
             # Extract translation from structured tags
             extracted_inter = self.generator._extract_content_from_xml_tags(inter, "trans")
-            if extracted_inter:
-                inter = extracted_inter
+            if not extracted_inter:
+                raise ValueError(f"{self.name}: Failed to parse intermediate translation from LLM response")
+            inter = extracted_inter
             
             if inter and inter != text:
                 # Step 2: Target language back to English
@@ -141,8 +142,9 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
                 
                 # Extract translation from structured tags
                 extracted_back_en = self.generator._extract_content_from_xml_tags(back_en, "trans")
-                if extracted_back_en:
-                    back_en = extracted_back_en
+                if not extracted_back_en:
+                    raise ValueError(f"{self.name}: Failed to parse back translation from LLM response")
+                back_en = extracted_back_en
                 
                 cleaned = back_en.strip()
                 self._last_final = cleaned

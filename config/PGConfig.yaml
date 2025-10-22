@@ -26,7 +26,7 @@ prompt_generator:
   log_failing_prompts: true
   max_memory_usage_gb: 12.0
   model_loading_timeout: 300
-  name: models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_M.gguf
+  name: models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_S.gguf
   provider: local
   strategy: local
   task_type: prompt-generation

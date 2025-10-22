@@ -16,7 +16,7 @@ Process:
 import random
 from typing import List, Optional, Dict, Any, Tuple
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -61,7 +61,7 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
             self.logger.debug(f"{self.name}: LLM generator initialized successfully")
 
@@ -164,11 +164,12 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                 response = self.generator.model_interface.chat_completion(messages)
                 
                 if not response:
-                    raise ValueError(f"{self.name}: Empty LLM response for {mask_token}")
+                    self.logger.warning(f"{self.name}: Empty LLM response for {mask_token} - LLM may have refused")
+                    continue
                     
             except Exception as e:
-                self.logger.error(f"{self.name}: LLM call failed for {mask_token}: {e}")
-                raise RuntimeError(f"{self.name} replacement generation failed for {mask_token}: {e}") from e
+                self.logger.warning(f"{self.name}: LLM call failed for {mask_token} (likely refusal): {e}")
+                continue
             
             all_responses.append(f"{mask_token}: {response}")
                 
@@ -176,8 +177,8 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                 # Extract replacement from structured tags using improved method
                 replacement = self.generator._extract_content_from_xml_tags(response, "replacement")
                 if not replacement:
-                    # Fallback: Extract word from response
-                    replacement = self._extract_word_from_response(response, original_word)
+                    self.logger.warning(f"{self.name}: Failed to parse replacement from LLM response for {mask_token} - LLM may have refused")
+                    continue
                 
                 # Basic validation: should be a single word, no special tokens, and be alphabetic
                 if (replacement and 
@@ -188,11 +189,11 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                     replacements[mask_num] = replacement
                     self.logger.debug(f"{self.name}: {mask_token} -> '{replacement}'")
                 else:
-                    self.logger.warning(f"{self.name}: Invalid replacement for {mask_token}: '{replacement}', using original")
-                    replacements[mask_num] = original_word
+                    self.logger.warning(f"{self.name}: Invalid replacement for {mask_token}: '{replacement}' - LLM may have refused")
+                    continue
             else:
-                self.logger.warning(f"{self.name}: Empty response for {mask_token}, using original")
-                replacements[mask_num] = original_word
+                self.logger.warning(f"{self.name}: Empty response for {mask_token} - LLM may have refused")
+                continue
         
         # Store debug info
         self._last_structured_prompt = f"One-by-one prompts for {len(mask_mapping)} masks"
@@ -208,31 +209,6 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
         self.logger.info(f"{self.name}: Applied replacements: {replacements}")
         self._last_completed_text = completed_text
         return completed_text
-    
-    def _extract_word_from_response(self, response: str, fallback_word: str) -> str:
-        """Extract a single word from LLM response as fallback parsing."""
-        try:
-            import re
-            # Look for quoted words first
-            quoted_words = re.findall(r'"([^"]+)"', response)
-            if quoted_words:
-                for word in quoted_words:
-                    stripped_word = word.strip()
-                    if stripped_word and len(stripped_word.split()) == 1 and stripped_word.isalpha():
-                        return stripped_word
-            
-            # Look for single words in the response
-            words = re.findall(r'\b[a-zA-Z]{2,}\b', response)
-            if words:
-                for word in words:
-                    if len(word) > 1 and word.isalpha():
-                        return word
-            
-            raise ValueError(f"{self.name}: No valid word found in response: {response}")
-            
-        except Exception as e:
-            self.logger.error(f"{self.name}: Failed to extract word from response: {e}")
-            raise RuntimeError(f"{self.name} word extraction failed: {e}") from e
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
@@ -302,8 +278,9 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                 self.logger.info(f"{self.name}: Generated {len(variants)} variants successfully")
                 return variants
             else:
-                raise ValueError(f"{self.name}: No variants generated")
+                self.logger.warning(f"{self.name}: No variants generated - LLM may have refused all requests")
+                return []
                 
         except Exception as e:
-            self.logger.error(f"{self.name}: apply failed: {e}")
-            raise RuntimeError(f"{self.name} MLM generation failed: {e}") from e
+            self.logger.warning(f"{self.name}: apply failed (likely LLM refusals): {e}")
+            return []

@@ -22,7 +22,7 @@ A research framework for AI safety analysis through evolutionary text generation
 - **Python 3.8+** (Python 3.12+ recommended)
 - **macOS/Linux** (Windows support via WSL)
 - **8GB+ RAM** (16GB+ recommended for larger models)
-- **API Keys**: OpenAI API key and Google Perspective API key
+- **API Keys**: Google Perspective API key
 
 ### Installation Steps
 
@@ -43,28 +43,43 @@ A research framework for AI safety analysis through evolutionary text generation
    venv\Scripts\activate     # On Windows
    ```
 
-3. **Run automated setup (RECOMMENDED)**
+3. **Install dependencies**
    ```bash
-   python3 app.py --setup
+   pip install -r requirements.txt
    ```
-   This will:
-   - Install all required dependencies
-   - Create `.env` template file
-   - Optimize configuration for your system
-   - Verify all required files are present
 
-4. **Configure API keys**
-   Edit the `.env` file and add your API keys:
+4. **Create environment file**
+   Create a `.env` file in the project root:
    ```bash
    # Required API keys
-   OPENAI_API_KEY=your-openai-api-key-here
-   PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
+   GOOGLE_PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
    
    # Optional (for Hugging Face models)
    HF_TOKEN=your-huggingface-token-here
    ```
 
-5. **Verify installation**
+5. **Device Setup (Optional)**
+   The framework supports multiple device types:
+   
+   **For Apple Silicon (MPS):**
+   ```bash
+   # PyTorch with MPS support is automatically detected
+   # No additional setup required
+   ```
+   
+   **For NVIDIA GPU (CUDA):**
+   ```bash
+   # Install CUDA-enabled PyTorch
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+   ```
+   
+   **For CPU-only:**
+   ```bash
+   # CPU-only PyTorch (default)
+   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+   ```
+
+6. **Verify installation**
    ```bash
    # Test with a single generation
    python3 src/main.py --generations 1 --threshold 0.5
@@ -72,10 +87,10 @@ A research framework for AI safety analysis through evolutionary text generation
 
 ## Installation
 
-### Automated Installation (Recommended)
+### Automated Installation
+Use your preferred environment manager, then install from `requirements.txt`.
 ```bash
-# Run full environment setup
-python3 app.py --setup
+pip install -r requirements.txt
 ```
 
 ### Manual Installation
@@ -87,18 +102,14 @@ pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 
 # Create .env file manually
-cp .env.example .env  # Edit with your API keys
+echo "GOOGLE_PERSPECTIVE_API_KEY=your-api-key-here" > .env
 ```
 
 ## API Keys Configuration
 
 ### Required API Keys
 
-1. **OpenAI API Key**
-   - Get from: https://platform.openai.com/api-keys
-   - Used for: LLM-based text generation and paraphrasing
-
-2. **Google Perspective API Key**
+1. **Google Perspective API Key**
    - Get from: https://developers.perspectiveapi.com/
    - Used for: Content moderation and toxicity evaluation
 
@@ -106,8 +117,7 @@ cp .env.example .env  # Edit with your API keys
 Create a `.env` file in the project root:
 ```bash
 # Required API keys
-OPENAI_API_KEY=your-openai-api-key-here
-PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
+GOOGLE_PERSPECTIVE_API_KEY=your-google-perspective-api-key-here
 
 # Optional (for Hugging Face models)
 HF_TOKEN=your-huggingface-token-here
@@ -117,13 +127,7 @@ HF_TOKEN=your-huggingface-token-here
 
 ### Basic Usage
 ```bash
-# Run with interactive setup and monitoring (RECOMMENDED)
-python3 app.py --interactive
-
-# Run directly with process monitoring
-python3 app.py --generations 25
-
-# Run core pipeline directly
+# Run the pipeline
 python3 src/main.py --generations 25
 ```
 
@@ -133,15 +137,13 @@ python3 src/main.py --generations 25
 |----------|------|---------|-------------|
 | `--generations` | int | `None` | Maximum number of evolution generations. If not set, runs until north star metric is achieved |
 | `--threshold` | float | `0.95` | North star metric threshold for stopping evolution |
-| `--pg` | str | `qwen2.5-7b-instruct-gguf` | Prompt Generator model name |
-| `--rg` | str | `llama3.2-3b-instruct-gguf` | Response Generator model name |
-| `--check-interval` | int | `1800` | Health check interval in seconds (30 minutes) |
-| `--stuck-threshold` | int | `7200` | Stuck detection threshold in seconds (2 hours) |
-| `--memory-threshold` | float | `20.0` | Memory threshold in GB |
-| `--max-restarts` | int | `5` | Maximum restart attempts |
-| `--interactive` | flag | `False` | Run in interactive mode with setup and monitoring |
-| `--setup` | flag | `False` | Run full environment setup (install requirements, optimize config) |
-| `--no-monitor` | flag | `False` | Run without process monitoring |
+| `--pg` | str | `models/<dir>/<file>.gguf` | Prompt Generator model. Pass the relative path to the `.gguf` file under the `models/` directory |
+| `--rg` | str | `models/<dir>/<file>.gguf` | Response Generator model. Pass the relative path to the `.gguf` file under the `models/` directory |
+| `--operators` | str | `"all"` | Operator configuration mode: `ie` (InformedEvolution only), `cm` (all except InformedEvolution), `all` (all operators) |
+| `--max-variants` | int | `3` | Maximum number of variants to generate per operator |
+| `--elites-threshold` | int | `25` | Elite threshold percentage for classifying genomes as elites |
+| `--removal-threshold` | int | `5` | Removal threshold percentage for worst performing genomes |
+| `--stagnation-limit` | int | `5` | Number of generations without improvement before switching to explore mode |
 
 ### Example Commands
 ```bash
@@ -151,11 +153,98 @@ python3 src/main.py --generations 1 --threshold 0.5
 # Full evolution run
 python3 src/main.py --generations 50 --threshold 0.99
 
-# Run with specific models
-python3 src/main.py --generations 10 --pg qwen2.5-7b-instruct-gguf --rg llama3.2-3b-instruct-gguf
+# Run with specific operators
+python3 src/main.py --generations 10 --operators "ie" --max-variants 5
 
-# Interactive mode with monitoring
-python3 app.py --interactive
+# Run with all operators except InformedEvolution
+python3 src/main.py --generations 10 --operators "cm" --max-variants 3
+
+# Run with all operators (default)
+python3 src/main.py --generations 10 --operators "all" --max-variants 3
+
+# Run with custom thresholds
+python3 src/main.py --generations 20 --elites-threshold 30 --removal-threshold 10
+
+# Run with adaptive selection (stagnation limit)
+python3 src/main.py --generations 25 --stagnation-limit 3
+
+# Run with direct GGUF files (always pass relative path under `models/`)
+python3 src/main.py \
+   --pg models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
+   --rg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_S.gguf
+
+# Advanced run with all custom parameters (pass model paths under `models/`)
+python3 src/main.py \
+   --generations 30 \
+   --operators "all" \
+   --max-variants 4 \
+   --elites-threshold 20 \
+   --removal-threshold 8 \
+   --stagnation-limit 4 \
+   --pg models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
+   --rg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_S.gguf
+
+### Model path policy
+Always pass the relative path to the `.gguf` model file under the `models/` directory for both the prompt generator (`--pg`) and response generator (`--rg`).
+
+Examples (correct):
+
+```bash
+# Prompt Generator
+--pg models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+
+# Response Generator
+--rg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_S.gguf
+```
+
+The code no longer expects or resolves model "aliases"; providing a direct relative path is required and avoids ambiguous variant selection logic.
+
+### Operator Modes
+
+The `--operators` parameter controls which variation operators are used:
+
+#### **`ie` (Informed Evolution Only)**
+- **Operators**: Only `InformedEvolutionOperator`
+- **Data Source**: Uses `top_10.json` (top performing genomes)
+- **Purpose**: Focus on LLM-guided evolution using best examples
+- **Use Case**: When you want to leverage the best performing genomes to guide evolution
+
+#### **`cm` (Classical Methods)**
+- **Operators**: All operators except `InformedEvolutionOperator`
+- **Data Source**: Uses `parents.json` (selected parents)
+- **Purpose**: Traditional genetic algorithm operators (mutation, crossover)
+- **Use Case**: When you want to avoid LLM-guided evolution and use classical methods
+
+#### **`all` (All Operators)**
+- **Operators**: All 16 variation operators including `InformedEvolutionOperator`
+- **Data Source**: Uses both `parents.json` and `top_10.json`
+- **Purpose**: Maximum diversity and exploration
+- **Use Case**: Default mode for comprehensive evolution
+
+### Adaptive Selection Logic
+
+The framework now includes **adaptive selection pressure** that dynamically adjusts parent selection based on evolution progress:
+
+#### **Selection Modes:**
+- **DEFAULT**: 1 elite + 1 non-elite (balanced exploration/exploitation)
+- **EXPLORE**: 1 elite + 2 non-elites (increased exploration when stuck)
+- **EXPLOIT**: 2 elites + 1 non-elite (focused exploitation when fitness declining)
+
+#### **Adaptive Triggers:**
+- **Initial Generations**: First `m` generations (where `m` = `--stagnation-limit`) always use DEFAULT mode
+- **Stagnation**: After `m` generations without improvement → EXPLORE mode
+- **Declining Fitness**: When fitness slope < 0 → EXPLOIT mode
+
+#### **Configuration:**
+```bash
+# Customize stagnation limit (default: 5 generations)
+python3 src/main.py --stagnation-limit 3
+
+# Customize elite threshold (default: 25%)
+python3 src/main.py --elites-threshold 30
+
+# Customize removal threshold (default: 5%)
+python3 src/main.py --removal-threshold 10
 ```
 
 ## Requirements
@@ -171,7 +260,6 @@ See `requirements.txt` for complete list. Key dependencies:
 - `torch` - PyTorch for model operations
 - `transformers` - Hugging Face transformers
 - `spacy` - Natural language processing
-- `openai` - OpenAI API client
 - `google-api-python-client` - Google Perspective API
 - `pandas` - Data manipulation
 - `numpy` - Numerical operations
@@ -194,13 +282,12 @@ See `requirements.txt` for complete list. Key dependencies:
 
 **API rate limits**
 - Google Perspective API: 60 requests/minute limit
-- OpenAI API: Check your usage limits
-- Added 0.5-second delay between evaluations to prevent rate limiting
+- Added 0.75-second delay between evaluations to prevent rate limiting
 
 **Memory issues**
 - Use smaller models or reduce batch sizes
 - Monitor memory usage in logs
-- Enable garbage collection: `--memory-threshold 20.0`
+- Enable garbage collection
 
 **Model loading errors**
 - Check model files exist in `models/` directory

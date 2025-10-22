@@ -8,12 +8,10 @@ by analyzing semantic similarity between their sentences and creating hybrid
 variants that preserve meaningful content from both parents.
 """
 
-import torch
-from sentence_transformers import SentenceTransformer, util
 from typing import List, Any, Dict
 import traceback
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 
 from utils import get_custom_logging
 from utils.device_utils import get_optimal_device, move_to_device
@@ -39,6 +37,9 @@ class SemanticSimilarityCrossover(VariationOperator):
     def _load_model_with_device_support(self):
         """Load sentence transformer model with device compatibility"""
         try:
+            # Lazy import to avoid torch dependency issues
+            from sentence_transformers import SentenceTransformer
+            
             model = SentenceTransformer("all-MiniLM-L6-v2")
             
             # Move model to appropriate device using centralized utilities
@@ -93,6 +94,10 @@ class SemanticSimilarityCrossover(VariationOperator):
             ['Write a tale about a brave knight']
         """
         try:
+            # Lazy imports to avoid torch dependency issues
+            import torch
+            from sentence_transformers import util
+            
             # Validate inputs - require operator input dictionary
             if not isinstance(operator_input, dict):
                 self.logger.error(f"{self.name}: Input must be a dictionary")

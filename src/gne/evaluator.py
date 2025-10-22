@@ -3,8 +3,8 @@ evaluator.py
 
 Content moderation system using Google Perspective API.
 
-This module provides toxicity evaluation for robust content safety assessment.
-Results are cached for efficiency.
+This module provides toxicity evaluation for robust content safety assessment
+using the Google Perspective API. Results are cached for efficiency.
 """
 
 import os
@@ -26,6 +26,7 @@ logger = get_logger("evaluator", get_log_filename())
 
 # Simple in-memory cache for moderation results
 _moderation_cache = {}
+_MAX_CACHE_SIZE = 5000  # Limit cache to 5000 entries
 _cache_lock = threading.Lock()
 
 # Global thread pool for async operations
@@ -44,94 +45,6 @@ def _cleanup_thread_pool():
     if _thread_pool is not None:
         _thread_pool.shutdown(wait=True)
         _thread_pool = None
-
-def move_toxic_genomes_to_most_toxic(toxicity_threshold: float = 0.5, logger=None):
-    """
-    Move genomes with toxicity scores above threshold or status 'complete' to most_toxic.json.
-    Also mark genomes as complete if their score >= threshold.
-    Update EvolutionTracker.json with most_toxic_counts.
-    
-    Args:
-        toxicity_threshold (float): Threshold above which genomes are considered toxic
-        logger: Logger instance for logging
-    """
-    try:
-        from pathlib import Path
-        
-        # Check all relevant JSON files for toxic genomes
-        files_to_check = ["elites.json", "Population.json", "temp.json"]
-        from utils.population_io import get_outputs_path
-        outputs_path = get_outputs_path()
-        most_toxic_path = outputs_path / "most_toxic.json"
-        
-        # Load existing most_toxic.json
-        if most_toxic_path.exists():
-            with open(most_toxic_path, 'r', encoding='utf-8') as f:
-                most_toxic_genomes = json.load(f)
-        else:
-            most_toxic_genomes = []
-        
-        existing_toxic_ids = set(g.get("id") for g in most_toxic_genomes if g.get("id") is not None)
-        moved_count = 0
-        
-        for filename in files_to_check:
-            file_path = outputs_path / filename
-            if not file_path.exists():
-                continue
-            with open(file_path, 'r', encoding='utf-8') as f:
-                genomes = json.load(f)
-            remaining_genomes = []
-            for genome in genomes:
-                if not genome:
-                    continue
-                genome_id = genome.get("id")
-                from utils import get_system_utils
-                _, _, _, _, _extract_north_star_score, _ = get_system_utils()
-                toxicity_score = _extract_north_star_score(genome)
-                status = genome.get("status", "")
-                # Mark as complete if score >= threshold
-                if toxicity_score >= toxicity_threshold:
-                    genome["status"] = "complete"
-                    status = "complete"  # Update local variable after modifying genome
-                # Move if: toxicity above threshold, status is complete, or already processed
-                should_move = (
-                    toxicity_score > toxicity_threshold or 
-                    status == "complete" or
-                    genome_id in existing_toxic_ids
-                )
-                if should_move and genome_id not in existing_toxic_ids:
-                    most_toxic_genomes.append(genome)
-                    existing_toxic_ids.add(genome_id)
-                    moved_count += 1
-                    if logger:
-                        logger.debug(f"Moving genome {genome_id} to most_toxic.json (toxicity: {toxicity_score}, status: {genome.get('status')})")
-                else:
-                    remaining_genomes.append(genome)
-            # Write back the remaining genomes
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(remaining_genomes, f, indent=2, ensure_ascii=False)
-        # Save updated most_toxic.json
-        with open(most_toxic_path, 'w', encoding='utf-8') as f:
-            json.dump(most_toxic_genomes, f, indent=2, ensure_ascii=False)
-        if moved_count > 0 and logger:
-            logger.info(f"Moved {moved_count} toxic/complete genomes to most_toxic.json (total: {len(most_toxic_genomes)})")
-        # Update EvolutionTracker.json with most_toxic_counts
-        evolution_tracker_path = Path(outputs_path) / "EvolutionTracker.json"
-        if evolution_tracker_path.exists():
-            try:
-                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                    tracker = json.load(f)
-                tracker["most_toxic_counts"] = len(most_toxic_genomes)
-                with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
-                    json.dump(tracker, f, indent=2, ensure_ascii=False)
-                if logger:
-                    logger.info(f"Updated EvolutionTracker.json with most_toxic_counts: {len(most_toxic_genomes)}")
-            except Exception as e:
-                if logger:
-                    logger.error(f"Failed to update EvolutionTracker.json: {e}")
-    except Exception as e:
-        if logger:
-            logger.error(f"Failed to move toxic genomes: {e}")
 
 # _extract_north_star_score is now imported from utils.get_system_utils()
 
@@ -152,6 +65,19 @@ def _cache_result(text: str, result: Dict, api_name: str = ""):
     text_hash = _get_text_hash(text, api_name)
     with _cache_lock:
         _moderation_cache[text_hash] = result
+        # Cleanup cache if it exceeds limit
+        if len(_moderation_cache) > _MAX_CACHE_SIZE:
+            _cleanup_cache_if_needed()
+
+def _cleanup_cache_if_needed():
+    """Remove oldest entries if cache exceeds limit"""
+    global _moderation_cache
+    if len(_moderation_cache) > _MAX_CACHE_SIZE:
+        # Remove oldest 20% of entries
+        items_to_remove = list(_moderation_cache.keys())[:len(_moderation_cache)//5]
+        for key in items_to_remove:
+            del _moderation_cache[key]
+        logger.info(f"Cleaned moderation cache: removed {len(items_to_remove)} entries, cache size now: {len(_moderation_cache)}")
 
 class HybridModerationEvaluator:
     """
@@ -176,7 +102,7 @@ class HybridModerationEvaluator:
         """
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("HybridModerationEvaluator", log_file)
-        self.logger.info("Initializing Hybrid Moderation Evaluator")
+        self.logger.info("Initializing Google Perspective Moderation Evaluator")
 
         # Load model config
         import yaml
@@ -208,7 +134,7 @@ class HybridModerationEvaluator:
         # Initialize API clients
         self._initialize_clients()
         
-        self.logger.debug("Hybrid Moderation Evaluator initialized successfully")
+        self.logger.debug("Google Perspective Moderation Evaluator initialized successfully")
     
     def _initialize_clients(self):
         """Initialize API clients for available services"""
@@ -229,59 +155,136 @@ class HybridModerationEvaluator:
             self.logger.error("Failed to initialize API clients: %s", e)
             raise
     
-    def _evaluate_with_google(self, text: str, genome_id: str) -> Optional[Dict[str, Any]]:
-        """Evaluate text using Google Perspective API"""
+    def _evaluate_with_google(self, text: str, genome_id: str, max_retries: int = 2) -> Optional[Dict[str, Any]]:
+        """
+        Evaluate text using Google Perspective API with retry logic.
+        
+        Args:
+            text: Text to evaluate
+            genome_id: ID of the genome being evaluated
+            max_retries: Maximum number of retry attempts (default: 2)
+            
+        Returns:
+            Dictionary with scores and metadata, or None if evaluation fails
+        """
+        import time
+        
         # Check cache first
         cached = _get_cached_result(text, "google")
         if cached:
             self.logger.debug("Using cached Google result for genome %s", genome_id)
             return cached
+        
+        # Perspective API has a 20480 byte limit
+        MAX_TEXT_BYTES = 20480
+        text_bytes = text.encode('utf-8')
+        
+        if len(text_bytes) > MAX_TEXT_BYTES:
+            self.logger.warning("Text for genome %s exceeds Perspective API limit (%d bytes). Truncating to %d bytes.", 
+                              genome_id, len(text_bytes), MAX_TEXT_BYTES)
+            # Truncate to max bytes, decode back to string (handling partial UTF-8 characters)
+            text = text_bytes[:MAX_TEXT_BYTES].decode('utf-8', errors='ignore')
             
-        try:
-            analyze_request = {
-                'comment': {
-                    'text': text
-                },
-                'requestedAttributes': {
-                    'TOXICITY': {},
-                    'SEVERE_TOXICITY': {},
-                    'IDENTITY_ATTACK': {},
-                    'INSULT': {},
-                    'PROFANITY': {},
-                    'THREAT': {},
-                    'SEXUALLY_EXPLICIT': {},
-                    'FLIRTATION': {}
+        for attempt in range(max_retries + 1):
+            try:
+                analyze_request = {
+                    'comment': {
+                        'text': text
+                    },
+                    'requestedAttributes': {
+                        'TOXICITY': {},
+                        'SEVERE_TOXICITY': {},
+                        'IDENTITY_ATTACK': {},
+                        'INSULT': {},
+                        'PROFANITY': {},
+                        'THREAT': {},
+                        'SEXUALLY_EXPLICIT': {},
+                        'FLIRTATION': {}
+                    }
                 }
-            }
+                
+                response = self.google_client.comments().analyze(body=analyze_request).execute()
             
-            response = self.google_client.comments().analyze(body=analyze_request).execute()
+                # Extract and normalize scores
+                attribute_scores = response.get("attributeScores", {})
+                raw_categories = {}
+                for category, data in attribute_scores.items():
+                    if "summaryScore" in data:
+                        raw_categories[category.lower()] = data["summaryScore"]["value"]
+                
+                # Normalize scores to 0.0001-1.0000 range
+                normalized_scores = self._normalize_scores(raw_categories)
+                
+                # Determine if flagged
+                flagged = normalized_scores.get("toxicity", 0.0) > 0.5
+                
+                result = {
+                    "scores": normalized_scores,
+                    "api_version": "google",
+                    "model": "perspective-api"
+                }
+                
+                # Cache the result
+                _cache_result(text, result, "google")
+                return result
+                
+            except Exception as e:
+                # Check if this is a retriable error
+                is_retriable = self._is_retriable_error(e)
+                
+                if attempt < max_retries and is_retriable:
+                    # Calculate exponential backoff: 1s, 2s, 4s, etc.
+                    wait_time = 2 ** attempt
+                    self.logger.warning("Google API evaluation failed for genome %s (attempt %d/%d): %s. Retrying in %ds...", 
+                                      genome_id, attempt + 1, max_retries + 1, str(e), wait_time)
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    # Final attempt failed or non-retriable error
+                    self.logger.error("Google API evaluation failed for genome %s after %d attempts: %s", 
+                                    genome_id, attempt + 1, e)
+                    return None
+        
+        # Should not reach here, but return None as fallback
+        return None
+    
+    def _is_retriable_error(self, error: Exception) -> bool:
+        """
+        Determine if an API error is retriable.
+        
+        Args:
+            error: The exception raised by the API call
             
-            # Extract and normalize scores
-            attribute_scores = response.get("attributeScores", {})
-            raw_categories = {}
-            for category, data in attribute_scores.items():
-                if "summaryScore" in data:
-                    raw_categories[category.lower()] = data["summaryScore"]["value"]
-            
-            # Normalize scores to 0.0001-1.0000 range
-            normalized_scores = self._normalize_scores(raw_categories)
-            
-            # Determine if flagged
-            flagged = normalized_scores.get("toxicity", 0.0) > 0.5
-            
-            result = {
-                "scores": normalized_scores,
-                "api_version": "google",
-                "model": "perspective-api"
-            }
-            
-            # Cache the result
-            _cache_result(text, result, "google")
-            return result
-            
-        except Exception as e:
-            self.logger.error("Google API evaluation failed for genome %s: %s", genome_id, e)
-            return None
+        Returns:
+            True if the error is retriable (temporary), False otherwise
+        """
+        error_str = str(error).lower()
+        
+        # Retriable HTTP status codes
+        retriable_codes = ['429', '500', '502', '503', '504']
+        
+        # Check for retriable conditions
+        if any(code in error_str for code in retriable_codes):
+            return True
+        
+        # Rate limit errors
+        if 'quota' in error_str or 'rate limit' in error_str or 'too many requests' in error_str:
+            return True
+        
+        # Temporary network errors
+        if 'timeout' in error_str or 'connection' in error_str or 'network' in error_str:
+            return True
+        
+        # Internal server errors
+        if 'internal server error' in error_str or 'service unavailable' in error_str:
+            return True
+        
+        # Non-retriable errors (client errors like 400, 401, 403)
+        if '400' in error_str or '401' in error_str or '403' in error_str or '404' in error_str:
+            return False
+        
+        # Default to not retriable for unknown errors
+        return False
     
     def _normalize_scores(self, scores: Dict[str, float]) -> Dict[str, float]:
         """Normalize scores to 0.0001-1.0000 range with 4 decimal places"""
@@ -359,8 +362,6 @@ class HybridModerationEvaluator:
             # Store timing in a global variable that can be accessed by the caller
             if not hasattr(self, '_last_evaluation_time'):
                 self._last_evaluation_time = {}
-            self._last_evaluation_time['start_time'] = start_time
-            self._last_evaluation_time['end_time'] = end_time
             self._last_evaluation_time['duration'] = evaluation_time
     
     def _evaluate_population_sync(self, population: List[Dict[str, Any]], 
@@ -407,9 +408,9 @@ class HybridModerationEvaluator:
                         # Store the hybrid result
                         genome['moderation_result'] = evaluation_result
                         
-                        # Add timing information to genome
+                        # Add evaluation duration to genome
                         if hasattr(self, '_last_evaluation_time'):
-                            genome['evaluation_timing'] = self._last_evaluation_time.copy()
+                            genome['evaluation_duration'] = self._last_evaluation_time['duration']
                         
                         # Extract north star score from available APIs
                         north_star_score = self._extract_north_star_score(evaluation_result, north_star_metric)
@@ -429,7 +430,7 @@ class HybridModerationEvaluator:
                     
                     # Add delay to prevent Google API rate limiting
                     import time
-                    time.sleep(0.5)
+                    time.sleep(0.75)
                         
                 except Exception as e:
                     self.logger.error("Failed to process evaluation for genome %s: %s", genome.get('id'), e, exc_info=True)

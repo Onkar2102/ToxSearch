@@ -250,10 +250,50 @@ def select_parents_steady_state(self):
 
 ### **Population Files**
 - **`elites.json`**: Steady-state elite population
-- **`Population.json`**: Full population backup
-- **`population_index.json`**: Population metadata and counts
+- **`non_elites.json`**: Full population backup
+- **`EvolutionTracker.json`**: Evolution progress tracking and population metadata
 - **`temp.json`**: Staging area during generation cycles
-- **`most_toxic.json`**: High-toxicity genomes moved by moderation
+
+## Adaptive Selection Logic
+
+The EA package now includes **adaptive selection pressure** that dynamically adjusts parent selection based on evolution progress:
+
+### **Selection Modes:**
+
+#### **DEFAULT Mode** (Balanced)
+- **Selection**: 1 elite + 1 non-elite
+- **Usage**: Initial generations and steady progress
+- **Purpose**: Balanced exploration and exploitation
+
+#### **EXPLORE Mode** (Increased Exploration)
+- **Selection**: 1 elite + 2 non-elites
+- **Trigger**: After `stagnation_limit` generations without improvement
+- **Purpose**: Increase exploration when evolution is stuck
+
+#### **EXPLOIT Mode** (Focused Exploitation)
+- **Selection**: 2 elites + 1 non-elite
+- **Trigger**: When fitness slope < 0 (declining performance)
+- **Purpose**: Focus on exploitation when fitness is declining
+
+### **Configuration:**
+
+```python
+# In main.py
+python3 src/main.py --stagnation-limit 5 --elites-threshold 25 --removal-threshold 5
+```
+
+### **EvolutionTracker Integration:**
+
+The adaptive selection logic is tracked in `EvolutionTracker.json`:
+
+```json
+{
+  "generations_since_improvement": 0,
+  "avg_fitness_history": [0.1, 0.2, 0.15, 0.1, 0.05],
+  "slope_of_avg_fitness": -0.025,
+  "selection_mode": "exploit"
+}
+```
 
 ## Evolution Flow
 
@@ -391,7 +431,7 @@ result = run_evolution(
 
 ### **Two-tier Deduplication**
 - **EvolutionEngine**: Intra-file deduplication of staged variants within `temp.json`
-- **RunEvolution**: Cross-file deduplication against `elites.json`, `Population.json`, and `most_toxic.json`
+- **RunEvolution**: Cross-file deduplication against `elites.json` and `non_elites.json`
 
 ## File Structure
 

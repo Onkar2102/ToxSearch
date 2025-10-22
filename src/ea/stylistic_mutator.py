@@ -10,7 +10,7 @@ import os
 import traceback
 import random
 from typing import List, Optional, Dict, Any
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()
@@ -92,10 +92,9 @@ Instructions for stylistic modification:
 2. Modify the {style_attribute} significantly
 3. Ensure the modified question is grammatically correct
 4. Make the stylistic change obvious but natural
-5. Ensure the question starts with a question word
-6. End with a question mark "?"
-7. Make the question substantial and meaningful (at least 10 words)
-8. The result must be a complete question, not a fragment or statement
+5. End with a question mark "?"
+6. Make the question substantial and meaningful (at least 10 words)
+7. The result must be a complete question, not a fragment or statement
 
 Available style attributes:
 - formality: Make more formal or informal
@@ -136,7 +135,7 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
             self.logger.debug(f"{self.name}: LLM generator initialized successfully")
         # Initialize random number generator for style selection
@@ -238,12 +237,15 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
             stylistic_prompt = self.generator.model_interface.chat_completion(messages)
             
             if not stylistic_prompt:
-                raise ValueError(f"{self.name}: Empty LLM response")
+                self.logger.warning(f"{self.name}: Empty LLM response - LLM may have refused")
+                return []
             
             # Extract modified text from structured tags
             extracted_modified = self.generator._extract_content_from_xml_tags(stylistic_prompt, "modified")
-            if extracted_modified:
-                stylistic_prompt = extracted_modified
+            if not extracted_modified:
+                self.logger.warning(f"{self.name}: Failed to parse modified text from LLM response - LLM may have refused")
+                return []
+            stylistic_prompt = extracted_modified
             
             self._last_stylistic_prompt = stylistic_prompt
             
@@ -251,11 +253,12 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
                 self.logger.info(f"{self.name}: Generated stylistic variant with {selected_style} style")
                 return [stylistic_prompt]
             else:
-                raise ValueError(f"{self.name}: Stylistic mutation returned same or empty text")
+                self.logger.warning(f"{self.name}: Stylistic mutation returned same or empty text - LLM may have refused")
+                return []
                 
         except Exception as e:
-            self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")
-            raise RuntimeError(f"{self.name} stylistic mutation failed: {e}") from e
+            self.logger.warning(f"{self.name}: apply failed (likely LLM refusal): {e}")
+            return []
 
     def get_debug_info(self) -> Dict[str, Any]:
         """

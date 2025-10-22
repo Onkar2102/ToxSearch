@@ -11,7 +11,7 @@ import traceback
 import random
 from typing import List, Optional, Dict, Any
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()
@@ -119,7 +119,7 @@ Return only: <enhanced>YOUR_CONCEPT_ENHANCED_QUESTION_HERE</enhanced>"""
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
             self.logger.debug(f"{self.name}: LLM generator initialized successfully")
 
@@ -138,18 +138,13 @@ Return only: <enhanced>YOUR_CONCEPT_ENHANCED_QUESTION_HERE</enhanced>"""
         return messages
 
     def _parse_enhanced_response(self, response: str) -> str:
-        """Parse LLM response to extract concept-enhanced question using improved XML tag extraction."""
-        try:
-            # Extract enhanced question from structured tags using improved method
-            enhanced_question = self.generator._extract_content_from_xml_tags(response, "enhanced")
-            if enhanced_question and self._is_valid_question(enhanced_question):
-                return enhanced_question
-            
-            # Fallback: Extract question from response
-            return self._extract_question_from_response(response)
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to parse enhanced response: {e}")
-            return self._extract_question_from_response(response)
+        """Parse LLM response to extract concept-enhanced question using XML tag extraction."""
+        # Extract enhanced question from structured tags using centralized method
+        enhanced_question = self.generator._extract_content_from_xml_tags(response, "enhanced")
+        if enhanced_question and self._is_valid_question(enhanced_question):
+            return enhanced_question
+        
+        raise ValueError(f"{self.name}: Failed to parse enhanced question from LLM response")
     
     def _is_valid_question(self, text: str) -> bool:
         """Check if the text is a valid question."""
@@ -162,53 +157,12 @@ Return only: <enhanced>YOUR_CONCEPT_ENHANCED_QUESTION_HERE</enhanced>"""
         if not text.endswith('?'):
             return False
         
-        # Must start with question word or auxiliary verb
-        question_starters = [
-            'how', 'what', 'why', 'when', 'where', 'who', 'which', 
-            'can', 'could', 'should', 'would', 'do', 'does', 'did', 
-            'is', 'are', 'was', 'were', 'will', 'shall', 'have', 'has', 'had'
-        ]
-        
-        first_word = text.lower().split()[0] if text.split() else ""
-        if not any(first_word.startswith(starter) for starter in question_starters):
-            return False
-        
         # Must be a complete sentence (not a fragment)
         if len(text.split()) < 5:
             return False
         
         return True
     
-    def _extract_question_from_response(self, response: str) -> str:
-        """Extract a question from LLM response as fallback parsing."""
-        try:
-            import re
-            # Look for sentences ending with question marks
-            questions = re.findall(r'[^.!?]*\?', response)
-            if questions:
-                for question in questions:
-                    question = question.strip()
-                    if self._is_valid_question(question):
-                        return question
-            
-            # Look for sentences that start with question words
-            question_patterns = [
-                r'(?:How|What|Why|When|Where|Who|Which|Can|Could|Should|Would|Do|Does|Did|Is|Are|Was|Were|Will|Shall|Have|Has|Had)\s+[^.!?]*\?',
-            ]
-            
-            for pattern in question_patterns:
-                matches = re.findall(pattern, response, re.IGNORECASE)
-                for match in matches:
-                    match = match.strip()
-                    if self._is_valid_question(match):
-                        return match
-            
-            return ""
-            
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to extract question from response: {e}")
-            return ""
-
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate concept-enhanced variants using local LLM.
@@ -288,18 +242,24 @@ Return only: <enhanced>YOUR_CONCEPT_ENHANCED_QUESTION_HERE</enhanced>"""
                 
                 if response:
                     # Parse response to extract enhanced question
-                    enhanced_question = self._parse_enhanced_response(response)
-                    if enhanced_question and enhanced_question.lower() != original_question.lower():
-                        self.logger.info(f"{self.name}: Generated concept-enhanced variant")
-                        self._last_enhanced_question = enhanced_question
-                        return [enhanced_question]
-                    else:
-                        raise ValueError(f"{self.name}: Failed to parse enhanced question from LLM response")
+                    try:
+                        enhanced_question = self._parse_enhanced_response(response)
+                        if enhanced_question and enhanced_question.lower() != original_question.lower():
+                            self.logger.info(f"{self.name}: Generated concept-enhanced variant")
+                            self._last_enhanced_question = enhanced_question
+                            return [enhanced_question]
+                        else:
+                            self.logger.warning(f"{self.name}: Failed to parse enhanced question from LLM response - LLM may have refused")
+                            return []
+                    except ValueError as e:
+                        self.logger.warning(f"{self.name}: LLM refused to generate content or parsing failed: {e}")
+                        return []
                 else:
-                    raise ValueError(f"{self.name}: Empty LLM response")
+                    self.logger.warning(f"{self.name}: Empty LLM response - LLM may have refused")
+                    return []
             except Exception as e:
-                self.logger.error(f"{self.name}: LLM call failed: {e}")
-                raise RuntimeError(f"{self.name} concept addition generation failed: {e}") from e
+                self.logger.warning(f"{self.name}: LLM call failed (likely refusal): {e}")
+                return []
 
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")

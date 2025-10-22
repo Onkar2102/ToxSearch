@@ -11,7 +11,7 @@ import traceback
 import random
 from typing import List, Optional, Dict, Any
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 from utils import get_custom_logging
 
 get_logger, _, _, _ = get_custom_logging()
@@ -126,7 +126,7 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
             self.logger.debug(f"{self.name}: LLM generator initialized successfully")
 
@@ -145,18 +145,13 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
         return messages
 
     def _parse_typo_response(self, response: str) -> str:
-        """Parse LLM response to extract typographically modified question using improved XML tag extraction."""
-        try:
-            # Extract typo question from structured tags using improved method
-            typo_question = self.generator._extract_content_from_xml_tags(response, "typo")
-            if typo_question and self._is_valid_question_with_typos(typo_question):
-                return typo_question
-            
-            # Fallback: Extract question from response
-            return self._extract_question_from_response(response)
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to parse typo response: {e}")
-            return self._extract_question_from_response(response)
+        """Parse LLM response to extract typographically modified question using XML tag extraction."""
+        # Extract typo question from structured tags using centralized method
+        typo_question = self.generator._extract_content_from_xml_tags(response, "typo")
+        if typo_question and self._is_valid_question_with_typos(typo_question):
+            return typo_question
+        
+        raise ValueError(f"{self.name}: Failed to parse typo question from LLM response")
     
     def _is_valid_question_with_typos(self, text: str) -> bool:
         """Check if the text is a valid question (allowing for typos)."""
@@ -169,55 +164,12 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
         if not text.endswith('?'):
             return False
         
-        # Must start with question word or auxiliary verb (allowing for typos)
-        question_starters = [
-            'how', 'what', 'why', 'when', 'where', 'who', 'which', 
-            'can', 'could', 'should', 'would', 'do', 'does', 'did', 
-            'is', 'are', 'was', 'were', 'will', 'shall', 'have', 'has', 'had',
-            # Common typos for question starters
-            'whcih', 'wht', 'whay', 'howw', 'whhy', 'wher', 'wherre'
-        ]
-        
-        first_word = text.lower().split()[0] if text.split() else ""
-        if not any(first_word.startswith(starter) for starter in question_starters):
-            return False
-        
         # Must be a complete sentence (not a fragment) - allow for typos
         if len(text.split()) < 5:
             return False
         
         return True
     
-    def _extract_question_from_response(self, response: str) -> str:
-        """Extract a question from LLM response as fallback parsing."""
-        try:
-            import re
-            # Look for sentences ending with question marks
-            questions = re.findall(r'[^.!?]*\?', response)
-            if questions:
-                for question in questions:
-                    question = question.strip()
-                    if self._is_valid_question_with_typos(question):
-                        return question
-            
-            # Look for sentences that start with question words (including common typos)
-            question_patterns = [
-                r'(?:How|What|Why|When|Where|Who|Which|Can|Could|Should|Would|Do|Does|Did|Is|Are|Was|Were|Will|Shall|Have|Has|Had|Whcih|Wht|Whay|Howw|Whhy|Wher|Wherre)\s+[^.!?]*\?',
-            ]
-            
-            for pattern in question_patterns:
-                matches = re.findall(pattern, response, re.IGNORECASE)
-                for match in matches:
-                    match = match.strip()
-                    if self._is_valid_question_with_typos(match):
-                        return match
-            
-            return ""
-            
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to extract question from response: {e}")
-            return ""
-
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate typographically modified variants using local LLM.
@@ -297,18 +249,24 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
                 
                 if response:
                     # Parse response to extract typo question
-                    typo_question = self._parse_typo_response(response)
-                    if typo_question and typo_question.lower() != original_question.lower():
-                        self.logger.info(f"{self.name}: Generated typographical errors variant")
-                        self._last_typo_question = typo_question
-                        return [typo_question]
-                    else:
-                        raise ValueError(f"{self.name}: Failed to parse typo question from LLM response")
+                    try:
+                        typo_question = self._parse_typo_response(response)
+                        if typo_question and typo_question.lower() != original_question.lower():
+                            self.logger.info(f"{self.name}: Generated typographical errors variant")
+                            self._last_typo_question = typo_question
+                            return [typo_question]
+                        else:
+                            self.logger.warning(f"{self.name}: Failed to parse typo question from LLM response - LLM may have refused")
+                            return []
+                    except ValueError as e:
+                        self.logger.warning(f"{self.name}: LLM refused to generate content or parsing failed: {e}")
+                        return []
                 else:
-                    raise ValueError(f"{self.name}: Empty LLM response")
+                    self.logger.warning(f"{self.name}: Empty LLM response - LLM may have refused")
+                    return []
             except Exception as e:
-                self.logger.error(f"{self.name}: LLM call failed: {e}")
-                raise RuntimeError(f"{self.name} typographical errors generation failed: {e}") from e
+                self.logger.warning(f"{self.name}: LLM call failed (likely refusal): {e}")
+                return []
 
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")

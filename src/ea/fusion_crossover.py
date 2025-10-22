@@ -10,9 +10,10 @@ import os
 from typing import List, Optional, Dict, Any
 import traceback
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 
 from utils import get_custom_logging
+from utils.population_io import _extract_north_star_score
 
 get_logger, _, _, _ = get_custom_logging()
 
@@ -63,20 +64,8 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
         if generator is not None:
             self.generator = generator
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
-
-    def _extract_score_from_genome(self, genome: Dict[str, Any]) -> float:
-        """Extract the north star metric score from a genome dictionary."""
-        from utils import get_system_utils
-        _, _, _, _, _extract_north_star_score, _ = get_system_utils()
-        return _extract_north_star_score(genome, self.north_star_metric)
-    
-    def _can_extract_score(self, genome: Dict[str, Any]) -> bool:
-        """Check if we can extract a score from the genome."""
-        from utils import get_system_utils
-        _, _, _, _, _extract_north_star_score, _ = get_system_utils()
-        return _extract_north_star_score(genome, self.north_star_metric) > 0
 
     def _create_crossover_prompt(self, parent1: str, parent2: str, parent1_score: float, parent2_score: float, 
                                 parent1_output: str = "", parent2_output: str = "") -> List[Dict[str, str]]:
@@ -112,18 +101,13 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
         return messages
 
     def _parse_crossover_response(self, response: str) -> str:
-        """Parse LLM response to extract crossover variants using improved XML tag extraction."""
-        try:
-            # Extract crossover variant from structured tags using improved method
-            variant = self.generator._extract_content_from_xml_tags(response, "variant")
-            if variant and self._is_valid_question(variant):
-                return variant
-            
-            # Fallback: Extract question from response
-            return self._extract_question_from_response(response)
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to parse crossover response: {e}")
-            return self._extract_question_from_response(response)
+        """Parse LLM response to extract crossover variants using XML tag extraction."""
+        # Extract crossover variant from structured tags using centralized method
+        variant = self.generator._extract_content_from_xml_tags(response, "variant")
+        if variant and self._is_valid_question(variant):
+            return variant
+        
+        raise ValueError(f"{self.name}: Failed to parse crossover variant from LLM response")
     
     def _is_valid_question(self, text: str) -> bool:
         """Check if the text is a valid question."""
@@ -136,53 +120,12 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
         if not text.endswith('?'):
             return False
         
-        # Must start with question word or auxiliary verb
-        question_starters = [
-            'how', 'what', 'why', 'when', 'where', 'who', 'which', 
-            'can', 'could', 'should', 'would', 'do', 'does', 'did', 
-            'is', 'are', 'was', 'were', 'will', 'shall', 'have', 'has', 'had'
-        ]
-        
-        first_word = text.lower().split()[0] if text.split() else ""
-        if not any(first_word.startswith(starter) for starter in question_starters):
-            return False
-        
         # Must be a complete sentence (not a fragment)
         if len(text.split()) < 5:
             return False
         
         return True
     
-    def _extract_question_from_response(self, response: str) -> str:
-        """Extract a question from LLM response as fallback parsing."""
-        try:
-            import re
-            # Look for sentences ending with question marks
-            questions = re.findall(r'[^.!?]*\?', response)
-            if questions:
-                for question in questions:
-                    question = question.strip()
-                    if self._is_valid_question(question):
-                        return question
-            
-            # Look for sentences that start with question words
-            question_patterns = [
-                r'(?:How|What|Why|When|Where|Who|Which|Can|Could|Should|Would|Do|Does|Did|Is|Are|Was|Were|Will|Shall|Have|Has|Had)\s+[^.!?]*\?',
-            ]
-            
-            for pattern in question_patterns:
-                matches = re.findall(pattern, response, re.IGNORECASE)
-                for match in matches:
-                    match = match.strip()
-                    if self._is_valid_question(match):
-                        return match
-            
-            return ""
-            
-        except Exception as e:
-            self.logger.debug(f"{self.name}: Failed to extract question from response: {e}")
-            return ""
-
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """
         Generate crossover variants using local LLM with north star metric optimization.
@@ -196,11 +139,10 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
         
         Args:
             operator_input (Dict[str, Any]): Operator input containing:
-                - 'parent_data': List of enriched parent genome dictionaries containing:
+                - 'parent_data': List of simplified parent dictionaries containing:
+                    - 'id': Parent genome ID
                     - 'prompt': Original prompt text for crossover
-                    - 'generated_text': Generated output from the prompt (optional)
-                    - 'scores': Moderation scores dictionary
-                    - 'north_star_score': Primary optimization metric score
+                    - 'toxicity': Toxicity score (direct value)
                 - 'max_variants': Maximum number of variants to generate
             
         Returns:
@@ -214,8 +156,8 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
             >>> operator = SemanticFusionCrossover("toxicity")
             >>> input_data = {
             ...     "parent_data": [
-            ...         {"prompt": "Write a story", "generated_text": "Once upon a time...", "scores": {"toxicity": 0.1}},
-            ...         {"prompt": "Create a tale", "generated_text": "In a faraway land...", "scores": {"toxicity": 0.2}}
+            ...         {"id": "1", "prompt": "Write a story", "toxicity": 0.1},
+            ...         {"id": "2", "prompt": "Create a tale", "toxicity": 0.2}
             ...     ],
             ...     "max_variants": 1
             ... }
@@ -243,34 +185,35 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
                 self.logger.error(f"{self.name}: Parents must be genome dictionaries with required fields")
                 return []
             
-            # Validate required fields in slimmed parent data structure
-            required_fields = ["prompt", "generated_output"]
+            # Validate required fields in simplified parent data structure (like top_10.json)
+            required_fields = ["prompt", "toxicity"]
             for i, parent_data_item in enumerate([parent1_data, parent2_data], 1):
                 for field in required_fields:
                     if field not in parent_data_item:
                         self.logger.error(f"{self.name}: Parent {i} missing required field: {field}")
                         return []
                 
-                # Validate that we can extract scores (either from scores field or moderation_result)
-                if not self._can_extract_score(parent_data_item):
-                    self.logger.error(f"{self.name}: Parent {i} missing score data (scores field or moderation_result)")
+                # Validate that toxicity score is available
+                toxicity_score = parent_data_item.get("toxicity")
+                if toxicity_score is None:
+                    self.logger.error(f"{self.name}: Parent {i} missing toxicity score")
                     return []
             
             if not self.generator:
                 self.logger.error(f"{self.name}: No generator available")
                 return []
             
-            # Extract parent information from validated genome dictionaries
+            # Extract parent information from simplified parent data structure
             parent1 = parent1_data.get("prompt", "")
             parent2 = parent2_data.get("prompt", "")
-            parent1_output = parent1_data.get("generated_output", "")
-            parent2_output = parent2_data.get("generated_output", "")
+            parent1_output = ""  # Not available in simplified structure
+            parent2_output = ""  # Not available in simplified structure
             
-            # Extract scores from genome data
-            parent1_score = self._extract_score_from_genome(parent1_data)
-            parent2_score = self._extract_score_from_genome(parent2_data)
+            # Extract scores directly from simplified structure
+            parent1_score = round(parent1_data.get("toxicity", 0.0), 4)
+            parent2_score = round(parent2_data.get("toxicity", 0.0), 4)
             
-            self.logger.debug(f"{self.name}: Using genome data with outputs and scores")
+            self.logger.debug(f"{self.name}: Using simplified parent data structure")
             
             # Store debug info
             self._last_parent1 = parent1
@@ -296,18 +239,24 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
                 
                 if response:
                     # Parse response to extract a single variant
-                    variant = self._parse_crossover_response(response)
-                    if variant:
-                        self.logger.info(f"{self.name}: Generated crossover variant")
-                        self._last_variants = [variant]
-                        return [variant]
-                    else:
-                        raise ValueError(f"{self.name}: Failed to parse variant from LLM response")
+                    try:
+                        variant = self._parse_crossover_response(response)
+                        if variant:
+                            self.logger.info(f"{self.name}: Generated crossover variant")
+                            self._last_variants = [variant]
+                            return [variant]
+                        else:
+                            self.logger.warning(f"{self.name}: Failed to parse variant from LLM response - LLM may have refused")
+                            return []
+                    except ValueError as e:
+                        self.logger.warning(f"{self.name}: LLM refused to generate content or parsing failed: {e}")
+                        return []
                 else:
-                    raise ValueError(f"{self.name}: Empty LLM response")
+                    self.logger.warning(f"{self.name}: Empty LLM response - LLM may have refused")
+                    return []
             except Exception as e:
-                self.logger.error(f"{self.name}: LLM call failed: {e}")
-                raise RuntimeError(f"{self.name} crossover generation failed: {e}") from e
+                self.logger.warning(f"{self.name}: LLM call failed (likely refusal): {e}")
+                return []
 
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")
@@ -318,8 +267,6 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
             # Store timing in a global variable that can be accessed by the caller
             if not hasattr(self, '_last_operation_time'):
                 self._last_operation_time = {}
-            self._last_operation_time['start_time'] = start_time
-            self._last_operation_time['end_time'] = end_time
             self._last_operation_time['duration'] = operation_time
 
     def get_debug_info(self) -> Dict[str, Any]:

@@ -31,7 +31,7 @@ flowchart TD
   end
   
   F --> K[EvolutionTracker.json]
-  H --> L[Population.json]
+  H --> L[non_elites.json]
   
   style C fill:#4fc3f7,stroke:#0277bd,stroke-width:3px,color:#000
   style I fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
@@ -41,7 +41,7 @@ flowchart TD
 ## System Components
 
 ### **Entry Points**
-- **`app.py`** - Interactive entry with monitoring and setup
+Removed `app.py` — all CLI usage is consolidated in `src/main.py`.
 - **`src/main.py`** - Direct execution pipeline
 
 ### **Core Pipeline**
@@ -126,9 +126,8 @@ flowchart LR
 - **`data/outputs/elites.json`** - Steady-state population
 - **`data/outputs/EvolutionTracker.json`** - Progress tracking
 - **`data/outputs/population_index.json`** - Metadata & index
-- **`data/outputs/Population.json`** - Full population backup
+- **`data/outputs/non_elites.json`** - Full population backup
 - **`data/outputs/temp.json`** - Staging area during generation cycles
-- **`data/outputs/most_toxic.json`** - High-toxicity genomes
 
 ## Memory Management
 
@@ -242,6 +241,68 @@ flowchart TD
 - **Automatic Cleanup**: PyTorch cache and garbage collection
 - **Steady-State Management**: Efficient elite preservation
 
+## Adaptive Selection Logic
+
+The framework now includes **adaptive selection pressure** that dynamically adjusts parent selection based on evolution progress:
+
+### **Selection Modes:**
+
+#### **DEFAULT Mode** (Balanced)
+- **Selection**: 1 elite + 1 non-elite
+- **Usage**: Initial generations and steady progress
+- **Purpose**: Balanced exploration and exploitation
+
+#### **EXPLORE Mode** (Increased Exploration)
+- **Selection**: 1 elite + 2 non-elites
+- **Trigger**: After `stagnation_limit` generations without improvement
+- **Purpose**: Increase exploration when evolution is stuck
+
+#### **EXPLOIT Mode** (Focused Exploitation)
+- **Selection**: 2 elites + 1 non-elite
+- **Trigger**: When fitness slope < 0 (declining performance)
+- **Purpose**: Focus on exploitation when fitness is declining
+
+### **Adaptive Triggers:**
+
+```mermaid
+flowchart TD
+    A[Generation Start] --> B{Generation <= stagnation_limit?}
+    B -->|Yes| C[DEFAULT Mode<br/>1 elite + 1 non-elite]
+    B -->|No| D{Fitness slope < 0?}
+    D -->|Yes| E[EXPLOIT Mode<br/>2 elites + 1 non-elite]
+    D -->|No| F{Generations since improvement > stagnation_limit?}
+    F -->|Yes| G[EXPLORE Mode<br/>1 elite + 2 non-elites]
+    F -->|No| H[DEFAULT Mode<br/>1 elite + 1 non-elite]
+    
+    C --> I[Parent Selection]
+    E --> I
+    G --> I
+    H --> I
+    
+    style C fill:#4fc3f7,stroke:#0277bd,stroke-width:2px
+    style E fill:#ff9800,stroke:#f57c00,stroke-width:2px
+    style G fill:#4caf50,stroke:#388e3c,stroke-width:2px
+```
+
+### **Configuration Parameters:**
+
+- **`--stagnation-limit`**: Number of generations without improvement before switching to EXPLORE mode (default: 5)
+- **`--elites-threshold`**: Percentage for elite classification (default: 25%)
+- **`--removal-threshold`**: Percentage for removing worst performing genomes (default: 5%)
+
+### **EvolutionTracker Integration:**
+
+The adaptive selection logic is tracked in `EvolutionTracker.json`:
+
+```json
+{
+  "generations_since_improvement": 0,
+  "avg_fitness_history": [0.1, 0.2, 0.15, 0.1, 0.05],
+  "slope_of_avg_fitness": -0.025,
+  "selection_mode": "exploit"
+}
+```
+
 ## Recent Architecture Improvements
 
 ### **1. Steady-State Population Management**
@@ -283,10 +344,8 @@ flowchart TD
   B --> C[Intra-File Deduplication<br/>EvolutionEngine.generate_variants_global]
   C --> D[Cross-File Deduplication<br/>RunEvolution._check_and_move_genomes_from_temp]
   D --> E{Moderation Outcome}
-  E -->|Toxic| F[Move to data/outputs/most_toxic.json]
   E -->|Accepted| G[Merge into data/outputs/elites.json]
-  F --> H[Clear temp.json]
-  G --> H
+  G --> H[Clear temp.json]
 
   style B fill:#bbdefb,stroke:#1e88e5,stroke-width:2px,color:#000
   style C fill:#c8e6c9,stroke:#43a047,stroke-width:2px,color:#000
@@ -298,7 +357,7 @@ flowchart TD
 **Key Points:**
 - Staging occurs in `data/outputs/temp.json` for the current generation cycle
 - Intra-file dedup removes duplicate prompts/IDs within `temp.json` (EvolutionEngine)
-- Cross-file dedup removes items already present in `elites.json`, `Population.json`, and `most_toxic.json` (RunEvolution)
+- Cross-file dedup removes items already present in `elites.json` and `non_elites.json` (RunEvolution)
 - After processing and routing, `temp.json` is cleared for the next cycle
 
 ## File Structure Architecture
@@ -306,7 +365,7 @@ flowchart TD
 ```mermaid
 graph TB
   subgraph "EOST-CAM-LLM Project Structure"
-    A[app.py<br/>Main entry point with setup and monitoring]
+    A[src/main.py<br/>Main entry point]
     
     subgraph "Configuration"
       B1[config/RGConfig.yaml<br/>Response generation model configuration]
@@ -348,11 +407,10 @@ graph TB
     
     subgraph "Outputs"
       H1[elites.json<br/>Steady-state elite population]
-      H2[Population.json<br/>Full population backup]
+      H2[non_elites.json<br/>Full population backup]
       H3[population_index.json<br/>Population metadata/index]
       H4[EvolutionTracker.json<br/>Evolution progress tracking]
-      H5[most_toxic.json<br/>High-toxicity genomes]
-      H6[temp.json<br/>Staging area during generation cycles]
+      H5[temp.json<br/>Staging area during generation cycles]
     end
     
     subgraph "Supporting Files"
@@ -404,8 +462,7 @@ graph TB
 - **[models/](models/)** - Local model files and configurations
 
 ### 🚀 **Quick Reference**
-- **Setup**: `python3 app.py --setup`
-- **Run**: `python3 app.py --interactive`
+- **Run**: `python3 src/main.py --generations 25`
 - **Test**: `python3 src/main.py --generations 1`
 - **Monitor**: Check `logs/` directory for execution logs
 

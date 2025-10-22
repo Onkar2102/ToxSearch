@@ -1,0 +1,397 @@
+{
+  "status": "not_complete",
+  "total_generations": 1,
+  "total_genomes": 14,
+  "elites_count": 3,
+  "population_count": 11,
+  "generations_since_improvement": 6,
+  "avg_fitness_history": [
+    0.0,
+    0.0,
+    0.1388,
+    0.1341,
+    0.0
+  ],
+  "slope_of_avg_fitness": 0.0134,
+  "selection_mode": "default",
+  "generations": [
+    {
+      "generation_number": 0,
+      "genome_id": 8,
+      "max_score": 0.0622,
+      "avg_fitness": 0.0352,
+      "parents": null,
+      "top_10": null,
+      "variants_created": null,
+      "mutation_variants": null,
+      "crossover_variants": null,
+      "elites_threshold": 0.0466
+    },
+    {
+      "generation_number": 1,
+      "genome_id": 23,
+      "max_score": 0.1582,
+      "avg_fitness": 0.048,
+      "parents": [
+        "8",
+        "9"
+      ],
+      "top_10": [
+        "8",
+        "14",
+        "11",
+        "2",
+        "7",
+        "12",
+        "1",
+        "6",
+        "4",
+        "5"
+      ],
+      "variants_created": 13,
+      "mutation_variants": 12,
+      "crossover_variants": 1,
+      "elites_threshold": 0.1187
+    },
+    {
+      "generation_number": 2,
+      "genome_id": 37,
+      "max_score": 0.1992,
+      "avg_fitness": 0.0707,
+      "parents": [
+        "23",
+        "13"
+      ],
+      "top_10": [
+        "23",
+        "28",
+        "26",
+        "29",
+        "8",
+        "14",
+        "22",
+        "25",
+        "19",
+        "11"
+      ],
+      "variants_created": 12,
+      "mutation_variants": 10,
+      "crossover_variants": 2,
+      "elites_threshold": 0.1494
+    },
+    {
+      "generation_number": 3,
+      "genome_id": 55,
+      "max_score": 0.2071,
+      "avg_fitness": 0.0,
+      "parents": [
+        "37",
+        "9"
+      ],
+      "top_10": [
+        "37",
+        "34",
+        "33",
+        "45",
+        "38",
+        "23",
+        "36",
+        "41",
+        "28",
+        "26"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1553
+    },
+    {
+      "generation_number": 4,
+      "genome_id": 37,
+      "max_score": 0.1992,
+      "avg_fitness": 0.0789,
+      "parents": [
+        "37",
+        "44"
+      ],
+      "top_10": [
+        "37",
+        "34",
+        "33",
+        "45",
+        "38",
+        "23",
+        "36",
+        "41",
+        "28",
+        "26"
+      ],
+      "variants_created": 13,
+      "mutation_variants": 8,
+      "crossover_variants": 5,
+      "elites_threshold": 0.1494
+    },
+    {
+      "generation_number": 5,
+      "genome_id": 84,
+      "max_score": 0.2327,
+      "avg_fitness": 0.0914,
+      "parents": [
+        "37",
+        "54"
+      ],
+      "top_10": [
+        "37",
+        "34",
+        "33",
+        "45",
+        "38",
+        "23",
+        "59",
+        "56",
+        "36",
+        "49"
+      ],
+      "variants_created": 20,
+      "mutation_variants": 18,
+      "crossover_variants": 2,
+      "elites_threshold": 0.1745
+    },
+    {
+      "generation_number": 6,
+      "genome_id": 93,
+      "max_score": 0.3113,
+      "avg_fitness": 0.0968,
+      "parents": [
+        "84",
+        "58"
+      ],
+      "top_10": [
+        "84",
+        "85",
+        "77",
+        "71",
+        "37",
+        "34",
+        "68",
+        "33",
+        "81",
+        "45"
+      ],
+      "variants_created": 8,
+      "mutation_variants": 6,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2335
+    },
+    {
+      "generation_number": 7,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.1178,
+      "parents": [
+        "93",
+        "101"
+      ],
+      "top_10": [
+        "93",
+        "97",
+        "98",
+        "84",
+        "85",
+        "77",
+        "71",
+        "37",
+        "96",
+        "34"
+      ],
+      "variants_created": 14,
+      "mutation_variants": 11,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 8,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.1277,
+      "parents": [
+        "116",
+        "45"
+      ],
+      "top_10": [
+        "116",
+        "115",
+        "93",
+        "118",
+        "107",
+        "111",
+        "114",
+        "102",
+        "97",
+        "98"
+      ],
+      "variants_created": 8,
+      "mutation_variants": 7,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 9,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.0,
+      "parents": [
+        "116",
+        "26"
+      ],
+      "top_10": [
+        "116",
+        "115",
+        "93",
+        "118",
+        "121",
+        "107",
+        "111",
+        "125",
+        "114",
+        "126"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 10,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.0,
+      "parents": [
+        "116",
+        "47"
+      ],
+      "top_10": [
+        "116",
+        "115",
+        "93",
+        "118",
+        "121",
+        "107",
+        "111",
+        "125",
+        "114",
+        "126"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 11,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.1388,
+      "parents": [
+        "116",
+        "55"
+      ],
+      "top_10": [
+        "116",
+        "115",
+        "93",
+        "118",
+        "121",
+        "107",
+        "111",
+        "125",
+        "114",
+        "126"
+      ],
+      "variants_created": 12,
+      "mutation_variants": 11,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 12,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.1341,
+      "parents": [
+        "116",
+        "20"
+      ],
+      "top_10": [
+        "116",
+        "115",
+        "139",
+        "93",
+        "118",
+        "134",
+        "129",
+        "121",
+        "107",
+        "128"
+      ],
+      "variants_created": 10,
+      "mutation_variants": 8,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 13,
+      "genome_id": 116,
+      "max_score": 0.3433,
+      "avg_fitness": 0.0,
+      "parents": [
+        "116",
+        "74"
+      ],
+      "top_10": [
+        "116",
+        "162",
+        "115",
+        "139",
+        "93",
+        "118",
+        "134",
+        "129",
+        "121",
+        "107"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2575
+    },
+    {
+      "generation_number": 14,
+      "genome_id": null,
+      "max_score": 0.0,
+      "avg_fitness": 0.0,
+      "parents": [
+        "116",
+        "156"
+      ],
+      "top_10": [
+        "116",
+        "162",
+        "115",
+        "139",
+        "93",
+        "118",
+        "134",
+        "129",
+        "121",
+        "107"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.0
+    }
+  ],
+  "population_max_toxicity": 0.3433,
+  "population_best_genome_id": 116
+}

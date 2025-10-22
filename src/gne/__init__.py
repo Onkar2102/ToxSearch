@@ -9,12 +9,12 @@
 # Lazy imports to prevent circular import issues
 def get_ResponseGenerator():
     """Lazy import of ResponseGenerator to avoid circular imports"""
-    from gne.ResponseGenerator import ResponseGenerator
+    from gne.response_generator import ResponseGenerator
     return ResponseGenerator
 
 def get_PromptGenerator():
     """Lazy import of PromptGenerator to avoid circular imports"""
-    from gne.PromptGenerator import PromptGenerator
+    from gne.prompt_generator import PromptGenerator
     return PromptGenerator
 
 def get_run_moderation_on_population():

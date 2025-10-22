@@ -9,7 +9,7 @@ import random
 import spacy
 from dataclasses import dataclass
 
-from .VariationOperators import VariationOperator
+from .variation_operators import VariationOperator
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -111,7 +111,7 @@ Return only: <antonyms>antonym_word</antonyms>"""
             self.generator = generator
             self.logger.info(f"{self.name}: Using provided LLM generator")
         else:
-            from .EvolutionEngine import get_generator
+            from .evolution_engine import get_generator
             self.generator = get_generator()
             self.logger.debug(f"{self.name}: LLM generator initialized successfully")
         
@@ -119,16 +119,12 @@ Return only: <antonyms>antonym_word</antonyms>"""
 
     def _validate_num_POS_tags(self, num_POS_tags: int) -> int:
         """Ensure num_POS_tags is within valid range."""
-        try:
-            val = max(1, int(num_POS_tags))
-            max_available = len(self.POS_DESCRIPTIONS)
-            if val > max_available:
-                self.logger.warning(f"{self.name}: num_POS_tags={val} > max_available={max_available}, capping to {max_available}")
-                return max_available
-            return val
-        except (ValueError, TypeError):
-            self.logger.warning(f"{self.name}: Invalid num_POS_tags '{num_POS_tags}', using default 1")
-            return 1
+        val = max(1, int(num_POS_tags))
+        max_available = len(self.POS_DESCRIPTIONS)
+        if val > max_available:
+            self.logger.warning(f"{self.name}: num_POS_tags={val} > max_available={max_available}, capping to {max_available}")
+            return max_available
+        return val
 
     def _detect_and_organize_pos(self, text: str) -> Dict[str, List[POSWord]]:
         """
@@ -142,40 +138,35 @@ Return only: <antonyms>antonym_word</antonyms>"""
         """
         self.logger.debug(f"{self.name}: Starting POS detection for text: '{text[:50]}...'")
         
-        try:
-            # Process text with spaCy
-            doc = nlp(text)
+        # Process text with spaCy
+        doc = nlp(text)
+        
+        # Initialize organization structure
+        pos_words: Dict[str, List[POSWord]] = {}
+        
+        # Extract POS information for each token
+        for token in doc:
+            pos_tag = token.pos_.upper()
             
-            # Initialize organization structure
-            pos_words: Dict[str, List[POSWord]] = {}
-            
-            # Extract POS information for each token
-            for token in doc:
-                pos_tag = token.pos_.upper()
+            # Filter valid POS tags and alphabetic tokens
+            if pos_tag in self.POS_DESCRIPTIONS and token.is_alpha:
+                pos_word = POSWord(
+                    word=token.text,
+                    start=token.idx,
+                    end=token.idx + len(token.text),
+                    pos_tag=pos_tag,
+                    pos_description=self.POS_DESCRIPTIONS[pos_tag]
+                )
                 
-                # Filter valid POS tags and alphabetic tokens
-                if pos_tag in self.POS_DESCRIPTIONS and token.is_alpha:
-                    pos_word = POSWord(
-                        word=token.text,
-                        start=token.idx,
-                        end=token.idx + len(token.text),
-                        pos_tag=pos_tag,
-                        pos_description=self.POS_DESCRIPTIONS[pos_tag]
-                    )
-                    
-                    if pos_tag not in pos_words:
-                        pos_words[pos_tag] = []
-                    pos_words[pos_tag].append(pos_word)
-            
-            self.logger.info(f"{self.name}: POS detection complete. Found {len(pos_words)} POS types:")
-            for pos_tag, words in pos_words.items():
-                self.logger.info(f"{self.name}:   {pos_tag} ({len(words)} instances): {[w.word for w in words[:3]]}{'...' if len(words) > 3 else ''}")
-            
-            return pos_words
-            
-        except Exception as e:
-            self.logger.error(f"{self.name}: POS detection failed: {e}")
-            return {}
+                if pos_tag not in pos_words:
+                    pos_words[pos_tag] = []
+                pos_words[pos_tag].append(pos_word)
+        
+        self.logger.info(f"{self.name}: POS detection complete. Found {len(pos_words)} POS types:")
+        for pos_tag, words in pos_words.items():
+            self.logger.info(f"{self.name}:   {pos_tag} ({len(words)} instances): {[w.word for w in words[:3]]}{'...' if len(words) > 3 else ''}")
+        
+        return pos_words
 
     def _select_pos_types(self, detected_pos: Dict[str, List[POSWord]]) -> List[str]:
         """
@@ -229,12 +220,11 @@ Return only: <antonyms>antonym_word</antonyms>"""
                 if antonym and len(antonym.split()) == 1 and antonym.isalpha():
                     return [antonym]
             
-            self.logger.warning(f"{self.name}: Failed to parse antonyms from response")
-            return []
+            raise ValueError(f"{self.name}: Failed to parse antonyms from response")
             
         except Exception as e:
             self.logger.debug(f"{self.name}: Failed to parse antonyms from response: {e}")
-            return []
+            raise ValueError(f"{self.name}: Failed to parse antonyms from response") from e
     
     def _ask_llm_for_antonyms(self, pos_tag: str, pos_words: List[POSWord], text_context: str) -> List[str]:
         """
@@ -279,8 +269,8 @@ Return only: <antonyms>antonym_word</antonyms>"""
                 raise ValueError(f"{self.name}: Failed to parse antonyms for {pos_tag}")
                 
         except Exception as e:
-            self.logger.error(f"{self.name}: LLM antonym generation failed for {pos_tag}: {e}")
-            raise RuntimeError(f"{self.name} antonym generation failed for {pos_tag}: {e}") from e
+            self.logger.warning(f"{self.name}: LLM antonym generation failed for {pos_tag} (likely refusal): {e}")
+            return []
 
     def _generate_antonyms_for_selected_pos(self, detected_pos: Dict[str, List[POSWord]], selected_pos: List[str], text: str) -> Dict[str, List[str]]:
         """
@@ -400,26 +390,22 @@ Return only: <antonyms>antonym_word</antonyms>"""
         Returns:
             True if boundaries are valid
         """
-        try:
-            # Check basic bounds
-            if start < 0 or end > len(text) or start >= end:
-                return False
-            
-            # Check that the substring matches expected word
-            word = text[start:end]
-            if not word.strip():
-                return False
-            
-            # Check for word boundaries (not in middle of another word)
-            if start > 0 and text[start-1].isalnum():
-                return False
-            if end < len(text) and text[end].isalnum():
-                return False
-            
-            return True
-            
-        except Exception:
+        # Check basic bounds
+        if start < 0 or end > len(text) or start >= end:
             return False
+        
+        # Check that the substring matches expected word
+        word = text[start:end]
+        if not word.strip():
+            return False
+        
+        # Check for word boundaries (not in middle of another word)
+        if start > 0 and text[start-1].isalnum():
+            return False
+        if end < len(text) and text[end].isalnum():
+            return False
+        
+        return True
 
     def _safe_substitute(self, text: str, start: int, end: int, replacement: str) -> str:
         """
@@ -434,20 +420,15 @@ Return only: <antonyms>antonym_word</antonyms>"""
         Returns:
             Text with substitution applied
         """
-        try:
-            # Validate inputs
-            if not isinstance(text, str) or not isinstance(replacement, str):
-                return text
-            
-            if start < 0 or end > len(text) or start >= end:
-                return text
-            
-            # Perform substitution
-            return text[:start] + replacement + text[end:]
-            
-        except Exception as e:
-            self.logger.error(f"{self.name}: Safe substitution failed: {e}")
+        # Validate inputs
+        if not isinstance(text, str) or not isinstance(replacement, str):
             return text
+        
+        if start < 0 or end > len(text) or start >= end:
+            return text
+        
+        # Perform substitution
+        return text[:start] + replacement + text[end:]
 
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """Generate text variants using POS-aware antonym replacement."""
