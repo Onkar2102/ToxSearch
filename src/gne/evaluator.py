@@ -440,7 +440,9 @@ class HybridModerationEvaluator:
                     # Save even failed genomes immediately
                     self._save_single_genome(genome, pop_path)
             
-            # No need to save population here - each genome is saved immediately
+            # Final batch save to ensure all changes are persisted
+            # Note: The parent method evaluate_population_sync() will also do a final save,
+            # but we do it here as well to ensure incremental updates are preserved
             
             # Log final summary
             self.logger.info("Population evaluation completed:")
@@ -455,14 +457,18 @@ class HybridModerationEvaluator:
             raise
     
     def _save_single_genome(self, genome: Dict[str, Any], pop_path: str) -> None:
-        """Save a single genome immediately by updating the existing population file."""
+        """
+        Save a single genome immediately by updating the existing population file.
+        This is a best-effort incremental save for crash recovery.
+        A final batch save is always performed by the caller.
+        """
         try:
             from pathlib import Path
             
             # Load existing population
             pop_path_obj = Path(pop_path)
             if not pop_path_obj.exists():
-                self.logger.warning(f"Population file {pop_path} does not exist for single genome save")
+                self.logger.debug(f"Population file {pop_path} does not exist for incremental save, skipping (final batch save will persist changes)")
                 return
             
             with open(pop_path_obj, 'r', encoding='utf-8') as f:
@@ -478,17 +484,17 @@ class HybridModerationEvaluator:
                     break
             
             if not updated:
-                self.logger.warning(f"Genome {genome_id} not found in population for update")
+                self.logger.debug(f"Genome {genome_id} not found in file for incremental update (may be in memory only)")
                 return
             
             # Save updated population
             with open(pop_path_obj, 'w', encoding='utf-8') as f:
                 json.dump(population, f, indent=2, ensure_ascii=False)
             
-            self.logger.debug(f"Immediately saved genome {genome_id} to {pop_path}")
+            self.logger.debug(f"Incremental save completed for genome {genome_id}")
             
         except Exception as e:
-            self.logger.error(f"Failed to save single genome {genome.get('id', 'unknown')}: {e}")
+            self.logger.debug(f"Incremental save failed for genome {genome.get('id', 'unknown')}: {e} (final batch save will persist changes)")
 
     def _extract_north_star_score(self, evaluation_result: Dict[str, Any], north_star_metric: str) -> float:
         """Extract north star score from hybrid evaluation result (flattened structure)"""

@@ -454,9 +454,34 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             })
             _logger.info("Updated existing generation %d globally with max_score %.4f and %d variants", gen_number, best_score, variants_created)
         else:
-            # Generation should already exist (created by evolution_engine.py)
-            _logger.warning("Generation %d not found - should have been created by evolution_engine.py", gen_number)
-            # Don't create new entry here to avoid conflicts
+            # Generation entry doesn't exist yet - create it
+            _logger.warning("Generation %d not found - creating new entry", gen_number)
+            variants_created = generation_data.get("variants_created", 0)
+            mutation_variants = generation_data.get("mutation_variants", 0)
+            crossover_variants = generation_data.get("crossover_variants", 0)
+            
+            new_gen = {
+                "generation_number": gen_number,
+                "genome_id": best_genome_id,
+                "max_score": best_score,
+                "min_score": 0.0001,
+                "avg_fitness": round(avg_fitness, 4),
+                "avg_fitness_variants": 0.0001,
+                "avg_fitness_generation": 0.0001,
+                "avg_fitness_elites": 0.0001,
+                "avg_fitness_non_elites": 0.0001,
+                "parents": [],
+                "top_10": [],
+                "variants_created": variants_created,
+                "mutation_variants": mutation_variants,
+                "crossover_variants": crossover_variants,
+                "elites_threshold": 0.0001,
+                "removal_threshold": 0.0001,
+                "elites_count": 0,
+                "non_elites_count": 0
+            }
+            evolution_tracker.setdefault("generations", []).append(new_gen)
+            _logger.info("Created new generation entry %d with max_score %.4f and %d variants", gen_number, best_score, variants_created)
         
         # Sort generations by generation number
         evolution_tracker["generations"].sort(key=lambda x: x["generation_number"])

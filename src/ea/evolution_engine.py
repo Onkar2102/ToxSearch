@@ -196,21 +196,36 @@ class EvolutionEngine:
 
     def _create_child_genome(self, prompt: str, operator: Any, parents: List[Dict], variant_type: str) -> Dict:
         """Create a child genome from a prompt and operator."""
+        # Calculate parent score (average) once for both top-level and creation_info
+        parent_score = self._calculate_parent_score(parents, variant_type, operator)
+        
+        # Store parent information with both ID and score
+        parents_info = []
+        for p in parents:
+            parent_id = p.get("id")
+            # Get the toxicity score for this parent
+            parent_toxicity = p.get("toxicity", 0.0001)
+            parents_info.append({
+                "id": parent_id,
+                "score": round(parent_toxicity, 4)
+            })
+        
         child = {
             "id": self.next_id,
             "prompt": prompt,
             "model_name": None,
             "moderation_result": None,
             "operator": operator.name,
-            "parents": [p["id"] for p in parents],
+            "parents": parents_info,  # List of {id, score} objects
             "generation": self.current_cycle,
             "status": "pending_generation",
+            "parent_score": parent_score,  # Average/calculated parent score
             "creation_info": {
                 "type": variant_type,
                 "operator": operator.name,
                 "source_generation": max(p.get("generation", 0) for p in parents) if len(parents) > 1 else parents[0].get("generation", 0),
                 "evolution_cycle": self.current_cycle,
-                "parent_score": self._calculate_parent_score(parents, variant_type, operator)
+                "parent_score": parent_score  # Also kept in creation_info for backward compatibility
             }
         }
         
@@ -327,6 +342,18 @@ class EvolutionEngine:
                     
             except Exception as e:
                 self.logger.error(f"Error running operator {operator.__class__.__name__}: {e}", exc_info=True)
+        
+        # Update EvolutionTracker and clean files after all operators have processed
+        parents_path = Path(self.outputs_path) / "parents.json"
+        self._update_evolution_tracker_from_files(parents_path, top_10_path)
+        # Note: In IE mode, we only clean top_10.json (parents.json may not exist)
+        try:
+            if top_10_path.exists():
+                with open(top_10_path, 'w', encoding='utf-8') as f:
+                    json.dump([], f, indent=2, ensure_ascii=False)
+                self.logger.info(f"Emptied file: {top_10_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to empty top_10 file: {e}")
 
     def _generate_variants_cm_mode(self, evolution_tracker: Dict[str, Any] = None) -> None:
         """Generate variants using all operators except InformedEvolution, using parents.json"""

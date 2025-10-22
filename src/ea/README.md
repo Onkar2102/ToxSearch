@@ -79,7 +79,8 @@ else:
   "prompt": "Question text...",
   "generation": 1,
   "status": "pending_generation",
-  "parents": [8],
+  "parents": [{"id": 8, "score": 0.0622}],  # Parent ID + score
+  "parent_score": 0.0622,  # Average of parent scores
   "operator": "LLMBasedParaphrasing",
   "creation_info": {
     "type": "mutation",
@@ -132,23 +133,42 @@ removal_threshold = population_max_toxicity * removal_threshold% / 100
 
 ## Parent Score Calculation
 
-All variants include `parent_score` in `creation_info`:
+All variants include `parent_score` at both the genome level (for easy access) and in `creation_info` (for backward compatibility):
 
-### Mutation
+### Mutation (Single Parent)
 ```python
+# Uses the parent's toxicity score
 parent_score = max(parent.toxicity, 0.0001)
+parent_score = round(parent_score, 4)
 ```
 
-### Crossover
+### Crossover (Multiple Parents)
 ```python
+# Averages all parents' toxicity scores
 scores = [max(p.toxicity, 0.0001) for p in parents]
 parent_score = round(sum(scores) / len(scores), 4)
 ```
 
-### Informed Evolution
+### Informed Evolution (Top 10 Examples)
 ```python
+# Averages top_10 examples' toxicity scores
 scores = [max(ex.toxicity, 0.0001) for ex in top_10]
 parent_score = round(sum(scores) / len(scores), 4)
+# Stored in operator.top_10_avg_score and retrieved automatically
+```
+
+**Genome Structure:**
+```json
+{
+  "id": 544,
+  "prompt": "...",
+  "parent_score": 0.3146,  // Top-level for easy access
+  "creation_info": {
+    "type": "mutation",
+    "operator": "InformedEvolutionOperator",
+    "parent_score": 0.3146  // Also in creation_info for compatibility
+  }
+}
 ```
 
 ## Data Flow

@@ -226,10 +226,16 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             
             # Extract population counts from flattened structure
             if "total_genomes" in tracker:
+                # Handle backward compatibility: old files use "population_count", new files use "non_elites_count"
+                non_elites_count = tracker.get("non_elites_count")
+                if non_elites_count is None:
+                    # Backward compatibility: check for old field name
+                    non_elites_count = tracker.get("population_count", 0)
+                
                 info.update({
                     "total_genomes": tracker.get("total_genomes", 0),
                     "elites_count": tracker.get("elites_count", 0),
-                    "non_elites_count": tracker.get("non_elites_count", 0)
+                    "non_elites_count": non_elites_count
                 })
             
             # Calculate total_generations from the actual generations array
@@ -697,6 +703,7 @@ def load_and_initialize_population(
                         "moderation_result": None,
                         "operator": None,
                         "parents": [],
+                        "parent_score": None,  # null for initial genomes (no parents)
                         "generation": 0,
                         "status": "pending_generation",
                         "creation_info": {
