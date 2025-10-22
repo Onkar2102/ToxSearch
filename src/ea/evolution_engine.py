@@ -632,7 +632,11 @@ class EvolutionEngine:
                     "max_score": 0.0001,
                     "min_score": 0.0001,
                     "avg_fitness": 0.0001,
+                    # Variant statistics from temp.json (before distribution)
+                    "max_score_variants": 0.0001,
+                    "min_score_variants": 0.0001,
                     "avg_fitness_variants": 0.0001,
+                    # Population statistics (after distribution)
                     "avg_fitness_generation": 0.0001,
                     "avg_fitness_elites": 0.0001,
                     "avg_fitness_non_elites": 0.0001,

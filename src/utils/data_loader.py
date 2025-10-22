@@ -33,38 +33,95 @@ def extract_english_questions(ds, source_name, split_name):
             q_list = q_col.to_pylist()
         except AttributeError:
             q_list = list(q_col)
-        
+
         df = pd.DataFrame({"questions": pd.Series(q_list, dtype="string")})
         logger.info(f"Extracted {len(df)} questions from {source_name} ({split_name})")
         return df
-        
+
     except Exception as e:
         logger.error(f"Error extracting questions from {source_name}: {e}")
+        return pd.DataFrame(columns=['questions'])
+
+def extract_harmfulqa_questions(ds, source_name, split_name):
+    """
+    Extract English questions from the HarmfulQA dataset format:
+    The dataset has a "contexts" column which is a list of lists of questions,
+    and "contexts_language" which includes a "en" split.
+    """
+    try:
+        # For HarmfulQA, sometimes the main list is under a column like 'contexts' with [[...], [...]]
+        # or under 'question' directly.
+        # We'll flatten 'contexts' if it exists and treat them as questions.
+        if "contexts" in ds.column_names:
+            context_lists = ds["contexts"]
+            all_questions = []
+            for context_entry in context_lists:
+                if isinstance(context_entry, (list, tuple)):
+                    all_questions.extend([q for q in context_entry if isinstance(q, str)])
+            df = pd.DataFrame({"questions": pd.Series(all_questions, dtype="string")})
+            logger.info(f"Extracted {len(df)} questions from 'contexts' in {source_name} ({split_name})")
+            return df
+        elif "question" in ds.column_names:
+            # fallback, if there's just a question column
+            return extract_english_questions(ds, source_name, split_name)
+        else:
+            logger.warning(f"No 'contexts' or 'question' column found in {source_name}. Available columns: {ds.column_names}")
+            return pd.DataFrame(columns=['questions'])
+    except Exception as e:
+        logger.error(f"Error extracting HarmfulQA questions from {source_name}: {e}")
         return pd.DataFrame(columns=['questions'])
 
 def load_harmful_datasets():
     """
     Load and combine harmful question datasets from HuggingFace.
-    For now, only use CategoricalHarmfulQA.
-    Returns: DataFrame with unique questions from CategoricalHarmfulQA
+    Uses CategoricalHarmfulQA and HarmfulQA.
+    Returns: DataFrame with unique questions from all datasets.
     """
     all_questions = []
+
+    # ---- CategoricalHarmfulQA (prefer English split; fallback to train) ----
     try:
-        # ---- CategoricalHarmfulQA ----
         logger.info("Loading CategoricalHarmfulQA dataset...")
-        categorical_ds = load_dataset("declare-lab/CategoricalHarmfulQA", split="en")
-        categorical_questions = extract_english_questions(categorical_ds, "CategoricalHarmfulQA", "en")
-        all_questions.append(categorical_questions)
+        try:
+            categorical_ds = load_dataset("declare-lab/CategoricalHarmfulQA", split="en")
+            logger.info("CategoricalHarmfulQA: using 'en' split")
+        except Exception as e_en:
+            logger.warning(f"CategoricalHarmfulQA 'en' split failed: {e_en}; falling back to 'train'")
+            categorical_ds = load_dataset("declare-lab/CategoricalHarmfulQA", split="train")
+            logger.info("CategoricalHarmfulQA: using 'train' split")
+        categorical_questions = extract_english_questions(categorical_ds, "CategoricalHarmfulQA", "en_or_train")
+        if not categorical_questions.empty:
+            all_questions.append(categorical_questions)
+        else:
+            logger.warning("CategoricalHarmfulQA produced 0 questions after extraction.")
     except Exception as e:
         logger.error(f"Failed to load CategoricalHarmfulQA dataset: {e}")
 
-    if not all_questions:
+    # ---- HarmfulQA (correct repo name; prefer English split; fallback to train) ----
+    try:
+        logger.info("Loading HarmfulQA dataset (prefer 'en' split)...")
+        try:
+            harmfulqa_ds = load_dataset("declare-lab/HarmfulQA", split="en")
+            logger.info("HarmfulQA: using 'en' split")
+        except Exception as e_en:
+            logger.warning(f"HarmfulQA 'en' split failed: {e_en}; falling back to 'train'")
+            harmfulqa_ds = load_dataset("declare-lab/HarmfulQA", split="train")
+            logger.info("HarmfulQA: using 'train' split")
+        harmfulqa_questions = extract_harmfulqa_questions(harmfulqa_ds, "HarmfulQA", "en_or_train")
+        if not harmfulqa_questions.empty:
+            all_questions.append(harmfulqa_questions)
+        else:
+            logger.warning("HarmfulQA produced 0 questions after extraction.")
+    except Exception as e:
+        logger.error(f"Failed to load HarmfulQA dataset: {e}")
+
+    if not any(not df.empty for df in all_questions):
         logger.error("No datasets could be loaded!")
         return pd.DataFrame(columns=['questions'])
 
-    # Use only 'questions' columns and combine
+    # Only keep non-empty
     logger.info("Combining datasets...")
-    combined_df = pd.concat(all_questions, ignore_index=True)
+    combined_df = pd.concat([df for df in all_questions if not df.empty], ignore_index=True)
 
     # Basic cleaning and deduplication
     logger.info("Cleaning data...")
@@ -72,6 +129,7 @@ def load_harmful_datasets():
     combined_df = combined_df.dropna(subset=['questions'])
     combined_df = combined_df.drop_duplicates(subset=['questions'])
 
+    logger.info(f"Combined unique questions: {len(combined_df)}")
     return combined_df
 
 def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_questions.csv")):
@@ -79,7 +137,7 @@ def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_
     Save questions DataFrame to CSV and Excel files.
 
     Args:
-        questions_df: DataFrame with questions
+        questions_df: DataFrame with questions (should already be UNIQUE for prompt_extended.xlsx!)
         filename: Output filename (default: "data/harmful_questions.csv")
     """
     # Ensure the data/ directory exists
@@ -97,13 +155,27 @@ def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_
         logger.error(f"Failed to save questions to {filename}: {e}")
         success = False
 
-    # Save as Excel (.xlsx)
-    excel_filename = "data/prompt.xlsx"
+    # Save as Excel (.xlsx) - ensure prompt_extended.xlsx always contains the full combined unique DataFrame
+    excel_filename = "data/prompt_extended.xlsx"
     try:
+        # Always save prompt_extended.xlsx as the full combined, deduplicated questions_df
         questions_df[['questions']].to_excel(excel_filename, index=False, header=True)
-        logger.info(f"Saved {len(questions_df)} unique questions to {excel_filename}")
+        logger.info(f"Saved {len(questions_df)} unique questions to {excel_filename} (combined/unique)")
     except Exception as e:
         logger.error(f"Failed to save questions to {excel_filename}: {e}")
+        success = False
+
+    # Save 100 random questions to prompt.xlsx with column name 'questions'
+    # NOTE: These 100 are selected at random (using a fixed random_state for reproducibility).
+    try:
+        prompt_filename = "data/prompt.xlsx"
+        # The following line selects 100 random questions (or fewer if dataset < 100), at random
+        sample_df = questions_df.sample(n=min(100, len(questions_df)), random_state=42)
+        # Always save with column "questions" as requested
+        sample_df[['questions']].to_excel(prompt_filename, index=False, header=True)
+        logger.info(f"Saved {len(sample_df)} randomly selected questions to {prompt_filename}")
+    except Exception as e:
+        logger.error(f"Failed to save prompt.xlsx: {e}")
         success = False
 
     return success
@@ -126,11 +198,11 @@ if __name__ == "__main__":
 
     if not all_questions.empty:
         logger.info(f"Number of unique questions: {len(all_questions)}")
-        # Save to data/harmful_questions.csv and also to data/harmful_questions.xlsx
+        # Save to data/harmful_questions.csv, data/prompt_extended.xlsx, and data/prompt.xlsx
         saved = save_questions_to_file(all_questions)
         if saved:
             print("="*50)
-            print("Saved questions to: data/harmful_questions.csv and data/harmful_questions.xlsx")
+            print("Saved questions to: data/harmful_questions.csv, data/prompt_extended.xlsx, and data/prompt.xlsx")
             print("="*50)
             print("SAMPLE QUESTIONS:")
             print("="*50)

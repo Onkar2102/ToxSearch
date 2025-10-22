@@ -329,7 +329,11 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "max_score": best_gen0_score,
                     "min_score": 0.0001,
                     "avg_fitness": 0.0001,
+                    # Variant statistics from temp.json (before distribution)
+                    "max_score_variants": 0.0001,
+                    "min_score_variants": 0.0001,
                     "avg_fitness_variants": 0.0001,
+                    # Population statistics (after distribution)
                     "avg_fitness_generation": 0.0001,
                     "avg_fitness_elites": 0.0001,
                     "avg_fitness_non_elites": 0.0001,
@@ -466,7 +470,11 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "max_score": best_score,
                 "min_score": 0.0001,
                 "avg_fitness": round(avg_fitness, 4),
+                # Variant statistics from temp.json (before distribution)
+                "max_score_variants": 0.0001,
+                "min_score_variants": 0.0001,
                 "avg_fitness_variants": 0.0001,
+                # Population statistics (after distribution)
                 "avg_fitness_generation": 0.0001,
                 "avg_fitness_elites": 0.0001,
                 "avg_fitness_non_elites": 0.0001,

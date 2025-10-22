@@ -390,7 +390,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     # For generation 0: avg_fitness_generation = elites + non_elites (no variants yet)
                     gen["avg_fitness_generation"] = avg_fitness_generation_gen0
                     gen["min_score"] = 0.0001  # No variants generated yet
-                    gen["avg_fitness_variants"] = 0.0001  # No variants generated yet
+                    # No variants generated yet - set all variant stats to default
+                    gen["max_score_variants"] = 0.0001
+                    gen["min_score_variants"] = 0.0001
+                    gen["avg_fitness_variants"] = 0.0001
                     break
             
             # Save updated tracker
@@ -590,6 +593,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     
                     # Calculate variant statistics from temp.json BEFORE distribution
                     temp_path = get_outputs_path() / "temp.json"
+                    max_score_variants = 0.0001
                     min_score_variants = 0.0001
                     avg_fitness_variants = 0.0001
                     try:
@@ -599,12 +603,18 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         if temp_variants:
                             from utils.population_io import _extract_north_star_score
                             scores = [_extract_north_star_score(v, north_star_metric) for v in temp_variants if v]
-                            scores = [s for s in scores if s > 0]  # Filter out zero scores
+                            # DO NOT filter out zero scores - we want ALL variant scores for accurate statistics
                             
                             if scores:
+                                max_score_variants = round(max(scores), 4)
                                 min_score_variants = round(min(scores), 4)
                                 avg_fitness_variants = round(sum(scores) / len(scores), 4)
-                                logger.info(f"Variant statistics: min_score={min_score_variants:.4f}, avg_fitness={avg_fitness_variants:.4f}")
+                                logger.info(f"Variant statistics from temp.json ({len(scores)} variants): "
+                                          f"max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
+                            else:
+                                logger.warning("No variants in temp.json to calculate statistics")
+                        else:
+                            logger.info("temp.json is empty - using default values (0.0001) for variant statistics")
                     except Exception as e:
                         logger.warning(f"Failed to calculate variant statistics: {e}")
                     
@@ -699,8 +709,12 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                 gen["avg_fitness_elites"] = avg_fitness_elites
                                 gen["avg_fitness_non_elites"] = avg_fitness_non_elites
                                 gen["avg_fitness_generation"] = avg_fitness_generation  # Average of elites + non_elites AFTER distribution
-                                gen["min_score"] = min_score_variants
+                                # Variant statistics from temp.json (BEFORE distribution)
+                                gen["max_score_variants"] = max_score_variants
+                                gen["min_score_variants"] = min_score_variants
                                 gen["avg_fitness_variants"] = avg_fitness_variants
+                                # Keep legacy field for backward compatibility
+                                gen["min_score"] = min_score_variants
                                 break
                         
                         # Save updated tracker
@@ -712,7 +726,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                    f"non_elites_count={redistribution_result['non_elites_count']}, "
                                    f"removal_threshold={removal_threshold_value:.4f}, "
                                    f"avg_fitness_elites={avg_fitness_elites:.4f}, "
-                                   f"avg_fitness_non_elites={avg_fitness_non_elites:.4f}")
+                                   f"avg_fitness_non_elites={avg_fitness_non_elites:.4f}, "
+                                   f"variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
                     except Exception as e:
                         logger.warning(f"Failed to update generation metrics in EvolutionTracker: {e}")
                 
