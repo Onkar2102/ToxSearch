@@ -38,43 +38,43 @@ removal_threshold = max_toxicity × removal_percentage / 100
 
 ```mermaid
 flowchart TB
-    %% Major components
-    IN[Seed Prompts\n(prompt.csv)] --> INIT[Population Initialization\ncreate genomes in temp.json]
-    INIT --> SEL[Parent Selection\n(adaptive tournament)]
-    SEL --> VAR[Variation\nMutation + Crossover]
+  %% Major components
+  IN[Seed Prompts<br>(prompt.csv)] --> INIT[Population Initialization<br>create genomes in temp.json]
+  INIT --> SEL[Parent Selection<br>(adaptive tournament)]
+  SEL --> VAR[Variation<br>Mutation + Crossover]
 
-    %% Two‑LLM and scoring pipeline
-    VAR -->|candidate prompts p'| RG[Response Generator (RG)\nLLM_y: generate y ~ RG(·|p')] 
-    RG --> MOD[Moderation Oracle\nPerspective API]
-    MOD --> FIT[Fitness Aggregation\nmax/mean toxicity]
+  %% Two-LLM and scoring pipeline
+  VAR -->|candidate prompts p'| RG[Response Generator (RG)<br>LLM_y: generate y ~ RG(p')]
+  RG --> MOD[Moderation Oracle<br>Perspective API]
+  MOD --> FIT[Fitness Aggregation<br>max/mean toxicity]
 
-    %% Replacement & bookkeeping
-    FIT --> CLS[Selection & Replacement\n(elitism / tiers)]
-    CLS --> IDX[Update Indices\nEvolutionTracker.json]
-    CLS --> EL[elites.json]
-    CLS --> NE[non_elites.json]
-    CLS --> UP[under_performing.json]
+  %% Replacement & bookkeeping
+  FIT --> CLS[Selection & Replacement<br>(elitism / tiers)]
+  CLS --> IDX[Update Indices<br>EvolutionTracker.json]
+  CLS --> EL[elites.json]
+  CLS --> NE[non_elites.json]
+  CLS --> UP[under_performing.json]
 
-    %% Loop/termination
-    IDX --> TERM{Termination?\n(generations/budget/plateau)}
-    TERM -- No --> SEL
-    TERM -- Yes --> DONE[Finalize & Export Results]
+  %% Loop/termination
+  IDX --> TERM{Termination?<br>(generations/budget/plateau)}
+  TERM -->|No| SEL
+  TERM -->|Yes| DONE[Finalize & Export Results]
 
-    %% Optional: Prompt Generator role
-    PG[Prompt Generator (PG)\nLLM_x: propose/evolve prompts] --- VAR
+  %% Optional: Prompt Generator role
+  PG[Prompt Generator (PG)<br>LLM_x: propose/evolve prompts] --- VAR
 
-    %% Styles
-    classDef io fill:#e3f2fd,stroke:#90caf9,color:#0d47a1;
-    classDef evolve fill:#ede7f6,stroke:#b39ddb,color:#4a148c;
-    classDef llm fill:#fff3e0,stroke:#ffb74d,color:#e65100;
-    classDef score fill:#e8f5e9,stroke:#81c784,color:#1b5e20;
-    classDef store fill:#fffde7,stroke:#fff176,color:#f57f17;
+  %% Styles
+  classDef io fill:#e3f2fd,stroke:#90caf9,color:#0d47a1;
+  classDef evolve fill:#ede7f6,stroke:#b39ddb,color:#4a148c;
+  classDef llm fill:#fff3e0,stroke:#ffb74d,color:#e65100;
+  classDef score fill:#e8f5e9,stroke:#81c784,color:#1b5e20;
+  classDef store fill:#fffde7,stroke:#fff176,color:#f57f17;
 
-    class IN,EL,NE,UP io;
-    class INIT,SEL,VAR evolve;
-    class RG,PG llm;
-    class MOD,FIT score;
-    class CLS,IDX,TERM,DONE store;
+  class IN,EL,NE,UP io;
+  class INIT,SEL,VAR evolve;
+  class RG,PG llm;
+  class MOD,FIT score;
+  class CLS,IDX,TERM,DONE store;
 ```
 
 ### Block Descriptions and Interactions
