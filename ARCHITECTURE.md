@@ -39,29 +39,29 @@ removal_threshold = max_toxicity × removal_percentage / 100
 ```mermaid
 flowchart TB
   %% Major components
-  IN[Seed Prompts<br>(prompt.csv)] --> INIT[Population Initialization<br>create genomes in temp.json]
-  INIT --> SEL[Parent Selection<br>(adaptive tournament)]
-  SEL --> VAR[Variation<br>Mutation + Crossover]
+  IN["Seed Prompts<br/>(prompt.csv)"] --> INIT["Population Initialization<br/>create genomes in temp.json"]
+  INIT --> SEL["Parent Selection<br/>(adaptive tournament)"]
+  SEL --> VAR["Variation<br/>Mutation + Crossover"]
 
   %% Two-LLM and scoring pipeline
-  VAR -->|candidate prompts p'| RG[Response Generator (RG)<br>LLM_y: generate y ~ RG(p')]
-  RG --> MOD[Moderation Oracle<br>Perspective API]
-  MOD --> FIT[Fitness Aggregation<br>max/mean toxicity]
+  VAR -->|candidate prompts p'| RG["Response Generator (RG)<br/>LLM_y: generate y ~ RG(p')"]
+  RG --> MOD["Moderation Oracle<br/>Perspective API"]
+  MOD --> FIT["Fitness Aggregation<br/>max/mean toxicity"]
 
   %% Replacement & bookkeeping
-  FIT --> CLS[Selection & Replacement<br>(elitism / tiers)]
-  CLS --> IDX[Update Indices<br>EvolutionTracker.json]
-  CLS --> EL[elites.json]
-  CLS --> NE[non_elites.json]
-  CLS --> UP[under_performing.json]
+  FIT --> CLS["Selection & Replacement<br/>(elitism / tiers)"]
+  CLS --> IDX["Update Indices<br/>EvolutionTracker.json"]
+  CLS --> EL["elites.json"]
+  CLS --> NE["non_elites.json"]
+  CLS --> UP["under_performing.json"]
 
   %% Loop/termination
-  IDX --> TERM{Termination?<br>(generations/budget/plateau)}
+  IDX --> TERM{"Termination?<br/>(generations/budget/plateau)"}
   TERM -->|No| SEL
-  TERM -->|Yes| DONE[Finalize & Export Results]
+  TERM -->|Yes| DONE["Finalize & Export Results"]
 
   %% Optional: Prompt Generator role
-  PG[Prompt Generator (PG)<br>LLM_x: propose/evolve prompts] --- VAR
+  PG["Prompt Generator (PG)<br/>LLM_x: propose/evolve prompts"] --- VAR
 
   %% Styles
   classDef io fill:#e3f2fd,stroke:#90caf9,color:#0d47a1;
