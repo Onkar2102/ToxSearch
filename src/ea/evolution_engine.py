@@ -22,9 +22,11 @@ from .paraphrasing import LLMBasedParaphrasingOperator
 from .antonym_replacement import POSAwareAntonymReplacement
 from .stylistic_mutator import StylisticMutator
 from .back_translation import (
-    LLMBackTranslationHIOperator, LLMBackTranslationFROperator, 
-    LLMBackTranslationDEOperator, LLMBackTranslationJAOperator, 
-    LLMBackTranslationZHOperator
+    LLMBackTranslationHIOperator
+    # Disabled non-Hindi back translation operators:
+    # LLMBackTranslationFROperator, 
+    # LLMBackTranslationDEOperator, LLMBackTranslationJAOperator, 
+    # LLMBackTranslationZHOperator
 )
 from .semantic_similarity_crossover import SemanticSimilarityCrossover
 from .fusion_crossover import SemanticFusionCrossover
@@ -710,17 +712,18 @@ class EvolutionEngine:
                 LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # Back translation operators
+                # Back translation operators (Hindi only)
                 LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # Disabled non-Hindi back translation operators:
+                # LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
                 
                 # New mutation operators
                 NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-                TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-                ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+                TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, num_error_types=3, generator=self.prompt_generator),
+                ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, num_concept_types=1, generator=self.prompt_generator),
             ]
             self.logger.info("Operator mode 'cm': Using all operators except InformedEvolution (%d operators)", len(filtered_operators))
         elif self.operators == "all":
@@ -735,17 +738,18 @@ class EvolutionEngine:
                 LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # Back translation operators
+                # Back translation operators (Hindi only)
                 LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # Disabled non-Hindi back translation operators:
+                # LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
                 
                 # New mutation operators
                 NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-                TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-                ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+                TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, num_error_types=3, generator=self.prompt_generator),
+                ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, num_concept_types=1, generator=self.prompt_generator),
                 InformedEvolutionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator, top_10_path=str(self.outputs_path / "top_10.json")),
             ]
             self.logger.info("Operator mode 'all': Using all operators (%d operators)", len(filtered_operators))
@@ -761,17 +765,18 @@ class EvolutionEngine:
                 LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # Back translation operators
+                # Back translation operators (Hindi only)
                 LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
-                LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # Disabled non-Hindi back translation operators:
+                # LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
+                # LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
                 
                 # New mutation operators
                 NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-                TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
-                ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
+                TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, num_error_types=3, generator=self.prompt_generator),
+                ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, num_concept_types=1, generator=self.prompt_generator),
                 InformedEvolutionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator, top_10_path=str(self.outputs_path / "top_10.json")),
             ]
             self.logger.warning("Invalid operator mode '%s', defaulting to 'all' (%d operators)", self.operators, len(filtered_operators))
