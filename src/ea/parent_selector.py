@@ -194,7 +194,7 @@ class ParentSelector:
     def _save_top_10_by_toxicity(self, elites_path: str = None, output_path: str = None) -> None:
         """
         Save the top 10 genomes from elites.json and population.json combined by their toxicity score to top_10.json.
-        Only saves essential fields: id, prompt, generated_text, generation, and scores.
+        Only saves essential fields: id, prompt, and toxicity scores.
         
         Args:
             elites_path: Path to elites.json file. If None, uses centralized get_outputs_path()
@@ -243,7 +243,7 @@ class ParentSelector:
             # Create slimmed-down top 10 data structure with only essential fields
             top_10_slim = []
             for genome in top_10_full:
-                # Extract only id, prompt, and north star metric score (no scaling)
+                # Extract only id, prompt, and north star metric score (original scores for IE operator)
                 original_score = round(_extract_north_star_score(genome, "toxicity"), 4)
                 slim_genome = {
                     "id": genome.get("id"),

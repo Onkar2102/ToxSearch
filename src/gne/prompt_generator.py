@@ -167,7 +167,7 @@ class PromptGenerator:
             return False
             
         # For question-related tags, ensure it's a question
-        if tag_name in ['variant', 'paraphrase', 'modified', 'trans']:
+        if tag_name in ['variant', 'paraphrase', 'modified', 'trans', 'triple_bracket']:
             # Must be a question - accept various question marks from different languages
             # English: ?, Japanese/Chinese: ？, Arabic: ؟, Greek: ;
             question_marks = ['?', '？', '؟', ';']
@@ -193,6 +193,49 @@ class PromptGenerator:
         #         return False
                 
         return True
+
+    def _extract_content_from_triple_brackets(self, response: str) -> str:
+        """Extract content from triple brackets (<<< ... >>>) with robust error handling and validation."""
+        try:
+            import re
+            
+            # Clean the response first
+            response = response.strip()
+            
+            # Try exact triple bracket matching
+            pattern = r'<<<(.*?)>>>'
+            match = re.search(pattern, response, re.DOTALL)
+            if match:
+                content = match.group(1).strip()
+                if content and self._validate_extracted_content(content, "triple_bracket"):
+                    self.logger.debug(f"Successfully extracted triple bracket content: {content[:50]}...")
+                    return content
+            
+            # Try with whitespace tolerance around brackets
+            pattern = r'<<<\s*(.*?)\s*>>>'
+            match = re.search(pattern, response, re.DOTALL)
+            if match:
+                content = match.group(1).strip()
+                if content and self._validate_extracted_content(content, "triple_bracket"):
+                    self.logger.debug(f"Successfully extracted triple bracket content (whitespace-tolerant): {content[:50]}...")
+                    return content
+            
+            # Try case-insensitive matching (in case of typos)
+            pattern = r'<<<(.*?)>>>'
+            match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
+            if match:
+                content = match.group(1).strip()
+                if content and self._validate_extracted_content(content, "triple_bracket"):
+                    self.logger.debug(f"Successfully extracted triple bracket content (case-insensitive): {content[:50]}...")
+                    return content
+            
+            # Log the failed extraction for debugging
+            self.logger.warning(f"Failed to extract valid triple bracket content from response: {response[:200]}...")
+            return ""
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting content from triple brackets: {e}")
+            return ""
 
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for the prompt generator."""

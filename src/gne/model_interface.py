@@ -229,9 +229,9 @@ class LlamaCppChatInterface(ModelInterface):
         if device == "mps":
             # Metal Performance Shaders optimizations for macOS
             device_config.update({
-                "gpu_layers": config.get("mps", {}).get("gpu_layers", 20),  # Reasonable default
+                "gpu_layers": config.get("mps", {}).get("gpu_layers", -1),  # Reasonable default
                 "use_mmap": True,
-                "use_mlock": False,
+                "use_mlock": True,
                 "low_vram": False,
                 "f16_kv": True,
             })

@@ -33,13 +33,14 @@ def _reset_temp_json(logger):
         logger.error(f"Failed to reset temp.json: {e}")
         raise
 
-def _deduplicate_variants_in_temp(logger):
+def _deduplicate_variants_in_temp(logger, operator_stats=None):
     """
     Deduplicate variants in temp.json by comparing against existing genomes in all files.
     This function ONLY performs deduplication and does NOT distribute genomes.
     
     Args:
         logger: Logger instance
+        operator_stats: Optional OperatorStatistics instance to track duplicates
         
     Returns:
         int: Number of duplicates removed
@@ -99,6 +100,10 @@ def _deduplicate_variants_in_temp(logger):
             
             if norm_prompt in existing_prompts or genome_id in existing_ids:
                 duplicates_removed += 1
+                if operator_stats:
+                    # Get operator name from variant's creation_info
+                    operator_name = variant.get("creation_info", {}).get("operator", "unknown")
+                    operator_stats.record_duplicate(operator_name)
                 logger.debug(f"Removing duplicate genome {genome_id}")
                 continue
             
@@ -326,12 +331,10 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                 evolution_tracker["generations"] = [{
                     "generation_number": 0,
                     "genome_id": best_gen0_id,  # Best genome ID from generation 0
-                    "max_score": best_gen0_score,
-                    "min_score": 0.0001,
+                    "max_score_variants": best_gen0_score,
+                    "min_score_variants": 0.0001,
                     "avg_fitness": 0.0001,
                     # Variant statistics from temp.json (before distribution)
-                    "max_score_variants": 0.0001,
-                    "min_score_variants": 0.0001,
                     "avg_fitness_variants": 0.0001,
                     # Population statistics (after distribution)
                     "avg_fitness_generation": 0.0001,
@@ -345,7 +348,6 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "elites_threshold": 0.0001,
                     "removal_threshold": 0.0001,
                     "elites_count": 0,
-                    "non_elites_count": 0
                 }]
                 logger.info("Created generation 0 entry with best genome %s, score: %.4f", best_gen0_id, best_gen0_score)
 
@@ -446,17 +448,17 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             
             _logger.info(f"Updating generation {gen_number} with variant counts: created={variants_created}, mutation={mutation_variants}, crossover={crossover_variants}")
             
-            # NOTE: max_score represents the maximum score of VARIANTS GENERATED in this generation (from temp.json)
+            # NOTE: max_score_variants represents the maximum score of VARIANTS GENERATED in this generation (from temp.json)
             # It does NOT represent the entire population's max score. Use population_max_toxicity for that.
             existing_gen.update({
                 "genome_id": best_genome_id,
-                "max_score": best_score,  # Max score of variants created in THIS generation
+                "max_score_variants": best_score,  # Max score of variants created in THIS generation
                 "avg_fitness": round(avg_fitness, 4),
                 "variants_created": variants_created,
                 "mutation_variants": mutation_variants,
                 "crossover_variants": crossover_variants
             })
-            _logger.info("Updated existing generation %d globally with max_score %.4f and %d variants", gen_number, best_score, variants_created)
+            _logger.info("Updated existing generation %d globally with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
         else:
             # Generation entry doesn't exist yet - create it
             _logger.warning("Generation %d not found - creating new entry", gen_number)
@@ -467,11 +469,9 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             new_gen = {
                 "generation_number": gen_number,
                 "genome_id": best_genome_id,
-                "max_score": best_score,
-                "min_score": 0.0001,
                 "avg_fitness": round(avg_fitness, 4),
                 # Variant statistics from temp.json (before distribution)
-                "max_score_variants": 0.0001,
+                "max_score_variants": best_score,
                 "min_score_variants": 0.0001,
                 "avg_fitness_variants": 0.0001,
                 # Population statistics (after distribution)
@@ -486,10 +486,9 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "elites_threshold": 0.0001,
                 "removal_threshold": 0.0001,
                 "elites_count": 0,
-                "non_elites_count": 0
             }
             evolution_tracker.setdefault("generations", []).append(new_gen)
-            _logger.info("Created new generation entry %d with max_score %.4f and %d variants", gen_number, best_score, variants_created)
+            _logger.info("Created new generation entry %d with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
         
         # Sort generations by generation number
         evolution_tracker["generations"].sort(key=lambda x: x["generation_number"])
@@ -551,7 +550,7 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
         all_scores = []
         best_scores = []
         for gen_entry in evolution_tracker.get("generations", []):
-            score = gen_entry.get("max_score", 0.0001)
+            score = gen_entry.get("max_score_variants", 0.0001)
             all_scores.append(score)
             if gen_entry.get("generation_number") == total_generations - 1:  # Latest generation
                 best_scores.append(score)
@@ -589,8 +588,8 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
             "score_statistics": {
                 "average_score": avg_score,
                 "best_average_score": best_avg_score,
-                "max_score": max_score,
-                "min_score": min_score,
+                "max_score_variants": max_score,
+                "min_score_variants": min_score,
                 "north_star_metric": north_star_metric
             },
             "variant_statistics": {
@@ -618,11 +617,11 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
             # Initial score (generation 0)
             gen_0 = next((gen for gen in generations if gen.get("generation_number") == 0), None)
             if gen_0:
-                prompt_detail["initial_score"] = gen_0.get("max_score", 0.0)
+                prompt_detail["initial_score"] = gen_0.get("max_score_variants", 0.0)
             
             # Best score (latest generation)
             latest_gen = max(generations, key=lambda g: g.get("generation_number", 0))
-            prompt_detail["best_score"] = latest_gen.get("max_score", 0.0)
+            prompt_detail["best_score"] = latest_gen.get("max_score_variants", 0.0)
             prompt_detail["score_improvement"] = prompt_detail["best_score"] - prompt_detail["initial_score"]
             
             # Total variants created
@@ -704,6 +703,11 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         _reset_temp_json(logger)
         # Generate variants and update temp.json (handles parent selection and variant deduplication)
         engine.generate_variants_global(evolution_tracker=evolution_tracker)
+        
+        # Get operator statistics after variant generation
+        operator_stats_dict = engine.operator_stats.to_dict()
+        logger.info(f"Operator statistics: {operator_stats_dict}")
+        
         # Count variants from temp.json for logging
         temp_path = outputs_path / "temp.json"
         variant_count = 0
@@ -726,7 +730,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
     # Phase 4: Deduplicate variants in temp.json (cross-file check)
     # Remove variants that already exist in elites.json and non_elites.json
     try:
-        duplicates_removed = _deduplicate_variants_in_temp(logger)
+        duplicates_removed = _deduplicate_variants_in_temp(logger, engine.operator_stats)
         logger.info("Successfully deduplicated variants in temp.json (%d duplicates removed)", duplicates_removed)
     except Exception as e:
         logger.error("Failed to deduplicate variants in temp.json: %s", e, exc_info=True)
@@ -741,9 +745,10 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         new_generation_data = {
             "generation_number": current_generation,
             "genome_id": None,  # Will be updated with best genome
-            "max_score": 0.0,   # Will be updated with best score
+            "max_score_variants": 0.0,   # Will be updated with best score
             "parents": [],
-            "elites_threshold": threshold
+            "elites_threshold": threshold,
+            "operator_statistics": operator_stats_dict
         }
         
         # EvolutionTracker update will be handled in main.py after evaluation
@@ -758,7 +763,11 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
     logger.info("  - Total genomes processed: %d", len(engine.genomes))
     logger.info("  - Evolution tracker updated: %s", evolution_tracker_path)
     
-    return
+    # Return operator statistics for use by main.py
+    return {
+        "operator_statistics": engine.operator_stats.to_dict(),
+        "total_genomes": len(engine.genomes)
+    }
 
 
 

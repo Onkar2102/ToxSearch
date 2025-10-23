@@ -90,7 +90,7 @@ class DeviceManager:
                 elif is_macos:
                     self.logger.warning(f"MPS not fully available - macOS: {is_macos}, backend: {has_mps_backend}, built: {is_mps_built}, available: {is_mps_available}")
                 elif not is_macos and (has_mps_backend or is_mps_built or is_mps_available):
-                    self.logger.warning(f"MPS detected on non-macOS system - this is unexpected. OS: {platform.system()}")
+                    self.logger.debug(f"MPS backend exists on Linux but is not available for use. OS: {platform.system()}")
             except Exception as e:
                 self.logger.warning(f"MPS check failed: {e}")
                 import traceback

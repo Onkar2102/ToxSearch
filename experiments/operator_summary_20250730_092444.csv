@@ -1,8 +1,0 @@
-operator,Total_Count,Min_Gen,Max_Gen,Mean_Gen,Completion_Rate,score_violence_mean,score_violence_std,score_violence_max
-BackTranslation,63,1,5,4.2857,0.0,0.0003,0.0007,0.0043
-BertMLM,166,1,5,4.2771,0.0,0.0073,0.0177,0.1913
-InstructionPreservingCrossover,210,2,7,4.9762,0.0,0.0031,0.013,0.1752
-LLMBasedParaphrasing,88,1,5,4.4545,0.0,0.0029,0.0088,0.0765
-OnePointCrossover,99,2,7,4.9697,0.0,0.0103,0.0159,0.0929
-POSAwareSynonymReplacement,177,1,5,4.322,0.0,0.0083,0.0164,0.1544
-SemanticSimilarityCrossover,62,2,7,4.3065,0.0,0.0029,0.0054,0.0302

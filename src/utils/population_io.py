@@ -97,7 +97,15 @@ def _extract_north_star_score(genome, metric="toxicity"):
 
 def initialize_system(logger, log_file):
     """Initialize the system components and create gen0 if needed"""
-    logger.info("Initializing optimized pipeline for M3 Mac...")
+    from utils.device_utils import device_manager
+    device = device_manager.get_optimal_device()
+    
+    if device == "mps":
+        logger.info("Initializing optimized pipeline for Apple Silicon (MPS)...")
+    elif device == "cuda":
+        logger.info("Initializing optimized pipeline for NVIDIA GPU (CUDA)...")
+    else:
+        logger.info("Initializing optimized pipeline for CPU...")
     
     # Import required modules
     population_io_functions = get_population_io()
@@ -212,10 +220,7 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
     
     info = {
         "total_generations": 0,
-        "total_genomes": 0,
         "generation_counts": {},
-        "elites_count": 0,
-        "non_elites_count": 0
     }
     
     # Try to get metadata from EvolutionTracker.json first
@@ -224,19 +229,7 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             with open(evolution_tracker_file, 'r', encoding='utf-8') as f:
                 tracker = json.load(f)
             
-            # Extract population counts from flattened structure
-            if "total_genomes" in tracker:
-                # Handle backward compatibility: old files use "population_count", new files use "non_elites_count"
-                non_elites_count = tracker.get("non_elites_count")
-                if non_elites_count is None:
-                    # Backward compatibility: check for old field name
-                    non_elites_count = tracker.get("population_count", 0)
-                
-                info.update({
-                    "total_genomes": tracker.get("total_genomes", 0),
-                    "elites_count": tracker.get("elites_count", 0),
-                    "non_elites_count": non_elites_count
-                })
+            # Note: Global population counts removed - now tracked per generation only
             
             # Calculate total_generations from the actual generations array
             # This ensures it's always up-to-date with the actual generation count
@@ -248,9 +241,8 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
                 # Fallback: use tracker value or 0 if no generations exist
                 info["total_generations"] = tracker.get("total_generations", 0)
             
-            # If we got counts from tracker, return with calculated total_generations
-            if "total_genomes" in tracker:
-                return info
+            # Note: Global population counts removed - now tracked per generation only
+            return info
                 
         except Exception as e:
             # Fall back to file scanning if tracker read fails
@@ -262,7 +254,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             with open(population_file, 'r', encoding='utf-8') as f:
                 population = json.load(f)
             
-            info["non_elites_count"] = len(population)
             
             # Count genomes by generation
             for genome in population:
@@ -280,7 +271,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             with open(elites_file, 'r', encoding='utf-8') as f:
                 elites = json.load(f)
             
-            info["elites_count"] = len(elites)
             
             # Add elite genomes to generation counts
             for genome in elites:
@@ -293,7 +283,7 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             pass
     
     # Calculate total genomes and generations
-    info["total_genomes"] = info["non_elites_count"] + info["elites_count"]
+    # Note: total_genomes is now per-generation only, not global
     
     # Ensure all generations from 0 to max are represented, even if they have 0 variants
     if info["generation_counts"]:
@@ -328,9 +318,6 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
                 tracker = {
                     "status": "not_complete",
                     "total_generations": 1,
-                    "total_genomes": 0,
-                    "elites_count": 0,
-                    "non_elites_count": 0,
                     "generations_since_improvement": 0,
                     "avg_fitness_history": [],
                     "slope_of_avg_fitness": 0.0,
@@ -341,9 +328,6 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
                 tracker = {
                     "status": "not_complete",
                     "total_generations": 1,
-                    "total_genomes": 0,
-                    "elites_count": 0,
-                    "non_elites_count": 0,
                     "generations_since_improvement": 0,
                     "avg_fitness_history": [],
                     "slope_of_avg_fitness": 0.0,
@@ -352,9 +336,7 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
                 }
         
         # Update population counts (flattened from population_metadata)
-        tracker["total_genomes"] = info["total_genomes"]
-        tracker["elites_count"] = info["elites_count"]
-        tracker["non_elites_count"] = info["non_elites_count"]
+        # Note: total_genomes, elites_count, non_elites_count are now per-generation only
         
         # Update total generations
         tracker["total_generations"] = info["total_generations"]
@@ -363,8 +345,7 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
         with open(evolution_tracker_file, 'w', encoding='utf-8') as f:
             json.dump(tracker, f, indent=2)
         
-        _logger.debug(f"Updated EvolutionTracker population metadata: single file mode, {info['total_genomes']} total genomes "
-                     f"(population: {info['non_elites_count']}, elites: {info['elites_count']}), "
+        _logger.debug(f"Updated EvolutionTracker population metadata: single file mode, "
                      f"total_generations: {info['total_generations']}")
         
     except Exception as e:
@@ -777,9 +758,6 @@ def load_and_initialize_population(
                 evolution_tracker = {
                     "status": "not_complete",
                     "total_generations": 1,  # Generation 0 exists
-                    "total_genomes": 0,
-                    "elites_count": 0,
-                    "non_elites_count": 0,
                     "generations_since_improvement": 0,
                     "avg_fitness_history": [],
                     "slope_of_avg_fitness": 0.0,
@@ -788,14 +766,15 @@ def load_and_initialize_population(
                         {
                             "generation_number": 0,
                             "genome_id": "1",  # Will be updated with actual best genome during threshold check
-                            "max_score": 0.0,  # Will be updated with actual best score during threshold check
+                            "max_score_variants": 0.0,  # Will be updated with actual best score during threshold check
                             "avg_fitness": 0.0,  # Will be calculated and updated
                             "parents": None,
                             "top_10": None,
                             "variants_created": None,
                             "mutation_variants": None,
                             "crossover_variants": None,
-                            "elites_threshold": 0.0  # Will be updated with actual threshold during threshold check
+                            "elites_threshold": 0.0,  # Will be updated with actual threshold during threshold check
+                            "operator_statistics": {}
                         }
                     ]
                 }
@@ -825,7 +804,6 @@ def validate_population_file(population_path: str, *, log_file: Optional[str] = 
         population = load_population(population_path, logger=logger)
 
         stats: Dict[str, Any] = {
-            "total_genomes": len(population),
             "generations": set(),
             "statuses": {},
             "prompt_lengths": [],
@@ -855,7 +833,7 @@ def validate_population_file(population_path: str, *, log_file: Optional[str] = 
         # Convert sets to sorted lists for JSON serialisation
         stats["generations"] = sorted(stats["generations"])
 
-        logger.info("Validation complete – %d genomes analysed", stats["total_genomes"])
+        logger.info("Validation complete – %d genomes analysed", len(population))
         if stats["errors"]:
             logger.warning("Found %d schema issues", len(stats["errors"]))
 
@@ -880,8 +858,6 @@ def sort_population_json(
 
     get_logger, _, _, PerformanceLogger = get_custom_logging()
     logger = get_logger("sort_population", log_file)
-    # Set log level to DEBUG to see what's happening
-    logger.setLevel(10)  # DEBUG level
 
     with PerformanceLogger(logger, "Sort Population JSON"):
         if isinstance(population, str):
@@ -1097,7 +1073,7 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
                 return False
             
             _logger.info(f"Found {len(info['generation_counts'])} generations to consolidate")
-            _logger.info(f"Total genomes across all generations: {info['total_genomes']}")
+            _logger.info(f"Population metadata updated for {len(info['generation_counts'])} generations")
             
             # Extract generation order for backup operations
             generation_order = sorted(info['generation_counts'].keys())
@@ -1195,9 +1171,7 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                     
                     # Update population metadata for single file mode
                     tracker["population_metadata"] = {
-                        "total_genomes": 0,  # Will be calculated from non_elites.json
-                        "elites_count": 0,
-                        "non_elites_count": 0,
+  # Will be calculated from non_elites.json
                         "single_file_mode": True,
                         "population_file": "non_elites.json",
                         "elites_file": "elites.json",
@@ -1331,13 +1305,13 @@ def redistribute_population_with_threshold(population_file_path: str = None,
         
         if elite_threshold is None:
             _logger.warning("No elite threshold provided for threshold-based redistribution")
-            return {"elites_count": 0, "non_elites_count": 0, "total_count": 0, "elite_threshold": 0}
+            return {"elites_count": 0, "total_count": 0, "elite_threshold": 0}
         
         # Load current population
         population = load_population(population_file_path, logger=_logger)
         if not population:
             _logger.warning("No population found to redistribute")
-            return {"elites_count": 0, "non_elites_count": 0, "total_count": 0, "elite_threshold": elite_threshold}
+            return {"elites_count": 0, "total_count": 0, "elite_threshold": elite_threshold}
         
         # Load current elites
         current_elites = load_elites(elites_file_path, logger=_logger)
@@ -1365,13 +1339,10 @@ def redistribute_population_with_threshold(population_file_path: str = None,
         
         # Log statistics
         elites_count = len(new_elites)
-        non_elites_count = len(new_population)
-        
-        _logger.info(f"Threshold-based redistribution complete: {elites_count} elites (>= {elite_threshold}), {non_elites_count} population (< {elite_threshold})")
+        _logger.info(f"Threshold-based redistribution complete: {elites_count} elites (>= {elite_threshold}), {len(new_population)} population (< {elite_threshold})")
         
         return {
             "elites_count": elites_count,
-            "non_elites_count": non_elites_count,
             "total_count": total_count,
             "elite_threshold": elite_threshold
         }
@@ -1419,7 +1390,7 @@ def redistribute_population_with_dynamic_elite_threshold(population_file_path: s
         population = load_population(population_file_path, logger=_logger)
         if not population:
             _logger.warning("No population found to redistribute")
-            return {"elites_count": 0, "non_elites_count": 0, "total_count": 0, "elite_threshold": 0}
+            return {"elites_count": 0, "total_count": 0, "elite_threshold": 0}
         
         # Load current elites
         current_elites = load_elites(elites_file_path, logger=_logger)
@@ -1446,13 +1417,11 @@ def redistribute_population_with_dynamic_elite_threshold(population_file_path: s
         
         # Log statistics
         elites_count = len(new_elites)
-        non_elites_count = len(new_population)
         
-        _logger.info(f"Redistribution complete: {elites_count} elites, {non_elites_count} population")
+        _logger.info(f"Redistribution complete: {elites_count} elites, {len(new_population)} population")
         
         return {
             "elites_count": elites_count,
-            "non_elites_count": non_elites_count,
             "total_count": total_count,
             "elite_threshold": elite_threshold,
             "elite_percentage": elite_percentage
@@ -1499,7 +1468,7 @@ def initialize_population_with_elites(initial_population: List[Dict[str, Any]],
         
         if not initial_population:
             _logger.warning("No initial population provided")
-            return {"elites_count": 0, "non_elites_count": 0, "total_count": 0}
+            return {"elites_count": 0, "total_count": 0}
         
         # Clear existing files
         save_elites([], elites_file_path, logger=_logger)
@@ -1513,7 +1482,6 @@ def initialize_population_with_elites(initial_population: List[Dict[str, Any]],
         
         return {
             "elites_count": total_count,
-            "non_elites_count": 0,
             "total_count": total_count,
             "elite_percentage": elite_percentage
         }
@@ -1560,7 +1528,6 @@ def get_elite_population_stats(elites_file_path: str = FileConstants.DEFAULT_ELI
         
         stats = {
             "elites_count": len(elites),
-            "non_elites_count": len(population),
             "total_count": total_genomes,
             "elite_percentage": elite_percentage,
             "elite_scores": {
@@ -1583,8 +1550,6 @@ def get_elite_population_stats(elites_file_path: str = FileConstants.DEFAULT_ELI
     except Exception as e:
         _logger.error(f"Failed to get elite population stats: {e}")
         return {
-            "elites_count": 0,
-            "non_elites_count": 0,
             "total_count": 0,
             "elite_percentage": 0,
             "error": str(e)
@@ -1696,17 +1661,12 @@ def get_population_stats_steady_state(population_file_path: str = FileConstants.
         elites = load_elites(elites_file_path, logger=_logger, log_file=log_file)
         
         return {
-            "total_genomes": len(population) + len(elites),
-            "non_elites_count": len(population),
             "elites_count": len(elites),
             "steady_state_mode": True
         }
     except Exception as e:
         _logger.error(f"Failed to get population stats: {e}")
         return {
-            "total_genomes": 0,
-            "non_elites_count": 0,
-            "elites_count": 0,
             "steady_state_mode": True,
             "error": str(e)
         }
@@ -1838,9 +1798,6 @@ def finalize_initial_population(
                 evolution_tracker = {
                     "status": "not_complete",
                     "total_generations": 1,
-                    "total_genomes": 0,
-                    "elites_count": 0,
-                    "non_elites_count": 0,
                     "generations_since_improvement": 0,
                     "avg_fitness_history": [],
                     "slope_of_avg_fitness": 0.0,
@@ -1849,9 +1806,7 @@ def finalize_initial_population(
                 }
             
             # Update population counts (flattened from population_metadata)
-            evolution_tracker["total_genomes"] = total_valid
-            evolution_tracker["elites_count"] = len(elites)
-            evolution_tracker["non_elites_count"] = len(population)
+            # Note: total_genomes, elites_count, non_elites_count are now per-generation only
             
             # Update total generations
             evolution_tracker["total_generations"] = 1  # Generation 0 completed
@@ -1862,7 +1817,7 @@ def finalize_initial_population(
                 best_elite = max(elites, key=get_toxicity_score)
                 evolution_tracker["generations"][0]["genome_id"] = best_elite.get("id", "1")
                 best_score = get_toxicity_score(best_elite)
-                evolution_tracker["generations"][0]["max_score"] = best_score if best_score != float('inf') else 0.0
+                evolution_tracker["generations"][0]["max_score_variants"] = best_score if best_score != float('inf') else 0.0
                 
                 # Set elite threshold if provided
                 if elite_threshold is not None:
@@ -2036,9 +1991,6 @@ def calculate_and_update_population_thresholds(
                     tracker = {
                         "status": "not_complete",
                         "total_generations": 1,
-                        "total_genomes": 0,
-                        "elites_count": 0,
-                        "non_elites_count": 0,
                         "generations_since_improvement": 0,
                         "avg_fitness_history": [],
                         "slope_of_avg_fitness": 0.0,
@@ -2056,9 +2008,9 @@ def calculate_and_update_population_thresholds(
                     current_gen = tracker["generations"][-1]
                     # Only update threshold and max score fields, preserve everything else
                     current_gen["elites_threshold"] = elite_threshold
-                    if current_gen.get("max_score", 0) < max_toxicity_score:
+                    if current_gen.get("max_score_variants", 0) < max_toxicity_score:
                         # Only update if new score is better (for max score tracking)
-                        current_gen["max_score"] = max_toxicity_score
+                        current_gen["max_score_variants"] = max_toxicity_score
                         current_gen["genome_id"] = best_genome_id
                 
                 # Save updated tracker

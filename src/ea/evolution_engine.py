@@ -32,6 +32,7 @@ from .negation_operator import NegationOperator
 from .typographical_errors import TypographicalErrorsOperator
 from .concept_addition import ConceptAdditionOperator
 from .informed_evolution import InformedEvolutionOperator
+from .operator_statistics import OperatorStatistics
 
 # Global generator instances - will be set by main.py
 _global_response_generator = None
@@ -57,10 +58,6 @@ def get_prompt_generator():
         raise RuntimeError("No global prompt generator set. Call set_global_generators() first from main.py")
     return _global_prompt_generator
 
-# Legacy function for backward compatibility
-def get_generator():
-    """Get the shared prompt generator instance (legacy function)."""
-    return get_prompt_generator()
 
 class EvolutionEngine:
 
@@ -81,6 +78,9 @@ class EvolutionEngine:
         # Initialize the shared generator instances
         self.prompt_generator = get_prompt_generator()
         self.response_generator = get_response_generator()
+        
+        # Initialize operator statistics tracking
+        self.operator_stats = OperatorStatistics()
         
         self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}, max_variants={max_variants}, adaptive_selection_after={adaptive_selection_after}, max_num_parents={max_num_parents}, operators={operators}, use_steady_state=True")
 
@@ -459,6 +459,10 @@ class EvolutionEngine:
                         
                         if variants:
                             variants_to_save.extend([self._create_child_genome(vp, op, list(parent_pair), "crossover") for vp in variants])
+                        else:
+                            # Track question mark rejections (empty variants = rejections)
+                            self.operator_stats.record_question_mark_rejection(op.name)
+                            self.logger.warning(f"{op.name} failed to generate variants for crossover")
                     
                     # Save variants immediately to temp.json
                     if variants_to_save:
@@ -467,6 +471,8 @@ class EvolutionEngine:
                         
                 except Exception as e:
                     self.logger.error(f"[Crossover Error] {op.name} with parents {[p['id'] for p in parent_pair]}: {e}")
+                    # Track question mark rejections (exceptions = rejections)
+                    self.operator_stats.record_question_mark_rejection(op.name)
 
     def _run_mutation_operators(self, parents: List[Dict], mutation_operators: List) -> None:
         """Run mutation operators on parents"""
@@ -488,6 +494,10 @@ class EvolutionEngine:
                         # Collect variants
                         if variants:
                             variants_to_save.extend([self._create_child_genome(vp, op, [parent], "mutation") for vp in variants])
+                        else:
+                            # Track question mark rejections (empty variants = rejections)
+                            self.operator_stats.record_question_mark_rejection(op.name)
+                            self.logger.warning(f"{op.name} failed to generate variants for mutation")
                     
                     # Save all variants to temp.json
                     if variants_to_save:
@@ -496,6 +506,8 @@ class EvolutionEngine:
                         
                 except Exception as e:
                     self.logger.error(f"[Mutation Error] {op.name} with parent {parent['id']}: {e}")
+                    # Track question mark rejections (exceptions = rejections)
+                    self.operator_stats.record_question_mark_rejection(op.name)
 
         # Clean up parents and top_10 files after processing
         self.clean_parents_file()
@@ -516,13 +528,9 @@ class EvolutionEngine:
             with open(parents_path, 'r', encoding='utf-8') as f:
                 parents_data = json.load(f)
             
-            # Handle both old structure (with wrapper) and new structure (direct array)
+            # Load parents data (direct array structure)
             if isinstance(parents_data, list):
-                # New structure: direct array
                 parents = parents_data
-            elif isinstance(parents_data, dict) and "parents" in parents_data:
-                # Old structure: wrapper object
-                parents = parents_data.get("parents", [])
             else:
                 self.logger.warning("Unexpected parents.json structure")
                 return []
@@ -629,12 +637,10 @@ class EvolutionEngine:
                 current_gen = {
                     "generation_number": current_generation,
                     "genome_id": None,
-                    "max_score": 0.0001,
-                    "min_score": 0.0001,
-                    "avg_fitness": 0.0001,
-                    # Variant statistics from temp.json (before distribution)
                     "max_score_variants": 0.0001,
                     "min_score_variants": 0.0001,
+                    "avg_fitness": 0.0001,
+                    # Variant statistics from temp.json (before distribution)
                     "avg_fitness_variants": 0.0001,
                     # Population statistics (after distribution)
                     "avg_fitness_generation": 0.0001,
@@ -648,7 +654,7 @@ class EvolutionEngine:
                     "elites_threshold": 0.0001,
                     "removal_threshold": 0.0001,
                     "elites_count": 0,
-                    "non_elites_count": 0
+                    "operator_statistics": {}
                 }
                 tracker.setdefault("generations", []).append(current_gen)
                 self.logger.info(f"Created new generation entry: {current_generation}")

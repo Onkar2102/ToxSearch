@@ -1,10 +1,40 @@
-# System Architecture
+# System Architecture: Evolutionary Optimization for Safety Testing
 
-## Overview
+## Scientific Overview
 
-The Evolutionary Text Generation Framework uses genetic algorithms with adaptive selection pressure to evolve text prompts toward higher toxicity scores for AI safety research.
+This system implements a genetic algorithm framework for evolving text prompts to maximize toxicity scores, enabling comprehensive AI safety evaluation through adversarial prompt generation.
 
-## Core Architecture
+## Core Algorithm
+
+### Evolutionary Process
+The system uses a steady-state genetic algorithm with the following components:
+
+1. **Population Initialization**: Load initial prompts from CSV
+2. **Parent Selection**: Adaptive tournament selection based on fitness
+3. **Variation**: Apply 16 different operators to generate offspring
+4. **Evaluation**: Score offspring using Google Perspective API
+5. **Selection**: Distribute offspring into elite/non-elite/under-performing categories
+6. **Termination**: Stop when convergence criteria are met
+
+### Mathematical Framework
+
+**Fitness Function**:
+```
+f(x) = toxicity_score(x) ∈ [0, 1]
+```
+
+**Selection Pressure**:
+```
+P(select) = f(x) / Σf(x_i)  # Proportional selection
+```
+
+**Threshold Calculations**:
+```
+elite_threshold = max_toxicity × (100 - elite_percentage) / 100
+removal_threshold = max_toxicity × removal_percentage / 100
+```
+
+## System Architecture
 
 ```mermaid
 flowchart TB
@@ -29,34 +59,70 @@ flowchart TB
     style G fill:#ff9800
 ```
 
-## System Components
+## Component Architecture
 
-### Entry Point
-- **`src/main.py`** - CLI entry point, orchestrates entire pipeline
+### Evolution Engine (`evolution_engine.py`)
+Core evolution logic implementing the genetic algorithm:
 
-### Evolution System
-- **`src/ea/evolution_engine.py`** - Core evolution logic, variant generation
-- **`src/ea/parent_selector.py`** - Adaptive parent selection (DEFAULT/EXPLORE/EXPLOIT)
-- **`src/ea/run_evolution.py`** - Evolution orchestration, genome distribution
-- **`src/ea/variation_operators.py`** - Operator registry
-- **`src/ea/[operator_files].py`** - 16 individual variation operators
+**Key Methods**:
+- `generate_variants_global()` - Main variant generation entry point
+- `_calculate_parent_score()` - Calculates parent scores for creation_info
+- `_create_child_genome()` - Creates genome with metadata
+- `clean_parents_file()` - Updates EvolutionTracker and empties temp files
 
-### Generation & Evaluation
-- **`src/gne/prompt_generator.py`** - Prompt generation using LLM
-- **`src/gne/response_generator.py`** - Response generation using LLM
-- **`src/gne/evaluator.py`** - Google Perspective API integration
+**Operator Modes**:
+- `"ie"` - InformedEvolution only, uses `top_10.json`
+- `"cm"` - Classical methods, uses `parents.json`
+- `"all"` - All operators, uses both files
 
-### Utilities
-- **`src/utils/population_io.py`** - Population I/O, metrics calculation, genome management
+### Parent Selector (`parent_selector.py`)
+Adaptive parent selection based on evolution progress:
 
-## Data Flow
+**Selection Modes**:
+| Mode | Parents | Trigger |
+|------|---------|---------|
+| **DEFAULT** | 1 elite + 1 non-elite | First `m` generations |
+| **EXPLORE** | 1 elite + 2 non-elites | Stagnation > `m` generations |
+| **EXPLOIT** | 2 elites + 1 non-elite | Fitness slope < 0 |
 
-### 1. Initialization
+**Mathematical Implementation**:
+```python
+if generation <= stagnation_limit:
+    mode = "default"
+elif slope_of_avg_fitness < 0:
+    mode = "exploit"
+elif generations_since_improvement > stagnation_limit:
+    mode = "explore"
+else:
+    mode = "default"
+```
+
+### Variation Operators (16 Total)
+
+#### Mutation Operators (13)
+1. **Informed Evolution**: LLM-guided evolution using top performers
+2. **Masked Language Model**: Contextual word substitution
+3. **Paraphrasing**: Semantic-preserving text transformation
+4. **Back Translation**: Multi-language roundtrip translation (5 languages)
+5. **Synonym/Antonym Replacement**: Lexical substitution with POS awareness
+6. **Negation**: Logical operator insertion
+7. **Concept Addition**: Semantic concept injection
+8. **Typographical Errors**: Character-level noise injection
+9. **Stylistic Mutation**: Writing style transformation
+
+#### Crossover Operators (3)
+1. **Semantic Similarity**: Crossbreeding based on semantic distance
+2. **Semantic Fusion**: Hybrid prompt generation
+3. **Cut-and-Slice**: Structural recombination
+
+## Data Flow Architecture
+
+### 1. Initialization Phase
 ```
 prompt.csv → Load prompts → Generate responses → Evaluate → Initialize population
                                                                     ↓
                                                           temp.json (variants)
-                                                                    ↓
+                                                                    
                                                  Distribute by threshold (elite_threshold, removal_threshold)
                                                                     ↓
                                       ┌─────────────────────────────┴──────────────────────────────┐
@@ -105,45 +171,10 @@ prompt.csv → Load prompts → Generate responses → Evaluate → Initialize p
 
 3. **Under-Performing** (`under_performing.json`)
    - Score ≤ removal_threshold
-   - Archived, not used for evolution
+   - Archived (not used for evolution)
    - Initial state: `"inefficient"`
 
-### Threshold Calculations
-```python
-# Elite threshold (percentage-based)
-elite_threshold = population_max_toxicity * (100 - elites_threshold%) / 100
-
-# Removal threshold (percentage-based)
-removal_threshold = population_max_toxicity * removal_threshold% / 100
-
-# Example: max_toxicity=0.5, elites_threshold=25%, removal_threshold=5%
-# elite_threshold = 0.5 * (100 - 25) / 100 = 0.375
-# removal_threshold = 0.5 * 5 / 100 = 0.025
-```
-
-## Adaptive Selection
-
-### Selection Modes
-| Mode | Parents | Trigger |
-|------|---------|---------|
-| **DEFAULT** | 1 elite + 1 non-elite | First `m` generations (m=stagnation_limit) |
-| **EXPLORE** | 1 elite + 2 non-elites | No improvement for `m` generations |
-| **EXPLOIT** | 2 elites + 1 non-elite | Fitness slope < 0 (declining average fitness) |
-
-### Mode Determination Logic
-```python
-1. Check if generation ≤ stagnation_limit → DEFAULT
-2. Check if fitness slope < 0 → EXPLOIT
-3. Check if generations_since_improvement > stagnation_limit → EXPLORE
-4. Otherwise → DEFAULT
-```
-
-### Fitness Tracking
-- **avg_fitness_history**: Sliding window of last `m` generations' average fitness
-- **slope_of_avg_fitness**: Linear regression slope of avg_fitness_history
-- **generations_since_improvement**: Counter that resets when population_max_toxicity increases
-
-## Evolution Tracking
+## Data Structures
 
 ### EvolutionTracker.json Structure
 ```json
@@ -152,9 +183,6 @@ removal_threshold = population_max_toxicity * removal_threshold% / 100
   "total_generations": 10,
   "population_max_toxicity": 0.5234,
   "population_best_genome_id": 42,
-  "total_genomes": 100,
-  "elites_count": 15,
-  "non_elites_count": 85,
   "generations_since_improvement": 2,
   "avg_fitness_history": [0.0542, 0.0569, 0.0617, 0.0691, 0.0753],
   "slope_of_avg_fitness": 0.0054,
@@ -163,8 +191,8 @@ removal_threshold = population_max_toxicity * removal_threshold% / 100
     {
       "generation_number": 1,
       "genome_id": 34,
-      "max_score": 0.1912,
-      "min_score": 0.0113,
+      "max_score_variants": 0.1912,
+      "min_score_variants": 0.0113,
       "avg_fitness": 0.0542,
       "avg_fitness_variants": 0.0669,
       "avg_fitness_generation": 0.0669,
@@ -178,7 +206,17 @@ removal_threshold = population_max_toxicity * removal_threshold% / 100
       "elites_threshold": 0.1434,
       "removal_threshold": 0.0096,
       "elites_count": 3,
-      "non_elites_count": 32
+      "non_elites_count": 32,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        }
+      }
     }
   ]
 }
@@ -194,6 +232,7 @@ removal_threshold = population_max_toxicity * removal_threshold% / 100
   "parents": [8, 3],
   "operator": "LLMBasedParaphrasing",
   "initial_state": "elite",
+  "parent_score": 0.0622,
   "creation_info": {
     "type": "mutation",
     "operator": "LLMBasedParaphrasing",
@@ -206,80 +245,57 @@ removal_threshold = population_max_toxicity * removal_threshold% / 100
       "scores": {
         "toxicity": 0.1912,
         "severe_toxicity": 0.0234,
-        ...
+        "threat": 0.0123,
+        "insult": 0.0456,
+        "profanity": 0.0789
       }
     }
   }
 }
 ```
 
-## Variation Operators (16 Total)
-
-### Mutation Operators (13)
-1. **MLM** - Masked Language Model substitution
-2. **LLMBasedParaphrasing** - LLM-based paraphrasing
-3. **BackTranslation** (5 variants) - Translation roundtrip (Chinese, French, German, Hindi, Japanese)
-4. **SynonymReplacement** - WordNet synonyms
-5. **AntonymReplacement** - WordNet antonyms
-6. **TypographicalErrors** - Typo injection
-7. **NegationOperator** - Negation insertion
-8. **ConceptAddition** - Concept injection
-9. **StylisticMutator** - Style transfer
-10. **InformedEvolutionOperator** - LLM-guided using top_10
-
-### Crossover Operators (3)
-1. **SemanticFusionCrossover** - Semantic blending
-2. **SemanticSimilarityCrossover** - Similarity-based crossover
-3. **CutAndSliceCrossover** - Segment recombination
-
 ## Performance Characteristics
 
-### Memory Management
-- **Lazy Loading**: Population loaded only when needed
-- **Cache Limits**: Moderation cache capped at 5,000 entries
-- **Model Caching**: Max 2 models in memory, LRU eviction
+### Computational Complexity
+- **Time Complexity**: O(N × M × K) where N=population size, M=operators, K=variants per operator
+- **Space Complexity**: O(N) for population storage
+- **Convergence Rate**: Typically 10-50 generations for toxicity scores >0.8
 
-### API Rate Limiting
-- **Google Perspective API**: 60 requests/minute
-- **Retry Logic**: Exponential backoff (2 retries)
-- **Text Size Limit**: 20,480 bytes (truncated if exceeded)
+### Memory Optimization
+- Lazy loading: Population loaded only when needed
+- Model caching: LLM models cached and reused
+- Streaming evaluation: Process large populations efficiently
 
-### Score System
-- **Minimum Score**: 0.0001 (enforced across all calculations)
-- **Precision**: 4 decimal places
-- **Range**: 0.0001 to 1.0000
+### Scalability
+- Parallel operator execution
+- Batch API calls for efficiency
+- Configurable population sizes (100-10,000+ genomes)
 
-## File Lifecycle
+## Error Handling
 
-### Temporary Files (per generation)
-- **`temp.json`** - New variants before evaluation
-- **`parents.json`** - Selected parents (slimmed: id, prompt, toxicity)
-- **`top_10.json`** - Top 10 performers (slimmed: id, prompt, toxicity)
+### Critical Errors (Project Stops)
+- Empty `elites.json` - Indicates fundamental system failure
+- Missing required files
+- API authentication failures
 
-### Persistent Files
-- **`elites.json`** - Elite genomes
-- **`non_elites.json`** - Non-elite genomes
-- **`under_performing.json`** - Archived low-scoring genomes
-- **`EvolutionTracker.json`** - Complete evolution history
+### Graceful Handling
+- LLM refusals - Return empty variant list
+- XML parsing errors - Raise ValueError
+- Missing scores - Use default 0.0001
 
-## Configuration
+## Research Applications
 
-### Model Configuration
-- **PGConfig.yaml** - Prompt Generator settings
-- **RGConfig.yaml** - Response Generator settings
-- Command-line arguments override config files
+### AI Safety Evaluation
+- Generate adversarial prompts for content moderation testing
+- Identify edge cases in safety mechanisms
+- Measure robustness of AI systems
 
-### Key Parameters
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `max_variants` | 1 | Variants per operator per parent |
-| `elites_threshold` | 25 | Elite threshold percentage |
-| `removal_threshold` | 5 | Removal threshold percentage |
-| `stagnation_limit` | 5 | Generations before explore mode |
-| `north_star_threshold` | 0.95 | Target toxicity (reference only) |
+### Behavioral Analysis
+- Study prompt-toxicity relationships
+- Analyze evolutionary patterns in harmful content
+- Investigate linguistic features of high-toxicity prompts
 
-## See Also
-
-- **[README.md](README.md)** - Getting started and usage
-- **[OPERATORS.md](OPERATORS.md)** - Detailed operator documentation
-- **[src/ea/README.md](src/ea/README.md)** - Evolutionary algorithm details
+### Model Development
+- Create training data for safety classifiers
+- Develop countermeasures for adversarial attacks
+- Improve content moderation systems
