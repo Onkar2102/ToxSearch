@@ -91,6 +91,8 @@ Return only: <paraphrase>YOUR_PARAPHRASED_QUESTION_HERE</paraphrase>"""
             ['Craft an engaging narrative tale']
         """
         try:
+            import time
+            start_time = time.time()
             # Validate input format
             if not isinstance(operator_input, dict):
                 self.logger.error(f"{self.name}: Input must be a dictionary")
@@ -153,6 +155,15 @@ Return only: <paraphrase>YOUR_PARAPHRASED_QUESTION_HERE</paraphrase>"""
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")
             raise RuntimeError(f"{self.name} paraphrasing failed: {e}") from e
+        finally:
+            try:
+                end_time = time.time()
+                operation_time = end_time - start_time
+                if not hasattr(self, '_last_operation_time'):
+                    self._last_operation_time = {}
+                self._last_operation_time['duration'] = operation_time
+            except Exception:
+                pass
 
     def get_debug_info(self) -> Dict[str, Any]:
         """

@@ -687,11 +687,10 @@ def load_and_initialize_population(
                         "parent_score": None,  # null for initial genomes (no parents)
                         "generation": 0,
                         "status": "pending_generation",
+                        "variant_type": "initial",  # Moved to top-level
                         "creation_info": {
                             "type": "initial",
-                            "operator": "excel_import",
-                            "source_generation": 0,
-                            "evolution_cycle": 0
+                            "operator": "excel_import"
                         }
                     }
                 )

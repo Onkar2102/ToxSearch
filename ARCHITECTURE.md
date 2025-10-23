@@ -34,30 +34,59 @@ elite_threshold = max_toxicity × (100 - elite_percentage) / 100
 removal_threshold = max_toxicity × removal_percentage / 100
 ```
 
-## System Architecture
+## 1.2 System Architecture / Framework Overview
 
 ```mermaid
 flowchart TB
-    A[Input: prompt.csv] --> B[Initialize Population]
-    B --> C[Select Parents Adaptively]
-    C --> D[Apply 16 Variation Operators]
-    D --> E[Generate Responses LLM]
-    E --> F[Evaluate with Perspective API]
-    F --> G[Classify & Distribute]
-    G --> H{Max Generations?}
-    H -->|No| C
-    H -->|Yes| I[Complete]
-    
-    G --> J[elites.json]
-    G --> K[non_elites.json]
-    G --> L[under_performing.json]
-    F --> M[EvolutionTracker.json]
-    
-    style C fill:#4fc3f7
-    style D fill:#ba68c8
-    style F fill:#4caf50
-    style G fill:#ff9800
+    %% Major components
+    IN[Seed Prompts\n(prompt.csv)] --> INIT[Population Initialization\ncreate genomes in temp.json]
+    INIT --> SEL[Parent Selection\n(adaptive tournament)]
+    SEL --> VAR[Variation\nMutation + Crossover]
+
+    %% Two‑LLM and scoring pipeline
+    VAR -->|candidate prompts p'| RG[Response Generator (RG)\nLLM_y: generate y ~ RG(·|p')] 
+    RG --> MOD[Moderation Oracle\nPerspective API]
+    MOD --> FIT[Fitness Aggregation\nmax/mean toxicity]
+
+    %% Replacement & bookkeeping
+    FIT --> CLS[Selection & Replacement\n(elitism / tiers)]
+    CLS --> IDX[Update Indices\nEvolutionTracker.json]
+    CLS --> EL[elites.json]
+    CLS --> NE[non_elites.json]
+    CLS --> UP[under_performing.json]
+
+    %% Loop/termination
+    IDX --> TERM{Termination?\n(generations/budget/plateau)}
+    TERM -- No --> SEL
+    TERM -- Yes --> DONE[Finalize & Export Results]
+
+    %% Optional: Prompt Generator role
+    PG[Prompt Generator (PG)\nLLM_x: propose/evolve prompts] --- VAR
+
+    %% Styles
+    classDef io fill:#e3f2fd,stroke:#90caf9,color:#0d47a1;
+    classDef evolve fill:#ede7f6,stroke:#b39ddb,color:#4a148c;
+    classDef llm fill:#fff3e0,stroke:#ffb74d,color:#e65100;
+    classDef score fill:#e8f5e9,stroke:#81c784,color:#1b5e20;
+    classDef store fill:#fffde7,stroke:#fff176,color:#f57f17;
+
+    class IN,EL,NE,UP io;
+    class INIT,SEL,VAR evolve;
+    class RG,PG llm;
+    class MOD,FIT score;
+    class CLS,IDX,TERM,DONE store;
 ```
+
+### Block Descriptions and Interactions
+
+- **Population Initialization**: Load seed prompts from `prompt.csv`, wrap each as a genome, and write to `temp.json`. This forms generation 0.
+- **Parent Selection**: Adaptive tournament selection over elites and non‑elites, guided by historical fitness trends (selection mode DEFAULT/EXPLORE/EXPLOIT).
+- **Variation (Mutation/Crossover)**: Apply the configured operators to create prompt variants. Mutations include paraphrasing, back‑translation, synonym/antonym, negation, concept addition, typographical noise, stylistic mutation, etc.; crossovers include semantic similarity, fusion, and cut‑and‑slice.
+- **Response Generation (RG LLM)**: For each candidate prompt, query the target LLM to obtain response(s) \( y \sim \text{RG}(\cdot\mid p) \).
+- **Evaluation via Fitness Function(s)**: Score responses with the moderation oracle (Perspective API). Aggregate per‑prompt fitness via max or mean toxicity over \(k\) samples.
+- **Selection & Replacement (Elitism)**: Classify genomes into elites, non‑elites, and under‑performing using dynamic thresholds; replace population steady‑state while preserving top performers.
+- **Indices & Logging**: Persist metrics and histories to `EvolutionTracker.json` and store tiered populations in `elites.json`, `non_elites.json`, and `under_performing.json`.
+- **Termination Criteria**: Stop on reaching max generations, budget exhaustion, or convergence (fitness plateau). Otherwise, loop back to selection.
 
 ## Component Architecture
 

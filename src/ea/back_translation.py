@@ -81,6 +81,8 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """Generate back-translated variant using LLaMA model."""
         try:
+            import time
+            start_time = time.time()
             # Validate input format
             if not isinstance(operator_input, dict):
                 self.logger.error(f"{self.name}: Input must be a dictionary")
@@ -166,6 +168,15 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}")
             raise RuntimeError(f"{self.name} back-translation failed: {e}") from e
+        finally:
+            try:
+                end_time = time.time()
+                operation_time = end_time - start_time
+                if not hasattr(self, '_last_operation_time'):
+                    self._last_operation_time = {}
+                self._last_operation_time['duration'] = operation_time
+            except Exception:
+                pass
 
 class LLMBackTranslationHIOperator(_GenericLLMBackTranslationOperator):
     """LLaMA-based Hindi back-translation operator."""

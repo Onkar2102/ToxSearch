@@ -232,6 +232,8 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
             List[str]: List containing MLM-generated prompt variants (or original if failed)
         """
         try:
+            import time
+            start_time = time.time()
             # Validate input format
             if not isinstance(operator_input, dict):
                 self.logger.error(f"{self.name}: Input must be a dictionary")
@@ -283,3 +285,12 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
         except Exception as e:
             self.logger.warning(f"{self.name}: apply failed (likely LLM refusals): {e}")
             return []
+        finally:
+            try:
+                end_time = time.time()
+                operation_time = end_time - start_time
+                if not hasattr(self, '_last_operation_time'):
+                    self._last_operation_time = {}
+                self._last_operation_time['duration'] = operation_time
+            except Exception:
+                pass

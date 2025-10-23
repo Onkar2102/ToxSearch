@@ -472,6 +472,8 @@ Return only: <synonyms>synonym_word</synonyms>"""
     def apply(self, operator_input: Dict[str, Any]) -> List[str]:
         """Generate text variants using POS-aware synonym replacement."""
         try:
+            import time
+            start_time = time.time()
             # Validate input format
             if not isinstance(operator_input, dict):
                 self.logger.error(f"{self.name}: Input must be a dictionary")
@@ -510,6 +512,15 @@ Return only: <synonyms>synonym_word</synonyms>"""
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed: {e}")
             raise RuntimeError(f"{self.name} variant generation failed: {e}") from e
+        finally:
+            try:
+                end_time = time.time()
+                operation_time = end_time - start_time
+                if not hasattr(self, '_last_operation_time'):
+                    self._last_operation_time = {}
+                self._last_operation_time['duration'] = operation_time
+            except Exception:
+                pass
     
     def _generate_single_variant(self, text: str) -> str:
         """Generate a single variant using POS-aware synonym replacement."""

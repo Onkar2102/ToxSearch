@@ -94,6 +94,8 @@ class SemanticSimilarityCrossover(VariationOperator):
             ['Write a tale about a brave knight']
         """
         try:
+            import time
+            start_time = time.time()
             # Lazy imports to avoid torch dependency issues
             import torch
             from sentence_transformers import util
@@ -172,4 +174,13 @@ class SemanticSimilarityCrossover(VariationOperator):
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed with error: {e}\nTrace: {traceback.format_exc()}")
             return parent_texts[:1] if parent_texts else []
+        finally:
+            try:
+                end_time = time.time()
+                operation_time = end_time - start_time
+                if not hasattr(self, '_last_operation_time'):
+                    self._last_operation_time = {}
+                self._last_operation_time['duration'] = operation_time
+            except Exception:
+                pass
 

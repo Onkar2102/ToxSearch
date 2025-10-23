@@ -17,8 +17,8 @@ from dotenv import load_dotenv
 from utils import get_custom_logging, get_population_io
 from concurrent.futures import ThreadPoolExecutor
 
-# Load environment variables
-load_dotenv()
+# Load environment variables (override=True to use .env file over shell environment)
+load_dotenv(override=True)
 
 # Module-level logger initialization
 get_logger, get_log_filename, _, _ = get_custom_logging()
@@ -120,7 +120,17 @@ class HybridModerationEvaluator:
         self.google_available = bool(os.getenv("PERSPECTIVE_API_KEY"))
         
         if not self.google_available:
-            raise ValueError("PERSPECTIVE_API_KEY environment variable is not set")
+            error_msg = (
+                "PERSPECTIVE_API_KEY environment variable is not set.\n"
+                "Please set up your Google Perspective API key:\n"
+                "1. Get your API key from: https://developers.perspectiveapi.com/\n"
+                "2. Create a .env file in the project root\n"
+                "3. Add: PERSPECTIVE_API_KEY=your_actual_api_key_here\n"
+                "4. Or set the environment variable: export PERSPECTIVE_API_KEY=your_actual_api_key_here\n"
+                "See .env.example for reference."
+            )
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
         
         self.logger.info("API Availability - Google: %s", 
                         "OK" if self.google_available else "ERROR")
@@ -146,8 +156,7 @@ class HybridModerationEvaluator:
                     "commentanalyzer",
                     "v1alpha1",
                     developerKey=api_key,
-                    discoveryServiceUrl="https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1",
-                    static_discovery=False,
+                    discoveryServiceUrl="https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1"
                 )
                 self.logger.info("Google Perspective API client initialized")
                 
@@ -191,6 +200,7 @@ class HybridModerationEvaluator:
                     'comment': {
                         'text': text
                     },
+                    'languages': ['en'],  # Specify the language of the comment
                     'requestedAttributes': {
                         'TOXICITY': {},
                         'SEVERE_TOXICITY': {},
@@ -200,7 +210,8 @@ class HybridModerationEvaluator:
                         'THREAT': {},
                         'SEXUALLY_EXPLICIT': {},
                         'FLIRTATION': {}
-                    }
+                    },
+                    'doNotStore': True  # Set to True to prevent storing the comment text
                 }
                 
                 response = self.google_client.comments().analyze(body=analyze_request).execute()
@@ -415,8 +426,8 @@ class HybridModerationEvaluator:
                         # Extract north star score from available APIs
                         north_star_score = self._extract_north_star_score(evaluation_result, north_star_metric)
                         
-                        # All evaluated genomes go to pending_generation
-                        genome['status'] = 'pending_generation'
+                        # All evaluated genomes go to complete
+                        genome['status'] = 'complete'
                         total_processed += 1
                         self.logger.debug("Genome %s %s score: %.4f", genome.get('id'), north_star_metric, north_star_score)
                     else:

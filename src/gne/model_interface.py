@@ -8,6 +8,7 @@ Currently implements llama_cpp provider with chat completions support.
 import os
 import time
 import psutil
+import re
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from llama_cpp import Llama
@@ -375,6 +376,125 @@ class LlamaCppChatInterface(ModelInterface):
         
         return formatted_prompt
     
+    def _estimate_token_count(self, text: str) -> int:
+        """
+        Estimate token count for text using a simple heuristic.
+        This is a rough approximation - actual tokenization may vary.
+        
+        Args:
+            text: Input text to count tokens for
+            
+        Returns:
+            Estimated token count
+        """
+        if not text:
+            return 0
+        
+        # Simple heuristic: ~4 characters per token for English text
+        # This is conservative and may underestimate for some cases
+        char_count = len(text)
+        
+        # Account for special tokens and whitespace
+        # Count words as base, then add overhead for special tokens
+        word_count = len(text.split())
+        
+        # Use the higher of character-based or word-based estimates
+        char_based_estimate = char_count // 4
+        word_based_estimate = word_count * 1.3  # ~1.3 tokens per word
+        
+        estimated_tokens = max(char_based_estimate, int(word_based_estimate))
+        
+        # Add overhead for special tokens (system prompts, formatting, etc.)
+        overhead = 50  # Conservative overhead for special tokens
+        
+        return estimated_tokens + overhead
+    
+    def _validate_context_window(self, formatted_prompt: str, max_new_tokens: int, context_length: int = 4096) -> tuple[str, int]:
+        """
+        Validate and adjust prompt/tokens to fit within context window.
+        
+        Args:
+            formatted_prompt: The formatted prompt text
+            max_new_tokens: Requested maximum new tokens to generate
+            context_length: Total context window length
+            
+        Returns:
+            Tuple of (adjusted_prompt, adjusted_max_tokens)
+        """
+        prompt_tokens = self._estimate_token_count(formatted_prompt)
+        total_requested = prompt_tokens + max_new_tokens
+        
+        self.logger.debug(f"Token validation: prompt={prompt_tokens}, max_new={max_new_tokens}, total={total_requested}, context={context_length}")
+        
+        if total_requested <= context_length:
+            # Everything fits, return as-is
+            return formatted_prompt, max_new_tokens
+        
+        # Need to adjust - prioritize keeping max_new_tokens if possible
+        available_for_prompt = context_length - max_new_tokens
+        
+        if available_for_prompt <= 0:
+            # Even max_new_tokens alone exceeds context window
+            self.logger.warning(f"max_new_tokens ({max_new_tokens}) exceeds context window ({context_length}). Reducing to {context_length - 100}")
+            return formatted_prompt, context_length - 100
+        
+        if prompt_tokens > available_for_prompt:
+            # Need to truncate prompt
+            self.logger.warning(f"Prompt too long ({prompt_tokens} tokens). Truncating to fit context window.")
+            
+            # Simple truncation strategy: keep the end of the prompt (usually user input)
+            # This is a basic implementation - could be improved with smarter truncation
+            truncated_prompt = self._truncate_prompt(formatted_prompt, available_for_prompt)
+            truncated_tokens = self._estimate_token_count(truncated_prompt)
+            
+            self.logger.debug(f"Truncated prompt: {truncated_tokens} tokens")
+            return truncated_prompt, max_new_tokens
+        
+        return formatted_prompt, max_new_tokens
+    
+    def _truncate_prompt(self, prompt: str, max_tokens: int) -> str:
+        """
+        Truncate prompt to fit within token limit.
+        Prioritizes keeping the end of the prompt (user input).
+        
+        Args:
+            prompt: Original prompt text
+            max_tokens: Maximum tokens allowed
+            
+        Returns:
+            Truncated prompt text
+        """
+        if not prompt:
+            return prompt
+        
+        # Estimate characters per token (conservative)
+        chars_per_token = 4
+        max_chars = max_tokens * chars_per_token
+        
+        if len(prompt) <= max_chars:
+            return prompt
+        
+        # Find the last "User:" section and try to preserve it
+        user_sections = prompt.split("User:")
+        if len(user_sections) > 1:
+            # Keep system prompt + last user section
+            system_part = user_sections[0] + "User:"
+            user_part = user_sections[-1]
+            
+            # If system part is too long, truncate it
+            if len(system_part) > max_chars * 0.7:  # Reserve 30% for user part
+                system_part = system_part[:int(max_chars * 0.7)]
+            
+            # Combine and truncate if still too long
+            truncated = system_part + user_part
+            if len(truncated) > max_chars:
+                truncated = truncated[:max_chars]
+            
+            return truncated
+        else:
+            # No clear user section, truncate from end
+            return prompt[:max_chars]
+    
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """
         Generate a chat completion response using llama.cpp.
@@ -399,12 +519,22 @@ class LlamaCppChatInterface(ModelInterface):
             generation_kwargs = self.generation_args.copy()
             generation_kwargs.update(kwargs)
             
+            # Get context length from device config
+            device_config = self._get_device_specific_config()
+            context_length = device_config.get("context_length", 4096)
+            
+            # Validate context window and adjust if needed
+            max_new_tokens = generation_kwargs.get("max_new_tokens", 2048)
+            validated_prompt, validated_max_tokens = self._validate_context_window(
+                formatted_prompt, max_new_tokens, context_length
+            )
+            
             # Generate response using llama.cpp
-            self.logger.debug(f"Generating chat completion for prompt: {formatted_prompt[:100]}...")
+            self.logger.debug(f"Generating chat completion for prompt: {validated_prompt[:100]}...")
             
             response = self.model(
-                formatted_prompt,
-                max_tokens=generation_kwargs.get("max_new_tokens", 2048),
+                validated_prompt,
+                max_tokens=validated_max_tokens,
                 temperature=generation_kwargs.get("temperature", 0.7),
                 top_p=generation_kwargs.get("top_p", 0.9),
                 top_k=generation_kwargs.get("top_k", 40),

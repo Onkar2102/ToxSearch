@@ -30,7 +30,7 @@ from typing import Dict, Optional, Tuple
 # Optionally load .env automatically if python-dotenv is installed
 try:
     from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
+    load_dotenv(override=True)  # Override shell environment with .env file values
 except ImportError:
     # python-dotenv not installed, that's fine
     pass

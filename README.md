@@ -2,6 +2,60 @@
 
 A genetic algorithm framework for evolving text prompts to maximize toxicity scores, enabling comprehensive AI safety evaluation through adversarial prompt generation.
 
+## Quick Start
+
+### Prerequisites
+- Python 3.8+
+- Google Perspective API key
+- CUDA/MPS/CPU support for model inference
+
+### Installation
+```bash
+# Clone the repository
+git clone <repository-url>
+cd eost-cam-llm
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env and add your PERSPECTIVE_API_KEY
+```
+
+### API Key Setup
+1. **Get Google Perspective API Key**:
+   - Visit: https://developers.perspectiveapi.com/
+   - Create a project and enable the Perspective API
+   - Generate an API key
+
+2. **Configure Environment**:
+   ```bash
+   # Option 1: Using .env file (recommended)
+   echo "PERSPECTIVE_API_KEY=your_actual_api_key_here" > .env
+   
+   # Option 2: Using environment variable
+   export PERSPECTIVE_API_KEY=your_actual_api_key_here
+   ```
+
+3. **Verify Setup**:
+   ```bash
+   python -c "import os; print('API Key set:', bool(os.getenv('PERSPECTIVE_API_KEY')))"
+   ```
+
+### Running the System
+```bash
+# Basic run with default settings
+python src/main.py
+
+# Custom configuration
+python src/main.py --max-generations 10 --north-star-threshold 0.8
+```
+
 ## Scientific Foundation
 
 ### Research Objective

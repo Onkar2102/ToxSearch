@@ -3,32 +3,32 @@
     "total_generations": 1,
     "generations_since_improvement": 0,
     "avg_fitness_history": [
-        0.0368
+        0.0181
     ],
     "slope_of_avg_fitness": 0.0,
     "selection_mode": "default",
     "generations": [
         {
             "generation_number": 0,
-            "genome_id": 52,
+            "genome_id": 6,
             "max_score_variants": 0.0001,
-            "avg_fitness": 0.0374,
+            "avg_fitness": 0.0181,
             "parents": null,
             "top_10": null,
             "variants_created": null,
             "mutation_variants": null,
             "crossover_variants": null,
-            "elites_threshold": 0.1998,
+            "elites_threshold": 0.0179,
             "operator_statistics": {},
-            "elites_count": 2,
-            "removal_threshold": 0.0086,
-            "avg_fitness_elites": 0.2704,
-            "avg_fitness_non_elites": 0.0325,
-            "avg_fitness_generation": 0.0374,
+            "elites_count": 3,
+            "removal_threshold": 0.0008,
+            "avg_fitness_elites": 0.0228,
+            "avg_fitness_non_elites": 0.0152,
+            "avg_fitness_generation": 0.0181,
             "min_score_variants": 0.0001,
             "avg_fitness_variants": 0.0001
         }
     ],
-    "population_max_toxicity": 0.2855,
-    "population_best_genome_id": 52
+    "population_max_toxicity": 0.0256,
+    "population_best_genome_id": 6
 }

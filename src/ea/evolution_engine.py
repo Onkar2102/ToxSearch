@@ -123,8 +123,8 @@ class EvolutionEngine:
             with open(temp_path, 'r', encoding='utf-8') as f:
                 temp_variants = json.load(f)
             
-            mutation_count = sum(1 for v in temp_variants if v and v.get("creation_info", {}).get("type") == "mutation")
-            crossover_count = sum(1 for v in temp_variants if v and v.get("creation_info", {}).get("type") == "crossover")
+            mutation_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "mutation")
+            crossover_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "crossover")
             total_count = mutation_count + crossover_count
             
             self.logger.debug(f"Counted variants from temp.json: {mutation_count} mutation, {crossover_count} crossover, {total_count} total")
@@ -222,11 +222,10 @@ class EvolutionEngine:
             "generation": self.current_cycle,
             "status": "pending_generation",
             "parent_score": parent_score,  # Average/calculated parent score
+            "variant_type": variant_type,  # Moved to top-level
             "creation_info": {
                 "type": variant_type,
                 "operator": operator.name,
-                "source_generation": max(p.get("generation", 0) for p in parents) if len(parents) > 1 else parents[0].get("generation", 0),
-                "evolution_cycle": self.current_cycle,
                 "parent_score": parent_score  # Also kept in creation_info for backward compatibility
             }
         }
@@ -426,8 +425,6 @@ class EvolutionEngine:
         if not parents:
             self.logger.error("No parents selected or failed to load parents from file")
             return
-        
-        # EvolutionTracker is already updated by parent_selector.py when parents.json was created
 
         # Get all operators
         single_parent_operators = self._get_single_parent_operators()

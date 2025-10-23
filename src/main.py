@@ -492,8 +492,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 with open(temp_path, 'r', encoding='utf-8') as f:
                     temp_variants = json.load(f)
                 
-                mutation_count = sum(1 for v in temp_variants if v and v.get("creation_info", {}).get("type") == "mutation")
-                crossover_count = sum(1 for v in temp_variants if v and v.get("creation_info", {}).get("type") == "crossover")
+                mutation_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "mutation")
+                crossover_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "crossover")
                 total_count = mutation_count + crossover_count
                 
                 variant_counts = {
