@@ -392,8 +392,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     # For generation 0: avg_fitness = avg_fitness_generation (no variants to include)
                     gen["avg_fitness"] = avg_fitness_generation_gen0
                     gen["min_score_variants"] = 0.0001  # No variants generated yet
-                    # No variants generated yet - set all variant stats to default
-                    gen["max_score_variants"] = 0.0001
+                    # For generation 0: max_score_variants should be the max score from initial population
+                    gen["max_score_variants"] = max(all_scores_gen0) if all_scores_gen0 else 0.0001
                     gen["avg_fitness_variants"] = 0.0001
                     break
             

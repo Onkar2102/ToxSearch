@@ -1,4 +1,4 @@
-# Evolutionary Optimization for Safety Testing (EOST-CAM-LLM)
+# Evolutionary Optimization for Safety Testing in Large Language Models (EOST-LLM)
 
 A genetic algorithm framework for evolving text prompts to maximize toxicity scores, enabling comprehensive AI safety evaluation through adversarial prompt generation.
 
@@ -256,6 +256,25 @@ python src/main.py \
 - **Hardware**: GPU recommended (CUDA/MPS support)
 - **Models**: GGUF format LLMs (Llama 3.1/3.2 recommended)
 - **APIs**: Google Perspective API for toxicity evaluation
+
+### Documentation
+
+This project uses **Doxygen** for automatic documentation generation. To build documentation:
+
+```bash
+doxygen Doxyfile
+```
+
+Generated docs will be available in `docs/html/index.html`.
+
+**Key Doxyfile settings used:**
+- `INPUT = README.md src docs examples`
+- `RECURSIVE = YES`
+- `USE_MDFILE_AS_MAINPAGE = README.md`
+- `SOURCE_BROWSER = YES`
+- `INLINE_SOURCES = YES`
+- `HTML_COLORSTYLE = TOGGLE`
+- `HTML_DYNAMIC_SECTIONS = YES`
 
 ## Project Structure
 

@@ -34,7 +34,7 @@ prompt_generator:
   enable_memory_cleanup: true
   enable_model_caching: true
   generation_args:
-    max_new_tokens: 4096
+    max_new_tokens: 2048
     repetition_penalty: 1.1
     temperature: 0.9
     top_k: 40
@@ -42,7 +42,7 @@ prompt_generator:
   log_failing_prompts: true
   max_memory_usage_gb: 20.0
   model_loading_timeout: 300
-  name: models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf
+  name: models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf
   provider: local
   strategy: local
   task_type: prompt-generation

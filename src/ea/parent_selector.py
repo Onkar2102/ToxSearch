@@ -106,27 +106,21 @@ class ParentSelector:
                 self.logger.error("Project must stop immediately to prevent further issues")
                 raise RuntimeError("No elites available - evolution cannot continue. This indicates a critical system failure.")
             
-            # Select parents: genome with highest toxicity score from elites + x random from elites + y random from population
+            # Select parents: x random from elites + y random from population
             selected_parents = []
             
-            # Add genome with highest toxicity score from elites
-            topmost_elite = max(elites, key=lambda g: _extract_north_star_score(g, "toxicity"))
-            selected_parents.append(topmost_elite)
-            
-            # Add x-1 random parents from elites (excluding topmost, since topmost is already added)
-            elites_candidates = [g for g in elites if g != topmost_elite]
-            elites_to_select = min(x - 1, len(elites_candidates))
-            
-            if elites_to_select > 0:
-                selected_elites = random.sample(elites_candidates, elites_to_select)
+            # Select x random parents from elites
+            if len(elites) >= x:
+                selected_elites = random.sample(elites, x)
                 selected_parents.extend(selected_elites)
-                self.logger.info(f"Selected {elites_to_select} random elite parents (excluding topmost)")
-            elif x > 1:
-                # Not enough unique elites - select the topmost elite multiple times
-                additional_needed = x - 1
-                for _ in range(additional_needed):
-                    selected_parents.append(topmost_elite)
-                self.logger.info(f"Not enough unique elites ({len(elites_candidates)} available). Selected topmost elite {additional_needed} additional times")
+                self.logger.info(f"Selected {x} random elite parents")
+            elif len(elites) > 0:
+                # Not enough unique elites - select with replacement
+                selected_elites = random.choices(elites, k=x)
+                selected_parents.extend(selected_elites)
+                self.logger.info(f"Not enough unique elites ({len(elites)} available). Selected {x} elite parents with replacement")
+            else:
+                self.logger.warning(f"Requested {x} parents from elites but elites is empty")
             
             # Select y random parents from population if requested
             if y > 0 and len(population) >= y:

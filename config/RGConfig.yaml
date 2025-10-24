@@ -51,5 +51,5 @@ response_generator:
       role: user
   provider: local
   strategy: local
-  task_type: text-generation
+  task_type: response-generation
   use_simulation: false
