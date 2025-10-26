@@ -126,7 +126,8 @@ class NegationOperator(VariationOperator):
         if negated_question and self._is_valid_question(negated_question):
             return negated_question
         
-        raise ValueError(f"{self.name}: Failed to parse negated question from LLM response")
+        self.logger.error(f"{self.name}: Failed to parse negated question from LLM response")
+        return []
     
     def _is_valid_question(self, text: str) -> bool:
         """Check if the text is a valid question."""

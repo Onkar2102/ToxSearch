@@ -77,7 +77,7 @@ Return only: <synonyms>synonym_word</synonyms>"""
         # "SCONJ": "Subordinating Conjunction: joins a main clause with a subordinate clause such as a sentential complement"
     }
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, num_POS_tags: int = 1, seed: Optional[int] = 42, generator=None):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, num_POS_tags: int = 1, generator=None):
         """Initialize the LLM POS-aware synonym replacement operator."""
         super().__init__(
             "LLM_POSAwareSynonymReplacement", 
@@ -88,8 +88,6 @@ Return only: <synonyms>synonym_word</synonyms>"""
         self.logger = get_logger(self.name, log_file)
         self.north_star_metric = north_star_metric
         self.num_POS_tags = self._validate_num_POS_tags(num_POS_tags)
-        self.seed = seed
-        self.rng = random.Random(seed)
         
         # Initialize generator - use provided or create new one
         if generator is not None:
@@ -104,7 +102,7 @@ Return only: <synonyms>synonym_word</synonyms>"""
                 self.generator = None
                 self.logger.warning(f"{self.name}: LLM generator not available - will skip generation")
         
-        self.logger.info(f"{self.name}: Configured with num_POS_tags={self.num_POS_tags}, seed={seed}")
+        self.logger.info(f"{self.name}: Configured with num_POS_tags={self.num_POS_tags}")
 
     def _validate_num_POS_tags(self, num_POS_tags: int) -> int:
         """Ensure num_POS_tags is within valid range."""
@@ -175,7 +173,7 @@ Return only: <synonyms>synonym_word</synonyms>"""
         
         # Select up to num_POS_tags POS types
         num_to_select = min(self.num_POS_tags, len(available_pos))
-        selected_pos = self.rng.sample(available_pos, num_to_select)
+        selected_pos = random.sample(available_pos, num_to_select)
         
         self.logger.info(f"{self.name}: Selected {len(selected_pos)} POS types: {selected_pos}")
         return selected_pos
@@ -209,11 +207,13 @@ Return only: <synonyms>synonym_word</synonyms>"""
                 if synonym and len(synonym.split()) == 1 and synonym.isalpha():
                     return [synonym]
             
-            raise ValueError(f"{self.name}: Failed to parse synonyms from response")
+            self.logger.error(f"{self.name}: Failed to parse synonyms from response")
+            return []
             
         except Exception as e:
             self.logger.debug(f"{self.name}: Failed to parse synonyms from response: {e}")
-            raise ValueError(f"{self.name}: Failed to parse synonyms from response") from e
+            self.logger.error(f"{self.name}: Failed to parse synonyms from response")
+            return []
     
     def _safe_json_obj(self, s: str) -> Optional[Dict[str, Any]]:
         """
@@ -296,7 +296,8 @@ Return only: <synonyms>synonym_word</synonyms>"""
             response = self.generator.model_interface.chat_completion(messages)
             
             if not response:
-                raise ValueError(f"{self.name}: Empty LLM response for {pos_tag}")
+                self.logger.error(f"{self.name}: Empty LLM response for {pos_tag}")
+                return []
             
             # Parse LLM response
             synonyms_data = self._parse_synonyms_from_response(response, pos_tag)
@@ -305,7 +306,8 @@ Return only: <synonyms>synonym_word</synonyms>"""
                 self.logger.info(f"{self.name}: Generated synonyms for {pos_tag}: {len(synonyms_data)} words")
                 return synonyms_data
             else:
-                raise ValueError(f"{self.name}: Failed to parse synonyms for {pos_tag}")
+                self.logger.error(f"{self.name}: Failed to parse synonyms for {pos_tag}")
+                return []
                 
         except Exception as e:
             self.logger.error(f"{self.name}: LLM synonym generation failed for {pos_tag}: {e}")
@@ -400,7 +402,7 @@ Return only: <synonyms>synonym_word</synonyms>"""
                 return text
             
             # Randomly select ONE word from the POS words
-            selected_word = self.rng.choice(pos_words)
+            selected_word = random.choice(pos_words)
             
             # Validate word boundaries
             if self._is_valid_word_boundary(text, selected_word.start, selected_word.end):
@@ -506,7 +508,8 @@ Return only: <synonyms>synonym_word</synonyms>"""
                 self.logger.info(f"{self.name}: Generated {len(variants)} variants successfully")
                 return variants
             else:
-                raise ValueError(f"{self.name}: No variants generated")
+                self.logger.error(f"{self.name}: No variants generated")
+                return []
             
         except Exception as e:
             self.logger.error(f"{self.name}: apply failed: {e}")

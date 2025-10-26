@@ -123,12 +123,14 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
             self._last_intermediate = inter
             
             if not inter:
-                raise ValueError(f"{self.name}: Empty LLM response for English to {self.target_lang} translation")
+                self.logger.error(f"{self.name}: Empty LLM response for English to {self.target_lang} translation")
+                return []
             
             # Extract translation from structured tags
             extracted_inter = self.generator._extract_content_from_xml_tags(inter, "trans")
             if not extracted_inter:
-                raise ValueError(f"{self.name}: Failed to parse intermediate translation from LLM response")
+                self.logger.error(f"{self.name}: Failed to parse intermediate translation from LLM response")
+                return []
             inter = extracted_inter
             
             if inter and inter != text:
@@ -146,12 +148,14 @@ Return ONLY the translation in this format: <trans>TRANSLATED_QUESTION_HERE</tra
                 back_en = self.generator.model_interface.chat_completion(target_to_en_messages)
                 
                 if not back_en:
-                    raise ValueError(f"{self.name}: Empty LLM response for {self.target_lang} to English translation")
+                    self.logger.error(f"{self.name}: Empty LLM response for {self.target_lang} to English translation")
+                    return []
                 
                 # Extract translation from structured tags
                 extracted_back_en = self.generator._extract_content_from_xml_tags(back_en, "trans")
                 if not extracted_back_en:
-                    raise ValueError(f"{self.name}: Failed to parse back translation from LLM response")
+                    self.logger.error(f"{self.name}: Failed to parse back translation from LLM response")
+                    return []
                 back_en = extracted_back_en
                 
                 cleaned = back_en.strip()

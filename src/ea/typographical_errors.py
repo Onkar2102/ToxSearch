@@ -95,7 +95,7 @@ Instructions for typographical errors mutation:
 
 Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, num_error_types: int = 3, seed: Optional[int] = 42, generator=None):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, num_error_types: int = 3, generator=None):
         """
         Initialize the typographical errors mutation operator.
         
@@ -103,7 +103,6 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
             north_star_metric: The primary fitness metric to optimize for
             log_file: Path to log file (optional)
             num_error_types: Number of error types to randomly select (1 to max available)
-            seed: Random seed for reproducible selection (default: 42)
             generator: LLM generator instance to use. If None, will create own instance.
         """
         super().__init__(
@@ -118,8 +117,6 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
         
         # Validate and set parameters
         self.num_error_types = self._validate_num_error_types(num_error_types)
-        self.seed = seed
-        self.rng = random.Random(seed)
         
         # Initialize generator - use provided or create new one
         if generator is not None:
@@ -134,7 +131,7 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
                 self.generator = None
                 self.logger.warning(f"{self.name}: LLM generator not available - will skip generation")
         
-        self.logger.debug(f"{self.name}: Configured with num_error_types={self.num_error_types}, seed={seed}")
+        self.logger.debug(f"{self.name}: Configured with num_error_types={self.num_error_types}")
 
     def _validate_num_error_types(self, num_error_types: int) -> int:
         """Ensure num_error_types is within valid range."""
@@ -160,7 +157,7 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
         
         # Select up to num_error_types error types
         num_to_select = min(self.num_error_types, len(available_errors))
-        selected_errors = self.rng.sample(available_errors, num_to_select)
+        selected_errors = random.sample(available_errors, num_to_select)
         
         self.logger.info(f"{self.name}: Selected {len(selected_errors)} error types: {selected_errors}")
         return selected_errors
@@ -210,7 +207,8 @@ Return only: <typo>YOUR_TYPOGRAPHICALLY_MODIFIED_QUESTION_HERE</typo>"""
         if typo_question and self._is_valid_question_with_typos(typo_question):
             return typo_question
         
-        raise ValueError(f"{self.name}: Failed to parse typo question from LLM response")
+        self.logger.error(f"{self.name}: Failed to parse typo question from LLM response")
+        return []
     
     def _is_valid_question_with_typos(self, text: str) -> bool:
         """Check if the text is a valid question (allowing for typos)."""

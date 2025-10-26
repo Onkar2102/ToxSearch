@@ -90,7 +90,7 @@ class ConceptAdditionOperator(VariationOperator):
 
         Return only: <enhanced>YOUR_CONCEPT_ENHANCED_QUESTION_HERE</enhanced>"""
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, num_concept_types: int = 1, seed: Optional[int] = 42, generator=None):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, num_concept_types: int = 1, generator=None):
         """
         Initialize the concept addition mutation operator.
         
@@ -98,7 +98,6 @@ class ConceptAdditionOperator(VariationOperator):
             north_star_metric: The primary fitness metric to optimize for
             log_file: Path to log file (optional)
             num_concept_types: Number of concept types to randomly select (1 to max available)
-            seed: Random seed for reproducible selection (default: 42)
             generator: LLM generator instance to use. If None, will create own instance.
         """
         super().__init__(
@@ -113,8 +112,6 @@ class ConceptAdditionOperator(VariationOperator):
         
         # Validate and set parameters
         self.num_concept_types = self._validate_num_concept_types(num_concept_types)
-        self.seed = seed
-        self.rng = random.Random(seed)
         
         # Initialize generator - use provided or create new one
         if generator is not None:
@@ -129,7 +126,7 @@ class ConceptAdditionOperator(VariationOperator):
                 self.generator = None
                 self.logger.warning(f"{self.name}: LLM generator not available - will skip generation")
         
-        self.logger.debug(f"{self.name}: Configured with num_concept_types={self.num_concept_types}, seed={seed}")
+        self.logger.debug(f"{self.name}: Configured with num_concept_types={self.num_concept_types}")
 
     def _validate_num_concept_types(self, num_concept_types: int) -> int:
         """Ensure num_concept_types is within valid range."""
@@ -155,7 +152,7 @@ class ConceptAdditionOperator(VariationOperator):
         
         # Select up to num_concept_types concept types
         num_to_select = min(self.num_concept_types, len(available_concepts))
-        selected_concepts = self.rng.sample(available_concepts, num_to_select)
+        selected_concepts = random.sample(available_concepts, num_to_select)
         
         self.logger.info(f"{self.name}: Selected {len(selected_concepts)} concept types: {selected_concepts}")
         return selected_concepts
@@ -205,7 +202,8 @@ class ConceptAdditionOperator(VariationOperator):
         if enhanced_question and self._is_valid_question(enhanced_question):
             return enhanced_question
         
-        raise ValueError(f"{self.name}: Failed to parse enhanced question from LLM response")
+        self.logger.error(f"{self.name}: Failed to parse enhanced question from LLM response")
+        return []
     
     def _is_valid_question(self, text: str) -> bool:
         """Check if the text is a valid question."""

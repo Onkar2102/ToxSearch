@@ -23,7 +23,7 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 ```
 1. Load top 10 highest-scoring prompts
 2. Use LLM to generate evolved variants based on examples
-3. Apply structured output parsing (<<< ... >>>)
+3. Apply structured output parsing
 4. Validate question format and length
 ```
 
@@ -31,11 +31,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Parent score: Average of top 10 examples
 - Success rate: ~60-80% (depends on LLM quality)
 - Diversity: High (LLM creativity)
-
-**Research Applications**:
-- Study LLM-guided evolution patterns
-- Analyze prompt-toxicity relationships
-- Investigate linguistic features of high-toxicity prompts
 
 ### 2. Masked Language Model (MLM) Operator
 
@@ -55,11 +50,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Success rate: ~40-60%
 - Diversity: Medium (contextual constraints)
 
-**Research Applications**:
-- Study contextual word relationships
-- Analyze semantic coherence in toxic content
-- Investigate word-level toxicity patterns
-
 ### 3. Paraphrasing Operator
 
 **Type**: Mutation  
@@ -77,11 +67,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Parent score: Single parent toxicity
 - Success rate: ~70-90%
 - Diversity: Medium (semantic constraints)
-
-**Research Applications**:
-- Study semantic preservation in toxic content
-- Analyze paraphrasing patterns
-- Investigate linguistic diversity
 
 ### 4. Back Translation Operators (5 variants)
 
@@ -103,11 +88,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Success rate: ~30-50% (translation quality dependent)
 - Diversity: High (translation artifacts)
 
-**Research Applications**:
-- Study cross-linguistic toxicity patterns
-- Analyze translation artifacts
-- Investigate cultural bias in toxicity
-
 ### 5. Synonym/Antonym Replacement
 
 **Type**: Mutation  
@@ -125,11 +105,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Parent score: Single parent toxicity
 - Success rate: ~50-70%
 - Diversity: Medium (lexical constraints)
-
-**Research Applications**:
-- Study lexical toxicity patterns
-- Analyze POS-based toxicity
-- Investigate word-level semantic relationships
 
 ### 6. Negation Operator
 
@@ -149,11 +124,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Success rate: ~40-60%
 - Diversity: Low (logical constraints)
 
-**Research Applications**:
-- Study logical structure in toxic content
-- Analyze negation patterns
-- Investigate logical reasoning in toxicity
-
 ### 7. Concept Addition Operator
 
 **Type**: Mutation  
@@ -171,11 +141,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Parent score: Single parent toxicity
 - Success rate: ~60-80%
 - Diversity: High (concept diversity)
-
-**Research Applications**:
-- Study semantic concept relationships
-- Analyze concept-based toxicity
-- Investigate semantic coherence
 
 ### 8. Typographical Errors Operator
 
@@ -195,11 +160,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Success rate: ~30-50%
 - Diversity: Medium (error patterns)
 
-**Research Applications**:
-- Study robustness to noise
-- Analyze error patterns in toxicity
-- Investigate character-level features
-
 ### 9. Stylistic Mutator
 
 **Type**: Mutation  
@@ -217,11 +177,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Parent score: Single parent toxicity
 - Success rate: ~50-70%
 - Diversity: High (style diversity)
-
-**Research Applications**:
-- Study style-toxicity relationships
-- Analyze writing style patterns
-- Investigate stylistic diversity
 
 ### 10. Semantic Similarity Crossover
 
@@ -241,11 +196,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Success rate: ~60-80%
 - Diversity: Medium (similarity constraints)
 
-**Research Applications**:
-- Study semantic similarity in toxicity
-- Analyze crossover patterns
-- Investigate genetic diversity
-
 ### 11. Semantic Fusion Crossover
 
 **Type**: Crossover  
@@ -264,11 +214,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Success rate: ~70-90%
 - Diversity: High (fusion creativity)
 
-**Research Applications**:
-- Study semantic fusion patterns
-- Analyze hybrid generation
-- Investigate creative recombination
-
 ### 12. Cut-and-Slice Crossover
 
 **Type**: Crossover  
@@ -286,11 +231,6 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Parent score: Average of parent scores
 - Success rate: ~50-70%
 - Diversity: Medium (structural constraints)
-
-**Research Applications**:
-- Study structural patterns in toxicity
-- Analyze recombination patterns
-- Investigate structural diversity
 
 ## Performance Metrics
 
@@ -326,37 +266,3 @@ Multi-parent operators that combine genetic material from multiple prompts to cr
 - Back Translation
 - Typographical Errors
 - Negation
-
-## Research Applications
-
-### AI Safety Evaluation
-- Generate adversarial prompts for content moderation testing
-- Identify edge cases in safety mechanisms
-- Measure robustness of AI systems
-
-### Behavioral Analysis
-- Study prompt-toxicity relationships
-- Analyze evolutionary patterns in harmful content
-- Investigate linguistic features of high-toxicity prompts
-
-### Model Development
-- Create training data for safety classifiers
-- Develop countermeasures for adversarial attacks
-- Improve content moderation systems
-
-## Future Research Directions
-
-### Operator Optimization
-- Develop new operators based on linguistic analysis
-- Optimize operator parameters for specific use cases
-- Study operator interaction effects
-
-### Performance Analysis
-- Analyze operator performance across different domains
-- Study operator scalability with population size
-- Investigate operator efficiency metrics
-
-### Safety Applications
-- Develop safety-specific operators
-- Study operator impact on safety mechanisms
-- Analyze operator effectiveness for different safety tasks

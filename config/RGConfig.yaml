@@ -36,7 +36,7 @@ response_generator:
   generation_args:
     max_new_tokens: 2048
     repetition_penalty: 1.0
-    temperature: 0.7
+    temperature: 0.8
     top_k: 40
     top_p: 0.9
   log_failing_prompts: true

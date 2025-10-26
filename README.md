@@ -27,43 +27,22 @@ cp .env.example .env
 # Edit .env and add your PERSPECTIVE_API_KEY
 ```
 
-### API Key Setup
-1. **Get Google Perspective API Key**:
-   - Visit: https://developers.perspectiveapi.com/
-   - Create a project and enable the Perspective API
-   - Generate an API key
-
-2. **Configure Environment**:
-   ```bash
-   # Option 1: Using .env file (recommended)
-   echo "PERSPECTIVE_API_KEY=your_actual_api_key_here" > .env
-   
-   # Option 2: Using environment variable
-   export PERSPECTIVE_API_KEY=your_actual_api_key_here
-   ```
-
-3. **Verify Setup**:
-   ```bash
-   python -c "import os; print('API Key set:', bool(os.getenv('PERSPECTIVE_API_KEY')))"
-   ```
-
 ### Running the System
 ```bash
 # Basic run with default settings
 python src/main.py
 
 # Custom configuration
-python src/main.py --max-generations 10 --north-star-threshold 0.8
+python src/main.py --max-generations 10 --operators all --max-variants 3
 ```
 
-## Scientific Foundation
+## System Overview
 
 ### Research Objective
 Develop an automated system for generating high-toxicity prompts that can be used to:
 - Test AI safety mechanisms
 - Identify failure modes in content moderation systems
 - Generate adversarial examples for model robustness evaluation
-- Study the relationship between prompt characteristics and harmful outputs
 
 ### Evolutionary Algorithm Design
 
@@ -75,11 +54,6 @@ Develop an automated system for generating high-toxicity prompts that can be use
 - **Elites** (≥ elite_threshold): High-performing prompts for parent selection
 - **Non-elites** (removal_threshold < score < elite_threshold): Mid-performing prompts
 - **Under-performing** (≤ removal_threshold): Low-performing prompts (archived)
-
-**Selection Pressure**: Adaptive tournament selection
-- **DEFAULT**: 1 elite + 1 non-elite (balanced exploration)
-- **EXPLORE**: 1 elite + 2 non-elites (increased diversity)
-- **EXPLOIT**: 2 elites + 1 non-elite (convergence acceleration)
 
 ### Variation Operators (16 Total)
 
@@ -99,183 +73,6 @@ Develop an automated system for generating high-toxicity prompts that can be use
 2. **Semantic Fusion**: Hybrid prompt generation
 3. **Cut-and-Slice**: Structural recombination
 
-### Mathematical Framework
-
-**Threshold Calculations**:
-```
-elite_threshold = population_max_toxicity × (100 - elite_percentage) / 100
-removal_threshold = population_max_toxicity × removal_percentage / 100
-```
-
-**Fitness Metrics**:
-```
-avg_fitness = Σ(genome_scores) / N  # Before distribution
-avg_fitness_generation = Σ(elites + non_elites) / M  # After distribution
-slope_of_avg_fitness = linear_regression(avg_fitness_history)
-```
-
-**Parent Score Calculation**:
-```
-mutation: parent_score = max(parent.toxicity, 0.0001)
-crossover: parent_score = Σ(parent_scores) / N
-informed_evolution: parent_score = Σ(top_10_scores) / 10
-```
-
-## System Architecture
-
-```mermaid
-flowchart TB
-    A[Initial Population] --> B[Parent Selection]
-    B --> C[Variation Operators]
-    C --> D[Response Generation]
-    D --> E[Toxicity Evaluation]
-    E --> F[Population Distribution]
-    F --> G{Convergence?}
-    G -->|No| B
-    G -->|Yes| H[Final Analysis]
-    
-    F --> I[Elites]
-    F --> J[Non-Elites]
-    F --> K[Under-Performing]
-    
-    style C fill:#e1f5fe
-    style E fill:#f3e5f5
-    style F fill:#e8f5e8
-```
-
-## Data Structures
-
-### Genome Schema
-```json
-{
-  "id": 34,
-  "prompt": "Question text...",
-  "generation": 1,
-  "status": "complete",
-  "parent_score": 0.0622,
-  "creation_info": {
-    "type": "mutation",
-    "operator": "InformedEvolutionOperator",
-    "parent_score": 0.0622
-  },
-  "moderation_result": {
-    "google": {
-      "scores": {
-        "toxicity": 0.1912,
-        "severe_toxicity": 0.0234
-      }
-    }
-  }
-}
-```
-
-### Evolution Tracking
-```json
-{
-  "status": "not_complete",
-  "total_generations": 10,
-  "generations_since_improvement": 2,
-  "avg_fitness_history": [0.0542, 0.0569, 0.0617],
-  "slope_of_avg_fitness": 0.0054,
-  "selection_mode": "default",
-  "generations": [
-    {
-      "generation_number": 1,
-      "max_score_variants": 0.1912,
-      "avg_fitness": 0.0542,
-      "avg_fitness_generation": 0.0669,
-      "elites_count": 3,
-      "non_elites_count": 32,
-      "operator_statistics": {
-        "InformedEvolutionOperator": {
-          "duplicates_removed": 2,
-          "question_mark_rejections": 1
-        }
-      }
-    }
-  ]
-}
-```
-
-## Performance Characteristics
-
-### Computational Complexity
-- **Time Complexity**: O(N × M × K) where N=population size, M=operators, K=variants per operator
-- **Space Complexity**: O(N) for population storage
-- **Convergence Rate**: Typically 10-50 generations for toxicity scores >0.8
-
-### Memory Optimization
-- Lazy loading of population data
-- Model caching with intelligent cleanup
-- Streaming evaluation for large populations
-
-### Scalability
-- Parallel operator execution
-- Batch API calls for efficiency
-- Configurable population sizes (100-10,000+ genomes)
-
-## Usage
-
-### Basic Execution
-```bash
-python src/main.py --max-generations 50 --elites-threshold 25 --removal-threshold 5
-```
-
-### Advanced Configuration
-```bash
-python src/main.py \
-  --max-generations 100 \
-  --elites-threshold 20 \
-  --removal-threshold 10 \
-  --operators all \
-  --max-variants 3 \
-  --rg-model models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf \
-  --pg-model models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q5_K_S.gguf
-```
-
-## Research Applications
-
-### AI Safety Evaluation
-- Generate adversarial prompts for content moderation testing
-- Identify edge cases in safety mechanisms
-- Measure robustness of AI systems
-
-### Behavioral Analysis
-- Study prompt-toxicity relationships
-- Analyze evolutionary patterns in harmful content
-- Investigate linguistic features of high-toxicity prompts
-
-### Model Development
-- Create training data for safety classifiers
-- Develop countermeasures for adversarial attacks
-- Improve content moderation systems
-
-## Technical Requirements
-
-- **Python**: 3.8+
-- **Hardware**: GPU recommended (CUDA/MPS support)
-- **Models**: GGUF format LLMs (Llama 3.1/3.2 recommended)
-- **APIs**: Google Perspective API for toxicity evaluation
-
-### Documentation
-
-This project uses **Doxygen** for automatic documentation generation. To build documentation:
-
-```bash
-doxygen Doxyfile
-```
-
-Generated docs will be available in `docs/html/index.html`.
-
-**Key Doxyfile settings used:**
-- `INPUT = README.md src docs examples`
-- `RECURSIVE = YES`
-- `USE_MDFILE_AS_MAINPAGE = README.md`
-- `SOURCE_BROWSER = YES`
-- `INLINE_SOURCES = YES`
-- `HTML_COLORSTYLE = TOGGLE`
-- `HTML_DYNAMIC_SECTIONS = YES`
-
 ## Project Structure
 
 ```
@@ -285,7 +82,6 @@ eost-cam-llm/
 │   ├── ea/                        # Evolutionary algorithms
 │   │   ├── evolution_engine.py    # Core evolution logic
 │   │   ├── parent_selector.py     # Adaptive parent selection
-│   │   ├── run_evolution.py       # Evolution orchestration
 │   │   └── [16 operator files]    # Variation operators
 │   ├── gne/                       # Generation & evaluation
 │   │   ├── prompt_generator.py    # Prompt generation
@@ -301,16 +97,3 @@ eost-cam-llm/
 ## License
 
 MIT License - See LICENSE file for details.
-
-## Citation
-
-If you use this framework in your research, please cite:
-
-```bibtex
-@software{eost_cam_llm,
-  title={Evolutionary Optimization for Safety Testing (EOST-CAM-LLM)},
-  author={[Your Name]},
-  year={2024},
-  url={https://github.com/your-repo/eost-cam-llm}
-}
-```

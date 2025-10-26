@@ -79,28 +79,23 @@ class LlamaCppChatInterface(ModelInterface):
         if self._MODEL_CACHE_LOCK is None:
             self._MODEL_CACHE_LOCK = threading.Lock()
         
-        with self._MODEL_CACHE_LOCK:
-            # Use absolute path for caching
-            if absolute_model_path not in self._MODEL_CACHE:
-                self.logger.info(f"Loading llama.cpp model: {absolute_model_path}")
-                self._load_model(absolute_model_path)
-                # Track access count for new model
-                self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = 1
-                self.logger.info(f"Model loaded and cached: {absolute_model_path}")
-            else:
-                self.logger.info(f"Using cached llama.cpp model: {absolute_model_path}")
-                # Increment access count
-                self._MODEL_CACHE_ACCESS_COUNT[absolute_model_path] = self._MODEL_CACHE_ACCESS_COUNT.get(absolute_model_path, 0) + 1
-        
-        # Cleanup cache if too many models (but preserve our two main models)
-        self._cleanup_model_cache_if_needed()
-        
+        # DISABLE CACHING: Always load new model instance for different responses
+        self.logger.info(f"Loading fresh llama.cpp model (caching disabled): {absolute_model_path}")
+        self._load_model(absolute_model_path)
         self.model = self._MODEL_CACHE[absolute_model_path]
         self.generation_args = model_cfg.get("generation_args", {})
         
         # Memory monitoring
         self.last_memory_check = time.time()
         self.memory_check_interval = 60  # Check memory every 60 seconds
+    
+    @classmethod
+    def clear_model_cache(cls):
+        """Clear the entire model cache to force fresh model loading."""
+        with cls._MODEL_CACHE_LOCK:
+            cls._MODEL_CACHE.clear()
+            cls._MODEL_CACHE_ACCESS_COUNT.clear()
+            cls.logger.info("Model cache cleared - all models will be reloaded")
     
     def _cleanup_model_cache_if_needed(self):
         """Clean up unused models from cache, but preserve main RG/PG models."""
@@ -529,7 +524,7 @@ class LlamaCppChatInterface(ModelInterface):
                 formatted_prompt, max_new_tokens, context_length
             )
             
-            # Generate response using llama.cpp
+            # Generate response using llama.cpp with added randomness
             self.logger.debug(f"Generating chat completion for prompt: {validated_prompt[:100]}...")
             
             response = self.model(

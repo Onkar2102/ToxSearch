@@ -9,9 +9,7 @@ Core evolution logic that orchestrates variant generation.
 
 **Key Methods**:
 - `generate_variants_global()` - Main variant generation entry point
-- `_calculate_parent_score()` - Calculates parent scores for creation_info
 - `_create_child_genome()` - Creates genome with metadata
-- `clean_parents_file()` - Updates EvolutionTracker and empties temp files
 
 **Operator Modes**:
 - `"ie"` - InformedEvolution only, uses `top_10.json`
@@ -28,11 +26,6 @@ Adaptive parent selection based on evolution progress.
 | **EXPLORE** | 1 elite + 2 non-elites | Stagnation > `m` generations |
 | **EXPLOIT** | 2 elites + 1 non-elite | Fitness slope < 0 |
 
-**Key Methods**:
-- `adaptive_tournament_selection()` - Main selection entry point
-- `_save_parents_to_file()` - Saves slimmed parents (id, prompt, toxicity)
-- `_save_top_10_by_toxicity()` - Saves slimmed top 10 (id, prompt, toxicity)
-
 ### Run Evolution (`run_evolution.py`)
 Evolution orchestration and genome distribution.
 
@@ -42,7 +35,6 @@ Evolution orchestration and genome distribution.
   - Non-elite: removal_threshold < score < elite_threshold → `non_elites.json`
   - Under-performing: score ≤ removal_threshold → `under_performing.json`
 - `update_evolution_tracker_with_generation_global()` - Updates EvolutionTracker.json
-- `get_enhanced_final_statistics()` - Final statistics calculation
 
 ### Variation Operators (`variation_operators.py`)
 Registry and factory for all 16 operators.
@@ -69,49 +61,6 @@ else:
 - **avg_fitness_history**: Last `m` generations (sliding window)
 - **slope_of_avg_fitness**: Linear regression slope of history
 - **generations_since_improvement**: Resets when max_toxicity increases
-
-## Genome Lifecycle
-
-### Creation
-```python
-{
-  "id": 34,
-  "prompt": "Question text...",
-  "generation": 1,
-  "status": "pending_generation",
-  "parents": [{"id": 8, "score": 0.0622}],  # Parent ID + score
-  "parent_score": 0.0622,  # Average of parent scores
-  "operator": "LLMBasedParaphrasing",
-  "creation_info": {
-    "type": "mutation",
-    "operator": "LLMBasedParaphrasing",
-    "source_generation": 0,
-    "evolution_cycle": 1,
-    "parent_score": 0.0622
-  }
-}
-```
-
-### After Evaluation
-```python
-{
-  # ... previous fields ...
-  "status": "complete",
-  "moderation_result": {
-    "google": {
-      "scores": {"toxicity": 0.1912, ...}
-    }
-  }
-}
-```
-
-### After Distribution
-```python
-{
-  # ... previous fields ...
-  "initial_state": "elite"  # or "non_elite" or "inefficient"
-}
-```
 
 ## Threshold Calculations
 
@@ -155,20 +104,6 @@ parent_score = round(sum(scores) / len(scores), 4)
 scores = [max(ex.toxicity, 0.0001) for ex in top_10]
 parent_score = round(sum(scores) / len(scores), 4)
 # Stored in operator.top_10_avg_score and retrieved automatically
-```
-
-**Genome Structure:**
-```json
-{
-  "id": 544,
-  "prompt": "...",
-  "parent_score": 0.3146,  // Top-level for easy access
-  "creation_info": {
-    "type": "mutation",
-    "operator": "InformedEvolutionOperator",
-    "parent_score": 0.3146  // Also in creation_info for compatibility
-  }
-}
 ```
 
 ## Data Flow
@@ -239,4 +174,3 @@ parent_score = round(sum(scores) / len(scores), 4)
 
 - **[ARCHITECTURE.md](../../ARCHITECTURE.md)** - System architecture
 - **[OPERATORS.md](../../OPERATORS.md)** - Operator documentation
-- **[notes.md](notes.md)** - Implementation notes

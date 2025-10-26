@@ -49,11 +49,10 @@ Instructions:
 
 Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, seed: Optional[int] = 42, generator=None):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, generator=None):
         super().__init__("MLM", "mutation", "LLM-based masked language model operator for contextual word replacement")
         self.logger = get_logger(self.name, log_file)
         self.north_star_metric = north_star_metric
-        self.rng = random.Random(seed)
         
         # Initialize generator - use provided or create new one
         if generator is not None:
@@ -80,7 +79,7 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
         
         m = 1
         try:
-            idxs = set(self.rng.sample(range(len(words)), m))
+            idxs = set(random.sample(range(len(words)), m))
         except ValueError:
             idxs = set()
         
@@ -176,7 +175,7 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                 # Extract replacement from structured tags using improved method
                 replacement = self.generator._extract_content_from_xml_tags(response, "replacement")
                 if not replacement:
-                    self.logger.warning(f"{self.name}: Failed to parse replacement from LLM response for {mask_token} - LLM may have refused")
+                    self.logger.error(f"{self.name}: Failed to parse replacement from LLM response for {mask_token}")
                     continue
                 
                 # Basic validation: should be a single word, no special tokens, and be alphabetic
@@ -188,10 +187,10 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                     replacements[mask_num] = replacement
                     self.logger.debug(f"{self.name}: {mask_token} -> '{replacement}'")
                 else:
-                    self.logger.warning(f"{self.name}: Invalid replacement for {mask_token}: '{replacement}' - LLM may have refused")
+                    self.logger.error(f"{self.name}: Invalid replacement for {mask_token}: '{replacement}'")
                     continue
             else:
-                self.logger.warning(f"{self.name}: Empty response for {mask_token} - LLM may have refused")
+                self.logger.error(f"{self.name}: Empty response for {mask_token}")
                 continue
         
         # Store debug info
@@ -236,16 +235,14 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
             start_time = time.time()
             # Validate input format
             if not isinstance(operator_input, dict):
-                self.logger.error(f"{self.name}: Input must be a dictionary")
-                return []
+                raise ValueError(f"{self.name}: Input must be a dictionary")
             
             # Extract parent data and max_variants
             parent_data = operator_input.get("parent_data", {})
             max_variants = operator_input.get("max_variants", 1)
             
             if not isinstance(parent_data, dict):
-                self.logger.error(f"{self.name}: parent_data must be a dictionary")
-                return []
+                raise ValueError(f"{self.name}: parent_data must be a dictionary")
             
             # Extract prompt from parent data
             text = parent_data.get("prompt", "")
@@ -279,7 +276,7 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                 self.logger.info(f"{self.name}: Generated {len(variants)} variants successfully")
                 return variants
             else:
-                self.logger.warning(f"{self.name}: No variants generated - LLM may have refused all requests")
+                self.logger.error(f"{self.name}: No variants generated - LLM may have refused all requests")
                 return []
                 
         except Exception as e:

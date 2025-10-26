@@ -178,11 +178,11 @@ class HybridModerationEvaluator:
         """
         import time
         
-        # Check cache first
-        cached = _get_cached_result(text, "google")
-        if cached:
-            self.logger.debug("Using cached Google result for genome %s", genome_id)
-            return cached
+        # DISABLE CACHING: Always call API for different scores
+        # cached = _get_cached_result(text, "google")
+        # if cached:
+        #     self.logger.debug("Using cached Google result for genome %s", genome_id)
+        #     return cached
         
         # Perspective API has a 20480 byte limit
         MAX_TEXT_BYTES = 20480

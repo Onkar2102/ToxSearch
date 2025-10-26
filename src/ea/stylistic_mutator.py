@@ -98,13 +98,12 @@ Instructions for stylistic modification:
 
 Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
 
-    def __init__(self, log_file: Optional[str] = None, seed: Optional[int] = 42, generator=None):
+    def __init__(self, log_file: Optional[str] = None, generator=None):
         """
         Initialize the stylistic mutation operator.
         
         Args:
             log_file (str, optional): Path to log file for debugging. Defaults to None.
-            seed (int, optional): Random seed for reproducible style selection. Defaults to 42.
             generator: LLaMA generator instance to use
         """
         super().__init__("StylisticMutator", "mutation", 
@@ -125,7 +124,6 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
                 self.generator = None
                 self.logger.warning(f"{self.name}: LLM generator not available - will skip generation")
         # Initialize random number generator for style selection
-        self.rng = random.Random(seed)
         # Debug tracking attributes
         self._last_genome = {}
         self._last_original_prompt = ""
@@ -140,7 +138,7 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
             str: Selected stylistic attribute
         """
         available_styles = list(self.STYLE_ATTRIBUTES.keys())
-        selected_style = self.rng.choice(available_styles)
+        selected_style = random.choice(available_styles)
         self.logger.debug(f"{self.name}: Selected style attribute: {selected_style}")
         return selected_style
 
@@ -185,23 +183,20 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
             start_time = time.time()
             # Validate input format
             if not isinstance(operator_input, dict):
-                self.logger.error(f"{self.name}: Input must be a dictionary")
-                return []
+                raise ValueError(f"{self.name}: Input must be a dictionary")
             
             # Extract parent data and max_variants
             parent_data = operator_input.get("parent_data", {})
             max_variants = operator_input.get("max_variants", 1)
             
             if not isinstance(parent_data, dict):
-                self.logger.error(f"{self.name}: parent_data must be a dictionary")
-                return []
+                raise ValueError(f"{self.name}: parent_data must be a dictionary")
             
             # Extract prompt from parent data
             original_prompt = parent_data.get("prompt", "")
             
             if not original_prompt:
-                self.logger.error(f"{self.name}: Parent data missing required 'prompt' field")
-                return []
+                raise ValueError(f"{self.name}: Parent data missing required 'prompt' field")
             
             # Store debug information
             self._last_genome = parent_data
@@ -237,7 +232,7 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
             # Extract modified text from structured tags
             extracted_modified = self.generator._extract_content_from_xml_tags(stylistic_prompt, "modified")
             if not extracted_modified:
-                self.logger.warning(f"{self.name}: Failed to parse modified text from LLM response - LLM may have refused")
+                self.logger.error(f"{self.name}: Failed to parse modified text from LLM response")
                 return []
             stylistic_prompt = extracted_modified
             
@@ -247,7 +242,7 @@ Return only: <modified>YOUR_STYLISTICALLY_MODIFIED_QUESTION_HERE</modified>"""
                 self.logger.info(f"{self.name}: Generated stylistic variant with {selected_style} style")
                 return [stylistic_prompt]
             else:
-                self.logger.warning(f"{self.name}: Stylistic mutation returned same or empty text - LLM may have refused")
+                self.logger.error(f"{self.name}: Stylistic mutation returned same or empty text")
                 return []
                 
         except Exception as e:
