@@ -1,0 +1,10 @@
+,tokens_clean,tokens_clean,tokens_clean,tokens_clean,tokens_clean,tokens_clean,tokens_clean,tokens_clean,tokens_raw,tokens_raw,tokens_raw,tokens_raw,tokens_raw,tokens_raw,tokens_raw,tokens_raw
+,total_tokens,unique_tokens,n_prompts,TTR,uniq_per_prompt,hapax_ratio,entropy,mean_prompt_len,total_tokens,unique_tokens,n_prompts,TTR,uniq_per_prompt,hapax_ratio,entropy,mean_prompt_len
+operator,,,,,,,,,,,,,,,,
+BackTranslation,2539,91,63,0.036,1.444,0.006,5.515,40.302,2540,100,63,0.039,1.587,0.007,5.563,40.317
+BertMLM,11475,144,166,0.013,0.867,0.005,5.836,69.127,13090,163,166,0.012,0.982,0.004,5.865,78.855
+InstructionPreservingCrossover,17785,656,210,0.037,3.124,0.014,7.007,84.69,17785,809,210,0.045,3.852,0.018,7.197,84.69
+LLMBasedParaphrasing,5928,423,88,0.071,4.807,0.028,6.98,67.364,5928,507,88,0.086,5.761,0.035,7.17,67.364
+OnePointCrossover,8276,142,99,0.017,1.434,0.0,6.378,83.596,9127,157,99,0.017,1.586,0.0,6.433,92.192
+POSAwareSynonymReplacement,12221,183,177,0.015,1.034,0.008,5.836,69.045,14085,187,177,0.013,1.056,0.007,5.798,79.576
+SemanticSimilarityCrossover,9822,142,62,0.014,2.29,0.0,6.042,158.419,11164,160,62,0.014,2.581,0.0,6.059,180.065

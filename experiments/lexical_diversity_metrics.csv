@@ -1,0 +1,6 @@
+operator,total_tokens,unique_tokens,n_prompts,TTR,uniq_per_prompt,hapax_ratio,entropy,mean_prompt_len
+BackTranslation,49162,888,4753,0.018,0.187,0.005,6.13,10.343
+BertMLM,57883,901,5466,0.016,0.165,0.005,5.97,10.59
+POSAwareSynonymReplacement,61555,1049,5459,0.017,0.192,0.006,5.92,11.276
+TinyT5Paraphrasing,56934,2000,5330,0.035,0.375,0.018,6.579,10.682
+original,11,11,1,1.0,11.0,1.0,3.459,11.0

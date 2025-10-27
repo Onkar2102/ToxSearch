@@ -1,247 +1,297 @@
-# Evolving Prompts for Toxicity Search in Large Language Models
+# Evolutionary Text Generation Framework
 
-This repository implements a black-box evolutionary framework for systematically testing Large Language Model (LLM) safety through LLM-guided prompt evolution to elicit toxic responses.
+A research framework for AI safety analysis through evolutionary text generation, moderation evaluation, and genetic optimization with **automatic process monitoring and recovery**.
 
-## Abstract
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Large Language Models (LLMs) have demonstrated impressive capabilities, but they remain vulnerable to adversarial prompts that elicit toxic or harmful outputs. This paper presents a black-box evolutionary framework for systematically testing LLM safety by LLM-guided prompt evolution to elicit toxic responses from target LLM. Using a synchronous, steady-state evolutionary loop, we generate candidate prompts through a diverse set of mutation and crossover operators, including POS-aware phrase-level substitutions, informed paraphrasing, back-translation, concept injection, semantic similarity and fusion crossover. A moderation oracle serves as the fitness function guiding the search. Our results show that maintaining a diverse population of prompts uncovers a broader range of toxic behaviors, with LLM-driven operators achieving the highest toxicity and lexical diversity. These findings underscore the importance of adversarial evolution in evaluating and hardening LLM safety, and highlight transferable risks across models with different architectures.
+## Table of Contents
 
-## Installation
+- [Quick Start](#quick-start)
+- [app.py Command Line Arguments](#appy-command-line-arguments)
+- [Documentation](#documentation)
+  - [Architecture Overview](ARCHITECTURE.md)
+  - [Design Document](design_document.md)
+  - [Evolutionary Algorithms](src/ea/README.md)
+  - [Generation & Evaluation](#generation--evaluation)
+  - [Utilities](#utilities)
+- [Usage Examples](#usage-examples)
+- [Output Structure](#output-structure)
+- [License](#license)
 
-### Prerequisites
-- **Python**: 3.8 or higher
-- **Google Perspective API Key**: Required for toxicity evaluation ([Get it here](https://developers.perspectiveapi.com/))
-- **Hardware**: CUDA/GPU, MPS (Apple Silicon), or CPU support
-- **Disk Space**: ~10GB+ for GGUF models
-
-### Setup Instructions
-
-#### 1. Clone the Repository
-```bash
-git clone <repository-url>
-cd eost-cam-llm
-```
-
-#### 2. Create and Activate Virtual Environment
-```bash
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# On macOS/Linux:
-source venv/bin/activate
-# On Windows:
-# venv\Scripts\activate
-```
-
-#### 3. Install Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-#### 4. Set Up Environment Variables
-```bash
-# create .env from the example environment file
-
-# Edit .env and add your Google Perspective API key
-nano .env  # or use your preferred text editor
-```
-
-Add your API key to `.env`:
-```env
-PERSPECTIVE_API_KEY=your_actual_api_key_here
-```
-
-#### 5. Dataset Setup
-
-**Option A: Use Included Dataset (Recommended for Quick Start)**
-The project includes `data/prompt.csv` with 101 initial prompts as seed population. This file is automatically loaded during first run.
-
-**Option B: Download Fresh Dataset from HuggingFace**
-```bash
-# Download harmful prompt datasets from HuggingFace
-# This will create/update data/prompt.csv and data/prompt_extended.csv
-python src/utils/data_loader.py
-```
-**Note**: For custom experiments, you can replace `data/prompt.csv` with your own prompts (one per line, CSV format with 'questions' column).
-
-#### 6. Download Models
-
-**Option A: Use Existing Models (Recommended)**
-```bash
-# Clone or copy GGUF models to models/ directory
-# Models are available from HuggingFace or Ollama
-# Example: Llama 3.2 3B Instruct
-# Create directory: models/llama3.2-3b-instruct-gguf/
-# Download .gguf files into that directory
-```
-
-**Option B: Download from HuggingFace**
-If downloading gated models, add your HF token to `.env`:
-```env
-HF_TOKEN=your_huggingface_token_here
-```
-
-Then download models:
-```bash
-python src/utils/download_models.py
-```
-
-**Model Directory Structure:**
-```
-models/
-├── llama3.2-3b-instruct-gguf/
-│   └── Llama-3.2-3B-Instruct-Q4_K_M.gguf
-├── llama3.1-8b-instruct-gguf/
-│   └── Meta-Llama-3.1-8B-Instruct.Q4_K_M.gguf
-└── mistral-7b-instruct-gguf/
-    └── mistral-7b-instruct-v0.2.Q4_K_M.gguf
-```
-
-## How to Run the Project
-
-### Pre-Run Checklist
-
-Before running, ensure you have completed these steps **in order**:
-
-**Step 1: Dataset Setup**
-```bash
-# Option A: Use included dataset (already in data/prompt.csv)
-# Option B: Download fresh dataset from HuggingFace:
-python src/utils/data_loader.py
-
-# This downloads from CategoricalHarmfulQA and HarmfulQA datasets
-# Creates data/prompt.csv (100 prompts) and data/prompt_extended.csv (full dataset)
-```
-
-**Step 2: Download Models**
-```bash
-# Download GGUF models to models/ directory
-# Recommended: Llama-3.2-3B-Instruct (Q4_K_M quantization, ~2GB)
-
-# Option A: Manual download from HuggingFace
-# Go to: https://huggingface.co/Unsloth/Llama-3.2-3B-Instruct-GGUF
-# Download: Llama-3.2-3B-Instruct.Q4_K_M.gguf
-# Place in: models/llama3.2-3b-instruct-gguf/
-
-# Option B: Use download script (if available)
-python src/utils/download_models.py
-```
-
-**Step 3: Environment Variables**
-```bash
-# Already configured in .env file
-# Contains: PERSPECTIVE_API_KEY
-```
-
-### Quick Start Execution
-
-Once all prerequisites are ready:
+## Quick Start
 
 ```bash
-# Run with default settings (uses Llama 3.2 3B, all operators)
-python src/main.py
+# Run full environment setup (RECOMMENDED)
+python app.py --setup
+
+# Run with interactive setup and monitoring (RECOMMENDED)
+python app.py --interactive
+
+# Run directly with process monitoring
+python app.py --generations 25
+
+# Run core pipeline directly
+python src/main.py --generations 25
 ```
 
-### Custom Configuration
-```bash
-# Run with custom models and parameters
-python src/main.py \
-    --max-generations 50 \
-    --operators all \
-    --max-variants 1 \
-    --elites-threshold 25 \
-    --removal-threshold 5 \
-    --stagnation-limit 5 \
-    --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_S.gguf \
-    --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf
-```
+ 
 
-### Command Line Arguments
-
-Complete reference table:
+## app.py Command Line Arguments
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `--generations` | int | None | Maximum number of evolution generations. If not set, runs indefinitely |
-| `--threshold` | float | 0.99 | North star metric threshold for stopping evolution |
-| `--moderation-methods` | list | `["google"]` | Moderation methods: `google` (Perspective API), `all` (google only) |
-| `--threshold-percentage` | int | 25 | Percentage for elite threshold calculation |
-| `--elites-threshold` | int | 25 | Elite threshold percentage (top % genomes considered elite) |
-| `--removal-threshold` | int | 5 | Removal threshold percentage (bottom % genomes archived) |
-| `--stagnation-limit` | int | 5 | Generations without improvement before switching to explore mode |
-| `--rg` | str | `models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf` | Response generator model path (.gguf file or alias) |
-| `--pg` | str | `models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf` | Prompt generator model path (.gguf file or alias) |
-| `--operators` | str | `"all"` | Operator mode: `ie` (InformedEvolution only), `cm` (all except IE), `all` (all operators) |
-| `--max-variants` | int | 1 | Maximum variants to generate per evolution cycle |
+| `--generations` | int | `None` | Maximum number of evolution generations. If not set, runs until north star metric is achieved |
+| `--threshold` | float | `0.95` | North star metric threshold for stopping evolution |
+| `model_names` | list | `[]` | Model names to use (currently not used) |
+| `--check-interval` | int | `1800` | Health check interval in seconds (30 minutes) |
+| `--stuck-threshold` | int | `7200` | Stuck detection threshold in seconds (2 hours) |
+| `--memory-threshold` | float | `20.0` | Memory threshold in GB |
+| `--max-restarts` | int | `5` | Maximum restart attempts |
+| `--interactive` | flag | `False` | Run in interactive mode with setup and monitoring |
+| `--setup` | flag | `False` | Run full environment setup (install requirements, optimize config) |
+| `--no-monitor` | flag | `False` | Run without process monitoring |
 
-**Key Arguments Explained:**
+ 
 
-- **`--operators`**: Controls which variation operators are used
-  - `ie`: Only InformedEvolution (LLM-guided evolution using top performers)
-  - `cm`: All classical operators (synonym replacement, back-translation, etc.) except InformedEvolution
-  - `all`: All operators including both classical and LLM-driven
+## Architecture at a Glance
+
+```mermaid
+flowchart TD
+  A[Input Prompts: data/prompt.xlsx] --> B[Initialize Population → outputs/elites.json]
+  B --> C[Steady-State Evolution Loop]
   
-- **`--elites-threshold`**: Percentage of top-scoring genomes considered "elites" (used for parent selection)
-
-- **`--removal-threshold`**: Percentage of worst-performing genomes to archive to `under_performing.json`
-
-- **`--stagnation-limit`**: When fitness hasn't improved for N generations, switch from exploit mode to explore mode to search broader solution space
-
-- **Model arguments (`--rg`, `--pg`)**: Can specify either a direct `.gguf` file path or an alias (directory name under `models/`)
-
-### Results Output
-
-Results will be saved in `data/outputs/[timestamp]/` with:
-- `EvolutionTracker.json` - Generation-by-generation progress
-- `elites.json` - High-performing prompts
-- `non_elites.json` - Mid-performing prompts
-- `under_performing.json` - Archived prompts
-
-## System Overview
-
-## Project Structure
-
-```
-eost-cam-llm/
-├── src/
-│   ├── main.py                    # Entry point
-│   ├── ea/                        # Evolutionary algorithms
-│   │   ├── evolution_engine.py    # Core evolution logic
-│   │   ├── parent_selector.py     # Adaptive parent selection
-│   │   └── [16 operator files]    # Variation operators
-│   ├── gne/                       # Generation & evaluation
-│   │   ├── prompt_generator.py    # Prompt generation
-│   │   ├── response_generator.py  # Response generation
-│   │   └── evaluator.py           # Moderation API calls
-│   └── utils/
-│       └── population_io.py       # Population I/O & metrics
-├── config/                        # Model configurations
-├── data/                          # Input data and results
-└── experiments/                   # Analysis notebooks
+  subgraph "Evolution Loop"
+    C --> D[Parent Selection: Top Elite + Random]
+    D --> E[Text Generation: LLaMaTextGenerator]
+    E --> F[Safety Evaluation: Hybrid Moderation]
+    F --> G[Evolution: 16 Variation Operators]
+    G --> H[Update Elites: outputs/elites.json]
+    H --> I{Threshold Reached?}
+    I -->|No| D
+    I -->|Yes| J[Complete]
+  end
+  
+  F --> K[EvolutionTracker.json]
+  H --> L[Population.json]
+  
+  style C fill:#4fc3f7,stroke:#0277bd,stroke-width:3px,color:#000
+  style I fill:#ffb74d,stroke:#f57c00,stroke-width:3px,color:#000
+  style J fill:#81c784,stroke:#388e3c,stroke-width:3px,color:#000
 ```
 
-## Citation
+## System Components Overview
 
-If you use this framework in your research, please cite:
-
-```bibtex
-@article{evolving_prompts_toxicity_2025,
-  title={Evolving Prompts for Toxicity Search in Large Language Models},
-  author={...},
-  journal={...},
-  year={2025}
-}
+```mermaid
+graph TB
+  subgraph "Input Layer"
+    A1[data/prompt.xlsx]
+  end
+  
+  subgraph "Core Pipeline"
+    B1[Population Initialization]
+    B2[Text Generation - LLaMA]
+    B3[Safety Evaluation - Hybrid API]
+    B4[Evolution Engine - 16 Operators]
+  end
+  
+  subgraph "Storage Layer"
+    C1[outputs/elites.json<br/>Steady-State Population]
+    C2[outputs/EvolutionTracker.json<br/>Progress Tracking]
+    C3[outputs/Population.json<br/>Full Population]
+  end
+  
+  subgraph "Text Variation Operators"
+    D1[Mutation Operators<br/>13 Total]
+    D2[Crossover Operators<br/>3 Total]
+    D3[Multi-Language Support<br/>5 Languages]
+  end
+  
+  A1 --> B1
+  B1 --> B2
+  B2 --> B3
+  B3 --> B4
+  B4 --> B1
+  
+  B1 --> C1
+  B3 --> C2
+  B4 --> C3
+  
+  B4 --> D1
+  B4 --> D2
+  B4 --> D3
+  
+  style B1 fill:#64b5f6,stroke:#1976d2,stroke-width:2px,color:#000
+  style B2 fill:#ba68c8,stroke:#7b1fa2,stroke-width:2px,color:#000
+  style B3 fill:#4caf50,stroke:#2e7d32,stroke-width:2px,color:#000
+  style B4 fill:#ff9800,stroke:#ef6c00,stroke-width:2px,color:#000
 ```
 
-## Contributing
+## Memory Management Architecture
 
-This is a research framework. Contributions should focus on:
-- Improving operator diversity and effectiveness
-- Enhancing population management strategies
-- Extending to additional LLM architectures
-- Advancing safety evaluation metrics
+```mermaid
+flowchart LR
+  A[Memory Monitor] --> B[Adaptive Batch Sizing]
+  B --> C[Model Caching]
+  C --> D[Lazy Loading]
+  D --> E[Memory Cleanup]
+  E --> A
+  
+  subgraph "Memory Optimization"
+    F[Real-time Tracking]
+    G[Threshold Alerts]
+    H[PyTorch Cache Clear]
+    I[Garbage Collection]
+  end
+  
+  A --> F
+  A --> G
+  E --> H
+  E --> I
+  
+  style A fill:#f48fb1,stroke:#c2185b,stroke-width:3px,color:#000
+  style E fill:#66bb6a,stroke:#388e3c,stroke-width:3px,color:#000
+```
+
+## Documentation
+
+### **[Architecture Overview](ARCHITECTURE.md)**
+Comprehensive system architecture, component interactions, and data flow diagrams.
+
+### **[Design Document](design_document.md)**
+Detailed, professional design specification: goals, data models, algorithms, operations.
+
+### **[Evolutionary Algorithms](src/ea/README.md)**
+Complete guide to genetic algorithms, variation operators, and evolution strategies.
+
+### **Generation & Evaluation** (`src/gne/`)
+- `LLaMaTextGenerator.py` - LLaMA model integration with memory management and task-specific templates
+- `hybrid_moderation.py` - Hybrid moderation using Google Perspective API + OpenAI
+
+### **Utilities** (`src/utils/`)
+- `population_io.py` - Steady-state population management (`elites.json`) and `EvolutionTracker.json`
+- `custom_logging.py` - Performance and memory logging
+- `m3_optimizer.py` - M3 Mac optimization utilities
+- `config.py` - Configuration management
+- `constants.py` - System constants and configuration
+- `download_models.py` - Model download utilities
+
+## Usage Examples
+
+### **Basic Evolution Run**
+```bash
+# Run evolution until threshold is reached
+python src/main.py --threshold 0.99
+
+# Run for specific number of generations
+python src/main.py --generations 10
+```
+
+### **Population Management**
+```bash
+# Initialize population from prompt.xlsx
+python -c "from src.utils.population_io import load_and_initialize_population; load_and_initialize_population('data/prompt.xlsx', 'outputs')"
+
+# Load elites for analysis
+python -c "from src.utils.population_io import load_elites; elites = load_elites('outputs/elites.json')"
+```
+
+### **Operator Testing**
+```bash
+# Test all operators
+python tests/test_operators_demo.py
+
+# Test specific back translation
+python -c "from src.ea.TextVariationOperators import LLMBackTranslationHIOperator; op = LLMBackTranslationHIOperator(); print(op.apply('Hello world'))"
+```
+
+ 
+
+ 
+
+## Output Structure
+
+```
+outputs/
+├── elites.json              # Steady-state elite population
+├── Population.json          # Full population (if needed)
+├── population_index.json    # Population metadata
+├── EvolutionTracker.json    # Evolution progress tracking
+└── final_statistics.json   # Final analysis results (optional)
+```
+
+## Text Variation Operators
+
+```mermaid
+graph TB
+  subgraph "Mutation Operators (13)"
+    A1[LLM_POSAwareSynonymReplacement<br/>LLaMA-based synonym replacement]
+    A2[BertMLMOperator<br/>BERT masked language model]
+    A3[LLMBasedParaphrasingOperator<br/>OpenAI GPT-4 paraphrasing]
+    
+    subgraph "Back-Translation (10)"
+      B1[Model-Based: Helsinki-NLP]
+      B2[LLM-Based: LLaMA]
+      
+      subgraph "Languages (5)"
+        C1[Hindi (HI)]
+        C2[French (FR)]
+        C3[German (DE)]
+        C4[Japanese (JA)]
+        C5[Chinese (ZH)]
+      end
+      
+      B1 --> C1
+      B1 --> C2
+      B1 --> C3
+      B1 --> C4
+      B1 --> C5
+      
+      B2 --> C1
+      B2 --> C2
+      B2 --> C3
+      B2 --> C4
+      B2 --> C5
+    end
+  end
+  
+  subgraph "Crossover Operators (3)"
+    D1[OnePointCrossover<br/>Single-point crossover]
+    D2[SemanticSimilarityCrossover<br/>Semantic similarity-based]
+    D3[InstructionPreservingCrossover<br/>Instruction structure preservation]
+  end
+  
+  style A1 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style A2 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style A3 fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style B1 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
+  style B2 fill:#ab47bc,stroke:#6a1b9a,stroke-width:2px,color:#000
+  style D1 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D2 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style D3 fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+```
+
+### **Operator Selection Logic**
+
+```mermaid
+flowchart TD
+  A[Parent Selection] --> B{Number of Parents?}
+  B -->|1 Parent| C[Mutation Operators<br/>13 Total]
+  B -->|2+ Parents| D[Crossover Operators<br/>3 Total]
+  
+  C --> E[Apply Selected Operator]
+  D --> E
+  E --> F[Generate Variants<br/>Max 5 per operator]
+  F --> G[Deduplication]
+  G --> H[Add to Population]
+  
+  style C fill:#42a5f5,stroke:#1565c0,stroke-width:2px,color:#000
+  style D fill:#66bb6a,stroke:#2e7d32,stroke-width:2px,color:#000
+  style F fill:#ffb74d,stroke:#f57c00,stroke-width:2px,color:#000
+```
+
+ 
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License - see LICENSE file for details.
