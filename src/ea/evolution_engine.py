@@ -310,13 +310,27 @@ class EvolutionEngine:
             self.logger.error("top_10.json not found")
             return
         
-        # Run InformedEvolution operator max_variants times
+        # Determine number of calls based on selection mode
+        if evolution_tracker is None:
+            selection_mode = "default"
+        else:
+            selection_mode = evolution_tracker.get("selection_mode", "default")
+        
+        # Set number of calls based on mode: default=2, explore/exploit=3
+        if selection_mode == "explore" or selection_mode == "exploit":
+            num_calls = 3
+        else:  # default mode
+            num_calls = 2
+        
+        self.logger.info(f"IE mode: Selection mode={selection_mode}, calling operator {num_calls} times")
+        
+        # Run InformedEvolution operator num_calls times
         for operator in ie_operators:
             try:
-                self.logger.debug(f"Running operator: {operator.__class__.__name__} {self.max_variants} times")
+                self.logger.debug(f"Running operator: {operator.__class__.__name__} {num_calls} times")
                 
                 variants_to_save = []
-                for variant_iteration in range(self.max_variants):
+                for variant_iteration in range(num_calls):
                     operator_input = {
                         "parent_data": parent_example
                     }

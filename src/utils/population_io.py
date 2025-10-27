@@ -1989,7 +1989,9 @@ def calculate_and_update_population_thresholds(
                         "generations": []
                     }
                 
-                # Update population_max_toxicity and best genome
+                # Update population-level global statistics
+                # population_max_toxicity: Maximum score across ALL genomes in entire population
+                # population_best_genome_id: Genome ID with the maximum score (global best)
                 tracker["population_max_toxicity"] = max_toxicity_score
                 tracker["population_best_genome_id"] = best_genome_id
                 
@@ -1999,9 +2001,15 @@ def calculate_and_update_population_thresholds(
                     current_gen = tracker["generations"][-1]
                     # Only update threshold and max score fields, preserve everything else
                     current_gen["elites_threshold"] = elite_threshold
+                    
+                    # Only update max_score_variants if new score is better
                     if current_gen.get("max_score_variants", 0) < max_toxicity_score:
-                        # Only update if new score is better (for max score tracking)
                         current_gen["max_score_variants"] = max_toxicity_score
+                    
+                    # Set genome_id only if not already set (fallback for new generations)
+                    # NOTE: This sets the GLOBAL best genome as a fallback, but update_evolution_tracker_with_generation_global
+                    # should be setting it with the generation-specific best genome first
+                    if current_gen.get("genome_id") is None:
                         current_gen["genome_id"] = best_genome_id
                 
                 # Save updated tracker
