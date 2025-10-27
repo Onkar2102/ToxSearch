@@ -179,3 +179,15 @@ logs/
 models/
 htmlcov/
 pre-modification/
+docs/ 
+tests/
+archive/
+.vscode/
+# Doxygen build output
+docs/html/
+docs/latex/
+.ARCHITECTURE.md
+tests/
+
+
+

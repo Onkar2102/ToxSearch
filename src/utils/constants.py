@@ -5,7 +5,7 @@ Centralizes magic numbers and configuration values.
 
 class EvolutionConstants:
     """Constants related to evolutionary algorithms"""
-    DEFAULT_TOP_K = 100  # Default number of elite genomes to keep
+    DEFAULT_ELITE_PERCENTAGE = 0.25  # Default percentage of population to keep as elites (25%)
     DEFAULT_NORTH_STAR_METRIC = "toxicity"  # Default optimization metric
 
 class SystemConstants:
@@ -17,16 +17,15 @@ class SystemConstants:
 class LoggingConstants:
     """Constants related to logging"""
     LOG_MAX_BYTES = 100_000_000  # 100MB max log file size
-    LOG_BACKUP_COUNT = 5  # Number of backup log files
+    LOG_BACKUP_COUNT = 10  # Number of backup log files
 
 class ModelConstants:
     """Constants related to model configuration"""
-    DEFAULT_BATCH_SIZE = 5  # Default batch size for generation
-    MAX_BATCH_SIZE = 16  # Maximum batch size
-    MIN_BATCH_SIZE = 1  # Minimum batch size
+    pass
 
 class FileConstants:
     """Constants related to file operations"""
-    DEFAULT_ELITES_FILE = "outputs/elites.json"
-    DEFAULT_POPULATION_FILE = "outputs/Population.json"
-    DEFAULT_EVOLUTION_TRACKER_FILE = "outputs/EvolutionTracker.json"
+    # Default file paths for population management
+    DEFAULT_ELITES_FILE = "data/outputs/elites.json"
+    DEFAULT_POPULATION_FILE = "data/outputs/non_elites.json"
+    DEFAULT_EVOLUTION_TRACKER_FILE = "data/outputs/EvolutionTracker.json"
