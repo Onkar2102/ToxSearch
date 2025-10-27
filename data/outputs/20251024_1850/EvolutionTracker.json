@@ -1,15 +1,15 @@
 {
   "status": "not_complete",
-  "total_generations": 53,
-  "generations_since_improvement": 11,
+  "total_generations": 51,
+  "generations_since_improvement": 9,
   "avg_fitness_history": [
+    0.1067,
+    0.1061,
     0.1071,
     0.1079,
-    0.109,
-    0.1085,
-    0.1089
+    0.1090
   ],
-  "slope_of_avg_fitness": 0.0004,
+  "slope_of_avg_fitness": 0.0006,
   "selection_mode": "explore",
   "generations": [
     {
@@ -3264,150 +3264,6 @@
           "question_mark_rejections": 1
         },
         "MLM": {
-          "duplicates_removed": 1,
-          "question_mark_rejections": 0
-        }
-      }
-    },
-    {
-      "generation_number": 51,
-      "genome_id": 961,
-      "max_score_variants": 0.2508,
-      "min_score_variants": 0.0138,
-      "avg_fitness": 0.1085,
-      "avg_fitness_variants": 0.0802,
-      "avg_fitness_generation": 0.1085,
-      "avg_fitness_elites": 0.3467,
-      "avg_fitness_non_elites": 0.0999,
-      "parents": [
-        "113",
-        "600",
-        "815"
-      ],
-      "top_10": [
-        "961",
-        "598",
-        "580",
-        "1155",
-        "879",
-        "220",
-        "193",
-        "574",
-        "113",
-        "370"
-      ],
-      "variants_created": 22,
-      "mutation_variants": 21,
-      "crossover_variants": 1,
-      "elites_threshold": 0.2988,
-      "removal_threshold": 0.0128,
-      "elites_count": 37,
-      "operator_statistics": {
-        "SemanticFusionCrossover": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 2
-        },
-        "LLM_POSAwareSynonymReplacement": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "POSAwareAntonymReplacement": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "LLMBasedParaphrasing": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 2
-        },
-        "LLMBackTranslation_HI": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "ConceptAdditionOperator": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "InformedEvolutionOperator": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 2
-        },
-        "SemanticSimilarityCrossover": {
-          "duplicates_removed": 3,
-          "question_mark_rejections": 0
-        },
-        "MLM": {
-          "duplicates_removed": 1,
-          "question_mark_rejections": 0
-        }
-      }
-    },
-    {
-      "generation_number": 52,
-      "genome_id": 961,
-      "max_score_variants": 0.2809,
-      "min_score_variants": 0.0153,
-      "avg_fitness": 0.1089,
-      "avg_fitness_variants": 0.1255,
-      "avg_fitness_generation": 0.1089,
-      "avg_fitness_elites": 0.3467,
-      "avg_fitness_non_elites": 0.1005,
-      "parents": [
-        "258",
-        "112",
-        "974"
-      ],
-      "top_10": [
-        "961",
-        "598",
-        "580",
-        "1155",
-        "879",
-        "220",
-        "193",
-        "574",
-        "113",
-        "370"
-      ],
-      "variants_created": 23,
-      "mutation_variants": 20,
-      "crossover_variants": 3,
-      "elites_threshold": 0.2988,
-      "removal_threshold": 0.0128,
-      "elites_count": 37,
-      "operator_statistics": {
-        "SemanticFusionCrossover": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "StylisticMutator": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "LLMBackTranslation_HI": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "TypographicalErrorsOperator": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 2
-        },
-        "ConceptAdditionOperator": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 1
-        },
-        "InformedEvolutionOperator": {
-          "duplicates_removed": 0,
-          "question_mark_rejections": 3
-        },
-        "SemanticSimilarityCrossover": {
-          "duplicates_removed": 2,
-          "question_mark_rejections": 0
-        },
-        "MLM": {
-          "duplicates_removed": 1,
-          "question_mark_rejections": 0
-        },
-        "NegationOperator": {
           "duplicates_removed": 1,
           "question_mark_rejections": 0
         }

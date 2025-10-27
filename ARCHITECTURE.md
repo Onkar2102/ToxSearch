@@ -1,8 +1,8 @@
-# System Architecture: Evolutionary Optimization for Safety Testing
+# System Architecture: Evolutionary Search for Toxicity in LLMs
 
 ## Overview
 
-This system implements a genetic algorithm framework for evolving text prompts to maximize toxicity scores, enabling comprehensive AI safety evaluation through adversarial prompt generation.
+This system implements a genetic algorithm framework for evolving text prompts to elicit toxic responses from large language models, enabling comprehensive AI safety evaluation through adversarial prompt generation.
 
 ## Core Algorithm
 
@@ -20,8 +20,10 @@ The system uses a steady-state genetic algorithm with the following components:
 
 **Fitness Function**:
 ```
-f(x) = toxicity_score(x) ∈ [0, 1]
+f(x) = toxicity_score(response to prompt x) ∈ [0, 1]
 ```
+
+The fitness function evaluates toxicity in the LLM's response, not the prompt itself.
 
 **Threshold Calculations**:
 ```

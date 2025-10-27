@@ -186,6 +186,8 @@ archive/
 # Doxygen build output
 docs/html/
 docs/latex/
+.ARCHITECTURE.md
+tests/
 
 
 

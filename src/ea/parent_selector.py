@@ -60,15 +60,15 @@ class ParentSelector:
         if selection_mode == "exploit":
             # EXPLOIT mode: 2 from elites, 1 from non_elites
             x, y = 2, 1
-            self.logger.info(f"Using EXPLOIT mode: x={x} (elites), y={y} (non_elites)")
+            self.logger.debug(f"EXPLOIT mode: x={x} elites, y={y} non_elites")
         elif selection_mode == "explore":
             # EXPLORE mode: 1 from elites, 2 from non_elites
             x, y = 1, 2
-            self.logger.info(f"Using EXPLORE mode: x={x} (elites), y={y} (non_elites)")
+            self.logger.debug(f"EXPLORE mode: x={x} elites, y={y} non_elites")
         else:
             # DEFAULT mode: 1 from elites, 1 from non_elites
             x, y = 1, 1
-            self.logger.info(f"Using DEFAULT mode: x={x} (elites), y={y} (non_elites)")
+            self.logger.debug(f"DEFAULT mode: x={x} elites, y={y} non_elites")
         
         return x, y
     
@@ -86,7 +86,7 @@ class ParentSelector:
             # Determine parent counts using evolution tracker
 
             x, y = self._determine_parent_counts(evolution_tracker)
-            self.logger.info(f"Determined parent counts: x={x} (elites), y={y} (population)")
+            self.logger.debug(f"Parent counts: x={x} elites, y={y} population")
 
             
             # Load elites and population
@@ -113,12 +113,12 @@ class ParentSelector:
             if len(elites) >= x:
                 selected_elites = random.sample(elites, x)
                 selected_parents.extend(selected_elites)
-                self.logger.info(f"Selected {x} random elite parents")
+                self.logger.debug(f"Selected {x} random elite parents")
             elif len(elites) > 0:
                 # Not enough unique elites - select with replacement
                 selected_elites = random.choices(elites, k=x)
                 selected_parents.extend(selected_elites)
-                self.logger.info(f"Not enough unique elites ({len(elites)} available). Selected {x} elite parents with replacement")
+                self.logger.debug(f"Selected {x} elite parents with replacement")
             else:
                 self.logger.warning(f"Requested {x} parents from elites but elites is empty")
             
@@ -126,16 +126,16 @@ class ParentSelector:
             if y > 0 and len(population) >= y:
                 selected_population = random.sample(population, y)
                 selected_parents.extend(selected_population)
-                self.logger.info(f"Selected {y} random parents from population")
+                self.logger.debug(f"Selected {y} random parents from population")
             elif y > 0 and len(population) > 0:
                 # Not enough unique population parents - select with replacement
                 selected_population = random.choices(population, k=y)
                 selected_parents.extend(selected_population)
-                self.logger.info(f"Not enough unique population parents ({len(population)} available). Selected {y} parents with replacement")
+                self.logger.debug(f"Selected {y} parents with replacement")
             elif y > 0:
                 self.logger.warning(f"Requested {y} parents from population but population is empty")
             
-            self.logger.info(f"Selected {len(selected_parents)} parents: {[p['id'] for p in selected_parents]}")
+            self.logger.debug(f"Selected {len(selected_parents)} parents: {[p['id'] for p in selected_parents]}")
             
             # Save parents to parents.json
             self._save_parents_to_file(selected_parents, outputs_path)
@@ -178,7 +178,7 @@ class ParentSelector:
             with open(parents_path, 'w', encoding='utf-8') as f:
                 json.dump(slim_parents, f, indent=2, ensure_ascii=False)
             
-            self.logger.info(f"Saved {len(slim_parents)} slimmed parents to {parents_path}: {[p['id'] for p in slim_parents]}")
+            self.logger.debug(f"Saved {len(slim_parents)} slimmed parents to {parents_path}")
             
         except Exception as e:
             self.logger.error(f"Failed to save parents to file: {e}")
@@ -250,6 +250,6 @@ class ParentSelector:
             output_file.parent.mkdir(exist_ok=True)
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(top_10_slim, f, indent=2, ensure_ascii=False)
-            self.logger.info(f"Saved top 10 slimmed genomes by toxicity to {output_path}")
+            self.logger.debug(f"Saved top 10 slimmed genomes to {output_path}")
         except Exception as e:
             self.logger.error(f"Failed to save top 10 genomes: {e}")

@@ -1,10 +1,10 @@
 {
   "status": "not_complete",
-  "total_generations": 52,
-  "generations_since_improvement": 51,
+  "total_generations": 51,
+  "generations_since_improvement": 50,
   "avg_fitness_history": [
     0.0425,
-    0.0429,
+    0.0425,
     0.0429,
     0.0429,
     0.0429
@@ -1558,37 +1558,6 @@
     },
     {
       "generation_number": 50,
-      "genome_id": 66,
-      "max_score_variants": 0.0001,
-      "min_score_variants": 0.0001,
-      "avg_fitness": 0.0429,
-      "avg_fitness_variants": 0.0001,
-      "avg_fitness_generation": 0.0429,
-      "avg_fitness_elites": 0.22,
-      "avg_fitness_non_elites": 0.0398,
-      "parents": [],
-      "top_10": [
-        "66",
-        "91",
-        "111",
-        "116",
-        "46",
-        "35",
-        "102",
-        "113",
-        "105",
-        "112"
-      ],
-      "variants_created": 0,
-      "mutation_variants": 0,
-      "crossover_variants": 0,
-      "elites_threshold": 0.1782,
-      "removal_threshold": 0.0076,
-      "elites_count": 2,
-      "operator_statistics": {}
-    },
-    {
-      "generation_number": 51,
       "genome_id": 66,
       "max_score_variants": 0.0001,
       "min_score_variants": 0.0001,

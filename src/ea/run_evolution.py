@@ -114,7 +114,7 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump(unique_variants, f, indent=2, ensure_ascii=False)
         
-        logger.info(f"Deduplication complete: {len(temp_variants)} → {len(unique_variants)} variants ({duplicates_removed} duplicates removed)")
+        logger.debug(f"Deduplication: {len(temp_variants)} → {len(unique_variants)} ({duplicates_removed} duplicates)")
         
         return duplicates_removed
         
@@ -202,7 +202,7 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
             with open(elites_path, 'w', encoding='utf-8') as f:
                 json.dump(elites_to_save, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"Moved {len(elites_to_move)} elite genomes to elites.json")
+            logger.debug(f"Moved {len(elites_to_move)} elite genomes to elites.json")
         
         # Move non-elite genomes to non_elites.json
         if population_to_move:
@@ -217,7 +217,7 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
             with open(population_path, 'w', encoding='utf-8') as f:
                 json.dump(population_to_save, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"Moved {len(population_to_move)} genomes to non_elites.json for further evolution")
+            logger.debug(f"Moved {len(population_to_move)} genomes to non_elites.json")
         
         # Move under-performing genomes to under_performing.json (archive)
         if under_performing_to_move:
@@ -232,7 +232,7 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
             with open(under_performing_path, 'w', encoding='utf-8') as f:
                 json.dump(under_performing_to_save, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"Archived {len(under_performing_to_move)} under-performing genomes to under_performing.json")
+            logger.debug(f"Archived {len(under_performing_to_move)} under-performing genomes")
         
         # Clear temp.json after successful distribution
         with open(temp_path, 'w', encoding='utf-8') as f:
@@ -245,7 +245,7 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
             "total_processed": len(temp_variants)
         }
         
-        logger.info(f"Distribution complete: {distribution_stats['total_processed']} variants → "
+        logger.debug(f"Distribution complete: {distribution_stats['total_processed']} variants → "
                    f"{distribution_stats['elites_moved']} elites, "
                    f"{distribution_stats['population_moved']} population, "
                    f"{distribution_stats['under_performing_moved']} archived")
@@ -312,13 +312,13 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                 # For toxicity maximization, we don't stop when we reach the threshold
                 # We continue evolving to find even higher toxicity scores
                 evolution_tracker["status"] = "not_complete"
-                logger.info("Global population achieved threshold with score %.4f (genome %s), continuing evolution for higher scores", best_score, best_genome_id)
+                logger.debug("Threshold achieved (%.4f), continuing for higher scores", best_score)
             else:
                 evolution_tracker["status"] = "not_complete"
-                logger.info("Global population best score: %.4f (genome %s), threshold not reached", best_score, best_genome_id)
+                logger.debug("Best score: %.4f, threshold not reached", best_score)
         else:
             evolution_tracker["status"] = "not_complete"
-            logger.info("No completed genomes found in global population")
+            logger.debug("No completed genomes found")
 
         if not evolution_tracker.get("generations"):
             # Initialize generation 0 if not exists
@@ -349,15 +349,14 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "removal_threshold": 0.0001,
                     "elites_count": 0,
                 }]
-                logger.info("Created generation 0 entry with best genome %s, score: %.4f", best_gen0_id, best_gen0_score)
+                logger.debug("Created gen 0 entry: genome %s, score: %.4f", best_gen0_id, best_gen0_score)
 
         # For toxicity maximization, we don't mark genomes as complete when threshold is achieved
         # We continue evolving to find even higher toxicity scores
-        logger.info("Global population best score: %.4f, continuing evolution for higher scores", best_score if completed_genomes else 0.0)
+        logger.debug("Best score: %.4f, continuing evolution", best_score if completed_genomes else 0.0)
         
         with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
             json.dump(evolution_tracker, f, indent=4, ensure_ascii=False)
-        logger.info("Updated evolution tracker with threshold check results")
         
         return evolution_tracker
     except Exception as e:
@@ -374,7 +373,7 @@ def get_pending_status(evolution_tracker, logger):
     """Get status of global evolution tracker"""
     try:
         status = evolution_tracker.get("status", "not_complete")
-        logger.info("Global evolution status: %s", status)
+        logger.debug("Evolution status: %s", status)
         return status
     except Exception as e:
         logger.error("Failed to get pending status: %s", e, exc_info=True)
@@ -650,12 +649,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
     evolution_tracker_path = outputs_path / "EvolutionTracker.json"
     
     logger = get_logger("RunEvolution", log_file)
-    logger.info("Starting evolution run using population file: %s", population_path)
-    logger.info("Output directory: %s", outputs_path)
-    logger.info("North star metric: %s", north_star_metric)
-    logger.info("Using steady state population management")
-    if current_cycle is not None:
-        logger.info("Evolution cycle: %d", current_cycle)
+    logger.info("Starting evolution: cycle=%s, metric=%s", current_cycle, north_star_metric)
 
     # Check for population file
     if not population_path.exists():
@@ -666,7 +660,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
     try:
         _, _, load_population, _, _, _, _, _, _, _, _, _, _ = get_population_io()
         population = load_population(str(outputs_path), logger=logger)
-        logger.info("Successfully loaded population with %d genomes", len(population))
+        logger.debug("Loaded %d genomes", len(population))
     except Exception as e:
         logger.error("Unexpected error loading population: %s", e, exc_info=True)
         raise
@@ -706,7 +700,7 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         
         # Get operator statistics after variant generation
         operator_stats_dict = engine.operator_stats.to_dict()
-        logger.info(f"Operator statistics: {operator_stats_dict}")
+        logger.debug(f"Operator statistics: {operator_stats_dict}")
         
         # Count variants from temp.json for logging
         temp_path = outputs_path / "temp.json"
@@ -715,7 +709,6 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
             with open(temp_path, 'r', encoding='utf-8') as f:
                 temp_variants = json.load(f)
                 variant_count = len(temp_variants)
-        logger.info("Generated %d variants globally", variant_count)
         # Update population index after evolution
         try:
             update_population_index_single_file(str(outputs_path), len(engine.genomes), logger=logger)
@@ -725,13 +718,13 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
     except Exception as e:
         logger.error("Failed to process global evolution: %s", e, exc_info=True)
         raise
-    logger.info("Global evolution processing completed successfully")
+    logger.debug("Evolution processing completed")
 
     # Phase 4: Deduplicate variants in temp.json (cross-file check)
     # Remove variants that already exist in elites.json and non_elites.json
     try:
         duplicates_removed = _deduplicate_variants_in_temp(logger, engine.operator_stats)
-        logger.info("Successfully deduplicated variants in temp.json (%d duplicates removed)", duplicates_removed)
+        logger.debug("Deduplicated variants (%d duplicates removed)", duplicates_removed)
     except Exception as e:
         logger.error("Failed to deduplicate variants in temp.json: %s", e, exc_info=True)
         raise
@@ -753,15 +746,9 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         
         # EvolutionTracker update will be handled in main.py after evaluation
         # This ensures we track the best genome from evaluated variants
-        logger.info("EvolutionTracker update will be handled after evaluation phase")
     
     except Exception as e:
         logger.error("Failed to prepare EvolutionTracker data: %s", e, exc_info=True)
-    
-    # Log final summary
-    logger.info("Evolution run completed successfully:")
-    logger.info("  - Total genomes processed: %d", len(engine.genomes))
-    logger.info("  - Evolution tracker updated: %s", evolution_tracker_path)
     
     # Return operator statistics for use by main.py
     return {

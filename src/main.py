@@ -107,7 +107,7 @@ def update_model_configs(rg_model, pg_model, logger):
                 rg_config["response_generator"] = rg_section
                 with open(rg_config_path, 'w') as f:
                     yaml.dump(rg_config, f, default_flow_style=False)
-                logger.info("Updated RGConfig.yaml with file: %s", rg_file)
+                logger.debug("Updated RGConfig.yaml with file: %s", rg_file)
             else:
                 logger.warning("Skipped RGConfig.yaml update; no file resolved for alias '%s'", rg_model)
 
@@ -123,11 +123,11 @@ def update_model_configs(rg_model, pg_model, logger):
                 pg_config["prompt_generator"] = pg_section
                 with open(pg_config_path, 'w') as f:
                     yaml.dump(pg_config, f, default_flow_style=False)
-                logger.info("Updated PGConfig.yaml with file: %s", pg_file)
+                logger.debug("Updated PGConfig.yaml with file: %s", pg_file)
             else:
                 logger.warning("Skipped PGConfig.yaml update; no file resolved for alias '%s'", pg_model)
 
-        logger.info("Model configuration updates completed successfully")
+        logger.debug("Model configuration updates completed successfully")
 
     except Exception as e:
         logger.error(f"Failed to update model configurations: {e}")
@@ -172,7 +172,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     get_logger, get_log_filename, log_system_info, _ = get_custom_logging()
     log_file = get_log_filename()
     logger = get_logger("main", log_file)
-    logger.debug(f"Log file path resolved to: {log_file}")
     
     # Log system information at startup
     log_system_info(logger)
@@ -187,10 +186,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     
     start_time = time.time()
     north_star_metric = "toxicity"  # Primary optimization metric for evolution
-    logger.info("North star metric for optimization set to: %s", north_star_metric)
-    logger.info("North star threshold for stopping: %.4f (low toxicity target)", north_star_threshold)
-    logger.info("Using moderation methods: %s", moderation_methods)
-    logger.info("Maximum generations allowed for evolution: %s", max_generations)
+    logger.info("Starting evolutionary run: metric=%s, threshold=%.4f, max_generations=%s", 
+                north_star_metric, north_star_threshold, max_generations)
 
     # Phase 1: Update config files with selected models
     try:
@@ -212,7 +209,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         # Process temp.json directly (Phase 1 prompts)
         temp_path = str(get_outputs_path() / "temp.json")
         response_generator.process_population(pop_path=temp_path)
-        logger.debug("Text generation completed on temp.json.")
     except Exception as e:
         logger.error("Generation failed: %s", e, exc_info=True)
         return
@@ -228,7 +224,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             north_star_metric=north_star_metric,
             moderation_methods=moderation_methods
         )
-        logger.debug("Evaluation completed on temp.json with moderation scores.")
     except Exception as e:
         logger.error("Evaluation failed: %s", e, exc_info=True)
         return
@@ -306,8 +301,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             north_star_metric=north_star_metric,
             log_file=log_file
         )
-        logger.info("Initial population finalized - elites and population separated.")
-        logger.info("Used dynamic threshold: %.4f for initial population distribution", elite_threshold)
+        logger.info("Initial population finalized using elite threshold: %.4f", elite_threshold)
         
         # Remove worse performing genomes from all files for generation 0
         logger.info("Removing worse performing genomes from all files...")
@@ -320,7 +314,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             logger=logger,
             log_file=log_file
         )
-        logger.info("Genome archiving from all files completed: %d total archived, %d total remaining", 
+        logger.debug("Archived %d genomes, %d remaining", 
                    removal_results["archived_count_total"], removal_results["remaining_count_total"])
         
         # Now redistribute remaining genomes between elites and non_elites based on elite_threshold
@@ -331,7 +325,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             logger=logger,
             log_file=log_file
         )
-        logger.info("Final redistribution completed: %d elites, %d non_elites", 
+        logger.debug("Redistribution: %d elites, %d non_elites", 
                    redistribution_result["elites_count"], 
                    redistribution_result.get("total_count", 0) - redistribution_result["elites_count"])
         
@@ -401,11 +395,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(tracker, f, indent=4, ensure_ascii=False)
             
-            logger.info(f"Updated generation 0 with comprehensive metrics: "
-                       f"elites_count={redistribution_result['elites_count']}, "
-                       f"removal_threshold={removal_threshold_value:.4f}, "
-                       f"avg_fitness_elites={avg_fitness_elites:.4f}, "
-                       f"avg_fitness_non_elites={avg_fitness_non_elites:.4f}")
+            logger.debug(f"Gen0 metrics: elites={redistribution_result['elites_count']}, "
+                        f"removal_th={removal_threshold_value:.4f}, "
+                        f"elite_avg={avg_fitness_elites:.4f}, non_elite_avg={avg_fitness_non_elites:.4f}")
         except Exception as e:
             logger.warning(f"Failed to update generation 0 metrics in EvolutionTracker: {e}")
     except Exception as e:
@@ -429,13 +421,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             
         # Load elite_threshold from evolution tracker if available
         elite_threshold = evolution_tracker.get("generations", [{}])[0].get("elites_threshold", phase_3b_results["elite_threshold"])
-        logger.info("Continuing from generation %d (loaded from EvolutionTracker), elite_threshold=%.4f", 
-                   generation_count, elite_threshold)
+        logger.debug("Resuming from generation %d, elite_threshold=%.4f", generation_count, elite_threshold)
     else:
         generation_count = 0
         elite_threshold = phase_3b_results["elite_threshold"]  # Use the threshold from generation 0
-        logger.info("Starting fresh from generation 0 (no existing EvolutionTracker), elite_threshold=%.4f", 
-                   elite_threshold)
+        logger.debug("Starting fresh, elite_threshold=%.4f", elite_threshold)
     
     while max_generations is None or generation_count < max_generations:
         generation_count += 1
@@ -444,8 +434,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         # Phase 4: Evolution
         operator_statistics = {}  # Initialize operator statistics
         try:
-            logger.info("Running optimized evolution on population...")
-
             # Use RunEvolution.py as the evolution driver
             evolution_result = run_evolution(
                 north_star_metric=north_star_metric,
@@ -458,32 +446,25 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             
             # Extract operator statistics from evolution result
             operator_statistics = evolution_result.get("operator_statistics", {}) if evolution_result else {}
-            logger.info(f"Evolution completed with operator statistics: {operator_statistics}")
-
-            logger.info("Evolution generation completed successfully")
+            if operator_statistics:
+                logger.debug(f"Operator stats: {operator_statistics}")
 
         except Exception as e:
             logger.error("Evolution failed: %s", e, exc_info=True)
             break
 
         # Phase 5: Post-Evolution Generation and Evaluation
-        logger.info("Processing evolved variants post-evolution...")
-        
         try:
             temp_path = str(get_outputs_path() / "temp.json")
-            logger.info("Generating text for all pending genomes in temp.json...")
             response_generator.process_population(pop_path=temp_path)
-            logger.info("Text generation for temp.json completed.")
-
+            
             run_moderation_on_population = get_run_moderation_on_population()
-            logger.info("Evaluating all genomes in temp.json...")
             run_moderation_on_population(
                 pop_path=temp_path,
                 log_file=log_file,
                 north_star_metric=north_star_metric,
                 moderation_methods=moderation_methods
             )
-            logger.info("Evaluation of temp.json completed.")
             
             # Count variants from temp.json BEFORE distribution (while temp.json still has variants)
             variant_counts = {"variants_created": 0, "mutation_variants": 0, "crossover_variants": 0}
@@ -502,11 +483,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     "crossover_variants": crossover_count
                 }
                 
-                logger.info(f"Generation {generation_count}: {total_count} variants created ({mutation_count} mutation, {crossover_count} crossover)")
+                logger.info(f"Gen {generation_count}: {total_count} variants ({mutation_count} mutation, {crossover_count} crossover)")
             
             # Update EvolutionTracker with generation-specific data (variants, scores, etc.)
             try:
-                logger.info("Updating EvolutionTracker with generation data...")
                 from ea import get_update_evolution_tracker_with_generation_global
                 update_evolution_tracker_with_generation_global = get_update_evolution_tracker_with_generation_global()
                 
@@ -535,7 +515,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         file_genomes = load_population(str(file_path), logger=logger)
                         all_genomes.extend(file_genomes)
                 
-                logger.info(f"Loaded {len(all_genomes)} total genomes for generation analysis")
+                logger.debug(f"Loaded {len(all_genomes)} genomes for analysis")
                 
                 # Update EvolutionTracker with generation data
                 update_evolution_tracker_with_generation_global(
@@ -546,14 +526,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     north_star_metric=north_star_metric
                 )
                 
-                logger.info("EvolutionTracker updated with generation data successfully")
                 
             except Exception as e:
                 logger.error("Failed to update EvolutionTracker with generation data: %s", e, exc_info=True)
             
             try:
-                logger.info("Updating population_max_toxicity and recalculating threshold after evaluation...")
-                
                 # Get previous population_max_toxicity for adaptive selection comparison
                 previous_max_toxicity = 0.0001
                 evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
@@ -581,7 +558,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 # Only proceed with removal and distribution if threshold calculation was successful
                 if not threshold_results.get("skipped", False):
                     # Update adaptive selection logic
-                    logger.info("Updating adaptive selection logic...")
                     outputs_path = str(get_outputs_path())
                     adaptive_results = update_adaptive_selection_logic(
                         outputs_path=outputs_path,
@@ -592,7 +568,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         logger=logger,
                         log_file=log_file
                     )
-                    logger.info("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
+                    logger.debug("Selection: mode=%s, since_improvement=%d, avg=%.4f, slope=%.4f",
                                adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
                                adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
                     
@@ -614,12 +590,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                 max_score_variants = round(max(scores), 4)
                                 min_score_variants = round(min(scores), 4)
                                 avg_fitness_variants = round(sum(scores) / len(scores), 4)
-                                logger.info(f"Variant statistics from temp.json ({len(scores)} variants): "
-                                          f"max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
-                            else:
-                                logger.warning("No variants in temp.json to calculate statistics")
-                        else:
-                            logger.info("temp.json is empty - using default values (0.0001) for variant statistics")
+                                logger.debug(f"Variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
                     except Exception as e:
                         logger.warning(f"Failed to calculate variant statistics: {e}")
                     
@@ -661,7 +632,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     avg_fitness = round(sum(all_genomes_for_avg_fitness) / len(all_genomes_for_avg_fitness), 4) if all_genomes_for_avg_fitness else 0.0
                     
                     # Step 0: Distribute genomes from temp.json to elites.json and non_elites.json (and under_performing.json)
-                    logger.info("Distributing genomes from temp.json to elites, non_elites, and under_performing...")
                     distribution_result = distribute_genomes_by_threshold(
                         temp_path=temp_path,
                         elite_threshold=threshold_results["elite_threshold"],
@@ -669,12 +639,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         north_star_metric=north_star_metric,
                         logger=logger
                     )
-                    logger.info("Genome distribution completed: %d elites moved, %d non_elites moved, %d under_performing archived", 
+                    logger.debug("Distribution: %d to elites, %d to non_elites, %d archived", 
                                distribution_result["elites_moved"], distribution_result["population_moved"], 
                                distribution_result.get("under_performing_moved", 0))
                     
                     # Step 1: Remove worse performing genomes from all files
-                    logger.info("Removing worse performing genomes from all files...")
                     removal_results = remove_worse_performing_genomes_from_all_files(
                         outputs_path=outputs_path,
                         population_max_toxicity=threshold_results["max_toxicity_score"],
@@ -683,18 +652,17 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         logger=logger,
                         log_file=log_file
                     )
-                    logger.info("Genome archiving from all files completed: %d total archived, %d total remaining", 
+                    logger.debug("Archived %d genomes, %d remaining", 
                                removal_results["archived_count_total"], removal_results["remaining_count_total"])
                     
                     # Step 2: Redistribute remaining genomes between elites and non_elites
-                    logger.info("Redistributing remaining genomes between elites and non_elites...")
                     redistribution_result = redistribute_population_with_threshold(
                         elite_threshold=threshold_results["elite_threshold"],
                         north_star_metric=north_star_metric,
                         logger=logger,
                         log_file=log_file
                     )
-                    logger.info("Final redistribution completed: %d elites, %d non_elites", 
+                    logger.debug("Final: %d elites, %d non_elites", 
                                redistribution_result["elites_count"], redistribution_result.get("total_count", 0) - redistribution_result["elites_count"])
                     
                     # Update current generation's metrics in EvolutionTracker
@@ -741,11 +709,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                             all_scores.extend(non_elite_scores)
                         avg_fitness_generation = round(sum(all_scores) / len(all_scores), 4) if all_scores else 0.0
                         
-                        # Debug logging to understand the difference
-                        logger.info("Fitness calculation debug:")
-                        logger.info("  avg_fitness (before distribution): %.4f (includes %d genomes)", avg_fitness, len(all_genomes_for_avg_fitness))
-                        logger.info("  avg_fitness_generation (after distribution): %.4f (includes %d genomes)", avg_fitness_generation, len(all_scores))
-                        logger.info("  elite_scores count: %d, non_elite_scores count: %d", len(elite_scores), len(non_elite_scores))
                         
                         # avg_fitness was already calculated BEFORE distribution above
                         
@@ -770,16 +733,13 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                             json.dump(tracker, f, indent=4, ensure_ascii=False)
                         
-                        logger.info(f"Updated generation {generation_count} with comprehensive metrics: "
-                                   f"elites_count={redistribution_result['elites_count']}, "
-                                   f"removal_threshold={removal_threshold_value:.4f}, "
-                                   f"avg_fitness_elites={avg_fitness_elites:.4f}, "
-                                   f"avg_fitness_non_elites={avg_fitness_non_elites:.4f}, "
-                                   f"variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
+                        logger.debug(f"Gen{generation_count}: elites={redistribution_result['elites_count']}, "
+                                    f"elite_avg={avg_fitness_elites:.4f}, "
+                                    f"variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
                     except Exception as e:
                         logger.warning(f"Failed to update generation metrics in EvolutionTracker: {e}")
                 
-                logger.info("Threshold recalculation, removal, and redistribution completed successfully")
+                logger.debug("Generation processing completed")
                     
                 
             except Exception as e:
@@ -788,7 +748,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             # Update population metadata in EvolutionTracker after post-evolution processing
             try:
                 update_population_index_single_file(str(get_outputs_path()), 0, logger=logger)
-                logger.debug("Updated EvolutionTracker population metadata after post-evolution processing")
             except Exception as e:
                 logger.warning("Failed to update EvolutionTracker population metadata: %s", e)
             
@@ -810,33 +769,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     logger.info("Total execution time: %.2f seconds", total_time)
     logger.info("Total generations: %d", generation_count)
 
-    # Final Analysis
-    try:
-        # Import final statistics function
-        create_final_statistics_with_tracker = get_create_final_statistics_with_tracker()
-        
-        # Load evolution tracker for comprehensive stats
-        evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
-        if evolution_tracker_path.exists():
-            with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                evolution_tracker = json.load(f)
-            
-            # Create comprehensive final statistics using tracker
-            create_final_statistics_with_tracker = get_create_final_statistics_with_tracker()
-            final_stats = create_final_statistics_with_tracker(
-                evolution_tracker, 
-                north_star_metric, 
-                total_time, 
-                generation_count,
-                logger=logger
-            )
-            
-            # Save final statistics to file
-        with open(get_outputs_path() / "final_statistics.json", "w") as f:
-            json.dump(final_stats, f, indent=2)
-            
-    except Exception as e:
-        logger.error("Failed to generate final statistics: %s", e, exc_info=True)
 
 # ============================================================================
 # SECTION 6: MAIN ENTRY POINT

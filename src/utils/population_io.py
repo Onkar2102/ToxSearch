@@ -100,12 +100,7 @@ def initialize_system(logger, log_file):
     from utils.device_utils import device_manager
     device = device_manager.get_optimal_device()
     
-    if device == "mps":
-        logger.info("Initializing optimized pipeline for Apple Silicon (MPS)...")
-    elif device == "cuda":
-        logger.info("Initializing optimized pipeline for NVIDIA GPU (CUDA)...")
-    else:
-        logger.info("Initializing optimized pipeline for CPU...")
+    logger.debug(f"Initializing pipeline for device: {device}")
     
     # Import required modules
     population_io_functions = get_population_io()
@@ -116,17 +111,17 @@ def initialize_system(logger, log_file):
     # Initialize Response Generator (for generating responses to prompts)
     ResponseGenerator = get_ResponseGenerator()
     response_generator = ResponseGenerator(model_key="response_generator", config_path="config/RGConfig.yaml", log_file=log_file)
-    logger.info("Response generator initialized for response generation")
+    logger.debug("Response generator initialized")
     
     # Initialize Prompt Generator (for operators and evolutionary algorithms)
     PromptGenerator = get_PromptGenerator()
     prompt_generator = PromptGenerator(model_key="prompt_generator", config_path="config/PGConfig.yaml", log_file=log_file)
-    logger.info("Prompt generator initialized for prompt generation")
+    logger.debug("Prompt generator initialized")
     
     # Set the global generators for different purposes
     from ea.evolution_engine import set_global_generators
     set_global_generators(response_generator, prompt_generator)
-    logger.info("Global generators set: response_generator for responses, prompt_generator for operators")
+    logger.debug("Global generators set")
     
     # Check if population already exists (steady state: check elites.json)
     population_file = get_outputs_path() / "elites.json"
@@ -149,10 +144,7 @@ def initialize_system(logger, log_file):
 
     if should_initialize:
         try:
-            if not population_file.exists():
-                logger.info("No population file found. Initializing population from prompt.csv...")
-            else:
-                logger.info("Population file exists but is empty. Initializing population from prompt.csv...")
+            logger.info("Initializing population from prompt.csv...")
             load_and_initialize_population(
                 input_path=str(get_data_path()),
                 output_path=str(get_outputs_path()),
@@ -169,7 +161,7 @@ def initialize_system(logger, log_file):
             population = population_content if population_content is not None else []
             logger.info("Loaded %d genomes from existing elites.json", len(population))
             generations = set(g.get("generation", 0) for g in population if g)
-            logger.info("Available generations: %s", sorted(generations))
+            logger.debug("Available generations: %s", sorted(generations))
         except Exception as e:
             logger.warning("Could not read existing population info: %s", e)
     
