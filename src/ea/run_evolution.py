@@ -328,6 +328,8 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                 best_gen0_genome = max(gen0_genomes, key=lambda g: _extract_north_star_score(g, north_star_metric))
                 best_gen0_id = best_gen0_genome["id"]
                 best_gen0_score = _extract_north_star_score(best_gen0_genome, north_star_metric)
+                # Get selection_mode from EvolutionTracker root level (defaults to "default" for gen 0)
+                selection_mode = evolution_tracker.get("selection_mode", "default")
                 evolution_tracker["generations"] = [{
                     "generation_number": 0,
                     "genome_id": best_gen0_id,  # Best genome ID from generation 0
@@ -348,6 +350,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "elites_threshold": 0.0001,
                     "removal_threshold": 0.0001,
                     "elites_count": 0,
+                    "selection_mode": selection_mode,  # Add selection mode for generation 0
                 }]
                 logger.debug("Created gen 0 entry: genome %s, score: %.4f", best_gen0_id, best_gen0_score)
 
@@ -447,6 +450,9 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             
             _logger.info(f"Updating generation {gen_number} with variant counts: created={variants_created}, mutation={mutation_variants}, crossover={crossover_variants}")
             
+            # Get selection_mode from EvolutionTracker root level for this generation
+            selection_mode = evolution_tracker.get("selection_mode", "default")
+            
             # NOTE: max_score_variants represents the maximum score of VARIANTS GENERATED in this generation (from temp.json)
             # It does NOT represent the entire population's max score. Use population_max_toxicity for that.
             existing_gen.update({
@@ -455,7 +461,8 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "avg_fitness": round(avg_fitness, 4),
                 "variants_created": variants_created,
                 "mutation_variants": mutation_variants,
-                "crossover_variants": crossover_variants
+                "crossover_variants": crossover_variants,
+                "selection_mode": selection_mode  # Add selection mode for this generation
             })
             _logger.info("Updated existing generation %d globally with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
         else:
@@ -464,6 +471,9 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             variants_created = generation_data.get("variants_created", 0)
             mutation_variants = generation_data.get("mutation_variants", 0)
             crossover_variants = generation_data.get("crossover_variants", 0)
+            
+            # Get selection_mode from EvolutionTracker root level for this generation
+            selection_mode = evolution_tracker.get("selection_mode", "default")
             
             new_gen = {
                 "generation_number": gen_number,
@@ -485,6 +495,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "elites_threshold": 0.0001,
                 "removal_threshold": 0.0001,
                 "elites_count": 0,
+                "selection_mode": selection_mode,  # Add selection mode for this generation
             }
             evolution_tracker.setdefault("generations", []).append(new_gen)
             _logger.info("Created new generation entry %d with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
