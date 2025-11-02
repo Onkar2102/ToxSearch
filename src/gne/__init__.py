@@ -1,29 +1,35 @@
 ## @file src/gne/__init__.py
-# @author Onkar Shelar (os9660@rit.edu)
 # @brief Generative Neural Engine (GNE) package for LLM integration and moderation.
 #
 # This package provides:
-#  - LLaMaTextGenerator: LLaMA model integration with memory management
-#  - hybrid_moderation: Hybrid moderation using Google and OpenAI APIs
+#  - ResponseGenerator: Response generation using prompt_template from RGConfig.yaml
+#  - PromptGenerator: Prompt generation using task templates from PGConfig.yaml
+#  - evaluator: Content moderation using Google Perspective API
 
 # Lazy imports to prevent circular import issues
-def get_LLaMaTextGenerator():
-    """Lazy import of LLaMaTextGenerator to avoid circular imports"""
-    from gne.LLaMaTextGenerator import LlaMaTextGenerator
-    return LlaMaTextGenerator
+def get_ResponseGenerator():
+    """Lazy import of ResponseGenerator to avoid circular imports"""
+    from gne.response_generator import ResponseGenerator
+    return ResponseGenerator
+
+def get_PromptGenerator():
+    """Lazy import of PromptGenerator to avoid circular imports"""
+    from gne.prompt_generator import PromptGenerator
+    return PromptGenerator
 
 def get_run_moderation_on_population():
     """Lazy import of run_moderation_on_population to avoid circular imports"""
-    from gne.hybrid_moderation import run_moderation_on_population
+    from gne.evaluator import run_moderation_on_population
     return run_moderation_on_population
 
 def get_hybrid_moderation_cleanup():
     """Lazy import of _cleanup_thread_pool to avoid circular imports"""
-    from gne.hybrid_moderation import _cleanup_thread_pool
+    from gne.evaluator import _cleanup_thread_pool
     return _cleanup_thread_pool
 
 __all__ = [
-    "get_LLaMaTextGenerator",
+    "get_ResponseGenerator",
+    "get_PromptGenerator",
     "get_run_moderation_on_population",
     "get_hybrid_moderation_cleanup",
 ]

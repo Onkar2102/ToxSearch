@@ -1,0 +1,17 @@
+# ------------------------------------------------------------------------------
+# REQUIRED: Google Perspective API Key
+# ------------------------------------------------------------------------------
+# This is MANDATORY - the system won't work without it.
+# Get your API key from: https://developers.perspectiveapi.com/
+# ------------------------------------------------------------------------------
+PERSPECTIVE_API_KEY=your_google_perspective_api_key_here
+
+# ------------------------------------------------------------------------------
+# OPTIONAL: HuggingFace Hub Token  
+# ------------------------------------------------------------------------------
+# Only needed for downloading gated/private models from HuggingFace.
+# Get your token from: https://huggingface.co/settings/tokens
+# ------------------------------------------------------------------------------
+# HF_TOKEN=your_huggingface_token_here
+# HUGGINGFACE_HUB_TOKEN=your_huggingface_token_here
+
