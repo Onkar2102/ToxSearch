@@ -256,8 +256,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         
         # Only proceed if threshold calculation was successful
         if not threshold_results.get("skipped", False):
-            # Update adaptive selection logic
-            logger.info("Updating adaptive selection logic...")
+            # Update adaptive selection logic (applies to all operator configurations: ie, cm, all)
             outputs_path = str(get_outputs_path())
             adaptive_results = update_adaptive_selection_logic(
                 outputs_path=outputs_path,
@@ -268,7 +267,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 logger=logger,
                 log_file=log_file
             )
-            logger.info("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
+            logger.debug("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
                        adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
                        adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
             
@@ -277,7 +276,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 "elite_threshold": threshold_results["elite_threshold"],
                 "best_genome_id": threshold_results["best_genome_id"]
             }
-            logger.info("Evolution tracker updated for generation 0.")
         else:
             logger.warning("Skipping threshold calculation for generation 0 - no evaluated genomes found")
             phase_3b_results = {
@@ -304,7 +302,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.info("Initial population finalized using elite threshold: %.4f", elite_threshold)
         
         # Remove worse performing genomes from all files for generation 0
-        logger.info("Removing worse performing genomes from all files...")
         outputs_path = str(get_outputs_path())
         removal_results = remove_worse_performing_genomes_from_all_files(
             outputs_path=outputs_path,
@@ -318,7 +315,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                    removal_results["archived_count_total"], removal_results["remaining_count_total"])
         
         # Now redistribute remaining genomes between elites and non_elites based on elite_threshold
-        logger.info("Redistributing remaining genomes between elites and non_elites...")
         redistribution_result = redistribute_population_with_threshold(
             elite_threshold=phase_3b_results["elite_threshold"],
             north_star_metric=north_star_metric,
@@ -557,7 +553,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 
                 # Only proceed with removal and distribution if threshold calculation was successful
                 if not threshold_results.get("skipped", False):
-                    # Update adaptive selection logic
+                    # Update adaptive selection logic (applies to all operator configurations: ie, cm, all)
                     outputs_path = str(get_outputs_path())
                     adaptive_results = update_adaptive_selection_logic(
                         outputs_path=outputs_path,
@@ -738,8 +734,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                     f"variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
                     except Exception as e:
                         logger.warning(f"Failed to update generation metrics in EvolutionTracker: {e}")
-                
-                logger.debug("Generation processing completed")
                     
                 
             except Exception as e:
