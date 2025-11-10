@@ -1,73 +1,73 @@
 Metric,Operator,Mean,Median,Std,Min,Max,N
-Elite Hit Rate (%),ConceptAdditionOperator,4.531428571428571,3.5,3.2282610470275017,1.56,9.68,7
-Elite Hit Rate (%),InformedEvolutionOperator,9.721428571428572,7.08,4.558077378429978,3.5,16.54,7
-Elite Hit Rate (%),LLMBackTranslation_HI,4.695714285714286,4.72,2.1557355863758767,1.56,9.02,7
-Elite Hit Rate (%),LLMBasedParaphrasing,3.488571428571429,2.36,2.371114437025212,0.78,7.26,7
-Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,6.774285714285713,8.06,2.9809195951338676,3.12,10.62,7
-Elite Hit Rate (%),MLM,5.844285714285713,5.59,2.3334147702018,3.12,10.53,7
-Elite Hit Rate (%),NegationOperator,4.93,3.5,2.7459008409939765,1.57,9.02,7
-Elite Hit Rate (%),POSAwareAntonymReplacement,7.247142857142857,6.19,2.8250143579190845,3.91,11.28,7
-Elite Hit Rate (%),SemanticFusionCrossover,2.6328571428571435,1.92,1.6560254853604353,0.94,6.12,7
-Elite Hit Rate (%),SemanticSimilarityCrossover,2.2642857142857147,3.06,1.7641578901063504,0.0,4.55,7
-Elite Hit Rate (%),StylisticMutator,2.825714285714286,3.12,1.31319519975252,0.79,4.51,7
-Elite Hit Rate (%),TypographicalErrorsOperator,3.5171428571428573,3.76,1.637547942903084,0.0,5.65,7
-Conditional Elite Hit Rate (%),ConceptAdditionOperator,7.4399999999999995,6.1,5.257275231252674,2.41,15.38,7
-Conditional Elite Hit Rate (%),InformedEvolutionOperator,16.599999999999998,18.6,7.395403978147509,5.62,27.27,7
-Conditional Elite Hit Rate (%),LLMBackTranslation_HI,5.927142857142857,6.0,2.5619786677249192,1.98,10.81,7
-Conditional Elite Hit Rate (%),LLMBasedParaphrasing,6.022857142857142,3.8,4.319112720672795,1.35,13.04,7
-Conditional Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,8.045714285714286,9.71,3.570357553694656,3.51,12.24,7
-Conditional Elite Hit Rate (%),MLM,8.659999999999998,8.0,3.3489486623203324,4.12,15.22,7
-Conditional Elite Hit Rate (%),NegationOperator,6.395714285714285,4.72,3.7812653103080156,1.98,12.37,7
-Conditional Elite Hit Rate (%),POSAwareAntonymReplacement,7.788571428571428,6.8,2.853821641095265,4.42,11.9,7
-Conditional Elite Hit Rate (%),SemanticFusionCrossover,5.8585714285714285,4.88,3.208877990697632,2.13,12.24,7
-Conditional Elite Hit Rate (%),SemanticSimilarityCrossover,9.97857142857143,9.76,8.692526229175149,0.0,23.08,7
-Conditional Elite Hit Rate (%),StylisticMutator,4.667142857142857,4.88,2.098208176282899,1.23,7.41,7
-Conditional Elite Hit Rate (%),TypographicalErrorsOperator,7.425714285714285,8.06,3.43063449834349,0.0,12.28,7
-Invalid Rate (%),ConceptAdditionOperator,38.52428571428571,38.05,3.037126730235373,35.16,42.66,7
-Invalid Rate (%),InformedEvolutionOperator,40.05857142857143,36.36,10.3076856603929,30.0,61.95,7
-Invalid Rate (%),LLMBackTranslation_HI,21.072857142857142,21.09,5.06991607224339,15.79,31.5,7
-Invalid Rate (%),LLMBasedParaphrasing,40.94857142857143,42.19,3.2956743449186705,34.62,44.35,7
-Invalid Rate (%),LLM_POSAwareSynonymReplacement,13.14857142857143,12.39,3.3552791179250154,8.59,18.05,7
-Invalid Rate (%),MLM,26.48428571428571,25.38,4.845613206492939,20.31,37.17,7
-Invalid Rate (%),NegationOperator,18.81,20.35,5.918568842453144,7.81,26.32,7
-Invalid Rate (%),POSAwareAntonymReplacement,4.9957142857142856,4.51,2.1987909479195746,3.08,10.16,7
-Invalid Rate (%),SemanticFusionCrossover,56.01999999999999,57.35,4.411608064446082,49.09,61.21,7
-Invalid Rate (%),SemanticSimilarityCrossover,0.0,0.0,0.0,0.0,0.0,7
-Invalid Rate (%),StylisticMutator,39.39857142857143,39.1,4.07580116075856,33.87,44.62,7
-Invalid Rate (%),TypographicalErrorsOperator,53.25857142857143,53.85,3.394345838813333,45.67,57.52,7
-Non-Elite Percentage (%),ConceptAdditionOperator,55.712857142857146,53.23,5.173351260576275,48.87,62.99,7
-Non-Elite Percentage (%),InformedEvolutionOperator,49.15714285714286,54.33,9.640002540434926,30.97,58.04,7
-Non-Elite Percentage (%),LLMBackTranslation_HI,71.03285714285714,72.18,3.9637201655793524,62.99,75.0,7
-Non-Elite Percentage (%),LLMBasedParaphrasing,54.80571428571428,55.75,5.084586953705869,46.77,62.31,7
-Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,75.90285714285713,75.22,4.900605543591275,70.0,84.38,7
-Non-Elite Percentage (%),MLM,60.65,60.0,5.373891912358702,53.1,71.88,7
-Non-Elite Percentage (%),NegationOperator,71.47,69.23,8.364224838133964,58.65,86.72,7
-Non-Elite Percentage (%),POSAwareAntonymReplacement,83.9557142857143,84.07,0.8375791159706696,82.71,85.31,7
-Non-Elite Percentage (%),SemanticFusionCrossover,39.74285714285714,38.16,3.815819381341367,34.62,45.45,7
-Non-Elite Percentage (%),SemanticSimilarityCrossover,21.872857142857146,23.64,9.883962066016288,9.21,35.58,7
-Non-Elite Percentage (%),StylisticMutator,56.67714285714286,55.24,4.310507806630259,51.54,62.9,7
-Non-Elite Percentage (%),TypographicalErrorsOperator,41.68,41.54,2.573779877367694,38.71,47.24,7
-Mean Delta Score,ConceptAdditionOperator,-0.05285714285714286,-0.05,0.01749635530559413,-0.08,-0.03,7
-Mean Delta Score,InformedEvolutionOperator,-0.16999999999999998,-0.17,0.029760952365713796,-0.21,-0.13,7
-Mean Delta Score,LLMBackTranslation_HI,-0.07,-0.08,0.013093073414159542,-0.08,-0.05,7
-Mean Delta Score,LLMBasedParaphrasing,-0.06142857142857144,-0.07,0.020995626366712955,-0.08,-0.03,7
-Mean Delta Score,LLM_POSAwareSynonymReplacement,-0.054285714285714284,-0.06,0.012936264483053453,-0.07,-0.03,7
-Mean Delta Score,MLM,-0.05142857142857143,-0.05,0.012453996981544783,-0.07,-0.03,7
-Mean Delta Score,NegationOperator,-0.0642857142857143,-0.06,0.02258769757263128,-0.1,-0.03,7
-Mean Delta Score,POSAwareAntonymReplacement,-0.055714285714285716,-0.06,0.009035079029052512,-0.07,-0.04,7
-Mean Delta Score,SemanticFusionCrossover,-0.054285714285714284,-0.06,0.023819045715047237,-0.09,-0.02,7
-Mean Delta Score,SemanticSimilarityCrossover,-0.05,-0.06,0.02725540575476988,-0.08,-0.0,7
-Mean Delta Score,StylisticMutator,-0.06571428571428571,-0.06,0.018405855323893036,-0.1,-0.04,7
-Mean Delta Score,TypographicalErrorsOperator,-0.06285714285714286,-0.06,0.012777531299998797,-0.08,-0.05,7
-Delta Score Std Dev,ConceptAdditionOperator,0.12571428571428572,0.13,0.015907898179514348,0.1,0.15,7
-Delta Score Std Dev,InformedEvolutionOperator,0.10714285714285712,0.11,0.010301575072754253,0.09,0.12,7
-Delta Score Std Dev,LLMBackTranslation_HI,0.12,0.12,0.014142135623730952,0.1,0.14,7
-Delta Score Std Dev,LLMBasedParaphrasing,0.11714285714285713,0.12,0.013850513878332372,0.09,0.13,7
-Delta Score Std Dev,LLM_POSAwareSynonymReplacement,0.11142857142857143,0.11,0.016413036132965797,0.08,0.13,7
-Delta Score Std Dev,MLM,0.1157142857142857,0.11,0.018405855323893036,0.09,0.15,7
-Delta Score Std Dev,NegationOperator,0.11857142857142856,0.12,0.0164130361329658,0.09,0.14,7
-Delta Score Std Dev,POSAwareAntonymReplacement,0.11714285714285713,0.12,0.011605769149479946,0.1,0.14,7
-Delta Score Std Dev,SemanticFusionCrossover,0.09142857142857141,0.09,0.009897433186107871,0.08,0.11,7
-Delta Score Std Dev,SemanticSimilarityCrossover,0.09428571428571428,0.09,0.009035079029052515,0.08,0.11,7
-Delta Score Std Dev,StylisticMutator,0.11714285714285713,0.11,0.008806305718527111,0.11,0.13,7
-Delta Score Std Dev,TypographicalErrorsOperator,0.1157142857142857,0.12,0.00903507902905251,0.1,0.13,7
+Elite Hit Rate (%),ConceptAdditionOperator,4.075,2.9299999999999997,2.9075152622127365,1.56,9.68,10
+Elite Hit Rate (%),InformedEvolutionOperator,8.283000000000001,7.055,4.663069911549686,1.59,16.54,10
+Elite Hit Rate (%),LLMBackTranslation_HI,4.351999999999999,4.72,2.343560539008967,0.0,9.02,10
+Elite Hit Rate (%),LLMBasedParaphrasing,3.011,2.45,2.241853920307922,0.0,7.26,10
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,5.888,5.0649999999999995,2.999482622053343,1.59,10.62,10
+Elite Hit Rate (%),MLM,5.546999999999999,4.92,2.0063352162587385,3.12,10.53,10
+Elite Hit Rate (%),NegationOperator,4.45,3.31,2.9358984996079136,0.79,9.02,10
+Elite Hit Rate (%),POSAwareAntonymReplacement,6.292,5.295,2.810671805814403,3.17,11.28,10
+Elite Hit Rate (%),SemanticFusionCrossover,2.0550000000000006,1.52,1.6660567217234834,0.0,6.12,10
+Elite Hit Rate (%),SemanticSimilarityCrossover,1.989,2.02,1.6659378739917046,0.0,4.55,10
+Elite Hit Rate (%),StylisticMutator,2.468,2.425,1.2881909796299613,0.79,4.51,10
+Elite Hit Rate (%),TypographicalErrorsOperator,3.021,3.325,1.651414242399526,0.0,5.65,10
+Conditional Elite Hit Rate (%),ConceptAdditionOperator,6.743,5.105,4.730044502961891,2.41,15.38,10
+Conditional Elite Hit Rate (%),InformedEvolutionOperator,14.950999999999999,14.855,7.530191830225841,3.33,27.27,10
+Conditional Elite Hit Rate (%),LLMBackTranslation_HI,5.523000000000001,5.9399999999999995,2.9340928751489788,0.0,10.81,10
+Conditional Elite Hit Rate (%),LLMBasedParaphrasing,5.128000000000001,3.665,4.067185267479219,0.0,13.04,10
+Conditional Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,6.949999999999998,5.785,3.596998748957247,1.82,12.24,10
+Conditional Elite Hit Rate (%),MLM,8.336000000000002,7.795,2.8652720638710734,4.12,15.22,10
+Conditional Elite Hit Rate (%),NegationOperator,5.6659999999999995,4.085,3.868069802886189,1.04,12.37,10
+Conditional Elite Hit Rate (%),POSAwareAntonymReplacement,6.756,5.77,2.8981966806964636,3.42,11.9,10
+Conditional Elite Hit Rate (%),SemanticFusionCrossover,4.598,3.8899999999999997,3.3669743093762983,0.0,12.24,10
+Conditional Elite Hit Rate (%),SemanticSimilarityCrossover,8.694999999999999,7.66,7.962275114563675,0.0,23.08,10
+Conditional Elite Hit Rate (%),StylisticMutator,4.1339999999999995,4.140000000000001,2.0368416727865717,1.23,7.41,10
+Conditional Elite Hit Rate (%),TypographicalErrorsOperator,6.406999999999999,7.305,3.431212759360748,0.0,12.28,10
+Invalid Rate (%),ConceptAdditionOperator,39.334999999999994,40.58,2.8711330516017552,35.16,42.66,10
+Invalid Rate (%),InformedEvolutionOperator,43.980999999999995,43.07,10.660870930651022,30.0,61.95,10
+Invalid Rate (%),LLMBackTranslation_HI,20.079,19.415,6.038944361392974,11.02,31.5,10
+Invalid Rate (%),LLMBasedParaphrasing,40.229,42.775,5.33048299875349,27.12,44.44,10
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,12.586,12.145,3.035757566078029,8.59,18.05,10
+Invalid Rate (%),MLM,27.95,25.85,5.375081394732549,20.31,37.17,10
+Invalid Rate (%),NegationOperator,18.381,19.625,5.618594931119345,7.81,26.32,10
+Invalid Rate (%),POSAwareAntonymReplacement,4.7909999999999995,4.375,1.8752303858459631,3.08,10.16,10
+Invalid Rate (%),SemanticFusionCrossover,55.681,57.165,4.183750590080627,49.09,61.21,10
+Invalid Rate (%),SemanticSimilarityCrossover,0.0,0.0,0.0,0.0,0.0,10
+Invalid Rate (%),StylisticMutator,40.559000000000005,39.79,4.94342684784553,33.87,51.18,10
+Invalid Rate (%),TypographicalErrorsOperator,53.621,53.94,3.0638617788666647,45.67,57.52,10
+Non-Elite Percentage (%),ConceptAdditionOperator,55.077,53.78,4.497837369225349,48.87,62.99,10
+Non-Elite Percentage (%),InformedEvolutionOperator,45.961,45.445,9.493533009370116,30.97,58.04,10
+Non-Elite Percentage (%),LLMBackTranslation_HI,70.85000000000001,71.09,5.41318575332493,62.71,81.1,10
+Non-Elite Percentage (%),LLMBasedParaphrasing,55.10799999999999,54.8,6.60473436256145,46.77,68.64,10
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,76.591,77.07,4.369225217358334,70.0,84.38,10
+Non-Elite Percentage (%),MLM,59.504999999999995,58.295,4.872972911888593,53.1,71.88,10
+Non-Elite Percentage (%),NegationOperator,71.239,72.325,8.60641905788929,57.94,86.72,10
+Non-Elite Percentage (%),POSAwareAntonymReplacement,83.777,84.16,3.4809109439915313,74.6,88.19,10
+Non-Elite Percentage (%),SemanticFusionCrossover,40.204,39.86,3.5131729248643606,34.62,45.45,10
+Non-Elite Percentage (%),SemanticSimilarityCrossover,20.854,20.36,8.57640624037831,9.21,35.58,10
+Non-Elite Percentage (%),StylisticMutator,55.32000000000001,55.065,4.769607950345605,47.24,62.9,10
+Non-Elite Percentage (%),TypographicalErrorsOperator,41.875,41.565,2.4118426565595037,38.71,47.24,10
+Mean Delta Score,ConceptAdditionOperator,-0.05900000000000001,-0.05,0.025079872407968905,-0.12,-0.03,10
+Mean Delta Score,InformedEvolutionOperator,-0.177,-0.17,0.03769615364994153,-0.26,-0.13,10
+Mean Delta Score,LLMBackTranslation_HI,-0.079,-0.08,0.029478805945967346,-0.16,-0.05,10
+Mean Delta Score,LLMBasedParaphrasing,-0.074,-0.07500000000000001,0.036932370625238777,-0.17,-0.03,10
+Mean Delta Score,LLM_POSAwareSynonymReplacement,-0.06000000000000001,-0.06,0.022803508501982758,-0.12,-0.03,10
+Mean Delta Score,MLM,-0.05700000000000001,-0.05,0.02368543856465402,-0.12,-0.03,10
+Mean Delta Score,NegationOperator,-0.072,-0.065,0.029597297173897488,-0.14,-0.03,10
+Mean Delta Score,POSAwareAntonymReplacement,-0.06200000000000001,-0.06,0.020880613017821098,-0.12,-0.04,10
+Mean Delta Score,SemanticFusionCrossover,-0.06100000000000001,-0.06,0.028792360097775936,-0.12,-0.02,10
+Mean Delta Score,SemanticSimilarityCrossover,-0.06000000000000001,-0.055,0.04049691346263318,-0.16,-0.0,10
+Mean Delta Score,StylisticMutator,-0.069,-0.06,0.0266270539113887,-0.13,-0.04,10
+Mean Delta Score,TypographicalErrorsOperator,-0.068,-0.06,0.023579652245103194,-0.13,-0.05,10
+Delta Score Std Dev,ConceptAdditionOperator,0.13199999999999998,0.125,0.026381811916545844,0.1,0.2,10
+Delta Score Std Dev,InformedEvolutionOperator,0.11300000000000002,0.11,0.016155494421403516,0.09,0.14,10
+Delta Score Std Dev,LLMBackTranslation_HI,0.128,0.125,0.024819347291981715,0.1,0.19,10
+Delta Score Std Dev,LLMBasedParaphrasing,0.128,0.125,0.030594117081556706,0.09,0.21,10
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,0.11999999999999997,0.12,0.02449489742783178,0.08,0.18,10
+Delta Score Std Dev,MLM,0.124,0.11499999999999999,0.026153393661244043,0.09,0.17,10
+Delta Score Std Dev,NegationOperator,0.125,0.12,0.025787593916455256,0.09,0.19,10
+Delta Score Std Dev,POSAwareAntonymReplacement,0.124,0.12,0.02764054992217051,0.1,0.2,10
+Delta Score Std Dev,SemanticFusionCrossover,0.094,0.09,0.012806248474865696,0.08,0.12,10
+Delta Score Std Dev,SemanticSimilarityCrossover,0.099,0.095,0.01920937271229855,0.08,0.15,10
+Delta Score Std Dev,StylisticMutator,0.126,0.11499999999999999,0.032619012860600184,0.1,0.22,10
+Delta Score Std Dev,TypographicalErrorsOperator,0.122,0.12,0.029597297173897485,0.08,0.2,10

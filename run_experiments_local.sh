@@ -10,7 +10,7 @@ fi
 
 # Define your experiments here (one per line)
 EXPERIMENTS=(
-    "python src/main.py --generations 50 --operators cm --max-variants 1 --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_S.gguf --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf"
+    "python src/main.py --generations 50 --operators ie --max-variants 1 --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_S.gguf --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf"
 )
 
 echo "Starting ${#EXPERIMENTS[@]} experiments..."
