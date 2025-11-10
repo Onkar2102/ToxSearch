@@ -137,7 +137,7 @@ def update_model_configs(rg_model, pg_model, logger):
 # SECTION 4: MAIN EXECUTION PIPELINE
 # ============================================================================
 
-def main(max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", pg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", operators="all", max_variants=1, elites_threshold=25, removal_threshold=5, stagnation_limit=5):
+def main(max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", pg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", operators="all", max_variants=1, elites_threshold=25, removal_threshold=5, stagnation_limit=5, seed_file="data/prompt.csv"):
     """
     Main entry point for evolutionary text generation with toxicity optimization.
     
@@ -198,7 +198,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
 
     # Phase 2: Initialize system and create gen0 if needed
     try:
-        response_generator, prompt_generator = initialize_system(logger, log_file)
+        response_generator, prompt_generator = initialize_system(logger, log_file, seed_file=seed_file)
     except Exception as e:
         logger.error("System initialization failed: %s", e, exc_info=True)
         return
@@ -793,6 +793,8 @@ if __name__ == "__main__":
                        help="Operator configuration mode: ie (InformedEvolution only), cm (all except InformedEvolution), all (all operators)")
     parser.add_argument("--max-variants", type=int, default=1,
                        help="Maximum number of variants to generate per evolution cycle. Controls how many times the evolution cycle runs.")
+    parser.add_argument("--seed-file", type=str, default="data/prompt.csv",
+                       help="Path to CSV file with seed prompts (must have 'questions' column). Default: data/prompt.csv")
     args = parser.parse_args()
     
     import sys
@@ -802,7 +804,7 @@ if __name__ == "__main__":
              threshold_percentage=args.threshold_percentage, rg_model=args.rg, pg_model=args.pg,
              operators=args.operators, max_variants=args.max_variants,
              elites_threshold=args.elites_threshold, removal_threshold=args.removal_threshold,
-             stagnation_limit=args.stagnation_limit)
+             stagnation_limit=args.stagnation_limit, seed_file=args.seed_file)
         sys.exit(0)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")

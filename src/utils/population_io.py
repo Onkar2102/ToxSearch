@@ -95,8 +95,15 @@ def _extract_north_star_score(genome, metric="toxicity"):
 # SYSTEM INITIALIZATION (moved from main.py)
 # ============================================================================
 
-def initialize_system(logger, log_file):
-    """Initialize the system components and create gen0 if needed"""
+def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
+    """Initialize the system components and create gen0 if needed
+    
+    Args:
+        logger: Logger instance
+        log_file: Log file path
+        seed_file: Path to CSV file with seed prompts (must have 'questions' column).
+                   Default: data/prompt.csv
+    """
     from utils.device_utils import device_manager
     device = device_manager.get_optimal_device()
     
@@ -144,9 +151,16 @@ def initialize_system(logger, log_file):
 
     if should_initialize:
         try:
-            logger.info("Initializing population from prompt.csv...")
+            # Resolve seed_file path (can be relative or absolute)
+            seed_path = Path(seed_file)
+            if not seed_path.is_absolute():
+                # If relative, resolve from project root
+                seed_path = get_project_root() / seed_path
+            input_path = str(seed_path)
+            logger.info("Initializing population from seed file: %s", input_path)
+            
             load_and_initialize_population(
-                input_path=str(get_data_path()),
+                input_path=input_path,
                 output_path=str(get_outputs_path()),
                 log_file=log_file
             )

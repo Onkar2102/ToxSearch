@@ -110,135 +110,16 @@ class ResponseGenerator:
             
             generated_text = self.model_interface.chat_completion(messages, **kwargs)
             
-            # Filter out safety disclaimers and unwanted prefixes
-            filtered_text = self._filter_response(generated_text)
-            
             # Update performance metrics
             self.generation_count += 1
-            self.total_tokens_generated += len(filtered_text.split())
+            self.total_tokens_generated += len(generated_text.split())
             
-            self.logger.debug(f"Generated response: {filtered_text[:100]}...")
-            return filtered_text, time.time() - start_time
+            self.logger.debug(f"Generated response: {generated_text[:100]}...")
+            return generated_text, time.time() - start_time
             
         except Exception as e:
             self.logger.error(f"Generation failed: {e}", exc_info=True)
             return "", time.time() - start_time
-
-    def _filter_response(self, response: str) -> str:
-        """Filter out safety disclaimers and unwanted prefixes from responses."""
-        if not response:
-            return response
-        
-        # Common safety disclaimer patterns to remove
-        safety_patterns = [
-            "I can provide information on a wide range of topics, but please note that",
-            "I understand you're asking about",
-            "I can help you with information about",
-            "I'm here to provide information, but",
-            "I can discuss this topic, but",
-            "I understand your question about",
-            "I can provide information about",
-            "I'm happy to help with information about",
-            "I can share information about",
-            "I understand you want to know about",
-            "I can provide details about",
-            "I'm here to help with information about",
-            "I can give you information about",
-            "I understand you're interested in",
-            "I can provide guidance on",
-            "I'm here to assist with information about",
-            "I can offer information about",
-            "I understand you need information about",
-            "I can provide details on",
-            "I'm here to help you with information about"
-        ]
-        
-        # Remove safety disclaimers
-        filtered_response = response
-        for pattern in safety_patterns:
-            if pattern.lower() in filtered_response.lower():
-                # Find the pattern and remove everything before the actual content
-                pattern_start = filtered_response.lower().find(pattern.lower())
-                if pattern_start != -1:
-                    # Look for the actual content after the disclaimer
-                    remaining_text = filtered_response[pattern_start + len(pattern):]
-                    # Find the first sentence that doesn't start with safety language
-                    sentences = remaining_text.split('.')
-                    for i, sentence in enumerate(sentences):
-                        sentence = sentence.strip()
-                        if sentence and not any(safety_word in sentence.lower() for safety_word in 
-                                              ['please note', 'but please', 'however', 'but', 'however,']):
-                            # Found the actual content, reconstruct from this point
-                            filtered_response = '.'.join(sentences[i:]).strip()
-                            break
-                    break
-        
-        # Remove common refusal patterns
-        refusal_patterns = [
-            "I'm sorry, but I cannot",
-            "I cannot provide",
-            "I'm not able to",
-            "I'm unable to",
-            "I can't help with",
-            "I cannot help with",
-            "I'm not allowed to",
-            "I cannot assist with",
-            "I'm sorry, I cannot",
-            "I cannot give you",
-            "I cannot share",
-            "I cannot discuss",
-            "I cannot provide information about",
-            "I cannot help you with",
-            "I cannot assist you with",
-            "I cannot provide details about",
-            "I cannot give you information about",
-            "I cannot share information about",
-            "I cannot discuss this topic",
-            "I cannot provide guidance on"
-        ]
-        
-        for pattern in refusal_patterns:
-            if pattern.lower() in filtered_response.lower():
-                # If we find a refusal, try to extract any actual content that might follow
-                pattern_start = filtered_response.lower().find(pattern.lower())
-                if pattern_start != -1:
-                    # Look for content after the refusal
-                    remaining_text = filtered_response[pattern_start + len(pattern):]
-                    # Try to find actual content
-                    if remaining_text.strip():
-                        # If there's content after refusal, use it
-                        filtered_response = remaining_text.strip()
-                    else:
-                        # If no content after refusal, return empty
-                        return ""
-        
-        # Clean up the response
-        filtered_response = filtered_response.strip()
-        
-        # Remove leading/trailing whitespace and common prefixes
-        filtered_response = filtered_response.lstrip('.,!?;: ')
-        
-        return filtered_response
-
-
-    def get_current_memory_stats(self) -> Dict[str, float]:
-        """Get current memory statistics for monitoring."""
-        try:
-            memory_info = psutil.virtual_memory()
-            process = psutil.Process()
-            process_memory = process.memory_info()
-            
-            return {
-                'total_memory_gb': process_memory.rss / (1024**3),
-                'available_system_gb': memory_info.available / (1024**3),
-                'system_memory_percent': memory_info.percent,
-                'max_memory_limit_gb': self.model_interface.max_memory_usage_gb,
-                'memory_usage_percent': (process_memory.rss / (1024**3)) / self.model_interface.max_memory_usage_gb * 100,
-                'memory_cleanup_enabled': self.model_interface.enable_memory_cleanup
-            }
-        except Exception as e:
-            self.logger.warning(f"Failed to get memory stats: {e}")
-            return {}
 
     def process_population(self, pop_path: str = "data/outputs/non_elites.json") -> None:
         """Process entire population for text generation one genome at a time."""
