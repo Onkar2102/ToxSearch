@@ -51,20 +51,16 @@ flowchart TB
 
 ## Component Architecture
 
-### Evolution Engine (`evolution_engine.py`)
-Core evolution logic implementing the genetic algorithm.
-
-**Key Methods**:
-- `generate_variants_global()` - Main variant generation entry point
-- `_create_child_genome()` - Creates genome with metadata
+### Evolution Engine
+Core evolution logic implementing the genetic algorithm. Manages the evolutionary cycle, coordinates operator application, and maintains population state throughout the evolution process.
 
 **Operator Modes**:
-- `"ie"` - InformedEvolution only, uses `top_10.json`
-- `"cm"` - Classical methods, uses `parents.json`
-- `"all"` - All operators, uses both files
+- **Informed Evolution (IE)**: Uses LLM-guided evolution with top performers
+- **Classical Methods (CM)**: Uses traditional mutation and crossover operators
+- **All Operators**: Combines both informed evolution and classical methods
 
-### Parent Selector (`parent_selector.py`)
-Adaptive parent selection based on evolution progress.
+### Parent Selector
+Adaptive parent selection mechanism that adjusts selection strategy based on evolution progress and fitness landscape.
 
 **Selection Modes**:
 | Mode | Parents | Trigger |
@@ -90,3 +86,26 @@ Adaptive parent selection based on evolution progress.
 #### Crossover Operators (2)
 1. **Semantic Similarity**: Crossbreeding based on semantic distance
 2. **Semantic Fusion**: Hybrid prompt generation
+
+### Response Generation
+Generates responses from target LLMs using the evolved prompts. Supports multiple model architectures through a unified interface.
+
+### Moderation Evaluation
+Evaluates generated responses for toxicity using Google Perspective API. Provides comprehensive toxicity scoring across multiple dimensions.
+
+### Population Management
+Manages population state, handles I/O operations, and maintains population statistics. Supports both monolithic and split file formats for scalability.
+
+## Data Flow
+
+### Population Structure
+Each genome in the population contains:
+- **Prompt**: The text prompt to be evaluated
+- **Response**: Generated response from the LLM
+- **Toxicity Score**: Fitness score from moderation API
+- **Metadata**: Generation number, operator used, parent information
+
+### Population Categories
+- **Elites**: Top performers above elite threshold
+- **Non-Elites**: Middle-tier performers
+- **Under-Performing**: Low performers below removal threshold
