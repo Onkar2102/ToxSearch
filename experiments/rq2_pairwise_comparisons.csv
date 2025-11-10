@@ -1,0 +1,331 @@
+Metric,Operator1,Operator2,U_statistic,p_value,Significant,Mean1,Mean2
+Elite Hit Rate (%),ConceptAdditionOperator,InformedEvolutionOperator,9.5,0.06362745191008491,False,4.531428571428571,9.721428571428572
+Elite Hit Rate (%),ConceptAdditionOperator,LLMBackTranslation_HI,20.5,0.6536515066299886,False,4.531428571428571,4.695714285714286
+Elite Hit Rate (%),ConceptAdditionOperator,LLMBasedParaphrasing,29.0,0.6200466200466201,False,4.531428571428571,3.488571428571429
+Elite Hit Rate (%),ConceptAdditionOperator,LLM_POSAwareSynonymReplacement,15.0,0.25932400932400934,False,4.531428571428571,6.774285714285713
+Elite Hit Rate (%),ConceptAdditionOperator,MLM,15.0,0.25932400932400934,False,4.531428571428571,5.844285714285713
+Elite Hit Rate (%),ConceptAdditionOperator,NegationOperator,22.5,0.8475088105673871,False,4.531428571428571,4.93
+Elite Hit Rate (%),ConceptAdditionOperator,POSAwareAntonymReplacement,12.0,0.12820512820512822,False,4.531428571428571,7.247142857142857
+Elite Hit Rate (%),ConceptAdditionOperator,SemanticFusionCrossover,32.0,0.3828671328671329,False,4.531428571428571,2.6328571428571435
+Elite Hit Rate (%),ConceptAdditionOperator,SemanticSimilarityCrossover,35.0,0.20084086874912754,False,4.531428571428571,2.2642857142857147
+Elite Hit Rate (%),ConceptAdditionOperator,StylisticMutator,32.0,0.3828671328671329,False,4.531428571428571,2.825714285714286
+Elite Hit Rate (%),ConceptAdditionOperator,TypographicalErrorsOperator,24.5,1.0,False,4.531428571428571,3.5171428571428573
+Elite Hit Rate (%),InformedEvolutionOperator,LLMBackTranslation_HI,41.0,0.03787878787878788,False,9.721428571428572,4.695714285714286
+Elite Hit Rate (%),InformedEvolutionOperator,LLMBasedParaphrasing,42.0,0.026223776223776224,False,9.721428571428572,3.488571428571429
+Elite Hit Rate (%),InformedEvolutionOperator,LLM_POSAwareSynonymReplacement,32.0,0.3828671328671329,False,9.721428571428572,6.774285714285713
+Elite Hit Rate (%),InformedEvolutionOperator,MLM,37.0,0.12820512820512822,False,9.721428571428572,5.844285714285713
+Elite Hit Rate (%),InformedEvolutionOperator,NegationOperator,38.5,0.08419183541379009,False,9.721428571428572,4.93
+Elite Hit Rate (%),InformedEvolutionOperator,POSAwareAntonymReplacement,33.0,0.31759906759906764,False,9.721428571428572,7.247142857142857
+Elite Hit Rate (%),InformedEvolutionOperator,SemanticFusionCrossover,47.0,0.002331002331002331,False,9.721428571428572,2.6328571428571435
+Elite Hit Rate (%),InformedEvolutionOperator,SemanticSimilarityCrossover,47.0,0.004890624053570851,False,9.721428571428572,2.2642857142857147
+Elite Hit Rate (%),InformedEvolutionOperator,StylisticMutator,47.0,0.002331002331002331,False,9.721428571428572,2.825714285714286
+Elite Hit Rate (%),InformedEvolutionOperator,TypographicalErrorsOperator,44.5,0.012618407809286959,False,9.721428571428572,3.5171428571428573
+Elite Hit Rate (%),LLMBackTranslation_HI,LLMBasedParaphrasing,33.0,0.31759906759906764,False,4.695714285714286,3.488571428571429
+Elite Hit Rate (%),LLMBackTranslation_HI,LLM_POSAwareSynonymReplacement,17.0,0.3828671328671329,False,4.695714285714286,6.774285714285713
+Elite Hit Rate (%),LLMBackTranslation_HI,MLM,16.5,0.3373725439387588,False,4.695714285714286,5.844285714285713
+Elite Hit Rate (%),LLMBackTranslation_HI,NegationOperator,24.5,1.0,False,4.695714285714286,4.93
+Elite Hit Rate (%),LLMBackTranslation_HI,POSAwareAntonymReplacement,13.0,0.16491841491841494,False,4.695714285714286,7.247142857142857
+Elite Hit Rate (%),LLMBackTranslation_HI,SemanticFusionCrossover,38.0,0.09731934731934733,False,4.695714285714286,2.6328571428571435
+Elite Hit Rate (%),LLMBackTranslation_HI,SemanticSimilarityCrossover,41.0,0.04069193939734579,False,4.695714285714286,2.2642857142857147
+Elite Hit Rate (%),LLMBackTranslation_HI,StylisticMutator,40.0,0.05303030303030303,False,4.695714285714286,2.825714285714286
+Elite Hit Rate (%),LLMBackTranslation_HI,TypographicalErrorsOperator,31.5,0.40571736095445154,False,4.695714285714286,3.5171428571428573
+Elite Hit Rate (%),LLMBasedParaphrasing,LLM_POSAwareSynonymReplacement,8.0,0.03787878787878788,False,3.488571428571429,6.774285714285713
+Elite Hit Rate (%),LLMBasedParaphrasing,MLM,12.0,0.1243705139372999,False,3.488571428571429,5.844285714285713
+Elite Hit Rate (%),LLMBasedParaphrasing,NegationOperator,15.0,0.25932400932400934,False,3.488571428571429,4.93
+Elite Hit Rate (%),LLMBasedParaphrasing,POSAwareAntonymReplacement,8.0,0.03787878787878788,False,3.488571428571429,7.247142857142857
+Elite Hit Rate (%),LLMBasedParaphrasing,SemanticFusionCrossover,29.0,0.6200466200466201,False,3.488571428571429,2.6328571428571435
+Elite Hit Rate (%),LLMBasedParaphrasing,SemanticSimilarityCrossover,30.0,0.5224458272016163,False,3.488571428571429,2.2642857142857147
+Elite Hit Rate (%),LLMBasedParaphrasing,StylisticMutator,26.0,0.898103811758924,False,3.488571428571429,2.825714285714286
+Elite Hit Rate (%),LLMBasedParaphrasing,TypographicalErrorsOperator,21.0,0.7103729603729605,False,3.488571428571429,3.5171428571428573
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,MLM,28.5,0.6543654987424038,False,6.774285714285713,5.844285714285713
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,NegationOperator,35.5,0.179233913097405,False,6.774285714285713,4.93
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,POSAwareAntonymReplacement,19.5,0.5648708373596065,False,6.774285714285713,7.247142857142857
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,SemanticFusionCrossover,44.0,0.011072261072261072,False,6.774285714285713,2.6328571428571435
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,SemanticSimilarityCrossover,42.0,0.029662258911377214,False,6.774285714285713,2.2642857142857147
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,StylisticMutator,40.5,0.04740124709678227,False,6.774285714285713,2.825714285714286
+Elite Hit Rate (%),LLM_POSAwareSynonymReplacement,TypographicalErrorsOperator,37.0,0.12820512820512822,False,6.774285714285713,3.5171428571428573
+Elite Hit Rate (%),MLM,NegationOperator,30.5,0.4817206802748212,False,5.844285714285713,4.93
+Elite Hit Rate (%),MLM,POSAwareAntonymReplacement,17.0,0.3828671328671329,False,5.844285714285713,7.247142857142857
+Elite Hit Rate (%),MLM,SemanticFusionCrossover,43.0,0.01748251748251748,False,5.844285714285713,2.6328571428571435
+Elite Hit Rate (%),MLM,SemanticSimilarityCrossover,44.0,0.015082034674868442,False,5.844285714285713,2.2642857142857147
+Elite Hit Rate (%),MLM,StylisticMutator,43.5,0.01795983237778527,False,5.844285714285713,2.825714285714286
+Elite Hit Rate (%),MLM,TypographicalErrorsOperator,37.5,0.10983183147447209,False,5.844285714285713,3.5171428571428573
+Elite Hit Rate (%),NegationOperator,POSAwareAntonymReplacement,13.0,0.16491841491841494,False,4.93,7.247142857142857
+Elite Hit Rate (%),NegationOperator,SemanticFusionCrossover,37.0,0.12820512820512822,False,4.93,2.6328571428571435
+Elite Hit Rate (%),NegationOperator,SemanticSimilarityCrossover,36.0,0.15940499314793322,False,4.93,2.2642857142857147
+Elite Hit Rate (%),NegationOperator,StylisticMutator,34.5,0.2242892124823661,False,4.93,2.825714285714286
+Elite Hit Rate (%),NegationOperator,TypographicalErrorsOperator,27.5,0.7491276096399462,False,4.93,3.5171428571428573
+Elite Hit Rate (%),POSAwareAntonymReplacement,SemanticFusionCrossover,46.0,0.004079254079254079,False,7.247142857142857,2.6328571428571435
+Elite Hit Rate (%),POSAwareAntonymReplacement,SemanticSimilarityCrossover,47.0,0.004890624053570851,False,7.247142857142857,2.2642857142857147
+Elite Hit Rate (%),POSAwareAntonymReplacement,StylisticMutator,45.0,0.006993006993006993,False,7.247142857142857,2.825714285714286
+Elite Hit Rate (%),POSAwareAntonymReplacement,TypographicalErrorsOperator,43.5,0.01795983237778527,False,7.247142857142857,3.5171428571428573
+Elite Hit Rate (%),SemanticFusionCrossover,SemanticSimilarityCrossover,26.5,0.8476751539452658,False,2.6328571428571435,2.2642857142857147
+Elite Hit Rate (%),SemanticFusionCrossover,StylisticMutator,21.0,0.7103729603729605,False,2.6328571428571435,2.825714285714286
+Elite Hit Rate (%),SemanticFusionCrossover,TypographicalErrorsOperator,15.0,0.25932400932400934,False,2.6328571428571435,3.5171428571428573
+Elite Hit Rate (%),SemanticSimilarityCrossover,StylisticMutator,21.0,0.7011653274181554,False,2.2642857142857147,2.825714285714286
+Elite Hit Rate (%),SemanticSimilarityCrossover,TypographicalErrorsOperator,14.0,0.19934954636744062,False,2.2642857142857147,3.5171428571428573
+Elite Hit Rate (%),StylisticMutator,TypographicalErrorsOperator,17.0,0.3828671328671329,False,2.825714285714286,3.5171428571428573
+Invalid Rate (%),ConceptAdditionOperator,InformedEvolutionOperator,28.0,0.7103729603729605,False,38.52428571428571,40.05857142857143
+Invalid Rate (%),ConceptAdditionOperator,LLMBackTranslation_HI,49.0,0.0005827505827505828,True,38.52428571428571,21.072857142857142
+Invalid Rate (%),ConceptAdditionOperator,LLMBasedParaphrasing,15.0,0.25932400932400934,False,38.52428571428571,40.94857142857143
+Invalid Rate (%),ConceptAdditionOperator,LLM_POSAwareSynonymReplacement,49.0,0.0005827505827505828,True,38.52428571428571,13.14857142857143
+Invalid Rate (%),ConceptAdditionOperator,MLM,46.0,0.004079254079254079,False,38.52428571428571,26.48428571428571
+Invalid Rate (%),ConceptAdditionOperator,NegationOperator,49.0,0.0005827505827505828,True,38.52428571428571,18.81
+Invalid Rate (%),ConceptAdditionOperator,POSAwareAntonymReplacement,49.0,0.0005827505827505828,True,38.52428571428571,4.9957142857142856
+Invalid Rate (%),ConceptAdditionOperator,SemanticFusionCrossover,0.0,0.0005827505827505828,True,38.52428571428571,56.01999999999999
+Invalid Rate (%),ConceptAdditionOperator,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,38.52428571428571,0.0
+Invalid Rate (%),ConceptAdditionOperator,StylisticMutator,20.5,0.6543654987424038,False,38.52428571428571,39.39857142857143
+Invalid Rate (%),ConceptAdditionOperator,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,38.52428571428571,53.25857142857143
+Invalid Rate (%),InformedEvolutionOperator,LLMBackTranslation_HI,48.0,0.0011655011655011655,False,40.05857142857143,21.072857142857142
+Invalid Rate (%),InformedEvolutionOperator,LLMBasedParaphrasing,17.0,0.3828671328671329,False,40.05857142857143,40.94857142857143
+Invalid Rate (%),InformedEvolutionOperator,LLM_POSAwareSynonymReplacement,49.0,0.0005827505827505828,True,40.05857142857143,13.14857142857143
+Invalid Rate (%),InformedEvolutionOperator,MLM,45.0,0.006993006993006993,False,40.05857142857143,26.48428571428571
+Invalid Rate (%),InformedEvolutionOperator,NegationOperator,49.0,0.0005827505827505828,True,40.05857142857143,18.81
+Invalid Rate (%),InformedEvolutionOperator,POSAwareAntonymReplacement,49.0,0.0005827505827505828,True,40.05857142857143,4.9957142857142856
+Invalid Rate (%),InformedEvolutionOperator,SemanticFusionCrossover,7.0,0.026223776223776224,False,40.05857142857143,56.01999999999999
+Invalid Rate (%),InformedEvolutionOperator,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,40.05857142857143,0.0
+Invalid Rate (%),InformedEvolutionOperator,StylisticMutator,22.0,0.8047785547785549,False,40.05857142857143,39.39857142857143
+Invalid Rate (%),InformedEvolutionOperator,TypographicalErrorsOperator,8.0,0.03787878787878788,False,40.05857142857143,53.25857142857143
+Invalid Rate (%),LLMBackTranslation_HI,LLMBasedParaphrasing,0.0,0.0005827505827505828,True,21.072857142857142,40.94857142857143
+Invalid Rate (%),LLMBackTranslation_HI,LLM_POSAwareSynonymReplacement,42.0,0.026223776223776224,False,21.072857142857142,13.14857142857143
+Invalid Rate (%),LLMBackTranslation_HI,MLM,9.0,0.05303030303030303,False,21.072857142857142,26.48428571428571
+Invalid Rate (%),LLMBackTranslation_HI,NegationOperator,28.0,0.7103729603729605,False,21.072857142857142,18.81
+Invalid Rate (%),LLMBackTranslation_HI,POSAwareAntonymReplacement,49.0,0.0005827505827505828,True,21.072857142857142,4.9957142857142856
+Invalid Rate (%),LLMBackTranslation_HI,SemanticFusionCrossover,0.0,0.0005827505827505828,True,21.072857142857142,56.01999999999999
+Invalid Rate (%),LLMBackTranslation_HI,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,21.072857142857142,0.0
+Invalid Rate (%),LLMBackTranslation_HI,StylisticMutator,0.0,0.0005827505827505828,True,21.072857142857142,39.39857142857143
+Invalid Rate (%),LLMBackTranslation_HI,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,21.072857142857142,53.25857142857143
+Invalid Rate (%),LLMBasedParaphrasing,LLM_POSAwareSynonymReplacement,49.0,0.0005827505827505828,True,40.94857142857143,13.14857142857143
+Invalid Rate (%),LLMBasedParaphrasing,MLM,48.0,0.0011655011655011655,False,40.94857142857143,26.48428571428571
+Invalid Rate (%),LLMBasedParaphrasing,NegationOperator,49.0,0.0005827505827505828,True,40.94857142857143,18.81
+Invalid Rate (%),LLMBasedParaphrasing,POSAwareAntonymReplacement,49.0,0.0005827505827505828,True,40.94857142857143,4.9957142857142856
+Invalid Rate (%),LLMBasedParaphrasing,SemanticFusionCrossover,0.0,0.0005827505827505828,True,40.94857142857143,56.01999999999999
+Invalid Rate (%),LLMBasedParaphrasing,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,40.94857142857143,0.0
+Invalid Rate (%),LLMBasedParaphrasing,StylisticMutator,28.0,0.7103729603729605,False,40.94857142857143,39.39857142857143
+Invalid Rate (%),LLMBasedParaphrasing,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,40.94857142857143,53.25857142857143
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,MLM,0.0,0.0005827505827505828,True,13.14857142857143,26.48428571428571
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,NegationOperator,10.0,0.07284382284382285,False,13.14857142857143,18.81
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,POSAwareAntonymReplacement,48.0,0.0011655011655011655,False,13.14857142857143,4.9957142857142856
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,SemanticFusionCrossover,0.0,0.0005827505827505828,True,13.14857142857143,56.01999999999999
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,13.14857142857143,0.0
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,StylisticMutator,0.0,0.0005827505827505828,True,13.14857142857143,39.39857142857143
+Invalid Rate (%),LLM_POSAwareSynonymReplacement,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,13.14857142857143,53.25857142857143
+Invalid Rate (%),MLM,NegationOperator,40.5,0.04740124709678227,False,26.48428571428571,18.81
+Invalid Rate (%),MLM,POSAwareAntonymReplacement,49.0,0.0005827505827505828,True,26.48428571428571,4.9957142857142856
+Invalid Rate (%),MLM,SemanticFusionCrossover,0.0,0.0005827505827505828,True,26.48428571428571,56.01999999999999
+Invalid Rate (%),MLM,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,26.48428571428571,0.0
+Invalid Rate (%),MLM,StylisticMutator,3.0,0.004079254079254079,False,26.48428571428571,39.39857142857143
+Invalid Rate (%),MLM,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,26.48428571428571,53.25857142857143
+Invalid Rate (%),NegationOperator,POSAwareAntonymReplacement,48.0,0.0011655011655011655,False,18.81,4.9957142857142856
+Invalid Rate (%),NegationOperator,SemanticFusionCrossover,0.0,0.0005827505827505828,True,18.81,56.01999999999999
+Invalid Rate (%),NegationOperator,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,18.81,0.0
+Invalid Rate (%),NegationOperator,StylisticMutator,0.0,0.0005827505827505828,True,18.81,39.39857142857143
+Invalid Rate (%),NegationOperator,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,18.81,53.25857142857143
+Invalid Rate (%),POSAwareAntonymReplacement,SemanticFusionCrossover,0.0,0.0005827505827505828,True,4.9957142857142856,56.01999999999999
+Invalid Rate (%),POSAwareAntonymReplacement,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,4.9957142857142856,0.0
+Invalid Rate (%),POSAwareAntonymReplacement,StylisticMutator,0.0,0.0005827505827505828,True,4.9957142857142856,39.39857142857143
+Invalid Rate (%),POSAwareAntonymReplacement,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,4.9957142857142856,53.25857142857143
+Invalid Rate (%),SemanticFusionCrossover,SemanticSimilarityCrossover,49.0,0.0010575750839325214,False,56.01999999999999,0.0
+Invalid Rate (%),SemanticFusionCrossover,StylisticMutator,49.0,0.0005827505827505828,True,56.01999999999999,39.39857142857143
+Invalid Rate (%),SemanticFusionCrossover,TypographicalErrorsOperator,35.0,0.20862470862470864,False,56.01999999999999,53.25857142857143
+Invalid Rate (%),SemanticSimilarityCrossover,StylisticMutator,0.0,0.0010575750839325214,False,0.0,39.39857142857143
+Invalid Rate (%),SemanticSimilarityCrossover,TypographicalErrorsOperator,0.0,0.0010575750839325214,False,0.0,53.25857142857143
+Invalid Rate (%),StylisticMutator,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,39.39857142857143,53.25857142857143
+Non-Elite Percentage (%),ConceptAdditionOperator,InformedEvolutionOperator,32.0,0.3828671328671329,False,55.712857142857146,49.15714285714286
+Non-Elite Percentage (%),ConceptAdditionOperator,LLMBackTranslation_HI,0.5,0.0026468723793319736,False,55.712857142857146,71.03285714285714
+Non-Elite Percentage (%),ConceptAdditionOperator,LLMBasedParaphrasing,26.5,0.8478409541795124,False,55.712857142857146,54.80571428571428
+Non-Elite Percentage (%),ConceptAdditionOperator,LLM_POSAwareSynonymReplacement,0.0,0.0005827505827505828,True,55.712857142857146,75.90285714285713
+Non-Elite Percentage (%),ConceptAdditionOperator,MLM,15.0,0.25932400932400934,False,55.712857142857146,60.65
+Non-Elite Percentage (%),ConceptAdditionOperator,NegationOperator,2.0,0.002331002331002331,False,55.712857142857146,71.47
+Non-Elite Percentage (%),ConceptAdditionOperator,POSAwareAntonymReplacement,0.0,0.0005827505827505828,True,55.712857142857146,83.9557142857143
+Non-Elite Percentage (%),ConceptAdditionOperator,SemanticFusionCrossover,49.0,0.0005827505827505828,True,55.712857142857146,39.74285714285714
+Non-Elite Percentage (%),ConceptAdditionOperator,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,55.712857142857146,21.872857142857146
+Non-Elite Percentage (%),ConceptAdditionOperator,StylisticMutator,22.0,0.797862708428663,False,55.712857142857146,56.67714285714286
+Non-Elite Percentage (%),ConceptAdditionOperator,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,55.712857142857146,41.68
+Non-Elite Percentage (%),InformedEvolutionOperator,LLMBackTranslation_HI,0.0,0.0005827505827505828,True,49.15714285714286,71.03285714285714
+Non-Elite Percentage (%),InformedEvolutionOperator,LLMBasedParaphrasing,18.0,0.45571095571095577,False,49.15714285714286,54.80571428571428
+Non-Elite Percentage (%),InformedEvolutionOperator,LLM_POSAwareSynonymReplacement,0.0,0.0005827505827505828,True,49.15714285714286,75.90285714285713
+Non-Elite Percentage (%),InformedEvolutionOperator,MLM,6.0,0.01748251748251748,False,49.15714285714286,60.65
+Non-Elite Percentage (%),InformedEvolutionOperator,NegationOperator,0.0,0.0005827505827505828,True,49.15714285714286,71.47
+Non-Elite Percentage (%),InformedEvolutionOperator,POSAwareAntonymReplacement,0.0,0.0005827505827505828,True,49.15714285714286,83.9557142857143
+Non-Elite Percentage (%),InformedEvolutionOperator,SemanticFusionCrossover,39.0,0.07284382284382285,False,49.15714285714286,39.74285714285714
+Non-Elite Percentage (%),InformedEvolutionOperator,SemanticSimilarityCrossover,47.0,0.002331002331002331,False,49.15714285714286,21.872857142857146
+Non-Elite Percentage (%),InformedEvolutionOperator,StylisticMutator,12.0,0.12820512820512822,False,49.15714285714286,56.67714285714286
+Non-Elite Percentage (%),InformedEvolutionOperator,TypographicalErrorsOperator,35.5,0.179233913097405,False,49.15714285714286,41.68
+Non-Elite Percentage (%),LLMBackTranslation_HI,LLMBasedParaphrasing,49.0,0.0005827505827505828,True,71.03285714285714,54.80571428571428
+Non-Elite Percentage (%),LLMBackTranslation_HI,LLM_POSAwareSynonymReplacement,11.5,0.10983183147447209,False,71.03285714285714,75.90285714285713
+Non-Elite Percentage (%),LLMBackTranslation_HI,MLM,46.0,0.004079254079254079,False,71.03285714285714,60.65
+Non-Elite Percentage (%),LLMBackTranslation_HI,NegationOperator,24.0,1.0,False,71.03285714285714,71.47
+Non-Elite Percentage (%),LLMBackTranslation_HI,POSAwareAntonymReplacement,0.0,0.0005827505827505828,True,71.03285714285714,83.9557142857143
+Non-Elite Percentage (%),LLMBackTranslation_HI,SemanticFusionCrossover,49.0,0.0005827505827505828,True,71.03285714285714,39.74285714285714
+Non-Elite Percentage (%),LLMBackTranslation_HI,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,71.03285714285714,21.872857142857146
+Non-Elite Percentage (%),LLMBackTranslation_HI,StylisticMutator,49.0,0.0005827505827505828,True,71.03285714285714,56.67714285714286
+Non-Elite Percentage (%),LLMBackTranslation_HI,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,71.03285714285714,41.68
+Non-Elite Percentage (%),LLMBasedParaphrasing,LLM_POSAwareSynonymReplacement,0.0,0.0005827505827505828,True,54.80571428571428,75.90285714285713
+Non-Elite Percentage (%),LLMBasedParaphrasing,MLM,12.0,0.12820512820512822,False,54.80571428571428,60.65
+Non-Elite Percentage (%),LLMBasedParaphrasing,NegationOperator,2.0,0.002331002331002331,False,54.80571428571428,71.47
+Non-Elite Percentage (%),LLMBasedParaphrasing,POSAwareAntonymReplacement,0.0,0.0005827505827505828,True,54.80571428571428,83.9557142857143
+Non-Elite Percentage (%),LLMBasedParaphrasing,SemanticFusionCrossover,49.0,0.0005827505827505828,True,54.80571428571428,39.74285714285714
+Non-Elite Percentage (%),LLMBasedParaphrasing,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,54.80571428571428,21.872857142857146
+Non-Elite Percentage (%),LLMBasedParaphrasing,StylisticMutator,21.0,0.7103729603729605,False,54.80571428571428,56.67714285714286
+Non-Elite Percentage (%),LLMBasedParaphrasing,TypographicalErrorsOperator,48.0,0.0011655011655011655,False,54.80571428571428,41.68
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,MLM,47.0,0.002331002331002331,False,75.90285714285713,60.65
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,NegationOperator,34.0,0.25932400932400934,False,75.90285714285713,71.47
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,POSAwareAntonymReplacement,5.0,0.011072261072261072,False,75.90285714285713,83.9557142857143
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,SemanticFusionCrossover,49.0,0.0005827505827505828,True,75.90285714285713,39.74285714285714
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,75.90285714285713,21.872857142857146
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,StylisticMutator,49.0,0.0005827505827505828,True,75.90285714285713,56.67714285714286
+Non-Elite Percentage (%),LLM_POSAwareSynonymReplacement,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,75.90285714285713,41.68
+Non-Elite Percentage (%),MLM,NegationOperator,7.5,0.0348055639329139,False,60.65,71.47
+Non-Elite Percentage (%),MLM,POSAwareAntonymReplacement,0.0,0.0005827505827505828,True,60.65,83.9557142857143
+Non-Elite Percentage (%),MLM,SemanticFusionCrossover,49.0,0.0005827505827505828,True,60.65,39.74285714285714
+Non-Elite Percentage (%),MLM,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,60.65,21.872857142857146
+Non-Elite Percentage (%),MLM,StylisticMutator,34.0,0.25932400932400934,False,60.65,56.67714285714286
+Non-Elite Percentage (%),MLM,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,60.65,41.68
+Non-Elite Percentage (%),NegationOperator,POSAwareAntonymReplacement,7.0,0.026223776223776224,False,71.47,83.9557142857143
+Non-Elite Percentage (%),NegationOperator,SemanticFusionCrossover,49.0,0.0005827505827505828,True,71.47,39.74285714285714
+Non-Elite Percentage (%),NegationOperator,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,71.47,21.872857142857146
+Non-Elite Percentage (%),NegationOperator,StylisticMutator,47.0,0.002331002331002331,False,71.47,56.67714285714286
+Non-Elite Percentage (%),NegationOperator,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,71.47,41.68
+Non-Elite Percentage (%),POSAwareAntonymReplacement,SemanticFusionCrossover,49.0,0.0005827505827505828,True,83.9557142857143,39.74285714285714
+Non-Elite Percentage (%),POSAwareAntonymReplacement,SemanticSimilarityCrossover,49.0,0.0005827505827505828,True,83.9557142857143,21.872857142857146
+Non-Elite Percentage (%),POSAwareAntonymReplacement,StylisticMutator,49.0,0.0005827505827505828,True,83.9557142857143,56.67714285714286
+Non-Elite Percentage (%),POSAwareAntonymReplacement,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,83.9557142857143,41.68
+Non-Elite Percentage (%),SemanticFusionCrossover,SemanticSimilarityCrossover,48.0,0.0011655011655011655,False,39.74285714285714,21.872857142857146
+Non-Elite Percentage (%),SemanticFusionCrossover,StylisticMutator,0.0,0.0005827505827505828,True,39.74285714285714,56.67714285714286
+Non-Elite Percentage (%),SemanticFusionCrossover,TypographicalErrorsOperator,18.0,0.45571095571095577,False,39.74285714285714,41.68
+Non-Elite Percentage (%),SemanticSimilarityCrossover,StylisticMutator,0.0,0.0005827505827505828,True,21.872857142857146,56.67714285714286
+Non-Elite Percentage (%),SemanticSimilarityCrossover,TypographicalErrorsOperator,0.0,0.0005827505827505828,True,21.872857142857146,41.68
+Non-Elite Percentage (%),StylisticMutator,TypographicalErrorsOperator,49.0,0.0005827505827505828,True,56.67714285714286,41.68
+Mean Delta Score,ConceptAdditionOperator,InformedEvolutionOperator,49.0,0.002092584662113058,False,-0.05285714285714286,-0.16999999999999998
+Mean Delta Score,ConceptAdditionOperator,LLMBackTranslation_HI,37.5,0.09761980169931112,False,-0.05285714285714286,-0.07
+Mean Delta Score,ConceptAdditionOperator,LLMBasedParaphrasing,31.5,0.3940131440308643,False,-0.05285714285714286,-0.06142857142857144
+Mean Delta Score,ConceptAdditionOperator,LLM_POSAwareSynonymReplacement,26.5,0.8435258690926942,False,-0.05285714285714286,-0.054285714285714284
+Mean Delta Score,ConceptAdditionOperator,MLM,23.5,0.947963120235628,False,-0.05285714285714286,-0.05142857142857143
+Mean Delta Score,ConceptAdditionOperator,NegationOperator,32.0,0.3641502655959049,False,-0.05285714285714286,-0.0642857142857143
+Mean Delta Score,ConceptAdditionOperator,POSAwareAntonymReplacement,27.0,0.7933505521096174,False,-0.05285714285714286,-0.055714285714285716
+Mean Delta Score,ConceptAdditionOperator,SemanticFusionCrossover,25.5,0.9484912846303624,False,-0.05285714285714286,-0.054285714285714284
+Mean Delta Score,ConceptAdditionOperator,SemanticSimilarityCrossover,25.0,1.0,False,-0.05285714285714286,-0.05
+Mean Delta Score,ConceptAdditionOperator,StylisticMutator,33.0,0.3007681842390252,False,-0.05285714285714286,-0.06571428571428571
+Mean Delta Score,ConceptAdditionOperator,TypographicalErrorsOperator,32.0,0.35642017739098875,False,-0.05285714285714286,-0.06285714285714286
+Mean Delta Score,InformedEvolutionOperator,LLMBackTranslation_HI,0.0,0.0018844465241654907,False,-0.16999999999999998,-0.07
+Mean Delta Score,InformedEvolutionOperator,LLMBasedParaphrasing,0.0,0.002021678063251607,False,-0.16999999999999998,-0.06142857142857144
+Mean Delta Score,InformedEvolutionOperator,LLM_POSAwareSynonymReplacement,0.0,0.001906896315959945,False,-0.16999999999999998,-0.054285714285714284
+Mean Delta Score,InformedEvolutionOperator,MLM,0.0,0.002092584662113058,False,-0.16999999999999998,-0.05142857142857143
+Mean Delta Score,InformedEvolutionOperator,NegationOperator,0.0,0.002092584662113058,False,-0.16999999999999998,-0.0642857142857143
+Mean Delta Score,InformedEvolutionOperator,POSAwareAntonymReplacement,0.0,0.002021678063251607,False,-0.16999999999999998,-0.055714285714285716
+Mean Delta Score,InformedEvolutionOperator,SemanticFusionCrossover,0.0,0.0021165616025705853,False,-0.16999999999999998,-0.054285714285714284
+Mean Delta Score,InformedEvolutionOperator,SemanticSimilarityCrossover,0.0,0.0021165616025705853,False,-0.16999999999999998,-0.05
+Mean Delta Score,InformedEvolutionOperator,StylisticMutator,0.0,0.0021165616025705853,False,-0.16999999999999998,-0.06571428571428571
+Mean Delta Score,InformedEvolutionOperator,TypographicalErrorsOperator,0.0,0.002021678063251607,False,-0.16999999999999998,-0.06285714285714286
+Mean Delta Score,LLMBackTranslation_HI,LLMBasedParaphrasing,19.5,0.5376727488320636,False,-0.07,-0.06142857142857144
+Mean Delta Score,LLMBackTranslation_HI,LLM_POSAwareSynonymReplacement,10.5,0.07701993148214077,False,-0.07,-0.054285714285714284
+Mean Delta Score,LLMBackTranslation_HI,MLM,8.5,0.04233546416238331,False,-0.07,-0.05142857142857143
+Mean Delta Score,LLMBackTranslation_HI,NegationOperator,21.0,0.6892068662866757,False,-0.07,-0.0642857142857143
+Mean Delta Score,LLMBackTranslation_HI,POSAwareAntonymReplacement,10.5,0.07599656164176065,False,-0.07,-0.055714285714285716
+Mean Delta Score,LLMBackTranslation_HI,SemanticFusionCrossover,16.0,0.2947081966524243,False,-0.07,-0.054285714285714284
+Mean Delta Score,LLMBackTranslation_HI,SemanticSimilarityCrossover,13.0,0.14681336601996153,False,-0.07,-0.05
+Mean Delta Score,LLMBackTranslation_HI,StylisticMutator,19.5,0.5537457784120277,False,-0.07,-0.06571428571428571
+Mean Delta Score,LLMBackTranslation_HI,TypographicalErrorsOperator,17.5,0.3751273474707575,False,-0.07,-0.06285714285714286
+Mean Delta Score,LLMBasedParaphrasing,LLM_POSAwareSynonymReplacement,16.5,0.32198033462818054,False,-0.06142857142857144,-0.054285714285714284
+Mean Delta Score,LLMBasedParaphrasing,MLM,15.5,0.26994249444706575,False,-0.06142857142857144,-0.05142857142857143
+Mean Delta Score,LLMBasedParaphrasing,NegationOperator,26.0,0.8950648495019562,False,-0.06142857142857144,-0.0642857142857143
+Mean Delta Score,LLMBasedParaphrasing,POSAwareAntonymReplacement,17.0,0.36196902026310196,False,-0.06142857142857144,-0.055714285714285716
+Mean Delta Score,LLMBasedParaphrasing,SemanticFusionCrossover,20.5,0.6481519714441237,False,-0.06142857142857144,-0.054285714285714284
+Mean Delta Score,LLMBasedParaphrasing,SemanticSimilarityCrossover,17.0,0.36251635377621527,False,-0.06142857142857144,-0.05
+Mean Delta Score,LLMBasedParaphrasing,StylisticMutator,25.0,1.0,False,-0.06142857142857144,-0.06571428571428571
+Mean Delta Score,LLMBasedParaphrasing,TypographicalErrorsOperator,23.0,0.8951868005641131,False,-0.06142857142857144,-0.06285714285714286
+Mean Delta Score,LLM_POSAwareSynonymReplacement,MLM,20.5,0.6399940105774466,False,-0.054285714285714284,-0.05142857142857143
+Mean Delta Score,LLM_POSAwareSynonymReplacement,NegationOperator,31.0,0.42323482980348426,False,-0.054285714285714284,-0.0642857142857143
+Mean Delta Score,LLM_POSAwareSynonymReplacement,POSAwareAntonymReplacement,24.0,1.0,False,-0.054285714285714284,-0.055714285714285716
+Mean Delta Score,LLM_POSAwareSynonymReplacement,SemanticFusionCrossover,24.0,1.0,False,-0.054285714285714284,-0.054285714285714284
+Mean Delta Score,LLM_POSAwareSynonymReplacement,SemanticSimilarityCrossover,26.0,0.8955501184217705,False,-0.054285714285714284,-0.05
+Mean Delta Score,LLM_POSAwareSynonymReplacement,StylisticMutator,32.0,0.350730224342913,False,-0.054285714285714284,-0.06571428571428571
+Mean Delta Score,LLM_POSAwareSynonymReplacement,TypographicalErrorsOperator,30.5,0.4692211560417394,False,-0.054285714285714284,-0.06285714285714286
+Mean Delta Score,MLM,NegationOperator,33.0,0.2991298634154749,False,-0.05142857142857143,-0.0642857142857143
+Mean Delta Score,MLM,POSAwareAntonymReplacement,29.0,0.5960555842906846,False,-0.05142857142857143,-0.055714285714285716
+Mean Delta Score,MLM,SemanticFusionCrossover,26.0,0.8968506656319674,False,-0.05142857142857143,-0.054285714285714284
+Mean Delta Score,MLM,SemanticSimilarityCrossover,28.0,0.6976586159239306,False,-0.05142857142857143,-0.05
+Mean Delta Score,MLM,StylisticMutator,35.0,0.19331680710567023,False,-0.05142857142857143,-0.06571428571428571
+Mean Delta Score,MLM,TypographicalErrorsOperator,34.5,0.21126001728480426,False,-0.05142857142857143,-0.06285714285714286
+Mean Delta Score,NegationOperator,POSAwareAntonymReplacement,18.5,0.47076833896591896,False,-0.0642857142857143,-0.055714285714285716
+Mean Delta Score,NegationOperator,SemanticFusionCrossover,19.0,0.515424338163534,False,-0.0642857142857143,-0.054285714285714284
+Mean Delta Score,NegationOperator,SemanticSimilarityCrossover,18.0,0.4387247178511211,False,-0.0642857142857143,-0.05
+Mean Delta Score,NegationOperator,StylisticMutator,25.0,1.0,False,-0.0642857142857143,-0.06571428571428571
+Mean Delta Score,NegationOperator,TypographicalErrorsOperator,23.0,0.8962655620001821,False,-0.0642857142857143,-0.06285714285714286
+Mean Delta Score,POSAwareAntonymReplacement,SemanticFusionCrossover,23.5,0.94778342175751,False,-0.055714285714285716,-0.054285714285714284
+Mean Delta Score,POSAwareAntonymReplacement,SemanticSimilarityCrossover,26.5,0.8449464061346881,False,-0.055714285714285716,-0.05
+Mean Delta Score,POSAwareAntonymReplacement,StylisticMutator,32.0,0.3569813204079747,False,-0.055714285714285716,-0.06571428571428571
+Mean Delta Score,POSAwareAntonymReplacement,TypographicalErrorsOperator,31.0,0.4265425932628122,False,-0.055714285714285716,-0.06285714285714286
+Mean Delta Score,SemanticFusionCrossover,SemanticSimilarityCrossover,23.0,0.897539890948048,False,-0.054285714285714284,-0.05
+Mean Delta Score,SemanticFusionCrossover,StylisticMutator,31.0,0.43717880419307564,False,-0.054285714285714284,-0.06571428571428571
+Mean Delta Score,SemanticFusionCrossover,TypographicalErrorsOperator,29.0,0.6044740637083499,False,-0.054285714285714284,-0.06285714285714286
+Mean Delta Score,SemanticSimilarityCrossover,StylisticMutator,30.0,0.5182695943797822,False,-0.05,-0.06571428571428571
+Mean Delta Score,SemanticSimilarityCrossover,TypographicalErrorsOperator,29.0,0.6015875612213246,False,-0.05,-0.06285714285714286
+Mean Delta Score,StylisticMutator,TypographicalErrorsOperator,23.0,0.8961473419391371,False,-0.06571428571428571,-0.06285714285714286
+Delta Score Std Dev,ConceptAdditionOperator,InformedEvolutionOperator,40.0,0.05182179383210158,False,0.12571428571428572,0.10714285714285712
+Delta Score Std Dev,ConceptAdditionOperator,LLMBackTranslation_HI,29.5,0.5569460110106894,False,0.12571428571428572,0.12
+Delta Score Std Dev,ConceptAdditionOperator,LLMBasedParaphrasing,31.5,0.39291549660148206,False,0.12571428571428572,0.11714285714285713
+Delta Score Std Dev,ConceptAdditionOperator,LLM_POSAwareSynonymReplacement,35.0,0.19331680710567023,False,0.12571428571428572,0.11142857142857143
+Delta Score Std Dev,ConceptAdditionOperator,MLM,32.5,0.3319900520245068,False,0.12571428571428572,0.1157142857142857
+Delta Score Std Dev,ConceptAdditionOperator,NegationOperator,30.0,0.515424338163534,False,0.12571428571428572,0.11857142857142856
+Delta Score Std Dev,ConceptAdditionOperator,POSAwareAntonymReplacement,32.5,0.32870024088652405,False,0.12571428571428572,0.11714285714285713
+Delta Score Std Dev,ConceptAdditionOperator,SemanticFusionCrossover,47.0,0.004566811524028778,False,0.12571428571428572,0.09142857142857141
+Delta Score Std Dev,ConceptAdditionOperator,SemanticSimilarityCrossover,46.5,0.00547173785188433,False,0.12571428571428572,0.09428571428571428
+Delta Score Std Dev,ConceptAdditionOperator,StylisticMutator,32.5,0.320841728573967,False,0.12571428571428572,0.11714285714285713
+Delta Score Std Dev,ConceptAdditionOperator,TypographicalErrorsOperator,34.0,0.2400877530554716,False,0.12571428571428572,0.1157142857142857
+Delta Score Std Dev,InformedEvolutionOperator,LLMBackTranslation_HI,12.0,0.11600309998255601,False,0.10714285714285712,0.12
+Delta Score Std Dev,InformedEvolutionOperator,LLMBasedParaphrasing,13.5,0.1700209434873724,False,0.10714285714285712,0.11714285714285713
+Delta Score Std Dev,InformedEvolutionOperator,LLM_POSAwareSynonymReplacement,19.0,0.5139828455252949,False,0.10714285714285712,0.11142857142857143
+Delta Score Std Dev,InformedEvolutionOperator,MLM,18.5,0.47281064726084465,False,0.10714285714285712,0.1157142857142857
+Delta Score Std Dev,InformedEvolutionOperator,NegationOperator,13.5,0.17149076954294729,False,0.10714285714285712,0.11857142857142856
+Delta Score Std Dev,InformedEvolutionOperator,POSAwareAntonymReplacement,14.0,0.18406343439836004,False,0.10714285714285712,0.11714285714285713
+Delta Score Std Dev,InformedEvolutionOperator,SemanticFusionCrossover,41.5,0.031066917771700755,False,0.10714285714285712,0.09142857142857141
+Delta Score Std Dev,InformedEvolutionOperator,SemanticSimilarityCrossover,39.5,0.056670974036041724,False,0.10714285714285712,0.09428571428571428
+Delta Score Std Dev,InformedEvolutionOperator,StylisticMutator,13.0,0.14062081084069286,False,0.10714285714285712,0.11714285714285713
+Delta Score Std Dev,InformedEvolutionOperator,TypographicalErrorsOperator,14.0,0.18406343439836004,False,0.10714285714285712,0.1157142857142857
+Delta Score Std Dev,LLMBackTranslation_HI,LLMBasedParaphrasing,27.0,0.792411322729272,False,0.12,0.11714285714285713
+Delta Score Std Dev,LLMBackTranslation_HI,LLM_POSAwareSynonymReplacement,31.0,0.4335224033897658,False,0.12,0.11142857142857143
+Delta Score Std Dev,LLMBackTranslation_HI,MLM,29.0,0.6040655312875796,False,0.12,0.1157142857142857
+Delta Score Std Dev,LLMBackTranslation_HI,NegationOperator,25.5,0.9476018486767809,False,0.12,0.11857142857142856
+Delta Score Std Dev,LLMBackTranslation_HI,POSAwareAntonymReplacement,28.5,0.6447240515019543,False,0.12,0.11714285714285713
+Delta Score Std Dev,LLMBackTranslation_HI,SemanticFusionCrossover,46.0,0.006601266578921161,False,0.12,0.09142857142857141
+Delta Score Std Dev,LLMBackTranslation_HI,SemanticSimilarityCrossover,45.0,0.00927740249096746,False,0.12,0.09428571428571428
+Delta Score Std Dev,LLMBackTranslation_HI,StylisticMutator,28.0,0.6933509161268525,False,0.12,0.11714285714285713
+Delta Score Std Dev,LLMBackTranslation_HI,TypographicalErrorsOperator,30.0,0.5090841958612752,False,0.12,0.1157142857142857
+Delta Score Std Dev,LLMBasedParaphrasing,LLM_POSAwareSynonymReplacement,29.5,0.5514172312840169,False,0.11714285714285713,0.11142857142857143
+Delta Score Std Dev,LLMBasedParaphrasing,MLM,27.5,0.743325434698866,False,0.11714285714285713,0.1157142857142857
+Delta Score Std Dev,LLMBasedParaphrasing,NegationOperator,22.5,0.8435258690926942,False,0.11714285714285713,0.11857142857142856
+Delta Score Std Dev,LLMBasedParaphrasing,POSAwareAntonymReplacement,26.5,0.8438846605648331,False,0.11714285714285713,0.11714285714285713
+Delta Score Std Dev,LLMBasedParaphrasing,SemanticFusionCrossover,44.5,0.010917465124103362,False,0.11714285714285713,0.09142857142857141
+Delta Score Std Dev,LLMBasedParaphrasing,SemanticSimilarityCrossover,43.5,0.015743859465434763,False,0.11714285714285713,0.09428571428571428
+Delta Score Std Dev,LLMBasedParaphrasing,StylisticMutator,26.5,0.8378287553628027,False,0.11714285714285713,0.11714285714285713
+Delta Score Std Dev,LLMBasedParaphrasing,TypographicalErrorsOperator,28.0,0.6916444476938407,False,0.11714285714285713,0.1157142857142857
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,MLM,23.0,0.8965007959949687,False,0.11142857142857143,0.1157142857142857
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,NegationOperator,18.5,0.4743271661239373,False,0.11142857142857143,0.11857142857142856
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,POSAwareAntonymReplacement,21.0,0.6943613128099595,False,0.11142857142857143,0.11714285714285713
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,SemanticFusionCrossover,40.5,0.0442506719656243,False,0.11142857142857143,0.09142857142857141
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,SemanticSimilarityCrossover,39.5,0.05984675986206028,False,0.11142857142857143,0.09428571428571428
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,StylisticMutator,20.5,0.6371462360145752,False,0.11142857142857143,0.11714285714285713
+Delta Score Std Dev,LLM_POSAwareSynonymReplacement,TypographicalErrorsOperator,22.0,0.7926473299658983,False,0.11142857142857143,0.1157142857142857
+Delta Score Std Dev,MLM,NegationOperator,21.0,0.6979825145728531,False,0.1157142857142857,0.11857142857142856
+Delta Score Std Dev,MLM,POSAwareAntonymReplacement,22.0,0.7935833746553121,False,0.1157142857142857,0.11714285714285713
+Delta Score Std Dev,MLM,SemanticFusionCrossover,43.0,0.019206776968043186,False,0.1157142857142857,0.09142857142857141
+Delta Score Std Dev,MLM,SemanticSimilarityCrossover,41.5,0.03145452092765203,False,0.1157142857142857,0.09428571428571428
+Delta Score Std Dev,MLM,StylisticMutator,21.5,0.7380182766545684,False,0.1157142857142857,0.11714285714285713
+Delta Score Std Dev,MLM,TypographicalErrorsOperator,22.5,0.8442409953656613,False,0.1157142857142857,0.1157142857142857
+Delta Score Std Dev,NegationOperator,POSAwareAntonymReplacement,28.0,0.6936888263665271,False,0.11857142857142856,0.11714285714285713
+Delta Score Std Dev,NegationOperator,SemanticFusionCrossover,44.0,0.013664457765133722,False,0.11857142857142856,0.09142857142857141
+Delta Score Std Dev,NegationOperator,SemanticSimilarityCrossover,42.5,0.022818988279962676,False,0.11857142857142856,0.09428571428571428
+Delta Score Std Dev,NegationOperator,StylisticMutator,28.0,0.6936888263665271,False,0.11857142857142856,0.11714285714285713
+Delta Score Std Dev,NegationOperator,TypographicalErrorsOperator,29.5,0.5537457784120277,False,0.11857142857142856,0.1157142857142857
+Delta Score Std Dev,POSAwareAntonymReplacement,SemanticFusionCrossover,46.5,0.005263736594588273,False,0.11714285714285713,0.09142857142857141
+Delta Score Std Dev,POSAwareAntonymReplacement,SemanticSimilarityCrossover,46.0,0.006300044643524354,False,0.11714285714285713,0.09428571428571428
+Delta Score Std Dev,POSAwareAntonymReplacement,StylisticMutator,24.5,1.0,False,0.11714285714285713,0.11714285714285713
+Delta Score Std Dev,POSAwareAntonymReplacement,TypographicalErrorsOperator,25.0,1.0,False,0.11714285714285713,0.1157142857142857
+Delta Score Std Dev,SemanticFusionCrossover,SemanticSimilarityCrossover,20.0,0.5907399828543654,False,0.09142857142857141,0.09428571428571428
+Delta Score Std Dev,SemanticFusionCrossover,StylisticMutator,2.0,0.0037917368234158546,False,0.09142857142857141,0.11714285714285713
+Delta Score Std Dev,SemanticFusionCrossover,TypographicalErrorsOperator,2.5,0.005263736594588273,False,0.09142857142857141,0.1157142857142857
+Delta Score Std Dev,SemanticSimilarityCrossover,StylisticMutator,2.0,0.0037917368234158546,False,0.09428571428571428,0.11714285714285713
+Delta Score Std Dev,SemanticSimilarityCrossover,TypographicalErrorsOperator,3.0,0.006300044643524354,False,0.09428571428571428,0.1157142857142857
+Delta Score Std Dev,StylisticMutator,TypographicalErrorsOperator,25.5,0.9460776629124596,False,0.11714285714285713,0.1157142857142857
