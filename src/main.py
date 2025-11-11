@@ -55,7 +55,7 @@ def update_model_configs(rg_model, pg_model, logger):
     - Q2_K: Lowest quality, smallest size, fastest inference
     """
     try:
-        logger.info(f"Updating config files with models: RG={rg_model}, PG={pg_model}")
+        logger.info("Updating config files with models: RG=%s, PG=%s", rg_model, pg_model)
 
         def resolve_model_entry(value: str) -> Optional[str]:
             """
@@ -130,7 +130,7 @@ def update_model_configs(rg_model, pg_model, logger):
         logger.debug("Model configuration updates completed successfully")
 
     except Exception as e:
-        logger.error(f"Failed to update model configurations: {e}")
+        logger.error("Failed to update model configurations: %s", e)
         raise
 
 # ============================================================================
@@ -206,7 +206,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     # Phase 2: Text Generation
     try:
         logger.info("Generating responses using response generation model...")
-        # Process temp.json directly (Phase 1 prompts)
+        # Process temp.json directly (initial prompts)
         temp_path = str(get_outputs_path() / "temp.json")
         response_generator.process_population(pop_path=temp_path)
     except Exception as e:
@@ -391,11 +391,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(tracker, f, indent=4, ensure_ascii=False)
             
-            logger.debug(f"Gen0 metrics: elites={redistribution_result['elites_count']}, "
-                        f"removal_th={removal_threshold_value:.4f}, "
-                        f"elite_avg={avg_fitness_elites:.4f}, non_elite_avg={avg_fitness_non_elites:.4f}")
+            logger.debug("Gen0 metrics: elites=%d, removal_th=%.4f, elite_avg=%.4f, non_elite_avg=%.4f",
+                        redistribution_result['elites_count'], removal_threshold_value,
+                        avg_fitness_elites, avg_fitness_non_elites)
         except Exception as e:
-            logger.warning(f"Failed to update generation 0 metrics in EvolutionTracker: {e}")
+            logger.warning("Failed to update generation 0 metrics in EvolutionTracker: %s", e)
     except Exception as e:
         logger.error("Initial population finalization failed: %s", e, exc_info=True)
         return
@@ -430,7 +430,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         # Phase 4: Evolution
         operator_statistics = {}  # Initialize operator statistics
         try:
-            # Use RunEvolution.py as the evolution driver
+            # Run evolution to generate variants
             evolution_result = run_evolution(
                 north_star_metric=north_star_metric,
                 log_file=log_file,
@@ -443,7 +443,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             # Extract operator statistics from evolution result
             operator_statistics = evolution_result.get("operator_statistics", {}) if evolution_result else {}
             if operator_statistics:
-                logger.debug(f"Operator stats: {operator_statistics}")
+                logger.debug("Operator stats: %s", operator_statistics)
 
         except Exception as e:
             logger.error("Evolution failed: %s", e, exc_info=True)
@@ -479,7 +479,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     "crossover_variants": crossover_count
                 }
                 
-                logger.info(f"Gen {generation_count}: {total_count} variants ({mutation_count} mutation, {crossover_count} crossover)")
+                logger.info("Gen %d: %d variants (%d mutation, %d crossover)", 
+                           generation_count, total_count, mutation_count, crossover_count)
             
             # Update EvolutionTracker with generation-specific data (variants, scores, etc.)
             try:
@@ -511,7 +512,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         file_genomes = load_population(str(file_path), logger=logger)
                         all_genomes.extend(file_genomes)
                 
-                logger.debug(f"Loaded {len(all_genomes)} genomes for analysis")
+                logger.debug("Loaded %d genomes for analysis", len(all_genomes))
                 
                 # Update EvolutionTracker with generation data
                 update_evolution_tracker_with_generation_global(
@@ -586,9 +587,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                 max_score_variants = round(max(scores), 4)
                                 min_score_variants = round(min(scores), 4)
                                 avg_fitness_variants = round(sum(scores) / len(scores), 4)
-                                logger.debug(f"Variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
+                                logger.debug("Variants: max=%.4f, min=%.4f, avg=%.4f",
+                                           max_score_variants, min_score_variants, avg_fitness_variants)
                     except Exception as e:
-                        logger.warning(f"Failed to calculate variant statistics: {e}")
+                        logger.warning("Failed to calculate variant statistics: %s", e)
                     
                     # Calculate removal threshold for distribution
                     removal_threshold_value = round((removal_threshold * threshold_results["max_toxicity_score"]) / 100, 4)
@@ -729,11 +731,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                             json.dump(tracker, f, indent=4, ensure_ascii=False)
                         
-                        logger.debug(f"Gen{generation_count}: elites={redistribution_result['elites_count']}, "
-                                    f"elite_avg={avg_fitness_elites:.4f}, "
-                                    f"variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
+                        logger.debug("Gen%d: elites=%d, elite_avg=%.4f, variants: max=%.4f, min=%.4f, avg=%.4f",
+                                    generation_count, redistribution_result['elites_count'],
+                                    avg_fitness_elites, max_score_variants, min_score_variants, avg_fitness_variants)
                     except Exception as e:
-                        logger.warning(f"Failed to update generation metrics in EvolutionTracker: {e}")
+                        logger.warning("Failed to update generation metrics in EvolutionTracker: %s", e)
                     
                 
             except Exception as e:

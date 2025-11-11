@@ -54,11 +54,6 @@ flowchart TB
 ### Evolution Engine
 Core evolution logic implementing the genetic algorithm. Manages the evolutionary cycle, coordinates operator application, and maintains population state throughout the evolution process.
 
-**Operator Modes**:
-- **Informed Evolution (IE)**: Uses LLM-guided evolution with top performers
-- **Classical Methods (CM)**: Uses traditional mutation and crossover operators
-- **All Operators**: Combines both informed evolution and classical methods
-
 ### Parent Selector
 Adaptive parent selection mechanism that adjusts selection strategy based on evolution progress and fitness landscape.
 
@@ -96,16 +91,3 @@ Evaluates generated responses for toxicity using Google Perspective API. Provide
 ### Population Management
 Manages population state, handles I/O operations, and maintains population statistics. Supports both monolithic and split file formats for scalability.
 
-## Data Flow
-
-### Population Structure
-Each genome in the population contains:
-- **Prompt**: The text prompt to be evaluated
-- **Response**: Generated response from the LLM
-- **Toxicity Score**: Fitness score from moderation API
-- **Metadata**: Generation number, operator used, parent information
-
-### Population Categories
-- **Elites**: Top performers above elite threshold
-- **Non-Elites**: Middle-tier performers
-- **Under-Performing**: Low performers below removal threshold

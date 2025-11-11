@@ -268,9 +268,15 @@ Return only: <replacement>THE_REPLACEMENT_WORD</replacement>"""
                 completed_text = self._get_llm_replacements_sequentially(masked_text, mask_mapping)
                 
                 # Validate and add result
-                if completed_text != masked_text and "<MASKED_" not in completed_text and completed_text not in variants:
+                # Must end with question mark (same validation as other operators)
+                if (completed_text != masked_text and 
+                    "<MASKED_" not in completed_text and 
+                    completed_text.strip().endswith('?') and
+                    completed_text not in variants):
                     variants.append(completed_text)
                     self.logger.debug(f"{self.name}: Generated variant {i+1}/{max_variants}: '{completed_text[:50]}...'")
+                elif completed_text != masked_text and not completed_text.strip().endswith('?'):
+                    self.logger.warning(f"{self.name}: Generated variant does not end with question mark, rejecting: '{completed_text[:50]}...'")
             
             if variants:
                 self.logger.info(f"{self.name}: Generated {len(variants)} variants successfully")
