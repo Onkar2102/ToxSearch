@@ -166,7 +166,6 @@ def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_
         success = False
 
     # Save 100 random questions to prompt.csv with column name 'questions'
-    # NOTE: These 100 are selected at random (using a fixed random_state for reproducibility).
     try:
         prompt_filename = "data/prompt.csv"
         # The following line selects 100 random questions (or fewer if dataset < 100), at random

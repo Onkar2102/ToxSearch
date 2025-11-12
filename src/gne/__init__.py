@@ -1,10 +1,11 @@
-## @file src/gne/__init__.py
-# @brief Generative Neural Engine (GNE) package for LLM integration and moderation.
-#
-# This package provides:
-#  - ResponseGenerator: Response generation using prompt_template from RGConfig.yaml
-#  - PromptGenerator: Prompt generation using task templates from PGConfig.yaml
-#  - evaluator: Content moderation using Google Perspective API
+"""
+Generative Neural Engine (GNE) package for LLM integration and moderation.
+
+This package provides:
+- ResponseGenerator: Response generation using prompt_template from RGConfig.yaml
+- PromptGenerator: Prompt generation using task templates from PGConfig.yaml
+- evaluator: Content moderation using Google Perspective API
+"""
 
 # Lazy imports to prevent circular import issues
 def get_ResponseGenerator():

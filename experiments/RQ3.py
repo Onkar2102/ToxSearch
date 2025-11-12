@@ -2,11 +2,8 @@
 """
 RQ3: Cross-Model Transferability Analysis
 
-This script analyzes whether toxic prompts evolved on one model (LLaMA 3.1 8B) 
-transfer to other models with different architectures or alignment tuning.
-
-Research Question: To what extent do toxic prompts evolved on one model transfer 
-to other models, especially those with different architectures or alignment tuning?
+Analyzes whether toxic prompts evolved on one model transfer to other models 
+with different architectures or alignment tuning.
 """
 
 import os

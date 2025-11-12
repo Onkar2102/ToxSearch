@@ -2,7 +2,7 @@
 """
 RQ2: Operator Performance Analysis
 
-This script analyzes operator performance metrics across multiple runs:
+Analyzes operator performance metrics across multiple runs:
 - NE: Non-elite percentage
 - EHR: Elite Hit Rate
 - IR: Invalid Rate  
@@ -10,11 +10,7 @@ This script analyzes operator performance metrics across multiple runs:
 - Δμ: Mean delta score (toxicity - parent_score)
 - Δσ: Standard deviation of delta score
 
-The script:
-1. Processes all comb runs and generates metrics tables
-2. Performs non-parametric statistical tests (Kruskal-Wallis, Mann-Whitney U)
-3. Calculates effect sizes (Cohen's r) and 95% confidence intervals
-4. Exports results to CSV and PDF files
+Processes all comb runs, performs statistical tests, and exports results.
 """
 
 # Imports and Helper Functions
@@ -58,9 +54,6 @@ def flatten_operator_statistics(df, col="operator_statistics"):
 # Define crossover operators (others are mutations)
 CROSSOVER_OPERATORS = {'SemanticSimilarityCrossover', 'SemanticFusionCrossover'}
 
-
-# Process all comb runs and generate final table
-# This cell processes all run*_comb directories and creates the final metrics table
 
 # Setup paths - use script's directory as reference
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -436,7 +429,7 @@ print(f"Simplified table exported to: {csv_filename}")
 # Prepare data for statistical tests (exclude mean rows, only use individual runs)
 # Ensure final_table_df exists (created in previous cell)
 if 'final_table_df' not in globals() or final_table_df.empty:
-    raise ValueError("final_table_df not found. Please run the main processing cell first.")
+    raise ValueError("final_table_df not found. Please run the main processing section first.")
 
 test_data_df = final_table_df[final_table_df['is_mean'] == False].copy()
 

@@ -1,17 +1,6 @@
 # ============================================================================
 # RQ1 Analysis Script
-# Converted from RQ1.ipynb
 # ============================================================================
-
-# This script processes evolutionary algorithm data from multiple runs
-# Processes all 3 operator modes (ie, ops, comb) and creates overlapped plots
-
-
-# ===========================================================================
-# Code Cell 1
-# ===========================================================================
-
-# All import statements
 
 import os
 import json
@@ -25,10 +14,6 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
 
-
-# ===========================================================================
-# Code Cell 2
-# ===========================================================================
 
 # ============================================================================
 # DATA LOADING: Load and aggregate JSON files from all runs (all 3 operator modes)
@@ -209,10 +194,6 @@ else:
 
 
 
-# ===========================================================================
-# Code Cell 3
-# ===========================================================================
-
 # ============================================================================
 # DATA FLATTENING: Flatten nested dictionary structures
 # Fully flatten all keys (columns with nested dicts or lists of dicts)
@@ -240,15 +221,8 @@ for label in ['elites', 'non_elites', 'under_performing']:
             pass
 
 
-# ===========================================================================
-# Code Cell 4
-# ===========================================================================
-
 # ============================================================================
 # UNIFIED DATAFRAME: Combine all DataFrames into one
-# ============================================================================
-# This cell concatenates elites, non_elites, and under_performing DataFrames.
-# Each row is labeled with its source group for easy filtering.
 # ============================================================================
 
 # Concatenate all columns (including 'id') for each group into a unified DataFrame
@@ -274,10 +248,6 @@ else:
 unified_df.head(3).T
 
 
-# ===========================================================================
-# Code Cell 5
-# ===========================================================================
-
 # ============================================================================
 # REMOVAL THRESHOLD: Aggregate by generation across all runs
 # Aggregate removal threshold by generation across all runs
@@ -285,15 +255,8 @@ unified_df.head(3).T
 removal_threshold_run_df = EvolutionTracker_df[['generation_number', 'removal_threshold', '_run']].copy()
 
 
-# ===========================================================================
-# Code Cell 6
-# ===========================================================================
-
 # ============================================================================
 # MINIMUM TOXICITY CALCULATION: Per-generation minimum toxicity score
-# Creates two DataFrames:
-# 1. per_run_df: Minimum toxicity, cumulative max scores, and avg fitness for each generation per run
-# 2. aggregated_df: Minimum toxicity, cumulative max scores, and avg fitness for each generation across all runs
 # ============================================================================
 
 # Ensure correct dtypes
@@ -464,10 +427,6 @@ else:
 
 
 
-# ===========================================================================
-# Code Cell 7
-# ===========================================================================
-
 # ============================================================================
 # VISUALIZATION: Individual Run Plotting (3 plots per operator mode: min, max, average)
 # ============================================================================
@@ -505,7 +464,7 @@ colors = [
 
 # Check if per_run_df exists
 if 'per_run_df' not in globals() or per_run_df.empty:
-    raise ValueError("per_run_df not found. Please run Cell 11 first.")
+    raise ValueError("per_run_df not found. Please run the data processing section first.")
 
 # Create individual run plots for each operator mode
 for mode in OPERATOR_MODES:
@@ -599,12 +558,9 @@ for mode in OPERATOR_MODES:
 
 
 
-# ===========================================================================
-# Code Cell 8
-# ===========================================================================
-
 # ============================================================================
 # METRICS: AUC (Area Under Curve) Calculation and Table Generation
+# ============================================================================
 
 # Calculate AUC for each run, then average
 all_aucs = []
@@ -867,10 +823,6 @@ if all_table_rows:
     plt.close()
 
 
-# ===========================================================================
-# Code Cell 9
-# ===========================================================================
-
 # ============================================================================
 # VISUALIZATION: Score Distribution Histogram (one plot per operator mode, scaled 0-1)
 # ============================================================================
@@ -908,17 +860,13 @@ for mode in OPERATOR_MODES:
     plt.close()
 
 
-# ===========================================================================
-# Code Cell 10
-# ===========================================================================
-
 # ============================================================================
 # VISUALIZATION: Aggregated Plotting (min, max, average for all 3 modes overlapped)
 # ============================================================================
 
 # Check if per_run_df exists
 if 'per_run_df' not in globals() or per_run_df.empty:
-    raise ValueError("per_run_df not found. Please run Cell 11 first.")
+    raise ValueError("per_run_df not found. Please run the data processing section first.")
 
 # Plot aggregated data for all 3 operator modes (overlapped)
 

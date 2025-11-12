@@ -25,12 +25,11 @@ get_logger, _, _, PerformanceLogger = get_custom_logging()
 
 
 # ============================================================================
-# UTILITY FUNCTIONS (moved from main.py)
+# UTILITY FUNCTIONS
 # ============================================================================
 
 def get_project_root():
     """Get the absolute path to the project root directory"""
-    # Get the directory where this script is located
     script_dir = Path(__file__).parent
     # Go up two levels to get to the project root (from src/utils/ to project root)
     project_root = script_dir.parent.parent
@@ -92,7 +91,7 @@ def _extract_north_star_score(genome, metric="toxicity"):
 
 
 # ============================================================================
-# SYSTEM INITIALIZATION (moved from main.py)
+# SYSTEM INITIALIZATION
 # ============================================================================
 
 def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
@@ -235,8 +234,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             with open(evolution_tracker_file, 'r', encoding='utf-8') as f:
                 tracker = json.load(f)
             
-            # Note: Global population counts removed - now tracked per generation only
-            
             # Calculate total_generations from the actual generations array
             # This ensures it's always up-to-date with the actual generation count
             if "generations" in tracker and tracker["generations"]:
@@ -247,7 +244,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
                 # Fallback: use tracker value or 0 if no generations exist
                 info["total_generations"] = tracker.get("total_generations", 0)
             
-            # Note: Global population counts removed - now tracked per generation only
             return info
                 
         except Exception as e:
@@ -289,7 +285,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             pass
     
     # Calculate total genomes and generations
-    # Note: total_genomes is now per-generation only, not global
     
     # Ensure all generations from 0 to max are represented, even if they have 0 variants
     if info["generation_counts"]:
@@ -342,7 +337,6 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
                 }
         
         # Update population counts (flattened from population_metadata)
-        # Note: total_genomes, elites_count, non_elites_count are now per-generation only
         
         # Update total generations
         tracker["total_generations"] = info["total_generations"]
@@ -1811,7 +1805,6 @@ def finalize_initial_population(
                 }
             
             # Update population counts (flattened from population_metadata)
-            # Note: total_genomes, elites_count, non_elites_count are now per-generation only
             
             # Update total generations
             evolution_tracker["total_generations"] = 1  # Generation 0 completed
@@ -2021,7 +2014,6 @@ def calculate_and_update_population_thresholds(
                         current_gen["max_score_variants"] = max_toxicity_score
                     
                     # Set genome_id only if not already set (fallback for new generations)
-                    # NOTE: This sets the GLOBAL best genome as a fallback, but update_evolution_tracker_with_generation_global
                     # should be setting it with the generation-specific best genome first
                     if current_gen.get("genome_id") is None:
                         current_gen["genome_id"] = best_genome_id

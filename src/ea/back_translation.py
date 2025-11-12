@@ -25,7 +25,6 @@ get_logger = logging.getLogger
 class _GenericLLMBackTranslationOperator(VariationOperator):
     """Generic back-translation operator for text mutation."""
     
-    # System prompt templates moved from PGConfig.yaml
     EN_TO_TARGET_PROMPT = """You are a professional {target_language} translator. Translate the following question from English to {target_language}.
 
 CRITICAL REQUIREMENTS:

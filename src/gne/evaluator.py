@@ -452,8 +452,6 @@ class HybridModerationEvaluator:
                     self._save_single_genome(genome, pop_path)
             
             # Final batch save to ensure all changes are persisted
-            # Note: The parent method evaluate_population_sync() will also do a final save,
-            # but we do it here as well to ensure incremental updates are preserved
             
             # Log final summary
             self.logger.info("Population evaluation completed:")

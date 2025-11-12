@@ -1,8 +1,5 @@
 """
-ResponseGenerator.py
-
-A specialized text generator for response generation using prompt templates.
-This class is used to generate responses to prompts using the prompt_template configuration.
+ResponseGenerator: Text generator for response generation using prompt templates.
 """
 
 import os
@@ -21,9 +18,6 @@ get_logger, _, _, _ = get_custom_logging()
 class ResponseGenerator:
     """
     Response generator using v1/chat/completions interface for efficient inference.
-    
-    This class is specifically designed for generating responses to prompts
-    using the prompt_template configuration from RGConfig.yaml with chat completions.
     """
     
     def __init__(self, model_key="response_generator", config_path="config/RGConfig.yaml", log_file: Optional[str] = None):

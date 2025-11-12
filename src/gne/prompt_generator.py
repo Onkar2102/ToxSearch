@@ -1,8 +1,5 @@
 """
-PromptGenerator.py
-
-A specialized text generator for prompt generation using task-specific templates.
-This class is used by all operators and evolutionary algorithms to generate/modify prompts.
+PromptGenerator: Text generator for prompt generation using task-specific templates.
 """
 
 import os
@@ -21,9 +18,6 @@ get_logger, _, _, _ = get_custom_logging()
 class PromptGenerator:
     """
     Prompt generator using v1/chat/completions interface for prompt generation and modification.
-    
-    This class is specifically designed for operators and evolutionary algorithms
-    to generate/modify prompts using task-specific templates with chat completions.
     """
     
     def __init__(self, model_key="prompt_generator", config_path="config/PGConfig.yaml", log_file: Optional[str] = None):

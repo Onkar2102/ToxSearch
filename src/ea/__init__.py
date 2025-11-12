@@ -1,10 +1,11 @@
-## @file src/ea/__init__.py
-# @brief Evolutionary Algorithm (EA) package for LLM toxicity optimization.
-#
-# This package provides:
-#  - EvolutionEngine: the core EA loop (selection + variation)
-#  - run_evolution: driver for one EA generation
-#  - TextVariationOperators: concrete mutation operators
+"""
+Evolutionary Algorithm (EA) package for LLM toxicity optimization.
+
+This package provides:
+- EvolutionEngine: the core EA loop (selection + variation)
+- run_evolution: driver for one EA generation
+- TextVariationOperators: concrete mutation operators
+"""
 
 # Lazy imports to avoid torch dependency issues
 def get_EvolutionEngine():
