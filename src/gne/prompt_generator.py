@@ -1,8 +1,5 @@
 """
-PromptGenerator.py
-
-A specialized text generator for prompt generation using task-specific templates.
-This class is used by all operators and evolutionary algorithms to generate/modify prompts.
+PromptGenerator: Text generator for prompt generation using task-specific templates.
 """
 
 import os
@@ -21,9 +18,6 @@ get_logger, _, _, _ = get_custom_logging()
 class PromptGenerator:
     """
     Prompt generator using v1/chat/completions interface for prompt generation and modification.
-    
-    This class is specifically designed for operators and evolutionary algorithms
-    to generate/modify prompts using task-specific templates with chat completions.
     """
     
     def __init__(self, model_key="prompt_generator", config_path="config/PGConfig.yaml", log_file: Optional[str] = None):
@@ -72,23 +66,6 @@ class PromptGenerator:
         self.total_tokens_generated = 0
         self.total_generation_time = 0.0
 
-
-
-    def generate_raw_response(self, prompt: str, generation_kwargs: Dict[str, Any] = None) -> str:
-        """Generate raw model response without any template manipulation using chat completions."""
-        try:
-            # Create simple user message
-            messages = [{"role": "user", "content": prompt}]
-            
-            # Generate with chat completions
-            generated_text = self.model_interface.chat_completion(messages, **(generation_kwargs or {}))
-            
-            self.logger.debug(f"Raw response for '{prompt[:50]}...': '{generated_text[:100]}...'")
-            return generated_text
-            
-        except Exception as e:
-            self.logger.error(f"Raw response generation failed: {e}")
-            return f"Error: {e}"
 
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
         """Direct access to chat completions for operators."""
@@ -193,62 +170,3 @@ class PromptGenerator:
         #         return False
                 
         return True
-
-    def _extract_content_from_triple_brackets(self, response: str) -> str:
-        """Extract content from triple brackets (<<< ... >>>) with robust error handling and validation."""
-        try:
-            import re
-            
-            # Clean the response first
-            response = response.strip()
-            
-            # Try exact triple bracket matching
-            pattern = r'<<<(.*?)>>>'
-            match = re.search(pattern, response, re.DOTALL)
-            if match:
-                content = match.group(1).strip()
-                if content and self._validate_extracted_content(content, "triple_bracket"):
-                    self.logger.debug(f"Successfully extracted triple bracket content: {content[:50]}...")
-                    return content
-            
-            # Try with whitespace tolerance around brackets
-            pattern = r'<<<\s*(.*?)\s*>>>'
-            match = re.search(pattern, response, re.DOTALL)
-            if match:
-                content = match.group(1).strip()
-                if content and self._validate_extracted_content(content, "triple_bracket"):
-                    self.logger.debug(f"Successfully extracted triple bracket content (whitespace-tolerant): {content[:50]}...")
-                    return content
-            
-            # Try case-insensitive matching (in case of typos)
-            pattern = r'<<<(.*?)>>>'
-            match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
-            if match:
-                content = match.group(1).strip()
-                if content and self._validate_extracted_content(content, "triple_bracket"):
-                    self.logger.debug(f"Successfully extracted triple bracket content (case-insensitive): {content[:50]}...")
-                    return content
-            
-            # Log the failed extraction for debugging
-            self.logger.warning(f"Failed to extract valid triple bracket content from response: {response[:200]}...")
-            return ""
-            
-        except Exception as e:
-            self.logger.error(f"Error extracting content from triple brackets: {e}")
-            return ""
-
-    def get_performance_stats(self) -> Dict[str, Any]:
-        """Get performance statistics for the prompt generator."""
-        return {
-            "generation_count": self.generation_count,
-            "total_tokens_generated": self.total_tokens_generated,
-            "total_generation_time": self.total_generation_time,
-            "average_tokens_per_generation": (
-                self.total_tokens_generated / self.generation_count 
-                if self.generation_count > 0 else 0
-            ),
-            "average_time_per_generation": (
-                self.total_generation_time / self.generation_count 
-                if self.generation_count > 0 else 0
-            )
-        }

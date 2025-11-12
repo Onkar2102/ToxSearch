@@ -25,12 +25,11 @@ get_logger, _, _, PerformanceLogger = get_custom_logging()
 
 
 # ============================================================================
-# UTILITY FUNCTIONS (moved from main.py)
+# UTILITY FUNCTIONS
 # ============================================================================
 
 def get_project_root():
     """Get the absolute path to the project root directory"""
-    # Get the directory where this script is located
     script_dir = Path(__file__).parent
     # Go up two levels to get to the project root (from src/utils/ to project root)
     project_root = script_dir.parent.parent
@@ -92,15 +91,22 @@ def _extract_north_star_score(genome, metric="toxicity"):
 
 
 # ============================================================================
-# SYSTEM INITIALIZATION (moved from main.py)
+# SYSTEM INITIALIZATION
 # ============================================================================
 
-def initialize_system(logger, log_file):
-    """Initialize the system components and create gen0 if needed"""
+def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
+    """Initialize the system components and create gen0 if needed
+    
+    Args:
+        logger: Logger instance
+        log_file: Log file path
+        seed_file: Path to CSV file with seed prompts (must have 'questions' column).
+                   Default: data/prompt.csv
+    """
     from utils.device_utils import device_manager
     device = device_manager.get_optimal_device()
     
-    logger.debug(f"Initializing pipeline for device: {device}")
+    logger.debug("Initializing pipeline for device: %s", device)
     
     # Import required modules
     population_io_functions = get_population_io()
@@ -144,9 +150,16 @@ def initialize_system(logger, log_file):
 
     if should_initialize:
         try:
-            logger.info("Initializing population from prompt.csv...")
+            # Resolve seed_file path (can be relative or absolute)
+            seed_path = Path(seed_file)
+            if not seed_path.is_absolute():
+                # If relative, resolve from project root
+                seed_path = get_project_root() / seed_path
+            input_path = str(seed_path)
+            logger.info("Initializing population from seed file: %s", input_path)
+            
             load_and_initialize_population(
-                input_path=str(get_data_path()),
+                input_path=input_path,
                 output_path=str(get_outputs_path()),
                 log_file=log_file
             )
@@ -221,8 +234,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             with open(evolution_tracker_file, 'r', encoding='utf-8') as f:
                 tracker = json.load(f)
             
-            # Note: Global population counts removed - now tracked per generation only
-            
             # Calculate total_generations from the actual generations array
             # This ensures it's always up-to-date with the actual generation count
             if "generations" in tracker and tracker["generations"]:
@@ -233,7 +244,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
                 # Fallback: use tracker value or 0 if no generations exist
                 info["total_generations"] = tracker.get("total_generations", 0)
             
-            # Note: Global population counts removed - now tracked per generation only
             return info
                 
         except Exception as e:
@@ -275,7 +285,6 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             pass
     
     # Calculate total genomes and generations
-    # Note: total_genomes is now per-generation only, not global
     
     # Ensure all generations from 0 to max are represented, even if they have 0 variants
     if info["generation_counts"]:
@@ -328,7 +337,6 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
                 }
         
         # Update population counts (flattened from population_metadata)
-        # Note: total_genomes, elites_count, non_elites_count are now per-generation only
         
         # Update total generations
         tracker["total_generations"] = info["total_generations"]
@@ -337,11 +345,11 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
         with open(evolution_tracker_file, 'w', encoding='utf-8') as f:
             json.dump(tracker, f, indent=2)
         
-        _logger.debug(f"Updated EvolutionTracker population metadata: single file mode, "
-                     f"total_generations: {info['total_generations']}")
+        _logger.debug("Updated EvolutionTracker population metadata: single file mode, "
+                     "total_generations: %d", info['total_generations'])
         
     except Exception as e:
-        _logger.warning(f"Failed to update EvolutionTracker population metadata: {e}")
+        _logger.warning("Failed to update EvolutionTracker population metadata: %s", e)
 
 
 def load_population_generation(generation: int, base_dir: str = "outputs", 
@@ -358,11 +366,11 @@ def load_population_generation(generation: int, base_dir: str = "outputs",
             # Filter by generation
             generation_genomes = [g for g in all_genomes if g and g.get("generation") == generation]
             
-            _logger.info(f"Loaded generation {generation}: {len(generation_genomes)} genomes from non_elites.json")
+            _logger.info("Loaded generation %d: %d genomes from non_elites.json", generation, len(generation_genomes))
             return generation_genomes
             
         except Exception as e:
-            _logger.error(f"Failed to load generation {generation}: {e}", exc_info=True)
+            _logger.error("Failed to load generation %d: %s", generation, e, exc_info=True)
             return []
 
 
@@ -380,11 +388,11 @@ def load_population_range(start_gen: int, end_gen: int, base_dir: str = "outputs
             # Filter by generation range
             range_genomes = [g for g in all_genomes if g and start_gen <= g.get("generation", 0) <= end_gen]
             
-            _logger.info(f"Loaded generations {start_gen}-{end_gen}: {len(range_genomes)} genomes from non_elites.json")
+            _logger.info("Loaded generations %d-%d: %d genomes from non_elites.json", start_gen, end_gen, len(range_genomes))
             return range_genomes
             
         except Exception as e:
-            _logger.error(f"Failed to load generation range: {e}", exc_info=True)
+            _logger.error("Failed to load generation range: %s", e, exc_info=True)
             return []
 
 
@@ -402,13 +410,13 @@ def load_population_lazy(base_dir: str = "outputs", max_gens: Optional[int] = No
         if max_gens is not None:
             all_genomes = [g for g in all_genomes if g and g.get("generation", 0) < max_gens]
         
-        _logger.info(f"Lazy loading {len(all_genomes)} genomes from non_elites.json")
+        _logger.info("Lazy loading %d genomes from non_elites.json", len(all_genomes))
         
         for genome in all_genomes:
             yield genome
             
     except Exception as e:
-        _logger.error(f"Failed to load population lazily: {e}", exc_info=True)
+        _logger.error("Failed to load population lazily: %s", e, exc_info=True)
         return
 
 
@@ -432,10 +440,10 @@ def save_population_generation(genomes: List[Dict[str, Any]], generation: int,
             # Save updated population
             save_population(filtered_population, base_dir, logger=_logger, log_file=log_file)
             
-            _logger.info(f"Updated non_elites.json with generation {generation}: {len(genomes)} genomes")
+            _logger.info("Updated non_elites.json with generation %d: %d genomes", generation, len(genomes))
             
         except Exception as e:
-            _logger.error(f"Failed to save generation {generation}: {e}", exc_info=True)
+            _logger.error("Failed to save generation %d: %s", generation, e, exc_info=True)
             raise
 
 
@@ -463,11 +471,11 @@ def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = 
             if max_generations is not None:
                 pending_genomes = [g for g in pending_genomes if g.get("generation", 0) < max_generations]
             
-            _logger.info(f"Found {len(pending_genomes)} genomes with status '{status}' from non_elites.json")
+            _logger.info("Found %d genomes with status '%s' from non_elites.json", len(pending_genomes), status)
             return pending_genomes
             
         except Exception as e:
-            _logger.error(f"Failed to get pending genomes: {e}", exc_info=True)
+            _logger.error("Failed to get pending genomes: %s", e, exc_info=True)
             return []
 
 
@@ -1797,7 +1805,6 @@ def finalize_initial_population(
                 }
             
             # Update population counts (flattened from population_metadata)
-            # Note: total_genomes, elites_count, non_elites_count are now per-generation only
             
             # Update total generations
             evolution_tracker["total_generations"] = 1  # Generation 0 completed
@@ -2007,7 +2014,6 @@ def calculate_and_update_population_thresholds(
                         current_gen["max_score_variants"] = max_toxicity_score
                     
                     # Set genome_id only if not already set (fallback for new generations)
-                    # NOTE: This sets the GLOBAL best genome as a fallback, but update_evolution_tracker_with_generation_global
                     # should be setting it with the generation-specific best genome first
                     if current_gen.get("genome_id") is None:
                         current_gen["genome_id"] = best_genome_id

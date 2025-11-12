@@ -48,7 +48,7 @@ def get_population_io():
     )
 
 def get_system_utils():
-    """Lazy import of system utility functions moved from main.py"""
+    """Lazy import of system utility functions"""
     from .population_io import (
         get_project_root,
         get_config_path,

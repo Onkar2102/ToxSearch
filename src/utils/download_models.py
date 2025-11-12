@@ -75,22 +75,35 @@ class ModelManager:
         
         self.GGUF_MODEL_REGISTRY = {
             # Meta Llama (GGUF)
-            "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
-            "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
-            "llama3.1-8b-instruct-gguf": "MaziyarPanahi/Meta-Llama-3.1-8B-Instruct-GGUF",
+            # "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+            # "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+            # "llama3.1-8b-instruct-gguf": "MaziyarPanahi/Meta-Llama-3.1-8B-Instruct-GGUF",
 
             # Mistral (GGUF)
-            "mistral-7b-instruct-gguf": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+            # "mistral-7b-instruct-gguf": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
 
             # Qwen (GGUF)
             "qwen2.5-7b-instruct-gguf": "bartowski/Qwen2.5-7B-Instruct-GGUF",
-            "qwen2.5-7b-instruct-1m-gguf": "bartowski/Qwen2.5-7B-Instruct-1M-GGUF",
+            # "qwen2.5-7b-instruct-1m-gguf": "bartowski/Qwen2.5-7B-Instruct-1M-GGUF",
 
             # Gemma (GGUF)
-            "gemma-2-9b-it-gguf": "bartowski/gemma-2-9b-it-GGUF",
+            # "gemma-2-9b-it-gguf": "bartowski/gemma-2-9b-it-GGUF",
 
             # Microsoft Phi (GGUF)
             "phi-3.5-mini-instruct-gguf": "bartowski/Phi-3.5-mini-instruct-GGUF",
+
+            # Mixtral (GGUF) - MoE architecture
+            "mixtral-8x7b-instruct-gguf": "bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF",
+
+            # LLaMA 3.2 (GGUF) - For size comparison
+            "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+            "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
+
+            # Stable LM (GGUF) - Different architecture
+            "stable-lm-2-1.6b-gguf": "bartowski/stable-lm-2-1.6b-GGUF",
+
+            # Falcon (GGUF) - Different architecture
+            "falcon-7b-instruct-gguf": "bartowski/Falcon-7B-Instruct-GGUF",
 
             # DeepSeek (GGUF)
             # "deepseek-coder-v2-instruct-gguf": "bartowski/DeepSeek-Coder-V2-Instruct-GGUF",

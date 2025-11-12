@@ -1,0 +1,1848 @@
+{
+  "status": "not_complete",
+  "total_generations": 51,
+  "generations_since_improvement": 5,
+  "avg_fitness_history": [
+    0.0614,
+    0.0624,
+    0.0625,
+    0.0627,
+    0.0632
+  ],
+  "slope_of_avg_fitness": 0.0004,
+  "selection_mode": "explore",
+  "generations": [
+    {
+      "generation_number": 0,
+      "genome_id": 58,
+      "max_score_variants": 0.1989,
+      "avg_fitness": 0.0349,
+      "parents": null,
+      "top_10": null,
+      "variants_created": null,
+      "mutation_variants": null,
+      "crossover_variants": null,
+      "elites_threshold": 0.1392,
+      "operator_statistics": {},
+      "elites_count": 2,
+      "removal_threshold": 0.006,
+      "avg_fitness_elites": 0.1855,
+      "avg_fitness_non_elites": 0.0318,
+      "avg_fitness_generation": 0.0349,
+      "min_score_variants": 0.0001,
+      "avg_fitness_variants": 0.0001
+    },
+    {
+      "generation_number": 1,
+      "genome_id": 101,
+      "max_score_variants": 0.2097,
+      "min_score_variants": 0.0555,
+      "avg_fitness": 0.0368,
+      "avg_fitness_variants": 0.1326,
+      "avg_fitness_generation": 0.0368,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.032,
+      "parents": [],
+      "top_10": [
+        "58",
+        "68",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55",
+        "85",
+        "75"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {},
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 2,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0368,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0368,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.032,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55",
+        "85"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 3,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0368,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0368,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.032,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55",
+        "85"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 4,
+      "genome_id": 103,
+      "max_score_variants": 0.1157,
+      "min_score_variants": 0.1157,
+      "avg_fitness": 0.0376,
+      "avg_fitness_variants": 0.1157,
+      "avg_fitness_generation": 0.0376,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.0329,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55",
+        "85"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 5,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0376,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0376,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.0329,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "103",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 6,
+      "genome_id": 104,
+      "max_score_variants": 0.0357,
+      "min_score_variants": 0.0357,
+      "avg_fitness": 0.0375,
+      "avg_fitness_variants": 0.0357,
+      "avg_fitness_generation": 0.0375,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.0329,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "103",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 7,
+      "genome_id": 106,
+      "max_score_variants": 0.1118,
+      "min_score_variants": 0.0422,
+      "avg_fitness": 0.0383,
+      "avg_fitness_variants": 0.077,
+      "avg_fitness_generation": 0.0383,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "103",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70",
+        "55"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 8,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0383,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0383,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 9,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0383,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0383,
+      "avg_fitness_elites": 0.1935,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 3,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 10,
+      "genome_id": 107,
+      "max_score_variants": 0.1555,
+      "min_score_variants": 0.1555,
+      "avg_fitness": 0.0394,
+      "avg_fitness_variants": 0.1555,
+      "avg_fitness_generation": 0.0394,
+      "avg_fitness_elites": 0.184,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32",
+        "70"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 4,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 11,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0394,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0394,
+      "avg_fitness_elites": 0.184,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 4,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 12,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0394,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0394,
+      "avg_fitness_elites": 0.184,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 4,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 13,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0394,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0394,
+      "avg_fitness_elites": 0.184,
+      "avg_fitness_non_elites": 0.0338,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 4,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 14,
+      "genome_id": 108,
+      "max_score_variants": 0.0966,
+      "min_score_variants": 0.0966,
+      "avg_fitness": 0.0399,
+      "avg_fitness_variants": 0.0966,
+      "avg_fitness_generation": 0.0399,
+      "avg_fitness_elites": 0.184,
+      "avg_fitness_non_elites": 0.0344,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "32"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 4,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 15,
+      "genome_id": 110,
+      "max_score_variants": 0.1588,
+      "min_score_variants": 0.0777,
+      "avg_fitness": 0.0413,
+      "avg_fitness_variants": 0.1182,
+      "avg_fitness_generation": 0.0413,
+      "avg_fitness_elites": 0.179,
+      "avg_fitness_non_elites": 0.0348,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36",
+        "108"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 5,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 16,
+      "genome_id": 112,
+      "max_score_variants": 0.0228,
+      "min_score_variants": 0.0228,
+      "avg_fitness": 0.0412,
+      "avg_fitness_variants": 0.0228,
+      "avg_fitness_generation": 0.0412,
+      "avg_fitness_elites": 0.179,
+      "avg_fitness_non_elites": 0.0347,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 5,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 17,
+      "genome_id": 113,
+      "max_score_variants": 0.1538,
+      "min_score_variants": 0.1538,
+      "avg_fitness": 0.0422,
+      "avg_fitness_variants": 0.1538,
+      "avg_fitness_generation": 0.0422,
+      "avg_fitness_elites": 0.1748,
+      "avg_fitness_non_elites": 0.0347,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "103",
+        "106",
+        "94",
+        "69",
+        "36"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 18,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0422,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0422,
+      "avg_fitness_elites": 0.1748,
+      "avg_fitness_non_elites": 0.0347,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "106",
+        "94",
+        "69"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 19,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0422,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0422,
+      "avg_fitness_elites": 0.1748,
+      "avg_fitness_non_elites": 0.0347,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "106",
+        "94",
+        "69"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 20,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0422,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0422,
+      "avg_fitness_elites": 0.1748,
+      "avg_fitness_non_elites": 0.0347,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "106",
+        "94",
+        "69"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 21,
+      "genome_id": 114,
+      "max_score_variants": 0.1125,
+      "min_score_variants": 0.1125,
+      "avg_fitness": 0.0428,
+      "avg_fitness_variants": 0.1125,
+      "avg_fitness_generation": 0.0428,
+      "avg_fitness_elites": 0.1748,
+      "avg_fitness_non_elites": 0.0354,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "106",
+        "94",
+        "69"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 22,
+      "genome_id": 115,
+      "max_score_variants": 0.0961,
+      "min_score_variants": 0.0961,
+      "avg_fitness": 0.0433,
+      "avg_fitness_variants": 0.0961,
+      "avg_fitness_generation": 0.0433,
+      "avg_fitness_elites": 0.1748,
+      "avg_fitness_non_elites": 0.036,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "114",
+        "106",
+        "94"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 23,
+      "genome_id": 117,
+      "max_score_variants": 0.2029,
+      "min_score_variants": 0.1979,
+      "avg_fitness": 0.046,
+      "avg_fitness_variants": 0.2004,
+      "avg_fitness_generation": 0.046,
+      "avg_fitness_elites": 0.1812,
+      "avg_fitness_non_elites": 0.036,
+      "parents": [],
+      "top_10": [
+        "101",
+        "58",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "114",
+        "106",
+        "94"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 24,
+      "genome_id": 118,
+      "max_score_variants": 0.1112,
+      "min_score_variants": 0.1112,
+      "avg_fitness": 0.0465,
+      "avg_fitness_variants": 0.1112,
+      "avg_fitness_generation": 0.0465,
+      "avg_fitness_elites": 0.1812,
+      "avg_fitness_non_elites": 0.0366,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "114"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 25,
+      "genome_id": 119,
+      "max_score_variants": 0.1426,
+      "min_score_variants": 0.1426,
+      "avg_fitness": 0.0473,
+      "avg_fitness_variants": 0.1426,
+      "avg_fitness_generation": 0.0473,
+      "avg_fitness_elites": 0.1812,
+      "avg_fitness_non_elites": 0.0376,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "68",
+        "110",
+        "107",
+        "113",
+        "103",
+        "114"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 26,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0473,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0473,
+      "avg_fitness_elites": 0.1812,
+      "avg_fitness_non_elites": 0.0376,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119",
+        "103"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 27,
+      "genome_id": 120,
+      "max_score_variants": 0.0761,
+      "min_score_variants": 0.0761,
+      "avg_fitness": 0.0476,
+      "avg_fitness_variants": 0.0761,
+      "avg_fitness_generation": 0.0476,
+      "avg_fitness_elites": 0.1812,
+      "avg_fitness_non_elites": 0.038,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119",
+        "103"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 28,
+      "genome_id": 122,
+      "max_score_variants": 0.1115,
+      "min_score_variants": 0.0293,
+      "avg_fitness": 0.048,
+      "avg_fitness_variants": 0.0704,
+      "avg_fitness_generation": 0.048,
+      "avg_fitness_elites": 0.1812,
+      "avg_fitness_non_elites": 0.0385,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119",
+        "103"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 29,
+      "genome_id": 125,
+      "max_score_variants": 0.1789,
+      "min_score_variants": 0.0974,
+      "avg_fitness": 0.05,
+      "avg_fitness_variants": 0.1312,
+      "avg_fitness_generation": 0.05,
+      "avg_fitness_elites": 0.1809,
+      "avg_fitness_non_elites": 0.0397,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119",
+        "103"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 9,
+      "operator_statistics": {},
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 30,
+      "genome_id": 101,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.05,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.05,
+      "avg_fitness_elites": 0.1809,
+      "avg_fitness_non_elites": 0.0397,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 9,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 31,
+      "genome_id": 126,
+      "max_score_variants": 0.1287,
+      "min_score_variants": 0.1287,
+      "avg_fitness": 0.0506,
+      "avg_fitness_variants": 0.1287,
+      "avg_fitness_generation": 0.0506,
+      "avg_fitness_elites": 0.1809,
+      "avg_fitness_non_elites": 0.0405,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 9,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 32,
+      "genome_id": 128,
+      "max_score_variants": 0.1593,
+      "min_score_variants": 0.0558,
+      "avg_fitness": 0.0515,
+      "avg_fitness_variants": 0.1076,
+      "avg_fitness_generation": 0.0515,
+      "avg_fitness_elites": 0.1788,
+      "avg_fitness_non_elites": 0.0406,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "110",
+        "107",
+        "113",
+        "119"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 10,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 33,
+      "genome_id": 129,
+      "max_score_variants": 0.0808,
+      "min_score_variants": 0.0808,
+      "avg_fitness": 0.0517,
+      "avg_fitness_variants": 0.0808,
+      "avg_fitness_generation": 0.0517,
+      "avg_fitness_elites": 0.1788,
+      "avg_fitness_non_elites": 0.041,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "128",
+        "110",
+        "107",
+        "113"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 10,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 34,
+      "genome_id": 130,
+      "max_score_variants": 0.1703,
+      "min_score_variants": 0.1703,
+      "avg_fitness": 0.0526,
+      "avg_fitness_variants": 0.1703,
+      "avg_fitness_generation": 0.0526,
+      "avg_fitness_elites": 0.178,
+      "avg_fitness_non_elites": 0.041,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "128",
+        "110",
+        "107",
+        "113"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 11,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 35,
+      "genome_id": 131,
+      "max_score_variants": 0.1157,
+      "min_score_variants": 0.1157,
+      "avg_fitness": 0.0531,
+      "avg_fitness_variants": 0.1157,
+      "avg_fitness_generation": 0.0531,
+      "avg_fitness_elites": 0.178,
+      "avg_fitness_non_elites": 0.0416,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130",
+        "128",
+        "110",
+        "107"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1468,
+      "removal_threshold": 0.0063,
+      "elites_count": 11,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 36,
+      "genome_id": 132,
+      "max_score_variants": 0.2546,
+      "min_score_variants": 0.0568,
+      "avg_fitness": 0.0548,
+      "avg_fitness_variants": 0.1271,
+      "avg_fitness_generation": 0.0555,
+      "avg_fitness_elites": 0.2071,
+      "avg_fitness_non_elites": 0.0483,
+      "parents": [],
+      "top_10": [
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130",
+        "128",
+        "110",
+        "107"
+      ],
+      "variants_created": 3,
+      "mutation_variants": 3,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 6,
+      "operator_statistics": {},
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 37,
+      "genome_id": 135,
+      "max_score_variants": 0.0326,
+      "min_score_variants": 0.0326,
+      "avg_fitness": 0.0554,
+      "avg_fitness_variants": 0.0326,
+      "avg_fitness_generation": 0.0554,
+      "avg_fitness_elites": 0.2071,
+      "avg_fitness_non_elites": 0.0481,
+      "parents": [],
+      "top_10": [
+        "132",
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130",
+        "128",
+        "110"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 6,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 38,
+      "genome_id": 137,
+      "max_score_variants": 0.2508,
+      "min_score_variants": 0.2001,
+      "avg_fitness": 0.0579,
+      "avg_fitness_variants": 0.2255,
+      "avg_fitness_generation": 0.0579,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.0481,
+      "parents": [],
+      "top_10": [
+        "132",
+        "101",
+        "117",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130",
+        "128",
+        "110"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {},
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 39,
+      "genome_id": 132,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0579,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0579,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.0481,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 40,
+      "genome_id": 132,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0579,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0579,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.0481,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 41,
+      "genome_id": 132,
+      "max_score_variants": 0.0001,
+      "min_score_variants": 0.0001,
+      "avg_fitness": 0.0579,
+      "avg_fitness_variants": 0.0001,
+      "avg_fitness_generation": 0.0579,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.0481,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 0,
+      "mutation_variants": 0,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 42,
+      "genome_id": 138,
+      "max_score_variants": 0.1566,
+      "min_score_variants": 0.1566,
+      "avg_fitness": 0.0586,
+      "avg_fitness_variants": 0.1566,
+      "avg_fitness_generation": 0.0586,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.049,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 43,
+      "genome_id": 140,
+      "max_score_variants": 0.1685,
+      "min_score_variants": 0.1685,
+      "avg_fitness": 0.0594,
+      "avg_fitness_variants": 0.1685,
+      "avg_fitness_generation": 0.0594,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.0499,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 44,
+      "genome_id": 143,
+      "max_score_variants": 0.0911,
+      "min_score_variants": 0.0343,
+      "avg_fitness": 0.0595,
+      "avg_fitness_variants": 0.0627,
+      "avg_fitness_generation": 0.0595,
+      "avg_fitness_elites": 0.2117,
+      "avg_fitness_non_elites": 0.0501,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1782,
+      "removal_threshold": 0.0076,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 45,
+      "genome_id": 144,
+      "max_score_variants": 0.261,
+      "min_score_variants": 0.1078,
+      "avg_fitness": 0.0613,
+      "avg_fitness_variants": 0.1844,
+      "avg_fitness_generation": 0.0613,
+      "avg_fitness_elites": 0.222,
+      "avg_fitness_non_elites": 0.0515,
+      "parents": [],
+      "top_10": [
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68",
+        "130"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1827,
+      "removal_threshold": 0.0078,
+      "elites_count": 8,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "explore"
+    },
+    {
+      "generation_number": 46,
+      "genome_id": 146,
+      "max_score_variants": 0.1191,
+      "min_score_variants": 0.0225,
+      "avg_fitness": 0.0614,
+      "avg_fitness_variants": 0.0708,
+      "avg_fitness_generation": 0.0614,
+      "avg_fitness_elites": 0.222,
+      "avg_fitness_non_elites": 0.0518,
+      "parents": [],
+      "top_10": [
+        "144",
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1827,
+      "removal_threshold": 0.0078,
+      "elites_count": 8,
+      "operator_statistics": {},
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 47,
+      "genome_id": 148,
+      "max_score_variants": 0.2271,
+      "min_score_variants": 0.0329,
+      "avg_fitness": 0.0624,
+      "avg_fitness_variants": 0.13,
+      "avg_fitness_generation": 0.0624,
+      "avg_fitness_elites": 0.2226,
+      "avg_fitness_non_elites": 0.0517,
+      "parents": [],
+      "top_10": [
+        "144",
+        "132",
+        "137",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125",
+        "68"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1827,
+      "removal_threshold": 0.0078,
+      "elites_count": 9,
+      "operator_statistics": {},
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 48,
+      "genome_id": 150,
+      "max_score_variants": 0.0948,
+      "min_score_variants": 0.0483,
+      "avg_fitness": 0.0625,
+      "avg_fitness_variants": 0.0716,
+      "avg_fitness_generation": 0.0625,
+      "avg_fitness_elites": 0.2226,
+      "avg_fitness_non_elites": 0.052,
+      "parents": [],
+      "top_10": [
+        "144",
+        "132",
+        "137",
+        "148",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1827,
+      "removal_threshold": 0.0078,
+      "elites_count": 9,
+      "operator_statistics": {},
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 49,
+      "genome_id": 152,
+      "max_score_variants": 0.0966,
+      "min_score_variants": 0.0966,
+      "avg_fitness": 0.0627,
+      "avg_fitness_variants": 0.0966,
+      "avg_fitness_generation": 0.0627,
+      "avg_fitness_elites": 0.2226,
+      "avg_fitness_non_elites": 0.0523,
+      "parents": [],
+      "top_10": [
+        "144",
+        "132",
+        "137",
+        "148",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125"
+      ],
+      "variants_created": 1,
+      "mutation_variants": 1,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1827,
+      "removal_threshold": 0.0078,
+      "elites_count": 9,
+      "operator_statistics": {
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      },
+      "selection_mode": "default"
+    },
+    {
+      "generation_number": 50,
+      "genome_id": 154,
+      "max_score_variants": 0.1139,
+      "min_score_variants": 0.0911,
+      "avg_fitness": 0.0632,
+      "avg_fitness_variants": 0.1025,
+      "avg_fitness_generation": 0.0632,
+      "avg_fitness_elites": 0.2226,
+      "avg_fitness_non_elites": 0.053,
+      "parents": [],
+      "top_10": [
+        "144",
+        "132",
+        "137",
+        "148",
+        "101",
+        "117",
+        "136",
+        "58",
+        "116",
+        "125"
+      ],
+      "variants_created": 2,
+      "mutation_variants": 2,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1827,
+      "removal_threshold": 0.0078,
+      "elites_count": 9,
+      "operator_statistics": {},
+      "selection_mode": "default"
+    }
+  ],
+  "population_max_toxicity": 0.261,
+  "population_best_genome_id": 144
+}

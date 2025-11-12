@@ -361,7 +361,6 @@ class EvolutionEngine:
         # Update EvolutionTracker and clean files after all operators have processed
         parents_path = Path(self.outputs_path) / "parents.json"
         self._update_evolution_tracker_from_files(parents_path, top_10_path)
-        # Note: In IE mode, we only clean top_10.json (parents.json may not exist)
         try:
             if top_10_path.exists():
                 with open(top_10_path, 'w', encoding='utf-8') as f:

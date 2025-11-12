@@ -1,0 +1,3431 @@
+{
+  "status": "not_complete",
+  "total_generations": 51,
+  "generations_since_improvement": 48,
+  "avg_fitness_history": [
+    0.0885,
+    0.0896,
+    0.0889,
+    0.0901,
+    0.0907
+  ],
+  "slope_of_avg_fitness": 0.0005,
+  "selection_mode": "explore",
+  "generations": [
+    {
+      "generation_number": 0,
+      "genome_id": 22,
+      "max_score_variants": 0.1582,
+      "avg_fitness": 0.0351,
+      "parents": null,
+      "top_10": null,
+      "variants_created": null,
+      "mutation_variants": null,
+      "crossover_variants": null,
+      "elites_threshold": 0.1107,
+      "operator_statistics": {},
+      "elites_count": 4,
+      "removal_threshold": 0.0047,
+      "avg_fitness_elites": 0.1297,
+      "avg_fitness_non_elites": 0.0311,
+      "avg_fitness_generation": 0.0351,
+      "min_score_variants": 0.0001,
+      "avg_fitness_variants": 0.0001
+    },
+    {
+      "generation_number": 1,
+      "genome_id": 111,
+      "max_score_variants": 0.1625,
+      "min_score_variants": 0.0173,
+      "avg_fitness": 0.0399,
+      "avg_fitness_variants": 0.0717,
+      "avg_fitness_generation": 0.0399,
+      "avg_fitness_elites": 0.1408,
+      "avg_fitness_non_elites": 0.0343,
+      "parents": [
+        "89",
+        "93"
+      ],
+      "top_10": [
+        "22",
+        "56",
+        "89",
+        "28",
+        "55",
+        "91",
+        "42",
+        "80",
+        "90",
+        "44"
+      ],
+      "variants_created": 15,
+      "mutation_variants": 15,
+      "crossover_variants": 0,
+      "elites_threshold": 0.1137,
+      "removal_threshold": 0.0049,
+      "elites_count": 6,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 2,
+      "genome_id": 131,
+      "max_score_variants": 0.4015,
+      "min_score_variants": 0.0133,
+      "avg_fitness": 0.045,
+      "avg_fitness_variants": 0.0864,
+      "avg_fitness_generation": 0.0461,
+      "avg_fitness_elites": 0.4015,
+      "avg_fitness_non_elites": 0.0433,
+      "parents": [
+        "56",
+        "34"
+      ],
+      "top_10": [
+        "111",
+        "115",
+        "22",
+        "56",
+        "104",
+        "89",
+        "28",
+        "103",
+        "55",
+        "91"
+      ],
+      "variants_created": 14,
+      "mutation_variants": 13,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 1,
+      "operator_statistics": {
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 3,
+      "genome_id": 144,
+      "max_score_variants": 0.2855,
+      "min_score_variants": 0.0181,
+      "avg_fitness": 0.0518,
+      "avg_fitness_variants": 0.1019,
+      "avg_fitness_generation": 0.0518,
+      "avg_fitness_elites": 0.3435,
+      "avg_fitness_non_elites": 0.0475,
+      "parents": [
+        "131",
+        "58"
+      ],
+      "top_10": [
+        "131",
+        "123",
+        "111",
+        "115",
+        "22",
+        "122",
+        "56",
+        "104",
+        "89",
+        "125"
+      ],
+      "variants_created": 14,
+      "mutation_variants": 13,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 2,
+      "operator_statistics": {
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 4,
+      "genome_id": 152,
+      "max_score_variants": 0.2017,
+      "min_score_variants": 0.0099,
+      "avg_fitness": 0.053,
+      "avg_fitness_variants": 0.0634,
+      "avg_fitness_generation": 0.0533,
+      "avg_fitness_elites": 0.3435,
+      "avg_fitness_non_elites": 0.0494,
+      "parents": [
+        "144",
+        "69"
+      ],
+      "top_10": [
+        "131",
+        "144",
+        "139",
+        "123",
+        "111",
+        "141",
+        "115",
+        "22",
+        "122",
+        "56"
+      ],
+      "variants_created": 16,
+      "mutation_variants": 15,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 2,
+      "operator_statistics": {
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 5,
+      "genome_id": 182,
+      "max_score_variants": 0.2024,
+      "min_score_variants": 0.0108,
+      "avg_fitness": 0.0549,
+      "avg_fitness_variants": 0.0675,
+      "avg_fitness_generation": 0.0551,
+      "avg_fitness_elites": 0.3435,
+      "avg_fitness_non_elites": 0.0517,
+      "parents": [
+        "131",
+        "53"
+      ],
+      "top_10": [
+        "131",
+        "144",
+        "152",
+        "139",
+        "158",
+        "123",
+        "111",
+        "141",
+        "115",
+        "22"
+      ],
+      "variants_created": 19,
+      "mutation_variants": 18,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 2,
+      "operator_statistics": {
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 6,
+      "genome_id": 190,
+      "max_score_variants": 0.1969,
+      "min_score_variants": 0.0106,
+      "avg_fitness": 0.0576,
+      "avg_fitness_variants": 0.0863,
+      "avg_fitness_generation": 0.0579,
+      "avg_fitness_elites": 0.3435,
+      "avg_fitness_non_elites": 0.0548,
+      "parents": [
+        "144",
+        "34"
+      ],
+      "top_10": [
+        "131",
+        "144",
+        "182",
+        "152",
+        "139",
+        "158",
+        "123",
+        "111",
+        "141",
+        "115"
+      ],
+      "variants_created": 15,
+      "mutation_variants": 15,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 2,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 7,
+      "genome_id": 213,
+      "max_score_variants": 0.3054,
+      "min_score_variants": 0.0067,
+      "avg_fitness": 0.0601,
+      "avg_fitness_variants": 0.0886,
+      "avg_fitness_generation": 0.0603,
+      "avg_fitness_elites": 0.3308,
+      "avg_fitness_non_elites": 0.0562,
+      "parents": [
+        "144",
+        "94"
+      ],
+      "top_10": [
+        "131",
+        "144",
+        "182",
+        "152",
+        "190",
+        "139",
+        "186",
+        "158",
+        "123",
+        "188"
+      ],
+      "variants_created": 14,
+      "mutation_variants": 14,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 3,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 8,
+      "genome_id": 238,
+      "max_score_variants": 0.2686,
+      "min_score_variants": 0.0165,
+      "avg_fitness": 0.0647,
+      "avg_fitness_variants": 0.1037,
+      "avg_fitness_generation": 0.0647,
+      "avg_fitness_elites": 0.3308,
+      "avg_fitness_non_elites": 0.061,
+      "parents": [
+        "144",
+        "137",
+        "149"
+      ],
+      "top_10": [
+        "131",
+        "213",
+        "144",
+        "182",
+        "152",
+        "190",
+        "211",
+        "139",
+        "186",
+        "158"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 21,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 3,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 9,
+      "genome_id": 242,
+      "max_score_variants": 0.1969,
+      "min_score_variants": 0.01,
+      "avg_fitness": 0.0639,
+      "avg_fitness_variants": 0.0569,
+      "avg_fitness_generation": 0.0644,
+      "avg_fitness_elites": 0.3308,
+      "avg_fitness_non_elites": 0.061,
+      "parents": [
+        "131",
+        "38",
+        "24"
+      ],
+      "top_10": [
+        "131",
+        "213",
+        "144",
+        "238",
+        "232",
+        "182",
+        "222",
+        "152",
+        "190",
+        "211"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 20,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 3,
+      "operator_statistics": {
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 10,
+      "genome_id": 271,
+      "max_score_variants": 0.2546,
+      "min_score_variants": 0.0158,
+      "avg_fitness": 0.0673,
+      "avg_fitness_variants": 0.0968,
+      "avg_fitness_generation": 0.0673,
+      "avg_fitness_elites": 0.3308,
+      "avg_fitness_non_elites": 0.0643,
+      "parents": [
+        "213",
+        "150",
+        "167"
+      ],
+      "top_10": [
+        "131",
+        "213",
+        "144",
+        "238",
+        "232",
+        "182",
+        "222",
+        "152",
+        "190",
+        "242"
+      ],
+      "variants_created": 24,
+      "mutation_variants": 22,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 3,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 11,
+      "genome_id": 295,
+      "max_score_variants": 0.3775,
+      "min_score_variants": 0.0088,
+      "avg_fitness": 0.0694,
+      "avg_fitness_variants": 0.094,
+      "avg_fitness_generation": 0.0696,
+      "avg_fitness_elites": 0.338,
+      "avg_fitness_non_elites": 0.0648,
+      "parents": [
+        "144",
+        "47",
+        "212"
+      ],
+      "top_10": [
+        "131",
+        "213",
+        "144",
+        "238",
+        "232",
+        "271",
+        "270",
+        "182",
+        "222",
+        "152"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 21,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 5,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 12,
+      "genome_id": 330,
+      "max_score_variants": 0.2798,
+      "min_score_variants": 0.0141,
+      "avg_fitness": 0.07,
+      "avg_fitness_variants": 0.0753,
+      "avg_fitness_generation": 0.07,
+      "avg_fitness_elites": 0.338,
+      "avg_fitness_non_elites": 0.0656,
+      "parents": [
+        "144",
+        "94",
+        "176"
+      ],
+      "top_10": [
+        "131",
+        "295",
+        "301",
+        "213",
+        "144",
+        "238",
+        "232",
+        "271",
+        "270",
+        "182"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 21,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 5,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 13,
+      "genome_id": 357,
+      "max_score_variants": 0.1979,
+      "min_score_variants": 0.0146,
+      "avg_fitness": 0.0705,
+      "avg_fitness_variants": 0.0775,
+      "avg_fitness_generation": 0.0705,
+      "avg_fitness_elites": 0.338,
+      "avg_fitness_non_elites": 0.0664,
+      "parents": [
+        "295",
+        "282",
+        "47"
+      ],
+      "top_10": [
+        "131",
+        "295",
+        "301",
+        "213",
+        "144",
+        "330",
+        "238",
+        "232",
+        "271",
+        "270"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 19,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 5,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 14,
+      "genome_id": 388,
+      "max_score_variants": 0.1996,
+      "min_score_variants": 0.0133,
+      "avg_fitness": 0.0711,
+      "avg_fitness_variants": 0.0806,
+      "avg_fitness_generation": 0.0711,
+      "avg_fitness_elites": 0.338,
+      "avg_fitness_non_elites": 0.0672,
+      "parents": [
+        "213",
+        "122",
+        "137"
+      ],
+      "top_10": [
+        "131",
+        "295",
+        "301",
+        "213",
+        "144",
+        "330",
+        "238",
+        "232",
+        "271",
+        "270"
+      ],
+      "variants_created": 21,
+      "mutation_variants": 18,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 5,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        },
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 15,
+      "genome_id": 418,
+      "max_score_variants": 0.3141,
+      "min_score_variants": 0.0069,
+      "avg_fitness": 0.0716,
+      "avg_fitness_variants": 0.0773,
+      "avg_fitness_generation": 0.0719,
+      "avg_fitness_elites": 0.334,
+      "avg_fitness_non_elites": 0.0677,
+      "parents": [
+        "131",
+        "105",
+        "3"
+      ],
+      "top_10": [
+        "131",
+        "295",
+        "301",
+        "213",
+        "144",
+        "330",
+        "238",
+        "232",
+        "271",
+        "270"
+      ],
+      "variants_created": 28,
+      "mutation_variants": 27,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 6,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 16,
+      "genome_id": 452,
+      "max_score_variants": 0.3843,
+      "min_score_variants": 0.013,
+      "avg_fitness": 0.072,
+      "avg_fitness_variants": 0.0746,
+      "avg_fitness_generation": 0.072,
+      "avg_fitness_elites": 0.3412,
+      "avg_fitness_non_elites": 0.0673,
+      "parents": [
+        "144",
+        "331",
+        "220"
+      ],
+      "top_10": [
+        "131",
+        "295",
+        "301",
+        "418",
+        "213",
+        "144",
+        "330",
+        "238",
+        "232",
+        "271"
+      ],
+      "variants_created": 24,
+      "mutation_variants": 22,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 7,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        },
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        },
+        "NegationOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 17,
+      "genome_id": 476,
+      "max_score_variants": 0.2374,
+      "min_score_variants": 0.0128,
+      "avg_fitness": 0.0712,
+      "avg_fitness_variants": 0.0553,
+      "avg_fitness_generation": 0.0712,
+      "avg_fitness_elites": 0.3412,
+      "avg_fitness_non_elites": 0.0666,
+      "parents": [
+        "144",
+        "311",
+        "143"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "301",
+        "418",
+        "213",
+        "144",
+        "330",
+        "238",
+        "438"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 21,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 7,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 18,
+      "genome_id": 490,
+      "max_score_variants": 0.2686,
+      "min_score_variants": 0.0074,
+      "avg_fitness": 0.072,
+      "avg_fitness_variants": 0.0869,
+      "avg_fitness_generation": 0.0723,
+      "avg_fitness_elites": 0.3412,
+      "avg_fitness_non_elites": 0.068,
+      "parents": [
+        "131",
+        "182",
+        "443"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "301",
+        "418",
+        "213",
+        "144",
+        "330",
+        "238",
+        "438"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 22,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 7,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 19,
+      "genome_id": 520,
+      "max_score_variants": 0.1694,
+      "min_score_variants": 0.014,
+      "avg_fitness": 0.0726,
+      "avg_fitness_variants": 0.0788,
+      "avg_fitness_generation": 0.0726,
+      "avg_fitness_elites": 0.3412,
+      "avg_fitness_non_elites": 0.0685,
+      "parents": [
+        "295",
+        "147",
+        "151"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "301",
+        "418",
+        "213",
+        "144",
+        "330",
+        "238",
+        "490"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 21,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 7,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 20,
+      "genome_id": 548,
+      "max_score_variants": 0.2546,
+      "min_score_variants": 0.0136,
+      "avg_fitness": 0.0729,
+      "avg_fitness_variants": 0.0788,
+      "avg_fitness_generation": 0.0729,
+      "avg_fitness_elites": 0.3412,
+      "avg_fitness_non_elites": 0.069,
+      "parents": [
+        "213",
+        "498",
+        "346"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "301",
+        "418",
+        "213",
+        "144",
+        "330",
+        "238",
+        "490"
+      ],
+      "variants_created": 25,
+      "mutation_variants": 22,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 7,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        },
+        "NegationOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 21,
+      "genome_id": 575,
+      "max_score_variants": 0.3256,
+      "min_score_variants": 0.0161,
+      "avg_fitness": 0.0755,
+      "avg_fitness_variants": 0.1243,
+      "avg_fitness_generation": 0.0755,
+      "avg_fitness_elites": 0.3305,
+      "avg_fitness_non_elites": 0.0705,
+      "parents": [
+        "144",
+        "333",
+        "348"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "301",
+        "418",
+        "213",
+        "144",
+        "330",
+        "238",
+        "490"
+      ],
+      "variants_created": 26,
+      "mutation_variants": 22,
+      "crossover_variants": 4,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 10,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 22,
+      "genome_id": 586,
+      "max_score_variants": 0.2855,
+      "min_score_variants": 0.0158,
+      "avg_fitness": 0.077,
+      "avg_fitness_variants": 0.1207,
+      "avg_fitness_generation": 0.077,
+      "avg_fitness_elites": 0.3264,
+      "avg_fitness_non_elites": 0.0718,
+      "parents": [
+        "213",
+        "83",
+        "276"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "213",
+        "577",
+        "144",
+        "581"
+      ],
+      "variants_created": 18,
+      "mutation_variants": 16,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 11,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 23,
+      "genome_id": 610,
+      "max_score_variants": 0.2546,
+      "min_score_variants": 0.0064,
+      "avg_fitness": 0.0764,
+      "avg_fitness_variants": 0.0623,
+      "avg_fitness_generation": 0.0765,
+      "avg_fitness_elites": 0.3264,
+      "avg_fitness_non_elites": 0.0715,
+      "parents": [
+        "452",
+        "72",
+        "468"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "213",
+        "577",
+        "144",
+        "581"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 21,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 11,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 24,
+      "genome_id": 642,
+      "max_score_variants": 0.236,
+      "min_score_variants": 0.0158,
+      "avg_fitness": 0.0769,
+      "avg_fitness_variants": 0.086,
+      "avg_fitness_generation": 0.0769,
+      "avg_fitness_elites": 0.3264,
+      "avg_fitness_non_elites": 0.072,
+      "parents": [
+        "586",
+        "96",
+        "119"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "213",
+        "577",
+        "144",
+        "581"
+      ],
+      "variants_created": 21,
+      "mutation_variants": 21,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 11,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 25,
+      "genome_id": 676,
+      "max_score_variants": 0.2298,
+      "min_score_variants": 0.0079,
+      "avg_fitness": 0.0778,
+      "avg_fitness_variants": 0.1007,
+      "avg_fitness_generation": 0.0779,
+      "avg_fitness_elites": 0.3264,
+      "avg_fitness_non_elites": 0.0733,
+      "parents": [
+        "301",
+        "182",
+        "333"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "213",
+        "577",
+        "144",
+        "581"
+      ],
+      "variants_created": 24,
+      "mutation_variants": 20,
+      "crossover_variants": 4,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 11,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      }
+    },
+    {
+      "generation_number": 26,
+      "genome_id": 686,
+      "max_score_variants": 0.3072,
+      "min_score_variants": 0.0127,
+      "avg_fitness": 0.079,
+      "avg_fitness_variants": 0.1098,
+      "avg_fitness_generation": 0.079,
+      "avg_fitness_elites": 0.3248,
+      "avg_fitness_non_elites": 0.0741,
+      "parents": [
+        "575",
+        "419",
+        "238"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "213",
+        "577",
+        "144",
+        "581"
+      ],
+      "variants_created": 20,
+      "mutation_variants": 19,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 12,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 27,
+      "genome_id": 709,
+      "max_score_variants": 0.1521,
+      "min_score_variants": 0.0127,
+      "avg_fitness": 0.0785,
+      "avg_fitness_variants": 0.0664,
+      "avg_fitness_generation": 0.0785,
+      "avg_fitness_elites": 0.3248,
+      "avg_fitness_non_elites": 0.0739,
+      "parents": [
+        "301",
+        "689",
+        "130"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "686",
+        "213",
+        "577",
+        "144"
+      ],
+      "variants_created": 21,
+      "mutation_variants": 18,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 12,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 28,
+      "genome_id": 729,
+      "max_score_variants": 0.2245,
+      "min_score_variants": 0.0285,
+      "avg_fitness": 0.0796,
+      "avg_fitness_variants": 0.1105,
+      "avg_fitness_generation": 0.0796,
+      "avg_fitness_elites": 0.3248,
+      "avg_fitness_non_elites": 0.0751,
+      "parents": [
+        "686",
+        "296",
+        "271"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "686",
+        "213",
+        "577",
+        "144"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 17,
+      "crossover_variants": 5,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 12,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        }
+      }
+    },
+    {
+      "generation_number": 29,
+      "genome_id": 769,
+      "max_score_variants": 0.1651,
+      "min_score_variants": 0.0121,
+      "avg_fitness": 0.0787,
+      "avg_fitness_variants": 0.0527,
+      "avg_fitness_generation": 0.0787,
+      "avg_fitness_elites": 0.3248,
+      "avg_fitness_non_elites": 0.0743,
+      "parents": [
+        "686",
+        "468",
+        "445"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "686",
+        "213",
+        "577",
+        "144"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 21,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 12,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 30,
+      "genome_id": 773,
+      "max_score_variants": 0.1538,
+      "min_score_variants": 0.0128,
+      "avg_fitness": 0.0783,
+      "avg_fitness_variants": 0.0661,
+      "avg_fitness_generation": 0.0783,
+      "avg_fitness_elites": 0.3248,
+      "avg_fitness_non_elites": 0.0741,
+      "parents": [
+        "686",
+        "525",
+        "751"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "686",
+        "213",
+        "577",
+        "144"
+      ],
+      "variants_created": 21,
+      "mutation_variants": 21,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 12,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 31,
+      "genome_id": 797,
+      "max_score_variants": 0.361,
+      "min_score_variants": 0.0086,
+      "avg_fitness": 0.0813,
+      "avg_fitness_variants": 0.1763,
+      "avg_fitness_generation": 0.0814,
+      "avg_fitness_elites": 0.3251,
+      "avg_fitness_non_elites": 0.0752,
+      "parents": [
+        "575",
+        "418",
+        "734"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "575",
+        "301",
+        "418",
+        "686",
+        "213",
+        "577",
+        "144"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 20,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 18,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 32,
+      "genome_id": 829,
+      "max_score_variants": 0.3276,
+      "min_score_variants": 0.0088,
+      "avg_fitness": 0.0818,
+      "avg_fitness_variants": 0.0973,
+      "avg_fitness_generation": 0.082,
+      "avg_fitness_elites": 0.3252,
+      "avg_fitness_non_elites": 0.0756,
+      "parents": [
+        "804",
+        "404",
+        "205"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "799",
+        "575",
+        "301",
+        "418"
+      ],
+      "variants_created": 18,
+      "mutation_variants": 17,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 19,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 33,
+      "genome_id": 849,
+      "max_score_variants": 0.3266,
+      "min_score_variants": 0.0115,
+      "avg_fitness": 0.082,
+      "avg_fitness_variants": 0.0843,
+      "avg_fitness_generation": 0.0822,
+      "avg_fitness_elites": 0.3253,
+      "avg_fitness_non_elites": 0.0757,
+      "parents": [
+        "575",
+        "26",
+        "206"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "799",
+        "829",
+        "575",
+        "301"
+      ],
+      "variants_created": 25,
+      "mutation_variants": 22,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 20,
+      "operator_statistics": {
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 34,
+      "genome_id": 891,
+      "max_score_variants": 0.2428,
+      "min_score_variants": 0.0077,
+      "avg_fitness": 0.0817,
+      "avg_fitness_variants": 0.0578,
+      "avg_fitness_generation": 0.0817,
+      "avg_fitness_elites": 0.3253,
+      "avg_fitness_non_elites": 0.0754,
+      "parents": [
+        "577",
+        "124",
+        "440"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "799",
+        "829",
+        "849",
+        "575"
+      ],
+      "variants_created": 18,
+      "mutation_variants": 18,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 20,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 35,
+      "genome_id": 911,
+      "max_score_variants": 0.3326,
+      "min_score_variants": 0.0226,
+      "avg_fitness": 0.0827,
+      "avg_fitness_variants": 0.1196,
+      "avg_fitness_generation": 0.0827,
+      "avg_fitness_elites": 0.3256,
+      "avg_fitness_non_elites": 0.0762,
+      "parents": [
+        "144",
+        "222",
+        "406"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "799",
+        "829",
+        "849",
+        "575"
+      ],
+      "variants_created": 20,
+      "mutation_variants": 15,
+      "crossover_variants": 5,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 21,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      }
+    },
+    {
+      "generation_number": 36,
+      "genome_id": 916,
+      "max_score_variants": 0.3992,
+      "min_score_variants": 0.0069,
+      "avg_fitness": 0.0831,
+      "avg_fitness_variants": 0.0981,
+      "avg_fitness_generation": 0.0833,
+      "avg_fitness_elites": 0.3272,
+      "avg_fitness_non_elites": 0.076,
+      "parents": [
+        "418",
+        "362",
+        "790"
+      ],
+      "top_10": [
+        "131",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "799",
+        "829",
+        "849"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 21,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 24,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 37,
+      "genome_id": 948,
+      "max_score_variants": 0.2798,
+      "min_score_variants": 0.009,
+      "avg_fitness": 0.0836,
+      "avg_fitness_variants": 0.0975,
+      "avg_fitness_generation": 0.0839,
+      "avg_fitness_elites": 0.3272,
+      "avg_fitness_non_elites": 0.0768,
+      "parents": [
+        "452",
+        "483",
+        "97"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 19,
+      "mutation_variants": 17,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 24,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 38,
+      "genome_id": 962,
+      "max_score_variants": 0.2843,
+      "min_score_variants": 0.0383,
+      "avg_fitness": 0.0849,
+      "avg_fitness_variants": 0.1211,
+      "avg_fitness_generation": 0.0849,
+      "avg_fitness_elites": 0.3255,
+      "avg_fitness_non_elites": 0.0777,
+      "parents": [
+        "797",
+        "776",
+        "411"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 19,
+      "crossover_variants": 4,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 25,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        }
+      }
+    },
+    {
+      "generation_number": 39,
+      "genome_id": 1001,
+      "max_score_variants": 0.1874,
+      "min_score_variants": 0.0123,
+      "avg_fitness": 0.0847,
+      "avg_fitness_variants": 0.0757,
+      "avg_fitness_generation": 0.0847,
+      "avg_fitness_elites": 0.3255,
+      "avg_fitness_non_elites": 0.0777,
+      "parents": [
+        "586",
+        "403",
+        "750"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 20,
+      "mutation_variants": 18,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 25,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 40,
+      "genome_id": 1020,
+      "max_score_variants": 0.2629,
+      "min_score_variants": 0.0175,
+      "avg_fitness": 0.0858,
+      "avg_fitness_variants": 0.1281,
+      "avg_fitness_generation": 0.0858,
+      "avg_fitness_elites": 0.3255,
+      "avg_fitness_non_elites": 0.079,
+      "parents": [
+        "962",
+        "482",
+        "161"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 23,
+      "mutation_variants": 19,
+      "crossover_variants": 4,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 25,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        }
+      }
+    },
+    {
+      "generation_number": 41,
+      "genome_id": 1046,
+      "max_score_variants": 0.3287,
+      "min_score_variants": 0.0082,
+      "avg_fitness": 0.0871,
+      "avg_fitness_variants": 0.1501,
+      "avg_fitness_generation": 0.0872,
+      "avg_fitness_elites": 0.3232,
+      "avg_fitness_non_elites": 0.0796,
+      "parents": [
+        "799",
+        "406",
+        "466"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 19,
+      "mutation_variants": 19,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 29,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 42,
+      "genome_id": 1064,
+      "max_score_variants": 0.3183,
+      "min_score_variants": 0.0133,
+      "avg_fitness": 0.0868,
+      "avg_fitness_variants": 0.0632,
+      "avg_fitness_generation": 0.0868,
+      "avg_fitness_elites": 0.323,
+      "avg_fitness_non_elites": 0.079,
+      "parents": [
+        "301",
+        "339",
+        "260"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 19,
+      "mutation_variants": 19,
+      "crossover_variants": 0,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 30,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 43,
+      "genome_id": 1090,
+      "max_score_variants": 0.2809,
+      "min_score_variants": 0.0069,
+      "avg_fitness": 0.0869,
+      "avg_fitness_variants": 0.0945,
+      "avg_fitness_generation": 0.0874,
+      "avg_fitness_elites": 0.323,
+      "avg_fitness_non_elites": 0.0798,
+      "parents": [
+        "829",
+        "143",
+        "421"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 22,
+      "mutation_variants": 21,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 30,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 44,
+      "genome_id": 1106,
+      "max_score_variants": 0.3476,
+      "min_score_variants": 0.0155,
+      "avg_fitness": 0.0882,
+      "avg_fitness_variants": 0.1285,
+      "avg_fitness_generation": 0.0882,
+      "avg_fitness_elites": 0.323,
+      "avg_fitness_non_elites": 0.08,
+      "parents": [
+        "799",
+        "114",
+        "221"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "806",
+        "809",
+        "911",
+        "922",
+        "799"
+      ],
+      "variants_created": 19,
+      "mutation_variants": 16,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 33,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLM_POSAwareSynonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 1,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 45,
+      "genome_id": 1138,
+      "max_score_variants": 0.2367,
+      "min_score_variants": 0.0132,
+      "avg_fitness": 0.0874,
+      "avg_fitness_variants": 0.0565,
+      "avg_fitness_generation": 0.0874,
+      "avg_fitness_elites": 0.323,
+      "avg_fitness_non_elites": 0.0794,
+      "parents": [
+        "213",
+        "731",
+        "36"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "1106",
+        "806",
+        "1101",
+        "809",
+        "911"
+      ],
+      "variants_created": 26,
+      "mutation_variants": 23,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 33,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 46,
+      "genome_id": 1151,
+      "max_score_variants": 0.3072,
+      "min_score_variants": 0.0194,
+      "avg_fitness": 0.0885,
+      "avg_fitness_variants": 0.1329,
+      "avg_fitness_generation": 0.0885,
+      "avg_fitness_elites": 0.3195,
+      "avg_fitness_non_elites": 0.0797,
+      "parents": [
+        "799",
+        "76",
+        "533"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "1106",
+        "806",
+        "1101",
+        "809",
+        "911"
+      ],
+      "variants_created": 25,
+      "mutation_variants": 23,
+      "crossover_variants": 2,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 38,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 47,
+      "genome_id": 1182,
+      "max_score_variants": 0.3287,
+      "min_score_variants": 0.0296,
+      "avg_fitness": 0.0896,
+      "avg_fitness_variants": 0.1445,
+      "avg_fitness_generation": 0.0896,
+      "avg_fitness_elites": 0.3199,
+      "avg_fitness_non_elites": 0.0805,
+      "parents": [
+        "1153",
+        "270",
+        "767"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "1106",
+        "806",
+        "1101",
+        "809",
+        "911"
+      ],
+      "variants_created": 21,
+      "mutation_variants": 20,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 40,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 2,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 48,
+      "genome_id": 1222,
+      "max_score_variants": 0.151,
+      "min_score_variants": 0.0151,
+      "avg_fitness": 0.0889,
+      "avg_fitness_variants": 0.0559,
+      "avg_fitness_generation": 0.0889,
+      "avg_fitness_elites": 0.3199,
+      "avg_fitness_non_elites": 0.0799,
+      "parents": [
+        "213",
+        "162",
+        "1143"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "1106",
+        "806",
+        "1101",
+        "809",
+        "911"
+      ],
+      "variants_created": 24,
+      "mutation_variants": 23,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 40,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "POSAwareAntonymReplacement": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBackTranslation_HI": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 49,
+      "genome_id": 1238,
+      "max_score_variants": 0.3099,
+      "min_score_variants": 0.0124,
+      "avg_fitness": 0.0901,
+      "avg_fitness_variants": 0.1517,
+      "avg_fitness_generation": 0.0901,
+      "avg_fitness_elites": 0.318,
+      "avg_fitness_non_elites": 0.0805,
+      "parents": [
+        "1153",
+        "61",
+        "478"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "1106",
+        "806",
+        "1101",
+        "809",
+        "911"
+      ],
+      "variants_created": 21,
+      "mutation_variants": 20,
+      "crossover_variants": 1,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 44,
+      "operator_statistics": {
+        "SemanticFusionCrossover": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "MLM": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "LLMBasedParaphrasing": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "NegationOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    },
+    {
+      "generation_number": 50,
+      "genome_id": 1262,
+      "max_score_variants": 0.361,
+      "min_score_variants": 0.0089,
+      "avg_fitness": 0.0907,
+      "avg_fitness_variants": 0.1176,
+      "avg_fitness_generation": 0.0908,
+      "avg_fitness_elites": 0.3191,
+      "avg_fitness_non_elites": 0.0802,
+      "parents": [
+        "1151",
+        "464",
+        "252"
+      ],
+      "top_10": [
+        "131",
+        "916",
+        "452",
+        "295",
+        "797",
+        "1106",
+        "806",
+        "1101",
+        "809",
+        "911"
+      ],
+      "variants_created": 26,
+      "mutation_variants": 23,
+      "crossover_variants": 3,
+      "elites_threshold": 0.2811,
+      "removal_threshold": 0.012,
+      "elites_count": 50,
+      "operator_statistics": {
+        "StylisticMutator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "TypographicalErrorsOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 1
+        },
+        "ConceptAdditionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 3
+        },
+        "InformedEvolutionOperator": {
+          "duplicates_removed": 0,
+          "question_mark_rejections": 2
+        },
+        "SemanticSimilarityCrossover": {
+          "duplicates_removed": 3,
+          "question_mark_rejections": 0
+        }
+      }
+    }
+  ],
+  "population_max_toxicity": 0.4015,
+  "population_best_genome_id": 131
+}

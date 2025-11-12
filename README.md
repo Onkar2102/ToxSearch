@@ -147,7 +147,7 @@ python src/main.py
 ```bash
 # Run with custom models and parameters
 python src/main.py \
-    --max-generations 50 \
+    --generations 50 \
     --operators all \
     --max-variants 1 \
     --elites-threshold 25 \
@@ -209,7 +209,7 @@ eost-cam-llm/
 │   ├── ea/                        # Evolutionary algorithms
 │   │   ├── evolution_engine.py    # Core evolution logic
 │   │   ├── parent_selector.py     # Adaptive parent selection
-│   │   └── [16 operator files]    # Variation operators
+│   │   └── [12 operator files]    # Variation operators
 │   ├── gne/                       # Generation & evaluation
 │   │   ├── prompt_generator.py    # Prompt generation
 │   │   ├── response_generator.py  # Response generation

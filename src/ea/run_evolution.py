@@ -1,5 +1,6 @@
-## @file RunEvolution.py
-# @brief Main script for evolving LLM input prompts using mutation operators.
+"""
+Main script for evolving LLM input prompts using mutation operators.
+"""
 
 import json
 from typing import Dict, Any, List, Optional
@@ -453,8 +454,6 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             # Get selection_mode from EvolutionTracker root level for this generation
             selection_mode = evolution_tracker.get("selection_mode", "default")
             
-            # NOTE: max_score_variants represents the maximum score of VARIANTS GENERATED in this generation (from temp.json)
-            # It does NOT represent the entire population's max score. Use population_max_toxicity for that.
             existing_gen.update({
                 "genome_id": best_genome_id,
                 "max_score_variants": best_score,  # Max score of variants created in THIS generation
@@ -503,9 +502,6 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
         # Sort generations by generation number
         evolution_tracker["generations"].sort(key=lambda x: x["generation_number"])
         
-        # Note: Population threshold calculations are now handled by the centralized
-        # calculate_and_update_population_thresholds function in utils/population_io.py
-        # This ensures single source of truth for threshold calculations
         
         # Get the dynamic path for this run
         outputs_path = get_outputs_path()
@@ -650,8 +646,6 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
             "generations_completed": generations_completed
         }
 
-## @brief Main entry point: runs one evolution generation, applying selection and variation to prompts.
-# @return None
 def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=1, max_num_parents=4, operators="all"):
     """Run one evolution generation with comprehensive logging and steady state support"""
     # Set up dynamic paths for this run

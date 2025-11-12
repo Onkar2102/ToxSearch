@@ -55,7 +55,7 @@ def update_model_configs(rg_model, pg_model, logger):
     - Q2_K: Lowest quality, smallest size, fastest inference
     """
     try:
-        logger.info(f"Updating config files with models: RG={rg_model}, PG={pg_model}")
+        logger.info("Updating config files with models: RG=%s, PG=%s", rg_model, pg_model)
 
         def resolve_model_entry(value: str) -> Optional[str]:
             """
@@ -130,14 +130,14 @@ def update_model_configs(rg_model, pg_model, logger):
         logger.debug("Model configuration updates completed successfully")
 
     except Exception as e:
-        logger.error(f"Failed to update model configurations: {e}")
+        logger.error("Failed to update model configurations: %s", e)
         raise
 
 # ============================================================================
 # SECTION 4: MAIN EXECUTION PIPELINE
 # ============================================================================
 
-def main(max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", pg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", operators="all", max_variants=1, elites_threshold=25, removal_threshold=5, stagnation_limit=5):
+def main(max_generations=None, north_star_threshold=0.99, moderation_methods=None, threshold_percentage=25, rg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", pg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", operators="all", max_variants=1, elites_threshold=25, removal_threshold=5, stagnation_limit=5, seed_file="data/prompt.csv"):
     """
     Main entry point for evolutionary text generation with toxicity optimization.
     
@@ -198,7 +198,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
 
     # Phase 2: Initialize system and create gen0 if needed
     try:
-        response_generator, prompt_generator = initialize_system(logger, log_file)
+        response_generator, prompt_generator = initialize_system(logger, log_file, seed_file=seed_file)
     except Exception as e:
         logger.error("System initialization failed: %s", e, exc_info=True)
         return
@@ -206,7 +206,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     # Phase 2: Text Generation
     try:
         logger.info("Generating responses using response generation model...")
-        # Process temp.json directly (Phase 1 prompts)
+        # Process temp.json directly (initial prompts)
         temp_path = str(get_outputs_path() / "temp.json")
         response_generator.process_population(pop_path=temp_path)
     except Exception as e:
@@ -256,8 +256,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         
         # Only proceed if threshold calculation was successful
         if not threshold_results.get("skipped", False):
-            # Update adaptive selection logic
-            logger.info("Updating adaptive selection logic...")
+            # Update adaptive selection logic (applies to all operator configurations: ie, cm, all)
             outputs_path = str(get_outputs_path())
             adaptive_results = update_adaptive_selection_logic(
                 outputs_path=outputs_path,
@@ -268,7 +267,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 logger=logger,
                 log_file=log_file
             )
-            logger.info("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
+            logger.debug("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
                        adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
                        adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
             
@@ -277,7 +276,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 "elite_threshold": threshold_results["elite_threshold"],
                 "best_genome_id": threshold_results["best_genome_id"]
             }
-            logger.info("Evolution tracker updated for generation 0.")
         else:
             logger.warning("Skipping threshold calculation for generation 0 - no evaluated genomes found")
             phase_3b_results = {
@@ -304,7 +302,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.info("Initial population finalized using elite threshold: %.4f", elite_threshold)
         
         # Remove worse performing genomes from all files for generation 0
-        logger.info("Removing worse performing genomes from all files...")
         outputs_path = str(get_outputs_path())
         removal_results = remove_worse_performing_genomes_from_all_files(
             outputs_path=outputs_path,
@@ -318,7 +315,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                    removal_results["archived_count_total"], removal_results["remaining_count_total"])
         
         # Now redistribute remaining genomes between elites and non_elites based on elite_threshold
-        logger.info("Redistributing remaining genomes between elites and non_elites...")
         redistribution_result = redistribute_population_with_threshold(
             elite_threshold=phase_3b_results["elite_threshold"],
             north_star_metric=north_star_metric,
@@ -395,11 +391,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                 json.dump(tracker, f, indent=4, ensure_ascii=False)
             
-            logger.debug(f"Gen0 metrics: elites={redistribution_result['elites_count']}, "
-                        f"removal_th={removal_threshold_value:.4f}, "
-                        f"elite_avg={avg_fitness_elites:.4f}, non_elite_avg={avg_fitness_non_elites:.4f}")
+            logger.debug("Gen0 metrics: elites=%d, removal_th=%.4f, elite_avg=%.4f, non_elite_avg=%.4f",
+                        redistribution_result['elites_count'], removal_threshold_value,
+                        avg_fitness_elites, avg_fitness_non_elites)
         except Exception as e:
-            logger.warning(f"Failed to update generation 0 metrics in EvolutionTracker: {e}")
+            logger.warning("Failed to update generation 0 metrics in EvolutionTracker: %s", e)
     except Exception as e:
         logger.error("Initial population finalization failed: %s", e, exc_info=True)
         return
@@ -434,7 +430,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         # Phase 4: Evolution
         operator_statistics = {}  # Initialize operator statistics
         try:
-            # Use RunEvolution.py as the evolution driver
+            # Run evolution to generate variants
             evolution_result = run_evolution(
                 north_star_metric=north_star_metric,
                 log_file=log_file,
@@ -447,7 +443,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             # Extract operator statistics from evolution result
             operator_statistics = evolution_result.get("operator_statistics", {}) if evolution_result else {}
             if operator_statistics:
-                logger.debug(f"Operator stats: {operator_statistics}")
+                logger.debug("Operator stats: %s", operator_statistics)
 
         except Exception as e:
             logger.error("Evolution failed: %s", e, exc_info=True)
@@ -483,7 +479,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     "crossover_variants": crossover_count
                 }
                 
-                logger.info(f"Gen {generation_count}: {total_count} variants ({mutation_count} mutation, {crossover_count} crossover)")
+                logger.info("Gen %d: %d variants (%d mutation, %d crossover)", 
+                           generation_count, total_count, mutation_count, crossover_count)
             
             # Update EvolutionTracker with generation-specific data (variants, scores, etc.)
             try:
@@ -515,7 +512,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         file_genomes = load_population(str(file_path), logger=logger)
                         all_genomes.extend(file_genomes)
                 
-                logger.debug(f"Loaded {len(all_genomes)} genomes for analysis")
+                logger.debug("Loaded %d genomes for analysis", len(all_genomes))
                 
                 # Update EvolutionTracker with generation data
                 update_evolution_tracker_with_generation_global(
@@ -557,7 +554,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 
                 # Only proceed with removal and distribution if threshold calculation was successful
                 if not threshold_results.get("skipped", False):
-                    # Update adaptive selection logic
+                    # Update adaptive selection logic (applies to all operator configurations: ie, cm, all)
                     outputs_path = str(get_outputs_path())
                     adaptive_results = update_adaptive_selection_logic(
                         outputs_path=outputs_path,
@@ -590,9 +587,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                 max_score_variants = round(max(scores), 4)
                                 min_score_variants = round(min(scores), 4)
                                 avg_fitness_variants = round(sum(scores) / len(scores), 4)
-                                logger.debug(f"Variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
+                                logger.debug("Variants: max=%.4f, min=%.4f, avg=%.4f",
+                                           max_score_variants, min_score_variants, avg_fitness_variants)
                     except Exception as e:
-                        logger.warning(f"Failed to calculate variant statistics: {e}")
+                        logger.warning("Failed to calculate variant statistics: %s", e)
                     
                     # Calculate removal threshold for distribution
                     removal_threshold_value = round((removal_threshold * threshold_results["max_toxicity_score"]) / 100, 4)
@@ -733,13 +731,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
                             json.dump(tracker, f, indent=4, ensure_ascii=False)
                         
-                        logger.debug(f"Gen{generation_count}: elites={redistribution_result['elites_count']}, "
-                                    f"elite_avg={avg_fitness_elites:.4f}, "
-                                    f"variants: max={max_score_variants:.4f}, min={min_score_variants:.4f}, avg={avg_fitness_variants:.4f}")
+                        logger.debug("Gen%d: elites=%d, elite_avg=%.4f, variants: max=%.4f, min=%.4f, avg=%.4f",
+                                    generation_count, redistribution_result['elites_count'],
+                                    avg_fitness_elites, max_score_variants, min_score_variants, avg_fitness_variants)
                     except Exception as e:
-                        logger.warning(f"Failed to update generation metrics in EvolutionTracker: {e}")
-                
-                logger.debug("Generation processing completed")
+                        logger.warning("Failed to update generation metrics in EvolutionTracker: %s", e)
                     
                 
             except Exception as e:
@@ -799,6 +795,8 @@ if __name__ == "__main__":
                        help="Operator configuration mode: ie (InformedEvolution only), cm (all except InformedEvolution), all (all operators)")
     parser.add_argument("--max-variants", type=int, default=1,
                        help="Maximum number of variants to generate per evolution cycle. Controls how many times the evolution cycle runs.")
+    parser.add_argument("--seed-file", type=str, default="data/prompt.csv",
+                       help="Path to CSV file with seed prompts (must have 'questions' column). Default: data/prompt.csv")
     args = parser.parse_args()
     
     import sys
@@ -808,7 +806,7 @@ if __name__ == "__main__":
              threshold_percentage=args.threshold_percentage, rg_model=args.rg, pg_model=args.pg,
              operators=args.operators, max_variants=args.max_variants,
              elites_threshold=args.elites_threshold, removal_threshold=args.removal_threshold,
-             stagnation_limit=args.stagnation_limit)
+             stagnation_limit=args.stagnation_limit, seed_file=args.seed_file)
         sys.exit(0)
     except KeyboardInterrupt:
         print("\nPipeline interrupted by user.")
