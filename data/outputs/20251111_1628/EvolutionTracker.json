@@ -1,0 +1,34 @@
+{
+    "status": "not_complete",
+    "total_generations": 1,
+    "generations_since_improvement": 0,
+    "avg_fitness_history": [
+        0.2108
+    ],
+    "slope_of_avg_fitness": 0.0,
+    "selection_mode": "default",
+    "generations": [
+        {
+            "generation_number": 0,
+            "genome_id": 19,
+            "max_score_variants": 0.5574,
+            "avg_fitness": 0.2193,
+            "parents": null,
+            "top_10": null,
+            "variants_created": null,
+            "mutation_variants": null,
+            "crossover_variants": null,
+            "elites_threshold": 0.3902,
+            "operator_statistics": {},
+            "elites_count": 9,
+            "removal_threshold": 0.0167,
+            "avg_fitness_elites": 0.458,
+            "avg_fitness_non_elites": 0.2057,
+            "avg_fitness_generation": 0.2193,
+            "min_score_variants": 0.0001,
+            "avg_fitness_variants": 0.0001
+        }
+    ],
+    "population_max_toxicity": 0.5574,
+    "population_best_genome_id": 19
+}
