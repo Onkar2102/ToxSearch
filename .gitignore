@@ -189,5 +189,8 @@ docs/latex/
 .ARCHITECTURE.md
 tests/
 
+requirements_spack.txt
+project_script.sh
+
 
 

@@ -40,8 +40,8 @@ def extract_toxicity(record):
 
 def shorten_model_name(name):
     """Shorten model names for better readability."""
-    if name == 'original':
-        return 'Original'
+    if name == 'Llama-3.1-8B':
+        return 'Llama-3.1-8B'
     
     # Remove common suffixes
     name = name.replace('-Q4_K_L', '').replace('-Q4_K_M', '').replace('.Q3_K_S', '')
@@ -49,8 +49,8 @@ def shorten_model_name(name):
     
     # Shorten specific model names
     name = name.replace('Meta-Llama-3.1-8B', 'Llama-3.1-8B')
-    name = name.replace('Llama-3.2-1B', 'Llama-1B')
-    name = name.replace('Llama-3.2-3B', 'Llama-3B')
+    name = name.replace('Llama-3.2-1B', 'Llama-3.2-1B')
+    name = name.replace('Llama-3.2-3B', 'Llama-3.2-3B')
     name = name.replace('Mistral-7B', 'Mistral-7B')
     name = name.replace('Phi-3.5-mini', 'Phi-3.5')
     name = name.replace('Qwen2.5-7B', 'Qwen-7B')
@@ -224,102 +224,162 @@ def main():
     
     # Collect toxicity scores per model
     model_toxicity_scores = {}
-    model_toxicity_scores['original'] = original_toxicity_scores
+    model_toxicity_scores['Llama-3.1-8B'] = original_toxicity_scores
     
-    # Read elites.json from each model directory
+    # Read elites.json, non_elites.json, and under_performing.json from each model directory
     for model_dir in sorted(model_dirs):
         model_name = model_dir.name
-        elites_path = model_dir / "elites.json"
         
+        # Collect all records from all three files
+        all_model_records = []
+        
+        # Read elites.json
+        elites_path = model_dir / "elites.json"
         if elites_path.exists():
             try:
                 with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites = json.load(f)
-                
-                # Match prompts with top 25% prompts
-                model_scores = []
-                for elite in elites:
-                    prompt = elite.get('prompt', '')
-                    # Normalize prompt for matching (strip and lowercase)
-                    normalized_prompt = prompt.strip().lower()
-                    top_25_normalized = {p.strip().lower() for p in top_25_prompts}
-                    
-                    if normalized_prompt in top_25_normalized:
-                        toxicity = extract_toxicity(elite)
-                        if toxicity is not None:
-                            model_scores.append(toxicity)
-                
-                if model_scores:
-                    model_toxicity_scores[model_name] = model_scores
-                    print(f"  {model_name}: {len(model_scores)} matching prompts")
+                    all_model_records.extend(json.load(f))
             except Exception as e:
-                print(f"  Error reading {model_name}: {e}")
+                print(f"  Error reading elites.json for {model_name}: {e}")
+        
+        # Read non_elites.json
+        non_elites_path = model_dir / "non_elites.json"
+        if non_elites_path.exists():
+            try:
+                with open(non_elites_path, 'r', encoding='utf-8') as f:
+                    all_model_records.extend(json.load(f))
+            except Exception as e:
+                print(f"  Error reading non_elites.json for {model_name}: {e}")
+        
+        # Read under_performing.json
+        under_performing_path = model_dir / "under_performing.json"
+        if under_performing_path.exists():
+            try:
+                with open(under_performing_path, 'r', encoding='utf-8') as f:
+                    all_model_records.extend(json.load(f))
+            except Exception as e:
+                print(f"  Error reading under_performing.json for {model_name}: {e}")
+        
+        if all_model_records:
+            # Match prompts with top 25% prompts
+            model_scores = []
+            for record in all_model_records:
+                prompt = record.get('prompt', '')
+                # Normalize prompt for matching (strip and lowercase)
+                normalized_prompt = prompt.strip().lower()
+                top_25_normalized = {p.strip().lower() for p in top_25_prompts}
+                
+                if normalized_prompt in top_25_normalized:
+                    toxicity = extract_toxicity(record)
+                    if toxicity is not None:
+                        model_scores.append(toxicity)
+            
+            if model_scores:
+                model_toxicity_scores[model_name] = model_scores
+                print(f"  {model_name}: {len(model_scores)} matching prompts (from {len(all_model_records)} total records)")
+            else:
+                print(f"  {model_name}: 0 matching prompts (from {len(all_model_records)} total records)")
     
-    # Prepare data for box plot with shortened names
-    box_data = []
-    box_labels = []
-    short_name_map = {}  # Map short names to full names for statistics
+    # Prepare data for improved distribution plot (ordered by median)
+    # Compute per-model medians and order descending; skip empty groups
+    medians = {
+        label: (np.median(scores) if len(scores) > 0 else np.nan)
+        for label, scores in model_toxicity_scores.items()
+    }
+    ordered_full_labels = [
+        k for k, _ in sorted(
+            [(k, v) for k, v in medians.items() if not np.isnan(v)],
+            key=lambda kv: kv[1],
+            reverse=True
+        )
+    ]
+
+    # Map ordered labels to data and shortened tick labels
+    box_data = [model_toxicity_scores[k] for k in ordered_full_labels]
+    box_labels = [shorten_model_name(k) for k in ordered_full_labels]
+
+
+    # Create publication-ready violin + jitter plot (raincloud-style without seaborn)
+    plt.rcParams.update({
+        'font.size': 10,
+        'font.family': 'serif',
+        'axes.labelsize': 11,
+        'axes.titlesize': 12,
+        'xtick.labelsize': 9,
+        'ytick.labelsize': 9,
+        'legend.fontsize': 9,
+        'figure.titlesize': 12
+    })
     
-    for label in sorted(model_toxicity_scores.keys()):
-        box_data.append(model_toxicity_scores[label])
-        short_name = shorten_model_name(label)
-        box_labels.append(short_name)
-        short_name_map[short_name] = label
+    fig, ax = plt.subplots(figsize=(7.5, 4.0), dpi=300)
     
-    # Create box plot with better sizing
-    fig, ax = plt.subplots(figsize=(16, 8))
-    
-    bp = ax.boxplot(box_data, tick_labels=box_labels, patch_artist=True, 
-                    showmeans=True, meanline=True, widths=0.7)
-    
-    # Color boxes with better colors
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
-              '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2']
-    for i, patch in enumerate(bp['boxes']):
-        color = colors[i % len(colors)]
-        patch.set_facecolor(color)
-        patch.set_alpha(0.7)
-        patch.set_edgecolor('black')
-        patch.set_linewidth(1.2)
-    
-    # Customize plot
-    ax.set_ylabel('Toxicity Score', fontsize=18, fontweight='bold')
-    ax.set_xlabel('Model', fontsize=18, fontweight='bold')
-    ax.set_title('Toxicity Distribution', 
-                 fontsize=18, fontweight='bold', pad=25)
-    ax.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
-    ax.tick_params(axis='x', rotation=45, labelsize=14)
-    ax.tick_params(axis='y', labelsize=14)
-    
-    # Set y-axis limits for better visibility
-    ax.set_ylim([0.3, 0.9])
-    
-    # Explicitly remove any legend if it exists
-    if hasattr(ax, 'legend_') and ax.legend_ is not None:
-        ax.legend_.remove()
-    
-    plt.tight_layout()
-    
-    # Save plot as PDF
+    positions = np.arange(1, len(box_data) + 1, dtype=float)
+
+    # Violin plot (distribution shape) with clean styling
+    vp = ax.violinplot(
+        box_data,
+        positions=positions,
+        widths=0.8,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False
+    )
+
+    # Palette (color-blind friendly tones)
+    palette = ['#4A90E2', '#7ED321', '#F5A623', '#BD10E0', '#50E3C2',
+               '#B8E986', '#9013FE', '#D0021B', '#417505', '#8B572A']
+
+    # Style violins
+    for i, body in enumerate(vp['bodies']):
+        color = palette[i % len(palette)]
+        body.set_facecolor(color)
+        body.set_edgecolor('black')
+        body.set_alpha(0.55)
+        body.set_linewidth(0.9)
+
+    # Overlay IQR bars and median dots
+    for i, scores in enumerate(box_data, start=1):
+        if len(scores) == 0:
+            continue
+        q1, med, q3 = np.percentile(scores, [25, 50, 75])
+        ax.vlines(i, q1, q3, colors='black', lw=1.3, zorder=3)   # IQR bar
+        ax.scatter([i], [med], s=18, color='black', zorder=4)     # median dot
+
+    # Add jittered points to show sample distribution
+    rng = np.random.default_rng(42)  # reproducible jitter
+    for i, scores in enumerate(box_data, start=1):
+        if len(scores) == 0:
+            continue
+        x = rng.normal(loc=i, scale=0.04, size=len(scores))
+        ax.scatter(x, scores, s=8, color='black', alpha=0.25, linewidths=0, zorder=2)
+
+    # Axes and style
+    ax.set_xlim(0.5, len(box_data) + 0.5)
+    ax.set_ylim(0.0, 1.0)
+    ax.set_ylabel('Toxicity Score', fontsize=11, fontweight='bold')
+    ax.set_xlabel('Model', fontsize=11, fontweight='bold')
+    ax.set_xticks(positions)
+    ax.set_xticklabels(box_labels, rotation=25, ha='right', fontsize=9)
+
+    # Minimalist spines and subtle grid
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_linewidth(1.0)
+    ax.spines['bottom'].set_linewidth(1.0)
+    ax.grid(axis='y', linestyle='--', alpha=0.3, linewidth=0.5)
+    ax.set_axisbelow(True)
+
+    # Tight layout and save (same filename used in LaTeX)
+    fig.tight_layout(pad=1.2)
     plot_path = Path(script_dir) / "top_25_percent_elites_toxicity_distribution_all_models.pdf"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight', format='pdf')
-    plt.close()
-    
-    print(f"\nBox plot saved to: {plot_path}")
-    print(f"\nToxicity Statistics:")
-    for label in sorted(model_toxicity_scores.keys()):
-        scores = model_toxicity_scores[label]
-        print(f"\n{label}:")
-        print(f"  Count: {len(scores)}")
-        print(f"  Mean: {np.mean(scores):.4f}")
-        print(f"  Median: {np.median(scores):.4f}")
-        print(f"  Std: {np.std(scores):.4f}")
-        print(f"  Min: {np.min(scores):.4f}")
-        print(f"  Max: {np.max(scores):.4f}")
+    fig.savefig(plot_path, bbox_inches='tight', format='pdf')
+    plt.close(fig)
+
+    print(f"\nDistribution plot saved to: {plot_path}")
     
     # Step 7: Create statistical analysis table
     print("\nStep 7: Creating statistical analysis table...")
-    
+
     # Calculate statistics for each model
     stats_rows = []
     for model_name in sorted(model_toxicity_scores.keys()):
@@ -336,80 +396,100 @@ def main():
             'Q3': np.percentile(scores, 75),
             'IQR': np.percentile(scores, 75) - np.percentile(scores, 25)
         })
-    
+
     # Create DataFrame
     stats_df = pd.DataFrame(stats_rows)
-    
+
+    # Public-facing table excludes sample counts for publication
+    pub_df = stats_df.drop(columns=['n'])
+
     # Format numbers for display
-    display_df = stats_df.copy()
+    display_df = pub_df.copy()
     for col in ['Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR']:
         display_df[col] = display_df[col].apply(lambda x: f'{x:.4f}')
-    
+
     print("Statistical Analysis Table for RQ3:")
     print("="*100)
     print(display_df.to_string(index=False))
+
+    # Create PDF table using matplotlib with publication styling
+    plt.rcParams.update({
+        'font.size': 10,
+        'font.family': 'serif'
+    })
     
-    # Create PDF table using matplotlib
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(8.0, 5.0), dpi=300)
     ax.axis('tight')
     ax.axis('off')
-    
-    # Prepare table data with formatted numbers
+
+    # Prepare table data with formatted numbers (3 decimal places for readability)
     table_data = []
-    for _, row in stats_df.iterrows():
+    for _, row in pub_df.iterrows():
         table_data.append([
             row['Model'],
-            f"{int(row['n'])}",
-            f"{row['Mean']:.4f}",
-            f"{row['Median']:.4f}",
-            f"{row['Std']:.4f}",
-            f"{row['Min']:.4f}",
-            f"{row['Max']:.4f}",
-            f"{row['Q1']:.4f}",
-            f"{row['Q3']:.4f}",
-            f"{row['IQR']:.4f}"
+            f"{row['Mean']:.3f}",
+            f"{row['Median']:.3f}",
+            f"{row['Std']:.3f}",
+            f"{row['Min']:.3f}",
+            f"{row['Max']:.3f}",
+            f"{row['Q1']:.3f}",
+            f"{row['Q3']:.3f}",
+            f"{row['IQR']:.3f}"
         ])
-    
+
     # Create table
-    table = ax.table(cellText=table_data,
-                     colLabels=['Model', 'n', 'Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR'],
-                     cellLoc='center',
-                     loc='center',
-                     bbox=[0, 0, 1, 1])
-    
-    # Style the table
+    table = ax.table(
+        cellText=table_data,
+        colLabels=['Model', 'Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR'],
+        cellLoc='center',
+        loc='center',
+        bbox=[0, 0, 1, 1]
+    )
+
     table.auto_set_font_size(False)
     table.set_fontsize(10)
-    table.scale(1, 2)
+    table.scale(1, 1.8)
+
+    # Publication-friendly styling
+    n_cols = len(['Model', 'Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR'])
     
-    # Style header
-    for i in range(10):
-        table[(0, i)].set_facecolor('#4CAF50')
-        table[(0, i)].set_text_props(weight='bold', color='white')
+    # Header row styling
+    for j in range(n_cols):
+        cell = table[(0, j)]
+        cell.set_facecolor('#E8E8E8')
+        cell.set_edgecolor('black')
+        cell.set_linewidth(1.2)
+        cell.set_text_props(weight='bold', color='black', fontsize=10)
+        cell.set_height(0.08)
     
-    # Style cells
+    # Body cells styling with alternating row colors
     for i in range(1, len(table_data) + 1):
-        for j in range(10):
+        for j in range(n_cols):
+            cell = table[(i, j)]
+            # Alternate row colors for better readability
             if i % 2 == 0:
-                table[(i, j)].set_facecolor('#f0f0f0')
+                cell.set_facecolor('#F5F5F5')
             else:
-                table[(i, j)].set_facecolor('white')
+                cell.set_facecolor('white')
+            cell.set_edgecolor('#CCCCCC')
+            cell.set_linewidth(0.8)
+            cell.set_text_props(color='black', fontsize=9)
+            cell.set_height(0.06)
     
-    plt.title('Statistical Analysis of Toxicity Scores Across Models for Top 25% Elites',
-              fontsize=14, fontweight='bold', pad=20)
-    
+    # No title here; captions are added in LaTeX
+
     # Save as PDF
     pdf_path = Path(script_dir) / "rq3_statistics_table.pdf"
     plt.savefig(pdf_path, dpi=300, bbox_inches='tight', format='pdf')
     plt.close()
-    
+
     print(f"\nStatistics table PDF saved to: {pdf_path}")
-    
+
     # Also save as CSV for reference
     csv_path = Path(script_dir) / "rq3_statistics_table.csv"
     stats_df.to_csv(csv_path, index=False, float_format='%.4f')
     print(f"Statistics table CSV saved to: {csv_path}")
-    
+
     print("\n" + "="*80)
     print("RQ3 Analysis Complete!")
     print("="*80)
