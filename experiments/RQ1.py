@@ -1,5 +1,7 @@
 # ============================================================================
-# RQ1 Analysis Script
+# RQ1B Analysis Script
+# Comparison of IE, OPS, and COMB modes with budget normalization
+# Per-genome metrics enable fair comparison across different budgets
 # ============================================================================
 
 import os
@@ -16,10 +18,12 @@ from scipy.interpolate import interp1d
 
 
 # ============================================================================
-# DATA LOADING: Load and aggregate JSON files from all runs (all 3 operator modes)
+# DATA LOADING: Load and aggregate JSON files from all runs (ie, ops, comb operator modes)
+# Budget normalization enables fair comparison despite different genome creation rates
 # ============================================================================
 
-# Load data from all 3 operator modes: ie, ops, comb
+# Load data from operator modes: ie (few-shot LLM-guided), ops (classical operators), comb (all operators)
+# Note: Budget normalization is applied to enable fair comparison despite different genome counts
 OPERATOR_MODES = ['ie', 'ops', 'comb']
 
 # Get the script's directory and construct path relative to it
@@ -549,7 +553,7 @@ for mode in OPERATOR_MODES:
         ax.legend(loc='upper left', fontsize=14, title="Execution #", title_fontsize=13)
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
-        filename_pdf = os.path.join(output_dir, f"{mode.lower()}_gen_fitness_range.pdf")
+        filename_pdf = os.path.join(output_dir, f"{mode.lower()}_gen_fitness_range_b.pdf")
         # Remove existing file if it exists (will be overwritten anyway, but explicit)
         if os.path.exists(filename_pdf):
             os.remove(filename_pdf)
@@ -651,6 +655,40 @@ all_scores_for_avg = np.concatenate([
 ])
 avg_score_all_runs = np.mean(all_scores_for_avg) if len(all_scores_for_avg) > 0 else np.nan
 
+# ============================================================================
+# BUDGET COUNTING: Count total genomes created per run for budget normalization
+# ============================================================================
+
+def count_total_genomes_per_run(run_name, base_dir):
+    """Count total genomes created in a run by reading elites.json, non_elites.json, and under_performing.json"""
+    run_dir = os.path.join(base_dir, run_name)
+    if not os.path.isdir(run_dir):
+        return 0
+    
+    total_count = 0
+    for filename in ['elites.json', 'non_elites.json', 'under_performing.json']:
+        file_path = os.path.join(run_dir, filename)
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        total_count += len(data)
+            except Exception as e:
+                print(f"Warning: Could not read {file_path}: {e}")
+    
+    return total_count
+
+# Count genomes for each run
+genome_counts = {}
+for run_name in all_dfs.keys():
+    genome_counts[run_name] = count_total_genomes_per_run(run_name, base_dir)
+    print(f"Run {run_name}: {genome_counts[run_name]} total genomes")
+
+# ============================================================================
+# METRICS: AUC Calculation with Budget Normalization
+# ============================================================================
+
 # Calculate metrics per operator mode (with individual runs and aggregates)
 all_table_rows = []
 
@@ -726,6 +764,12 @@ for mode in OPERATOR_MODES:
         if not np.isnan(run_avg):
             mode_avg_fitness_vals.append(run_avg)
         
+        # Budget normalization: Calculate per-genome metrics
+        total_genomes = genome_counts.get(run_name, 0)
+        auc_per_genome = auc / total_genomes if total_genomes > 0 else np.nan
+        max_per_genome = run_max / total_genomes if total_genomes > 0 and not np.isnan(run_max) else np.nan
+        avg_gain_per_genome = avg_gain / total_genomes if total_genomes > 0 else np.nan
+        
         # Add individual run row
         all_table_rows.append({
             'mode': f"{mode.upper()} - {run_display}",
@@ -735,6 +779,10 @@ for mode in OPERATOR_MODES:
             'auc': auc,
             'auc_norm': auc_norm,
             'avg_gain': avg_gain,
+            'total_genomes': total_genomes,
+            'auc_per_genome': auc_per_genome,
+            'max_per_genome': max_per_genome,
+            'avg_gain_per_genome': avg_gain_per_genome,
             'is_aggregate': False
         })
     
@@ -746,6 +794,25 @@ for mode in OPERATOR_MODES:
     mean_auc_norm = np.mean(mode_aucs_norm) if len(mode_aucs_norm) > 0 else np.nan
     mean_avg_gain = np.mean(mode_avg_gains) if len(mode_avg_gains) > 0 else np.nan
     
+    # Aggregate budget metrics: average per-genome metrics across runs
+    mode_aucs_per_genome = [row['auc_per_genome'] for row in all_table_rows 
+                            if row['mode'].startswith(f"{mode.upper()}") and not row['is_aggregate'] 
+                            and not np.isnan(row.get('auc_per_genome', np.nan))]
+    mode_max_per_genome = [row['max_per_genome'] for row in all_table_rows 
+                          if row['mode'].startswith(f"{mode.upper()}") and not row['is_aggregate'] 
+                          and not np.isnan(row.get('max_per_genome', np.nan))]
+    mode_avg_gain_per_genome = [row['avg_gain_per_genome'] for row in all_table_rows 
+                               if row['mode'].startswith(f"{mode.upper()}") and not row['is_aggregate'] 
+                               and not np.isnan(row.get('avg_gain_per_genome', np.nan))]
+    
+    mean_auc_per_genome = np.mean(mode_aucs_per_genome) if len(mode_aucs_per_genome) > 0 else np.nan
+    mean_max_per_genome = np.mean(mode_max_per_genome) if len(mode_max_per_genome) > 0 else np.nan
+    mean_avg_gain_per_genome = np.mean(mode_avg_gain_per_genome) if len(mode_avg_gain_per_genome) > 0 else np.nan
+    
+    # Total genomes across all runs for this mode
+    mode_total_genomes = sum([row['total_genomes'] for row in all_table_rows 
+                             if row['mode'].startswith(f"{mode.upper()}") and not row['is_aggregate']])
+    
     # Add aggregate row for this mode
     all_table_rows.append({
         'mode': f"{mode.upper()} - Aggregate",
@@ -755,6 +822,10 @@ for mode in OPERATOR_MODES:
         'auc': mean_auc,
         'auc_norm': mean_auc_norm,
         'avg_gain': mean_avg_gain,
+        'total_genomes': mode_total_genomes,
+        'auc_per_genome': mean_auc_per_genome,
+        'max_per_genome': mean_max_per_genome,
+        'avg_gain_per_genome': mean_avg_gain_per_genome,
         'is_aggregate': True
     })
 
@@ -768,20 +839,24 @@ if all_table_rows:
     ax.axis('tight')
     ax.axis('off')
     
-    # Prepare table data
+    # Prepare table data with budget-normalized metrics
     table_data = []
-    headers = ['Operator Mode / Run', 'Min', 'Max', 'Avg Fitness', 
-               'AUC', 'AUC/G', 'AvgGain/Gen']
+    headers = ['Operator Mode / Run', 'Total Genomes', 'Min', 'Max', 'Avg', 'AUC', 'AUC/G', 'AvgGain/Gen',
+               'Max/Genome', 'AUC/Genome', 'AvgGain/Genome']
     
     for row_data in all_table_rows:
         row = [
             row_data['mode'],
-            f"{row_data['min']:.4f}" if not np.isnan(row_data['min']) else 'N/A',
+            f"{int(row_data['total_genomes'])}" if 'total_genomes' in row_data else 'N/A',
+            f"{row_data['min']:.4f}" if 'min' in row_data and not np.isnan(row_data['min']) else 'N/A',
             f"{row_data['max']:.4f}" if not np.isnan(row_data['max']) else 'N/A',
-            f"{row_data['avg_fitness']:.4f}" if not np.isnan(row_data['avg_fitness']) else 'N/A',
+            f"{row_data['avg_fitness']:.4f}" if 'avg_fitness' in row_data and not np.isnan(row_data['avg_fitness']) else 'N/A',
             f"{row_data['auc']:.4f}" if not np.isnan(row_data['auc']) else 'N/A',
             f"{row_data['auc_norm']:.4f}" if not np.isnan(row_data['auc_norm']) else 'N/A',
-            f"{row_data['avg_gain']:.4f}" if not np.isnan(row_data['avg_gain']) else 'N/A'
+            f"{row_data['avg_gain']:.4f}" if not np.isnan(row_data['avg_gain']) else 'N/A',
+            f"{row_data['max_per_genome']:.6f}" if 'max_per_genome' in row_data and not np.isnan(row_data['max_per_genome']) else 'N/A',
+            f"{row_data['auc_per_genome']:.6f}" if 'auc_per_genome' in row_data and not np.isnan(row_data['auc_per_genome']) else 'N/A',
+            f"{row_data['avg_gain_per_genome']:.6f}" if 'avg_gain_per_genome' in row_data and not np.isnan(row_data['avg_gain_per_genome']) else 'N/A'
         ]
         table_data.append(row)
     
@@ -813,10 +888,11 @@ if all_table_rows:
                     table[(row_idx, j)].set_facecolor('white')
         row_idx += 1
     
-    plt.title('AUC and Related Metrics by Operator Mode and Run', fontsize=14, fontweight='bold', pad=20)
+    plt.title('AUC and Budget-Normalized Metrics by Operator Mode and Run\n(Per-Genome Metrics Enable Fair Comparison Across Different Budgets)', 
+              fontsize=13, fontweight='bold', pad=20)
     
     # Save table as PDF
-    filename_pdf = os.path.join(output_dir, "auc_metrics_table.pdf")
+    filename_pdf = os.path.join(output_dir, "auc_metrics_table_b.pdf")
     if os.path.exists(filename_pdf):
         os.remove(filename_pdf)
     plt.savefig(filename_pdf, dpi=150, bbox_inches='tight')
@@ -852,7 +928,7 @@ for mode in OPERATOR_MODES:
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
     
-    filename_pdf = os.path.join(output_dir, f"{mode.lower()}_distribution.pdf")
+    filename_pdf = os.path.join(output_dir, f"{mode.lower()}_distribution_b.pdf")
     # Remove existing file if it exists (will be overwritten anyway, but explicit)
     if os.path.exists(filename_pdf):
         os.remove(filename_pdf)
@@ -861,14 +937,14 @@ for mode in OPERATOR_MODES:
 
 
 # ============================================================================
-# VISUALIZATION: Aggregated Plotting (min, max, average for all 3 modes overlapped)
+# VISUALIZATION: Aggregated Plotting (min, max, average for ops and comb modes overlapped)
 # ============================================================================
 
 # Check if per_run_df exists
 if 'per_run_df' not in globals() or per_run_df.empty:
     raise ValueError("per_run_df not found. Please run the data processing section first.")
 
-# Plot aggregated data for all 3 operator modes (overlapped)
+# Plot aggregated data for ie, ops, and comb operator modes (overlapped)
 
 plt.figure(figsize=(20, 9.6))
 ax = plt.gca()
@@ -1025,7 +1101,7 @@ plt.tight_layout()
 if data_plotted:
     # === Save the aggregated plot ===
     plot_type = "aggregated_gen_fitness_range"
-    filename_pdf = os.path.join(output_dir, f"all_modes_{plot_type}.pdf")
+    filename_pdf = os.path.join(output_dir, f"all_modes_{plot_type}_b.pdf")
     # Remove existing file if it exists (will be overwritten anyway, but explicit)
     if os.path.exists(filename_pdf):
         os.remove(filename_pdf)
@@ -1034,14 +1110,133 @@ plt.close()  # Close the figure to free memory
 
 
 # ============================================================================
+# VISUALIZATION: Single Unified Efficiency Plot (Temporal Efficiency)
+# ============================================================================
+# Single plot showing efficiency over generations - complementary to table metrics
+
+try:
+    print(f"\n[Unified Efficiency Plot] Creating temporal efficiency visualization...")
+    
+    if 'per_run_df' in globals() and not per_run_df.empty:
+        fig, ax = plt.subplots(figsize=(14, 8))
+        
+        plot_data_exists = False
+        
+        for mode in OPERATOR_MODES:
+            mode_tracker = EvolutionTracker_df[EvolutionTracker_df['_operator_mode'] == mode].copy()
+            if mode_tracker.empty:
+                continue
+            
+            mode_runs = sorted(mode_tracker['_run'].unique())
+            mode_efficiency_curves = []
+            
+            for run_name in mode_runs:
+                run_tracker = mode_tracker[mode_tracker['_run'] == run_name].copy()
+                if run_tracker.empty:
+                    continue
+                
+                total_genomes = genome_counts.get(run_name, 1)
+                if total_genomes == 0:
+                    continue
+                
+                # Calculate cumulative AUC/Genome up to each generation
+                generations = sorted(run_tracker['generation_number'].unique())
+                cumulative_efficiency = []
+                
+                for gen in generations:
+                    gen_data = run_tracker[run_tracker['generation_number'] <= gen]
+                    if gen_data.empty:
+                        cumulative_efficiency.append(0)
+                        continue
+                    
+                    y = (pd.Series(gen_data['max_score_variants'], dtype='float64')
+                         .cummax().ffill().fillna(0.0).to_numpy())
+                    y = np.clip(y, 0.0, 1.0)
+                    x = np.arange(len(y), dtype=float)
+                    
+                    try:
+                        auc = np.trapezoid(y, x)
+                    except AttributeError:
+                        auc = np.trapz(y, x)
+                    
+                    # Normalize by total genomes to get efficiency
+                    efficiency = auc / total_genomes
+                    cumulative_efficiency.append(efficiency)
+                
+                if len(generations) > 0 and len(cumulative_efficiency) > 0:
+                    mode_efficiency_curves.append((generations, cumulative_efficiency))
+            
+            # Plot average efficiency curve for this mode with shaded std dev
+            if mode_efficiency_curves:
+                all_gens = set()
+                for gens, _ in mode_efficiency_curves:
+                    all_gens.update(gens)
+                all_gens = sorted(all_gens)
+                
+                if all_gens:
+                    interpolated_curves = []
+                    for gens, effs in mode_efficiency_curves:
+                        if len(gens) == len(effs):
+                            # Interpolate to common generation points
+                            interp_effs = np.interp(all_gens, gens, effs)
+                            interpolated_curves.append(interp_effs)
+                    
+                    if interpolated_curves:
+                        avg_efficiency = np.mean(interpolated_curves, axis=0)
+                        
+                        # Plot average efficiency line
+                        ax.plot(all_gens, avg_efficiency, lw=3.5, 
+                               label=f'{mode.upper()}', 
+                               color=mode_colors[mode], linestyle='solid', marker='o', 
+                               markersize=4, markevery=max(1, len(all_gens)//10))
+                        plot_data_exists = True
+        
+        if plot_data_exists:
+            ax.set_xlabel('Generation', fontsize=13, fontweight='bold')
+            ax.set_ylabel('Cumulative AUC per Genome', fontsize=13, fontweight='bold')
+            ax.set_title('Efficiency Over Generations',
+                        fontsize=14, fontweight='bold', pad=20)
+            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+            ax.tick_params(labelsize=11)
+            
+            # Set axes to start from (0, 0) and end at generation 50
+            ax.set_xlim(left=0, right=50)
+            ax.set_ylim(bottom=0)
+            
+            # Place legend in top-left (where the blue box was)
+            ax.legend(loc='upper left', fontsize=11, framealpha=0.9, ncol=1)
+            
+            plt.tight_layout()
+            
+            # Save unified plot
+            filename_pdf = os.path.join(output_dir, "unified_efficiency.pdf")
+            if os.path.exists(filename_pdf):
+                os.remove(filename_pdf)
+            plt.savefig(filename_pdf, dpi=300, bbox_inches='tight')
+            plt.close()
+            print(f"[Unified Efficiency Plot] Saved: {filename_pdf}")
+        else:
+            print(f"[Unified Efficiency Plot] No data available for temporal efficiency plot")
+    else:
+        print(f"[Unified Efficiency Plot] per_run_df not available")
+except Exception as e:
+    print(f"[Unified Efficiency Plot] Error: {e}")
+    import traceback
+    traceback.print_exc()
+
+
+# ============================================================================
 # Main execution block
 # ============================================================================
 if __name__ == "__main__":
     saved_files = []
     for mode in OPERATOR_MODES:
-        saved_files.append(f"{mode.lower()}_gen_fitness_range.pdf")
-        saved_files.append(f"{mode.lower()}_distribution.pdf")
-    saved_files.append("all_modes_aggregated_gen_fitness_range.pdf")
+        saved_files.append(f"{mode.lower()}_gen_fitness_range_b.pdf")
+        saved_files.append(f"{mode.lower()}_distribution_b.pdf")
+    saved_files.append("all_modes_aggregated_gen_fitness_range_b.pdf")
+    saved_files.append("auc_metrics_table_b.pdf")
+    saved_files.append("unified_efficiency.pdf")
     
-    print(f"\nRQ1 Analysis completed. Generated {len(saved_files)} plots in {output_dir}")
+    print(f"\nRQ1B Analysis completed. Generated {len(saved_files)} plots and tables in {output_dir}")
+    print(f"  - Unified efficiency plot: unified_efficiency.pdf")
 
