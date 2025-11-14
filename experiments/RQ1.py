@@ -10,7 +10,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
-OPERATOR_MODES = ['ie', 'ops', 'comb']
+OPERATOR_MODES = ['ops', 'comb']
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 base_dir = os.path.join(script_dir, "..", "data", "outputs")
@@ -344,7 +344,6 @@ else:
     min_tox_by_gen = pd.DataFrame(columns=['generation_number', 'min_score', '_run'])
 
 mode_colors = {
-    'ie': '#e41a1c',
     'ops': '#377eb8',
     'comb': '#4daf4a'
 }
@@ -433,8 +432,8 @@ for mode in OPERATOR_MODES:
                     ax.fill_between(generations[valid_mask], min_vals[valid_mask], max_vals[valid_mask], 
                                    facecolor=color, alpha=0.20)
         
-        ax.set_xlabel('Generation Number', fontsize=18)
-        ax.set_ylabel('Score', fontsize=18)
+        ax.set_xlabel('Generation Number', fontsize=18, fontweight='bold')
+        ax.set_ylabel('Score', fontsize=18, fontweight='bold')
         ax.tick_params(axis='x', labelsize=13)
         ax.tick_params(axis='y', labelsize=13)
         if max_gen - min_gen >= 5:
@@ -547,6 +546,7 @@ def count_total_genomes_per_run(run_name, base_dir):
                     if isinstance(data, list):
                         total_count += len(data)
             except Exception as e:
+                pass
     
     return total_count
 
@@ -770,13 +770,13 @@ for mode in OPERATOR_MODES:
 if 'per_run_df' not in globals() or per_run_df.empty:
     raise ValueError("per_run_df not found. Please run the data processing section first.")
 
-plt.figure(figsize=(20, 9.6))
+# Aggregated overlapped plot for all modes (paper-ready styling)
+plt.figure(figsize=(7.5, 4.5))
 ax = plt.gca()
 
 mode_colors = {
-    'ie': '#d62728',
-    'ops': '#1f77b4',
-    'comb': '#ff7f0e'
+    'ops': '#1f77b4',  # blue
+    'comb': '#ff7f0e'  # orange
 }
 
 all_generations = sorted(per_run_df['generation_number'].unique())
@@ -787,33 +787,31 @@ for mode in OPERATOR_MODES:
     mode_data = per_run_df[per_run_df['_operator_mode'] == mode].copy()
     if mode_data.empty:
         continue
-    
+
     mode_runs = mode_data['_run'].unique()
     run_lengths = []
     for run_name in mode_runs:
         run_data = mode_data[mode_data['_run'] == run_name].copy()
         run_lengths.append(len(run_data))
-    
+
     min_run_length = min(run_lengths) if len(run_lengths) > 0 else 0
-    
     mode_generations = sorted(mode_data['generation_number'].unique())[:min_run_length]
-    
+
     aggregated_data = []
     cumulative_max_all_runs = -np.inf
-    
+
     for gen_num in mode_generations:
         gen_data = mode_data[mode_data['generation_number'] == gen_num].copy()
-        
         count = len(gen_data)
         if count == 0:
             continue
-        
+
         min_toxicity_values = gen_data['minimum_toxicity'].dropna().values
         if len(min_toxicity_values) > 0:
             aggregated_min_toxicity = np.min(min_toxicity_values)
         else:
             aggregated_min_toxicity = np.nan
-        
+
         max_score_values = gen_data['cumulative_maximum_score'].dropna().values
         if len(max_score_values) > 0:
             current_gen_max = np.max(max_score_values)
@@ -821,54 +819,69 @@ for mode in OPERATOR_MODES:
             aggregated_cumulative_max = cumulative_max_all_runs
         else:
             aggregated_cumulative_max = cumulative_max_all_runs if cumulative_max_all_runs != -np.inf else np.nan
-        
+
         avg_fitness_values = gen_data['average_fitness'].dropna().values
         if len(avg_fitness_values) > 0:
             aggregated_avg_fitness = np.mean(avg_fitness_values)
         else:
             aggregated_avg_fitness = np.nan
-        
+
         aggregated_data.append({
             'generation_number': gen_num,
             'minimum_toxicity': aggregated_min_toxicity,
             'cumulative_maximum_score': aggregated_cumulative_max,
             'average_fitness': aggregated_avg_fitness
         })
-    
+
     mode_agg_df = pd.DataFrame(aggregated_data)
     mode_agg_df = mode_agg_df.sort_values('generation_number')
-    
     mode_agg_df = mode_agg_df.dropna(subset=['generation_number', 'average_fitness'])
-    
+
     if mode_agg_df.empty:
         continue
-    
+
     generations = mode_agg_df['generation_number'].values
     max_vals = mode_agg_df['cumulative_maximum_score'].ffill().fillna(0).values
     min_vals = mode_agg_df['minimum_toxicity'].ffill().fillna(0).values
     avg_fit = mode_agg_df['average_fitness'].values
-    
+
+    # Ensure the band is well-defined
     for i in range(len(min_vals)):
         if min_vals[i] > max_vals[i] and max_vals[i] > 0:
             min_vals[i] = max_vals[i]
-    
+
     color = mode_colors[mode]
-    
+
     if len(generations) > 0 and len(avg_fit) > 0:
         valid_mask = (min_vals >= 0) & (max_vals >= 0) & (min_vals <= max_vals)
         if np.any(valid_mask):
-            ax.fill_between(generations[valid_mask], min_vals[valid_mask], max_vals[valid_mask], 
-                           facecolor=color, alpha=0.25, label=f'{mode.upper()} - Range')
-        
-        ax.plot(generations, avg_fit, lw=3, label=f'{mode.upper()} - Average', color=color, linestyle='solid')
-        
+            # Shaded min--max band (no legend entry, to keep legend compact)
+            ax.fill_between(
+                generations[valid_mask],
+                min_vals[valid_mask],
+                max_vals[valid_mask],
+                facecolor=color,
+                alpha=0.18
+            )
+
+        # Mean trajectory line with slightly thicker width
+        ax.plot(
+            generations,
+            avg_fit,
+            lw=2.4,
+            label=f'{mode.upper()}',
+            color=color,
+            linestyle='solid'
+        )
+
         data_plotted = True
 
-ax.set_xlabel('Generation Number', fontsize=18)
-ax.set_ylabel('Score', fontsize=18)
+# Axis labels and ticks tuned for print readability
+ax.set_xlabel('Generated Prompts', fontsize=11, fontweight='bold')
+ax.set_ylabel('Score', fontsize=11, fontweight='bold')
 
-ax.tick_params(axis='x', labelsize=13)
-ax.tick_params(axis='y', labelsize=13)
+ax.tick_params(axis='x', labelsize=9)
+ax.tick_params(axis='y', labelsize=9)
 
 all_gens_combined = per_run_df['generation_number'].unique()
 max_gen = int(all_gens_combined.max()) if len(all_gens_combined) > 0 else 0
@@ -882,16 +895,19 @@ if max_gen - min_gen >= 5:
 else:
     ax.set_xticks(sorted(all_gens_combined))
 
-y_ticks = np.arange(0.2, 1.01, 0.2)
+y_ticks = np.arange(0.0, 1.01, 0.2)
 ax.set_yticks(y_ticks)
 
 ax.set_xlim(left=min_gen, right=max_gen)
-ax.set_ylim(0, 1)
-ax.set_title('All Operator Modes - Aggregated (Overlapped)', fontsize=18)
+ax.set_ylim(0.0, 1.0)
+
+# Cleaner title and grid for paper-style figure
+# ax.set_title('Population fitness convergence by operator mode', fontsize=12, fontweight='bold', pad=10)
 
 if data_plotted:
-    ax.legend(loc='upper left', fontsize=14)
-ax.grid(True, alpha=0.3)
+    ax.legend(loc='upper left', fontsize=9, frameon=False)
+
+ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.7)
 
 plt.tight_layout()
 
@@ -900,13 +916,14 @@ if data_plotted:
     filename_pdf = os.path.join(output_dir, f"all_modes_{plot_type}_b.pdf")
     if os.path.exists(filename_pdf):
         os.remove(filename_pdf)
-    plt.savefig(filename_pdf, dpi=150, bbox_inches='tight')
+    plt.savefig(filename_pdf, dpi=300, bbox_inches='tight')
 plt.close()
 
 try:
     
     if 'per_run_df' in globals() and not per_run_df.empty:
-        fig, ax = plt.subplots(figsize=(14, 8))
+        # Paper-ready unified efficiency plot (similar styling to aggregated plot)
+        fig, ax = plt.subplots(figsize=(7.5, 4.5))
         
         plot_data_exists = False
         
@@ -933,7 +950,7 @@ try:
                 for gen in generations:
                     gen_data = run_tracker[run_tracker['generation_number'] <= gen]
                     if gen_data.empty:
-                        cumulative_efficiency.append(0)
+                        cumulative_efficiency.append(0.0)
                         continue
                     
                     y = (pd.Series(gen_data['max_score_variants'], dtype='float64')
@@ -953,6 +970,7 @@ try:
                     mode_efficiency_curves.append((generations, cumulative_efficiency))
             
             if mode_efficiency_curves:
+                # Build a common generation grid and interpolate each run onto it
                 all_gens = set()
                 for gens, _ in mode_efficiency_curves:
                     all_gens.update(gens)
@@ -968,24 +986,48 @@ try:
                     if interpolated_curves:
                         avg_efficiency = np.mean(interpolated_curves, axis=0)
                         
-                        ax.plot(all_gens, avg_efficiency, lw=3.5, 
-                               label=f'{mode.upper()}', 
-                               color=mode_colors[mode], linestyle='solid', marker='o', 
-                               markersize=4, markevery=max(1, len(all_gens)//10))
+                        ax.plot(
+                            all_gens,
+                            avg_efficiency,
+                            lw=2.4,
+                            label=f'{mode.upper()}',
+                            color=mode_colors[mode],
+                            linestyle='solid'
+                        )
                         plot_data_exists = True
         
         if plot_data_exists:
-            ax.set_xlabel('Generation', fontsize=13, fontweight='bold')
-            ax.set_ylabel('Cumulative AUC per Genome', fontsize=13, fontweight='bold')
-            ax.set_title('Efficiency Over Generations',
-                        fontsize=14, fontweight='bold', pad=20)
-            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
-            ax.tick_params(labelsize=11)
+            # Axis labels tuned for print readability
+            ax.set_xlabel('Generated Prompts', fontsize=11, fontweight='bold')
+            ax.set_ylabel('Cumulative AUC per Genome', fontsize=11, fontweight='bold')
             
-            ax.set_xlim(left=0, right=50)
-            ax.set_ylim(bottom=0)
+            # Ticks and limits
+            all_gens_global = per_run_df['generation_number'].unique()
+            if len(all_gens_global) > 0:
+                max_gen = int(all_gens_global.max())
+                min_gen = int(all_gens_global.min())
+            else:
+                max_gen, min_gen = 0, 0
             
-            ax.legend(loc='upper left', fontsize=11, framealpha=0.9, ncol=1)
+            if max_gen - min_gen >= 5:
+                xticks = np.arange(min_gen, max_gen + 1, 5)
+                if xticks[-1] != max_gen:
+                    xticks = np.append(xticks, max_gen)
+                ax.set_xticks(xticks)
+            else:
+                ax.set_xticks(sorted(all_gens_global))
+            
+            ax.set_xlim(left=min_gen, right=max_gen if max_gen > min_gen else min_gen + 1)
+            ax.set_ylim(bottom=0.0)
+            
+            ax.tick_params(axis='x', labelsize=9)
+            ax.tick_params(axis='y', labelsize=9)
+            
+            # Legend in upper-left, no box, for compact paper style
+            ax.legend(loc='upper left', fontsize=9, frameon=False)
+            
+            # Light dashed grid for readability
+            ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.7)
             
             plt.tight_layout()
             
@@ -995,7 +1037,9 @@ try:
             plt.savefig(filename_pdf, dpi=300, bbox_inches='tight')
             plt.close()
         else:
+            pass
     else:
+        pass
 except Exception as e:
     import traceback
     traceback.print_exc()

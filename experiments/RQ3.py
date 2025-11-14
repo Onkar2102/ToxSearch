@@ -479,8 +479,8 @@ def main():
             color="white",
         )
     
-    ax.set_xlabel('Model', fontsize=11)
-    ax.set_ylabel('Invalid responses (%)', fontsize=11)
+    ax.set_xlabel('Model', fontsize=11, fontweight='bold')
+    ax.set_ylabel('Invalid responses (%)', fontsize=11, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels(model_names_short, rotation=45, ha='right', fontsize=9)
     

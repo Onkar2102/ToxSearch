@@ -389,7 +389,9 @@ for metric in metrics:
         h_statistic, p_value = kruskal(*groups)
         
         if p_value < 0.05:
+            pass
         else:
+            pass
         
         statistical_results[metric] = {
             'kruskal_wallis': {
@@ -469,6 +471,7 @@ for metric in metrics:
                     continue
             
             if not significant_pairs:
+                pass
             
             effect_sizes = [p.get('effect_size_r', np.nan) for p in pairwise_results if not np.isnan(p.get('effect_size_r', np.nan))]
             if len(effect_sizes) > 0:
@@ -509,6 +512,7 @@ if significant_metrics:
         p_val = statistical_results[metric]['kruskal_wallis']['p_value']
         num_sig_pairs = len(statistical_results[metric].get('significant_pairs', []))
 else:
+    pass
 
 if 'output_dir' not in globals():
     output_dir = script_dir
