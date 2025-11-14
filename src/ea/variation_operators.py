@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class VariationOperator(ABC):
     """
     Abstract base class for variation operators (e.g., mutation, crossover) used in prompt evolution.
-    
+
     Args:
         name: Name of the operator (defaults to class name).
         operator_type: Operator category ('mutation', 'crossover', or 'hybrid').

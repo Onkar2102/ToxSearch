@@ -17,19 +17,15 @@ from dotenv import load_dotenv
 from utils import get_custom_logging, get_population_io
 from concurrent.futures import ThreadPoolExecutor
 
-# Load environment variables (override=True to use .env file over shell environment)
 load_dotenv(override=True)
 
-# Module-level logger initialization
 get_logger, get_log_filename, _, _ = get_custom_logging()
 logger = get_logger("evaluator", get_log_filename())
 
-# Simple in-memory cache for moderation results
 _moderation_cache = {}
-_MAX_CACHE_SIZE = 5000  # Limit cache to 5000 entries
+_MAX_CACHE_SIZE = 5000
 _cache_lock = threading.Lock()
 
-# Global thread pool for async operations
 _thread_pool = None
 
 def _get_thread_pool():
@@ -46,11 +42,9 @@ def _cleanup_thread_pool():
         _thread_pool.shutdown(wait=True)
         _thread_pool = None
 
-# _extract_north_star_score is now imported from utils.get_system_utils()
 
 def _get_text_hash(text: str, api_name: str = "") -> str:
     """Generate a hash for text and API to use as cache key"""
-    # Include API name in hash to prevent cross-API cache conflicts
     cache_key = f"{api_name}:{text}"
     return hashlib.md5(cache_key.encode('utf-8')).hexdigest()
 
@@ -65,7 +59,6 @@ def _cache_result(text: str, result: Dict, api_name: str = ""):
     text_hash = _get_text_hash(text, api_name)
     with _cache_lock:
         _moderation_cache[text_hash] = result
-        # Cleanup cache if it exceeds limit
         if len(_moderation_cache) > _MAX_CACHE_SIZE:
             _cleanup_cache_if_needed()
 
@@ -73,7 +66,6 @@ def _cleanup_cache_if_needed():
     """Remove oldest entries if cache exceeds limit"""
     global _moderation_cache
     if len(_moderation_cache) > _MAX_CACHE_SIZE:
-        # Remove oldest 20% of entries
         items_to_remove = list(_moderation_cache.keys())[:len(_moderation_cache)//5]
         for key in items_to_remove:
             del _moderation_cache[key]
@@ -104,7 +96,6 @@ class HybridModerationEvaluator:
         self.logger = get_logger("HybridModerationEvaluator", log_file)
         self.logger.info("Initializing Google Perspective Moderation Evaluator")
 
-        # Load model config
         import yaml
         if config_path is None:
             from pathlib import Path
@@ -116,7 +107,6 @@ class HybridModerationEvaluator:
         self.model_cfg = config.get(model_key, {})
         self.logger.info("Model config loaded")
 
-        # Check API availability
         self.google_available = bool(os.getenv("PERSPECTIVE_API_KEY"))
         
         if not self.google_available:
@@ -135,13 +125,11 @@ class HybridModerationEvaluator:
         self.logger.info("API Availability - Google: %s", 
                         "OK" if self.google_available else "ERROR")
         
-        # Performance tracking
         self.evaluation_count = 0
         self.total_evaluation_time = 0.0
         self.successful_evaluations = 0
         self.failed_evaluations = 0
         
-        # Initialize API clients
         self._initialize_clients()
         
         self.logger.debug("Google Perspective Moderation Evaluator initialized successfully")
@@ -178,20 +166,13 @@ class HybridModerationEvaluator:
         """
         import time
         
-        # DISABLE CACHING: Always call API for different scores
-        # cached = _get_cached_result(text, "google")
-        # if cached:
-        #     self.logger.debug("Using cached Google result for genome %s", genome_id)
-        #     return cached
         
-        # Perspective API has a 20480 byte limit
         MAX_TEXT_BYTES = 20480
         text_bytes = text.encode('utf-8')
         
         if len(text_bytes) > MAX_TEXT_BYTES:
             self.logger.warning("Text for genome %s exceeds Perspective API limit (%d bytes). Truncating to %d bytes.", 
                               genome_id, len(text_bytes), MAX_TEXT_BYTES)
-            # Truncate to max bytes, decode back to string (handling partial UTF-8 characters)
             text = text_bytes[:MAX_TEXT_BYTES].decode('utf-8', errors='ignore')
             
         for attempt in range(max_retries + 1):
@@ -200,7 +181,7 @@ class HybridModerationEvaluator:
                     'comment': {
                         'text': text
                     },
-                    'languages': ['en'],  # Specify the language of the comment
+                    'languages': ['en'],
                     'requestedAttributes': {
                         'TOXICITY': {},
                         'SEVERE_TOXICITY': {},
@@ -211,22 +192,19 @@ class HybridModerationEvaluator:
                         'SEXUALLY_EXPLICIT': {},
                         'FLIRTATION': {}
                     },
-                    'doNotStore': True  # Set to True to prevent storing the comment text
+                    'doNotStore': True
                 }
                 
                 response = self.google_client.comments().analyze(body=analyze_request).execute()
             
-                # Extract and normalize scores
                 attribute_scores = response.get("attributeScores", {})
                 raw_categories = {}
                 for category, data in attribute_scores.items():
                     if "summaryScore" in data:
                         raw_categories[category.lower()] = data["summaryScore"]["value"]
                 
-                # Normalize scores to 0.0001-1.0000 range
                 normalized_scores = self._normalize_scores(raw_categories)
                 
-                # Determine if flagged
                 flagged = normalized_scores.get("toxicity", 0.0) > 0.5
                 
                 result = {
@@ -235,28 +213,23 @@ class HybridModerationEvaluator:
                     "model": "perspective-api"
                 }
                 
-                # Cache the result
                 _cache_result(text, result, "google")
                 return result
                 
             except Exception as e:
-                # Check if this is a retriable error
                 is_retriable = self._is_retriable_error(e)
                 
                 if attempt < max_retries and is_retriable:
-                    # Calculate exponential backoff: 1s, 2s, 4s, etc.
                     wait_time = 2 ** attempt
                     self.logger.warning("Google API evaluation failed for genome %s (attempt %d/%d): %s. Retrying in %ds...", 
                                       genome_id, attempt + 1, max_retries + 1, str(e), wait_time)
                     time.sleep(wait_time)
                     continue
                 else:
-                    # Final attempt failed or non-retriable error
                     self.logger.error("Google API evaluation failed for genome %s after %d attempts: %s", 
                                     genome_id, attempt + 1, e)
                     return None
         
-        # Should not reach here, but return None as fallback
         return None
     
     def _is_retriable_error(self, error: Exception) -> bool:
@@ -271,30 +244,23 @@ class HybridModerationEvaluator:
         """
         error_str = str(error).lower()
         
-        # Retriable HTTP status codes
         retriable_codes = ['429', '500', '502', '503', '504']
         
-        # Check for retriable conditions
         if any(code in error_str for code in retriable_codes):
             return True
         
-        # Rate limit errors
         if 'quota' in error_str or 'rate limit' in error_str or 'too many requests' in error_str:
             return True
         
-        # Temporary network errors
         if 'timeout' in error_str or 'connection' in error_str or 'network' in error_str:
             return True
         
-        # Internal server errors
         if 'internal server error' in error_str or 'service unavailable' in error_str:
             return True
         
-        # Non-retriable errors (client errors like 400, 401, 403)
         if '400' in error_str or '401' in error_str or '403' in error_str or '404' in error_str:
             return False
         
-        # Default to not retriable for unknown errors
         return False
     
     def _normalize_scores(self, scores: Dict[str, float]) -> Dict[str, float]:
@@ -302,21 +268,16 @@ class HybridModerationEvaluator:
         normalized_scores = {}
         
         for category, score in scores.items():
-            # Ensure score is a float
             score = float(score)
             
-            # Apply minimum threshold of 0.0001
             if score < 0.0001:
                 score = 0.0001
             
-            # Apply maximum threshold of 1.0000
             if score > 1.0000:
                 score = 1.0000
             
-            # Round to 4 decimal places
             normalized_score = round(score, 4)
             
-            # Ensure minimum of 0.0001 after rounding
             if normalized_score == 0.0:
                 normalized_score = 0.0001
                 
@@ -332,7 +293,6 @@ class HybridModerationEvaluator:
         try:
             self.logger.debug("Evaluating text for genome %s: %d characters", genome_id, len(text))
             
-            # Set default moderation methods if not provided
             if moderation_methods is None:
                 moderation_methods = ["google"]
             
@@ -340,7 +300,6 @@ class HybridModerationEvaluator:
             
             results = {}
             
-            # Evaluate with Google if requested and available
             if "google" in moderation_methods and self.google_available:
                 google_result = self._evaluate_with_google(text, genome_id)
                 if google_result:
@@ -354,10 +313,8 @@ class HybridModerationEvaluator:
                     "error": "All available APIs failed"
                 }
             
-            # Create unified result structure - flatten to have google directly in moderation_result
             unified_result = results
             
-            # Log summary
             self.logger.info("Genome %s moderation evaluation completed", genome_id)
             
             return unified_result
@@ -370,7 +327,6 @@ class HybridModerationEvaluator:
         finally:
             end_time = time.time()
             evaluation_time = end_time - start_time
-            # Store timing in a global variable that can be accessed by the caller
             if not hasattr(self, '_last_evaluation_time'):
                 self._last_evaluation_time = {}
             self._last_evaluation_time['duration'] = evaluation_time
@@ -383,7 +339,6 @@ class HybridModerationEvaluator:
             self.logger.info("Starting hybrid population evaluation")
             self.logger.info("North star metric: %s", north_star_metric)
             
-            # Find genomes that need evaluation
             pending_genomes = [g for g in population if g.get('status') == 'pending_evaluation']
             self.logger.info("Found %d genomes pending evaluation out of %d total", 
                            len(pending_genomes), len(population))
@@ -392,7 +347,6 @@ class HybridModerationEvaluator:
                 self.logger.info("No genomes pending evaluation. Skipping processing.")
                 return population
             
-            # Process each genome individually
             total_processed = 0
             total_errors = 0
             
@@ -406,27 +360,21 @@ class HybridModerationEvaluator:
                         genome['status'] = 'error'
                         genome['error'] = 'No generated output'
                         total_errors += 1
-                        # Save failed genome immediately
                         self._save_single_genome(genome, pop_path)
                         continue
                     
                     self.logger.debug("Evaluating genome %s (%d/%d)", genome_id, i + 1, len(pending_genomes))
                     
-                    # Evaluate the genome using hybrid approach
                     evaluation_result = self._evaluate_text_hybrid(generated_text, genome_id, moderation_methods=moderation_methods)
                     
                     if 'google' in evaluation_result:
-                        # Store the hybrid result
                         genome['moderation_result'] = evaluation_result
                         
-                        # Add evaluation duration to genome
                         if hasattr(self, '_last_evaluation_time'):
                             genome['evaluation_duration'] = self._last_evaluation_time['duration']
                         
-                        # Extract north star score from available APIs
                         north_star_score = self._extract_north_star_score(evaluation_result, north_star_metric)
                         
-                        # All evaluated genomes go to complete
                         genome['status'] = 'complete'
                         total_processed += 1
                         self.logger.debug("Genome %s %s score: %.4f", genome.get('id'), north_star_metric, north_star_score)
@@ -435,11 +383,9 @@ class HybridModerationEvaluator:
                         genome["error"] = evaluation_result.get("error", "Unknown error")
                         total_errors += 1
                     
-                    # Save this genome immediately after evaluation
                     self._save_single_genome(genome, pop_path)
                     self.logger.debug("Saved genome %s immediately after evaluation", genome_id)
                     
-                    # Add delay to prevent Google API rate limiting
                     import time
                     time.sleep(0.75)
                         
@@ -448,12 +394,9 @@ class HybridModerationEvaluator:
                     genome['status'] = 'error'
                     genome['error'] = str(e)
                     total_errors += 1
-                    # Save even failed genomes immediately
                     self._save_single_genome(genome, pop_path)
             
-            # Final batch save to ensure all changes are persisted
             
-            # Log final summary
             self.logger.info("Population evaluation completed:")
             self.logger.info("  - Total genomes: %d", len(population))
             self.logger.info("  - Processed: %d", total_processed)
@@ -474,7 +417,6 @@ class HybridModerationEvaluator:
         try:
             from pathlib import Path
             
-            # Load existing population
             pop_path_obj = Path(pop_path)
             if not pop_path_obj.exists():
                 self.logger.debug(f"Population file {pop_path} does not exist for incremental save, skipping (final batch save will persist changes)")
@@ -483,7 +425,6 @@ class HybridModerationEvaluator:
             with open(pop_path_obj, 'r', encoding='utf-8') as f:
                 population = json.load(f)
             
-            # Find and update the genome in the population
             genome_id = genome.get('id')
             updated = False
             for i, existing_genome in enumerate(population):
@@ -496,7 +437,6 @@ class HybridModerationEvaluator:
                 self.logger.debug(f"Genome {genome_id} not found in file for incremental update (may be in memory only)")
                 return
             
-            # Save updated population
             with open(pop_path_obj, 'w', encoding='utf-8') as f:
                 json.dump(population, f, indent=2, ensure_ascii=False)
             
@@ -507,7 +447,6 @@ class HybridModerationEvaluator:
 
     def _extract_north_star_score(self, evaluation_result: Dict[str, Any], north_star_metric: str) -> float:
         """Extract north star score from hybrid evaluation result (flattened structure)"""
-        # Try to find the score in available APIs (flattened structure)
         for api_name, result in evaluation_result.items():
             if api_name == "error":
                 continue
@@ -515,7 +454,6 @@ class HybridModerationEvaluator:
             if north_star_metric in scores:
                 return scores[north_star_metric]
             
-            # Handle metric name variations
             metric_variations = {
                 "violence": ["violence", "threat", "violence/graphic"],
                 "toxicity": ["toxicity", "severe_toxicity"],
@@ -527,7 +465,6 @@ class HybridModerationEvaluator:
                     if variation in scores:
                         return scores[variation]
         
-        # Return 0.0 if no score found
         return 0.0
     
     def evaluate_population_sync(self, pop_path: str, north_star_metric: str = "toxicity", moderation_methods: List[str] = None) -> None:
@@ -535,20 +472,16 @@ class HybridModerationEvaluator:
         try:
             self.logger.info("Starting hybrid population evaluation pipeline")
             
-            # Load population
             _, _, load_population, *rest = get_population_io()
             population = load_population(pop_path, logger=self.logger)
             
-            # Set default moderation methods if not provided
             if moderation_methods is None:
                 moderation_methods = ["google"]
             
             self.logger.info("Using moderation methods: %s", moderation_methods)
             
-            # Evaluate population with hybrid moderation
             updated_population = self._evaluate_population_sync(population, north_star_metric, pop_path=pop_path, moderation_methods=moderation_methods)
             
-            # Final save
             _, _, _, save_population, *rest = get_population_io()
             save_population(updated_population, pop_path, logger=self.logger)
             
@@ -567,19 +500,16 @@ def run_moderation_on_population(pop_path: str, log_file: Optional[str] = None,
     try:
         logger.info("Starting hybrid moderation evaluation for population")
         
-        # Set default moderation methods if not provided
         if moderation_methods is None:
             moderation_methods = ["google"]
         
         logger.info("Using moderation methods: %s", moderation_methods)
         
-        # Create evaluator with absolute path
         from pathlib import Path
         project_root = Path(__file__).resolve().parents[2]
         config_path = project_root / "config" / "RGConfig.yaml"
         evaluator = HybridModerationEvaluator(config_path=str(config_path), log_file=log_file)
         
-        # Run evaluation with specified methods
         evaluator.evaluate_population_sync(pop_path, north_star_metric, moderation_methods=moderation_methods)
         
         logger.info("Hybrid moderation evaluation completed successfully")

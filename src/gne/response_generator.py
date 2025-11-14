@@ -12,7 +12,6 @@ from llama_cpp import Llama
 from utils import get_custom_logging
 from .model_interface import LlamaCppChatInterface
 
-# Get the functions at module level to avoid repeated calls
 get_logger, _, _, _ = get_custom_logging()
 
 class ResponseGenerator:
@@ -25,7 +24,6 @@ class ResponseGenerator:
         self.logger = get_logger("ResponseGenerator", self.log_file)
         self.logger.debug(f"Logger correctly initialized with log_file: {self.log_file}")
 
-        # Load model config
         try:
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
@@ -35,7 +33,6 @@ class ResponseGenerator:
                 raise ValueError(f"Model '{model_key}' not found in configuration. Available keys: {list(config.keys())}")
             self.model_cfg = config[model_key]
             
-            # Validate model configuration
             if not self.model_cfg.get("name"):
                 raise ValueError(f"Model configuration missing 'name' field for {model_key}")
                 
@@ -49,18 +46,15 @@ class ResponseGenerator:
             self.logger.error(f"Failed to load model configuration: {e}")
             raise
 
-        # Initialize chat interface
         try:
             self.model_interface = LlamaCppChatInterface(self.model_cfg, log_file)
         except Exception as e:
             self.logger.error(f"Failed to initialize model interface: {e}")
             raise
         
-        # Prompt template support (for chat completions)
         tmpl = self.model_cfg.get("prompt_template", {})
         self.prompt_messages = tmpl.get("messages", [])
         
-        # Performance tracking attributes
         self.generation_count = 0
         self.total_tokens_generated = 0
         self.total_generation_time = 0.0
@@ -69,19 +63,16 @@ class ResponseGenerator:
         """Build messages array from prompt template and user input."""
         messages = []
         
-        # Add template messages
         for msg_template in self.prompt_messages:
             role = msg_template.get("role", "user")
             content = msg_template.get("content", "")
             
-            # Replace placeholders in content
             if "{{prompt}}" in content:
                 content = content.replace("{{prompt}}", raw_prompt)
             
-            if content.strip():  # Only add non-empty messages
+            if content.strip():
                 messages.append({"role": role, "content": content})
         
-        # If no template messages, create a simple user message
         if not messages:
             messages.append({"role": "user", "content": raw_prompt})
         
@@ -96,15 +87,12 @@ class ResponseGenerator:
         start_time = time.time()
         
         try:
-            # Build messages from template and user input
             messages = self._build_messages(prompt)
             
-            # Generate response using chat completions
             self.logger.debug(f"Generating response for prompt: {prompt[:100]}...")
             
             generated_text = self.model_interface.chat_completion(messages, **kwargs)
             
-            # Update performance metrics
             self.generation_count += 1
             self.total_tokens_generated += len(generated_text.split())
             
@@ -120,11 +108,9 @@ class ResponseGenerator:
         try:
             self.logger.info("Starting population processing for text generation with chat completions")
             
-            # Load population
             from utils.population_io import load_population
             population = load_population(pop_path, logger=self.logger)
             
-            # Count genomes that need processing
             pending_genomes = [g for g in population if g.get('status') == 'pending_generation']
             self.logger.info("Found %d genomes pending generation out of %d total", len(pending_genomes), len(population))
             
@@ -132,7 +118,6 @@ class ResponseGenerator:
                 self.logger.info("No genomes pending generation. Skipping processing.")
                 return
             
-            # Process each genome individually
             total_processed = 0
             total_errors = 0
             
@@ -141,7 +126,6 @@ class ResponseGenerator:
                 try:
                     self.logger.debug("Processing genome %s (%d/%d)", genome_id, i + 1, len(pending_genomes))
                     
-                    # Generate response for this genome
                     response, response_duration = self.generate_response(genome['prompt'])
                     
                     if response:
@@ -158,7 +142,6 @@ class ResponseGenerator:
                         total_errors += 1
                         self.logger.warning("Failed to generate response for genome %s", genome_id)
                     
-                    # Save this genome immediately after processing
                     self._save_single_genome(genome, pop_path)
                     self.logger.debug("Saved genome %s immediately after generation", genome_id)
                         
@@ -167,10 +150,8 @@ class ResponseGenerator:
                     genome['error'] = str(e)
                     total_errors += 1
                     self.logger.error("Error processing genome %s: %s", genome_id, e)
-                    # Save even failed genomes immediately
                     self._save_single_genome(genome, pop_path)
             
-            # Final batch save to ensure all changes are persisted
             try:
                 from utils.population_io import save_population
                 save_population(population, pop_path, logger=self.logger)
@@ -178,7 +159,6 @@ class ResponseGenerator:
             except Exception as e:
                 self.logger.error(f"Failed to perform final batch save: {e}")
             
-            # Log final summary
             self.logger.info("Population processing completed:")
             self.logger.info("  - Total genomes: %d", len(population))
             self.logger.info("  - Processed: %d", total_processed)
@@ -197,7 +177,6 @@ class ResponseGenerator:
         try:
             from pathlib import Path
             
-            # Load existing population
             pop_path_obj = Path(pop_path)
             if not pop_path_obj.exists():
                 self.logger.debug(f"Population file {pop_path} does not exist for incremental save, skipping (final batch save will persist changes)")
@@ -206,7 +185,6 @@ class ResponseGenerator:
             with open(pop_path_obj, 'r', encoding='utf-8') as f:
                 population = json.load(f)
             
-            # Find and update the genome in the population
             genome_id = genome.get('id')
             updated = False
             for i, existing_genome in enumerate(population):
@@ -219,7 +197,6 @@ class ResponseGenerator:
                 self.logger.debug(f"Genome {genome_id} not found in file for incremental update (may be in memory only)")
                 return
             
-            # Save updated population
             with open(pop_path_obj, 'w', encoding='utf-8') as f:
                 json.dump(population, f, indent=2, ensure_ascii=False)
             

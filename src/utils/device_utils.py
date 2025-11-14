@@ -62,16 +62,13 @@ class DeviceManager:
         if self._device_cache is not None:
             return self._device_cache
         
-        # Check if preferred device is specified in config
         preferred_device = self._config_cache.get("preferred_device")
         if preferred_device and self._is_device_available(preferred_device):
             self._device_cache = preferred_device
             self.logger.info(f"Using preferred device from config: {preferred_device}")
             return self._device_cache
         
-        # Auto-detect if enabled
         if self._config_cache.get("auto_detect", True):
-            # Check MPS availability (Apple Silicon ONLY)
             try:
                 import platform
                 is_macos = platform.system() == "Darwin"
@@ -81,7 +78,6 @@ class DeviceManager:
                 
                 self.logger.debug(f"MPS Detection - macOS: {is_macos}, has_backend: {has_mps_backend}, built: {is_mps_built}, available: {is_mps_available}")
                 
-                # Only use MPS on macOS with Apple Silicon
                 if is_macos and has_mps_backend and is_mps_built and is_mps_available:
                     self._device_cache = "mps"
                     self.logger.info("Using MPS (Metal Performance Shaders) for Apple Silicon")
@@ -96,7 +92,6 @@ class DeviceManager:
                 import traceback
                 self.logger.debug(f"MPS check traceback: {traceback.format_exc()}")
             
-            # Check CUDA availability (NVIDIA GPUs)
             try:
                 if torch.cuda.is_available():
                     self._device_cache = "cuda"
@@ -108,7 +103,6 @@ class DeviceManager:
             except Exception as e:
                 self.logger.warning(f"CUDA check failed: {e}")
         
-        # Fallback to CPU
         self._device_cache = "cpu"
         self.logger.info("Using CPU (fallback)")
         self._apply_device_optimizations("cpu")
@@ -143,7 +137,6 @@ class DeviceManager:
                     torch.backends.cudnn.allow_tf32 = True
                 if cuda_config.get("enable_cudnn_benchmark", True):
                     torch.backends.cudnn.benchmark = True
-                # Set memory fraction if specified
                 memory_fraction = cuda_config.get("memory_fraction")
                 if memory_fraction:
                     torch.cuda.set_per_process_memory_fraction(memory_fraction)
@@ -154,10 +147,9 @@ class DeviceManager:
                 if num_threads:
                     torch.set_num_threads(num_threads)
                 elif num_threads is None:
-                    # Auto-detect optimal thread count
                     import os
                     cpu_count = os.cpu_count()
-                    torch.set_num_threads(min(cpu_count, 8))  # Cap at 8 threads
+                    torch.set_num_threads(min(cpu_count, 8))
             
             self.logger.debug(f"Applied optimizations for {device}")
         except Exception as e:
@@ -252,8 +244,8 @@ class DeviceManager:
             device = self.get_optimal_device()
         
         kwargs = {
-            "pad_token_id": None,  # Will be set by caller
-            "eos_token_id": None,  # Will be set by caller
+            "pad_token_id": None,
+            "eos_token_id": None,
             "use_cache": True,
         }
         
@@ -271,9 +263,9 @@ class DeviceManager:
                 "top_p": 0.9,
                 "repetition_penalty": 1.15,
             })
-        else:  # CPU
+        else:
             kwargs.update({
-                "do_sample": False,  # Deterministic for CPU
+                "do_sample": False,
                 "temperature": 1.0,
                 "top_p": 1.0,
                 "repetition_penalty": 1.0,
@@ -287,7 +279,6 @@ class DeviceManager:
         self.logger.info("Device cache cleared")
 
 
-# Global device manager instance
 device_manager = DeviceManager()
 
 

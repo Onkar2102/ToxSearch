@@ -192,5 +192,8 @@ tests/
 requirements_spack.txt
 project_script.sh
 
+data/outputs/
+data/archive/
+
 
 

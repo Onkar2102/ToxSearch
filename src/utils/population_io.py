@@ -17,21 +17,15 @@ from utils import get_population_io
 from gne import get_ResponseGenerator, get_PromptGenerator
 from datetime import datetime
 
-# Import pandas directly - it's required for this module
 import pandas as pd
 
-# Get the functions at module level to avoid repeated calls
 get_logger, _, _, PerformanceLogger = get_custom_logging()
 
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
 
 def get_project_root():
     """Get the absolute path to the project root directory"""
     script_dir = Path(__file__).parent
-    # Go up two levels to get to the project root (from src/utils/ to project root)
     project_root = script_dir.parent.parent
     return project_root.resolve()
 
@@ -50,20 +44,15 @@ def get_outputs_path():
     """Get the absolute path to the outputs directory"""
     global _current_outputs_path
     
-    # If we already have a path for this run, use it
     if _current_outputs_path is not None:
         return _current_outputs_path
     
-    # Create timestamp string
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     
-    # Create the full path: data/outputs/YYYYMMDD_HHMM/
     outputs_dir = get_project_root() / "data" / "outputs" / timestamp
     
-    # Ensure the directory exists
     outputs_dir.mkdir(parents=True, exist_ok=True)
     
-    # Store the path for this run
     _current_outputs_path = outputs_dir
     
     return outputs_dir
@@ -79,7 +68,6 @@ def _extract_north_star_score(genome, metric="toxicity"):
     if "moderation_result" in genome:
         moderation_result = genome["moderation_result"]
         
-        # Check if moderation_result is not None before using 'in' operator
         if moderation_result is not None and "google" in moderation_result:
             google_scores = moderation_result["google"]
             if "scores" in google_scores:
@@ -90,9 +78,6 @@ def _extract_north_star_score(genome, metric="toxicity"):
     return 0.0001
 
 
-# ============================================================================
-# SYSTEM INITIALIZATION
-# ============================================================================
 
 def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
     """Initialize the system components and create gen0 if needed
@@ -108,31 +93,24 @@ def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
     
     logger.debug("Initializing pipeline for device: %s", device)
     
-    # Import required modules
     population_io_functions = get_population_io()
     
-    # Get population IO functions
     load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, load_elites, save_elites, get_population_stats_steady_state, finalize_initial_population = get_population_io()
     
-    # Initialize Response Generator (for generating responses to prompts)
     ResponseGenerator = get_ResponseGenerator()
     response_generator = ResponseGenerator(model_key="response_generator", config_path="config/RGConfig.yaml", log_file=log_file)
     logger.debug("Response generator initialized")
     
-    # Initialize Prompt Generator (for operators and evolutionary algorithms)
     PromptGenerator = get_PromptGenerator()
     prompt_generator = PromptGenerator(model_key="prompt_generator", config_path="config/PGConfig.yaml", log_file=log_file)
     logger.debug("Prompt generator initialized")
     
-    # Set the global generators for different purposes
     from ea.evolution_engine import set_global_generators
     set_global_generators(response_generator, prompt_generator)
     logger.debug("Global generators set")
     
-    # Check if population already exists (steady state: check elites.json)
     population_file = get_outputs_path() / "elites.json"
     
-    # Check if population file exists and has content, and avoid double-loading
     population_content = None
     if not population_file.exists():
         should_initialize = True
@@ -142,7 +120,6 @@ def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
                 content = f.read().strip()
             should_initialize = len(content) == 0 or content == '[]'
             if not should_initialize:
-                # Parse content once for later use
                 import json
                 population_content = json.loads(content)
         except Exception:
@@ -150,10 +127,8 @@ def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
 
     if should_initialize:
         try:
-            # Resolve seed_file path (can be relative or absolute)
             seed_path = Path(seed_file)
             if not seed_path.is_absolute():
-                # If relative, resolve from project root
                 seed_path = get_project_root() / seed_path
             input_path = str(seed_path)
             logger.info("Initializing population from seed file: %s", input_path)
@@ -169,7 +144,6 @@ def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
             raise
     else:
         logger.info("Existing elites file found. Skipping initialization.")
-        # Use already loaded content for info
         try:
             population = population_content if population_content is not None else []
             logger.info("Loaded %d genomes from existing elites.json", len(population))
@@ -211,9 +185,6 @@ def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file:
     return cleaned_population
 
 
-# ============================================================================
-# Split File Management Functions
-# ============================================================================
 
 def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
     """Get information about population files including non_elites.json and elites.json"""
@@ -310,7 +281,6 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
         info = get_population_files_info(base_dir)
         evolution_tracker_file = Path(base_dir) / "EvolutionTracker.json"
         
-        # Load existing EvolutionTracker.json or create new structure
         if evolution_tracker_file.exists():
             try:
                 with open(evolution_tracker_file, 'r', encoding='utf-8') as f:
@@ -336,12 +306,9 @@ def update_population_index_single_file(base_dir: str, total_genomes: int, *, lo
                     "generations": []
                 }
         
-        # Update population counts (flattened from population_metadata)
         
-        # Update total generations
         tracker["total_generations"] = info["total_generations"]
         
-        # Save updated tracker
         with open(evolution_tracker_file, 'w', encoding='utf-8') as f:
             json.dump(tracker, f, indent=2)
         
@@ -382,10 +349,8 @@ def load_population_range(start_gen: int, end_gen: int, base_dir: str = "outputs
     
     with PerformanceLogger(_logger, f"Load Generations {start_gen}-{end_gen} from Single File"):
         try:
-            # Load entire population
             all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
             
-            # Filter by generation range
             range_genomes = [g for g in all_genomes if g and start_gen <= g.get("generation", 0) <= end_gen]
             
             _logger.info("Loaded generations %d-%d: %d genomes from non_elites.json", start_gen, end_gen, len(range_genomes))
@@ -428,16 +393,12 @@ def save_population_generation(genomes: List[Dict[str, Any]], generation: int,
     
     with PerformanceLogger(_logger, f"Save Generation {generation} to Single File"):
         try:
-            # Load existing population
             existing_population = load_population(base_dir, logger=_logger, log_file=log_file)
             
-            # Remove existing genomes for this generation
             filtered_population = [g for g in existing_population if g and g.get("generation") != generation]
             
-            # Add new genomes
             filtered_population.extend(genomes)
             
-            # Save updated population
             save_population(filtered_population, base_dir, logger=_logger, log_file=log_file)
             
             _logger.info("Updated non_elites.json with generation %d: %d genomes", generation, len(genomes))
@@ -461,13 +422,10 @@ def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = 
     
     with PerformanceLogger(_logger, f"Find genomes with status '{status}'"):
         try:
-            # Load entire population
             all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
             
-            # Filter by status
             pending_genomes = [g for g in all_genomes if g and g.get("status") == status]
             
-            # Apply generation limit if specified
             if max_generations is not None:
                 pending_genomes = [g for g in pending_genomes if g.get("generation", 0) < max_generations]
             
@@ -479,9 +437,6 @@ def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = 
             return []
 
 
-# ============================================================================
-# Main Population I/O Functions (Unified API)
-# ============================================================================
 
 def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """
@@ -508,16 +463,12 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
 
     with PerformanceLogger(_logger, "Load Population", file_path=pop_path):
         try:
-            # Check if we should use split files
             pop_path_obj = Path(pop_path)
             
-            # If pop_path is a directory, use it directly
             if pop_path_obj.is_dir():
                 base_dir = pop_path_obj
-                # First, check if non_elites.json exists (preferred)
                 population_file = base_dir / "non_elites.json"
             else:
-                # If it's a file, use the file directly
                 population_file = pop_path_obj
                 base_dir = pop_path_obj.parent
             if population_file.exists():
@@ -529,7 +480,6 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
                     with open(population_file, "r", encoding="utf-8") as f:
                         population = json.load(f)
 
-                    # Clean the population to remove None genomes
                     population = clean_population(population, logger=_logger, log_file=log_file)
                     if pop_path_obj.is_dir():
                         _logger.info("Successfully loaded population with %d genomes from non_elites.json", len(population))
@@ -539,30 +489,24 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
                 except Exception as e:
                     _logger.warning("Failed to load non_elites.json: %s, falling back to split files", e)
             
-            # Fall back to split files if non_elites.json doesn't exist or fails
             info = get_population_files_info(str(base_dir))
             
             if info["generation_counts"]:
                 _logger.info("Using single file mode with generation counts")
-                # Load all genomes from single file
                 all_genomes = load_population(str(base_dir), logger=_logger, log_file=log_file)
                 
-                # Clean the population to remove None genomes
                 all_genomes = clean_population(all_genomes, logger=_logger, log_file=log_file)
                 _logger.info("Successfully loaded population with %d genomes from split files", len(all_genomes))
                 return all_genomes
             else:
-                # No split files either
                 if not os.path.exists(pop_path):
                     _logger.error("No population files found: neither non_elites.json nor split files exist")
                     raise FileNotFoundError(f"No population files found in {base_dir}")
                 else:
-                    # Try the original pop_path as fallback
                     _logger.info("Using fallback population file: %s", pop_path)
                     with open(pop_path, "r", encoding="utf-8") as f:
                         population = json.load(f)
 
-                    # Clean the population to remove None genomes
                     population = clean_population(population, logger=_logger, log_file=log_file)
                     _logger.info("Successfully loaded population with %d genomes from fallback file", len(population))
                     return population
@@ -592,25 +536,19 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outp
 
     with PerformanceLogger(_logger, "Save Population", file_path=pop_path, genome_count=len(population)):
         try:
-            # Clean the population before saving
             cleaned_population = clean_population(population, logger=_logger, log_file=log_file)
             
-            # Resolve the path - always use non_elites.json as filename
             pop_path_obj = Path(pop_path)
             output_file = pop_path_obj if pop_path_obj.suffix else pop_path_obj / "non_elites.json"
             
-            # Ensure directory exists
             output_file.parent.mkdir(parents=True, exist_ok=True)
             
-            # Only sort by generation, id if preserve_sort_order is False (default behavior)
-            # This allows sort_population_json to maintain its custom sorting
             if not preserve_sort_order:
                 cleaned_population.sort(key=lambda g: (
                     g.get("generation", 0),
                     g.get("id", "0")
                 ))
             
-            # Save to single file
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(cleaned_population, f, indent=2, ensure_ascii=False)
             
@@ -618,7 +556,6 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outp
             _logger.info("Successfully saved population to %s: %d genomes, %.2f MB", 
                         output_file.name, len(cleaned_population), size_mb)
             
-            # Update population index to reflect single file mode
             update_population_index_single_file(str(output_file.parent), len(cleaned_population), logger=_logger, log_file=log_file)
                         
         except Exception as e:
@@ -626,9 +563,6 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outp
             raise
 
 
-# ============================================================================
-# Population Initialization and Management
-# ============================================================================
 
 def load_and_initialize_population(
     input_path: str,
@@ -810,7 +744,6 @@ def validate_population_file(population_path: str, *, log_file: Optional[str] = 
         }
 
         for genome in population:
-            # Required keys check
             for field in ("id", "prompt", "generation", "status"):
                 if field not in genome:
                     stats["errors"].append(
@@ -829,7 +762,6 @@ def validate_population_file(population_path: str, *, log_file: Optional[str] = 
             stats["min_prompt_length"] = min(stats["prompt_lengths"])
             stats["max_prompt_length"] = max(stats["prompt_lengths"])
 
-        # Convert sets to sorted lists for JSON serialisation
         stats["generations"] = sorted(stats["generations"])
 
         logger.info("Validation complete – %d genomes analysed", len(population))
@@ -873,8 +805,6 @@ def sort_population_json(
         if len(reverse_flags) != len(sort_keys):
             raise ValueError("reverse_flags must match sort_keys in length")
 
-        # Use a single sort with a properly constructed compound key
-        # This ensures all sorting criteria are applied correctly: North Star Score -> Generation -> Genome ID
         def compound_sort_key(genome):
             values = []
             for i, key in enumerate(sort_keys):
@@ -883,43 +813,31 @@ def sort_population_json(
                 else:
                     value = genome.get(key) if genome is not None else None
                 
-                # Handle None values consistently
                 if value is None:
                     value = float("-inf") if reverse_flags[i] else float("inf")
                 
-                # For reverse sorting, negate numeric values
                 if reverse_flags[i] and isinstance(value, (int, float)):
                     value = -value
                 elif reverse_flags[i] and isinstance(value, str):
-                    # For string IDs, we want higher IDs first in reverse order
-                    # Convert to int if possible, otherwise use string comparison
                     try:
                         int_value = int(value)
                         value = -int_value
                         logger.debug("Negated string ID %s -> %d", value, int_value)
                     except ValueError:
-                        # If it's not a numeric string, we'll handle it specially
-                        # For reverse sorting of strings, we can't easily negate
-                        # So we'll use a different approach
                         pass
                 
                 values.append(value)
             return tuple(values)
         
-        # Log sorting parameters for debugging
         logger.debug("Sorting population with %d keys and reverse flags: %s", len(sort_keys), reverse_flags)
         
         pop_list.sort(key=compound_sort_key)
 
-        # Persist if needed
         if output_path:
-            # If output_path is specified, use it
             dest = output_path
         elif isinstance(population, str):
-            # If population is a file path, save back to the same file
             dest = population
         else:
-            # If population is a list, don't save (no destination specified)
             dest = None
             
         if dest:
@@ -957,10 +875,8 @@ def load_genome_by_id(genome_id: str, generation: int, base_dir: str = "outputs"
     
     with PerformanceLogger(_logger, f"Load Genome by ID", genome_id=genome_id, generation=generation):
         try:
-            # Load the specific generation file
             genomes = load_population_generation(generation, base_dir, logger=_logger, log_file=log_file)
             
-            # Find the specific genome
             for genome in genomes:
                 if genome.get("id") == genome_id:
                     _logger.info(f"Found genome {genome_id} in generation {generation}")
@@ -1001,7 +917,6 @@ def load_genomes_by_ids(genome_ids: List[str], generations: List[int], base_dir:
     
     with PerformanceLogger(_logger, f"Load Genomes by IDs", count=len(genome_ids)):
         try:
-            # Group by generation for efficiency
             generation_groups = {}
             for genome_id, generation in zip(genome_ids, generations):
                 if generation not in generation_groups:
@@ -1010,14 +925,11 @@ def load_genomes_by_ids(genome_ids: List[str], generations: List[int], base_dir:
             
             found_genomes = []
             
-            # Load each generation once and extract needed genomes
             for generation, ids_in_gen in generation_groups.items():
                 genomes = load_population_generation(generation, base_dir, logger=_logger, log_file=log_file)
                 
-                # Create lookup for efficiency
                 genome_lookup = {g.get("id"): g for g in genomes}
                 
-                # Extract requested genomes
                 for genome_id in ids_in_gen:
                     if genome_id in genome_lookup:
                         found_genomes.append(genome_lookup[genome_id])
@@ -1064,7 +976,6 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
             base_path = Path(base_dir).resolve()
             output_path = base_path / output_file
             
-            # Get information about available generation files
             info = get_population_files_info(str(base_path))
             
             if not info["generation_counts"]:
@@ -1074,26 +985,21 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
             _logger.info(f"Found {len(info['generation_counts'])} generations to consolidate")
             _logger.info(f"Population metadata updated for {len(info['generation_counts'])} generations")
             
-            # Extract generation order for backup operations
             generation_order = sorted(info['generation_counts'].keys())
             
-            # Load all genomes from single file
             all_genomes = load_population(str(base_path), logger=_logger, log_file=log_file)
             
             if not all_genomes:
                 _logger.error("No genomes loaded from non_elites.json")
                 return False
             
-            # Clean the population (remove None genomes)
             all_genomes = clean_population(all_genomes, logger=_logger, log_file=log_file)
             
-            # Sort the population by generation, and id
             all_genomes.sort(key=lambda g: (
                 g.get("generation", 0),
                 g.get("id", "0")
             ))
             
-            # Save as single non_elites.json file
             try:
                 with open(output_path, 'w', encoding='utf-8') as f:
                     json.dump(all_genomes, f, indent=2, ensure_ascii=False)
@@ -1102,7 +1008,6 @@ def consolidate_generations_to_single_file(base_dir: str = "outputs",
                 _logger.info(f"Successfully consolidated {len(all_genomes)} genomes into {output_file}")
                 _logger.info(f"File size: {size_mb:.2f} MB")
                 
-                # Create a backup of the original generation files
                 backup_dir = base_path / "generations_backup"
                 backup_dir.mkdir(exist_ok=True)
                 
@@ -1154,12 +1059,10 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
     
     with PerformanceLogger(_logger, "Migrate from Split to Single File"):
         try:
-            # Step 1: Consolidate all generations
             if not consolidate_generations_to_single_file(base_dir, "non_elites.json", logger=_logger, log_file=log_file):
                 _logger.error("Failed to consolidate generation files")
                 return False
             
-            # Step 2: Update EvolutionTracker to reflect single file
             base_path = Path(base_dir).resolve()
             evolution_tracker_file = base_path / "EvolutionTracker.json"
             
@@ -1168,9 +1071,7 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                     with open(evolution_tracker_file, 'r', encoding='utf-8') as f:
                         tracker = json.load(f)
                     
-                    # Update population metadata for single file mode
                     tracker["population_metadata"] = {
-  # Will be calculated from non_elites.json
                         "single_file_mode": True,
                         "population_file": "non_elites.json",
                         "elites_file": "elites.json",
@@ -1184,7 +1085,6 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                 except Exception as e:
                     _logger.warning(f"Failed to update EvolutionTracker: {e}")
             
-            # Step 3: Verify the consolidated file
             population_file = base_path / "non_elites.json"
             if population_file.exists():
                 try:
@@ -1208,9 +1108,6 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
             return False
 
 
-# ============================================================================
-# Steady State Population Management
-# ============================================================================
 
 def _extract_score(genome: Dict[str, Any], north_star_metric: str = "toxicity") -> float:
     """Extract score from genome using north star metric."""

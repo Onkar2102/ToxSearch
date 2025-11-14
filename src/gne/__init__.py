@@ -7,7 +7,6 @@ This package provides:
 - evaluator: Content moderation using Google Perspective API
 """
 
-# Lazy imports to prevent circular import issues
 def get_ResponseGenerator():
     """Lazy import of ResponseGenerator to avoid circular imports"""
     from gne.response_generator import ResponseGenerator
