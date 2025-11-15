@@ -19,7 +19,7 @@ Large Language Models remain vulnerable to adversarial prompts that elicit toxic
 #### 1. Clone the Repository
 ```bash
 git clone <repository-url>
-cd eost-cam-llm
+cd etg
 ```
 
 #### 2. Create and Activate Virtual Environment
@@ -41,46 +41,57 @@ pip install -r requirements.txt
 
 #### 4. Set Up Environment Variables
 ```bash
-# create .env from the example environment file
+# Create .env from the example environment file
+cp env_example.txt .env
 
-# Edit .env and add your Google Perspective API key
+# Edit .env and add your API keys
 nano .env  # or use your preferred text editor
 ```
 
-Add your API key to `.env`:
+Add your API keys to `.env`:
 ```env
-PERSPECTIVE_API_KEY=your_actual_api_key_here
+# REQUIRED: Google Perspective API Key
+PERSPECTIVE_API_KEY=your_google_perspective_api_key_here
+
+# OPTIONAL: HuggingFace Hub Token (only needed for downloading gated/private models)
+# HF_TOKEN=your_huggingface_token_here
+# HUGGINGFACE_HUB_TOKEN=your_huggingface_token_here
 ```
+
+**Get your API keys:**
+- **Google Perspective API Key**: [Get it here](https://developers.perspectiveapi.com/)
+- **HuggingFace Token**: [Get it here](https://huggingface.co/settings/tokens) (optional, only for gated models)
 
 #### 5. Dataset Setup
 
-**Option A: Use Included Dataset (Recommended for Quick Start)**
-The project includes `data/prompt.csv` with 101 initial prompts as seed population. This file is automatically loaded during first run.
-
-**Option B: Download Fresh Dataset from HuggingFace**
+Download the initial prompt dataset from HuggingFace:
 ```bash
 # Download harmful prompt datasets from HuggingFace
-# This will create/update data/prompt.csv and data/prompt_extended.csv
+# This will create data/prompt.csv and data/prompt_extended.csv
 python src/utils/data_loader.py
 ```
-**Note**: For custom experiments, you can replace `data/prompt.csv` with your own prompts (one per line, CSV format with 'questions' column).
+
+This downloads from CategoricalHarmfulQA and HarmfulQA datasets and creates:
+- `data/prompt.csv` - 100 prompts (seed population)
+- `data/prompt_extended.csv` - Full dataset
+
+**Note**: For custom experiments, you can create your own `data/prompt.csv` with prompts (one per line, CSV format with 'questions' column).
 
 #### 6. Download Models
 
-**Option A: Use Existing Models (Recommended)**
+Download GGUF models to the `models/` directory. Models are available from HuggingFace or Ollama.
+
+**Option A: Manual Download from HuggingFace (Recommended)**
 ```bash
-# Clone or copy GGUF models to models/ directory
-# Models are available from HuggingFace or Ollama
 # Example: Llama 3.2 3B Instruct
+# Go to: https://huggingface.co/Unsloth/Llama-3.2-3B-Instruct-GGUF
+# Download: Llama-3.2-3B-Instruct-Q4_K_M.gguf
 # Create directory: models/llama3.2-3b-instruct-gguf/
-# Download .gguf files into that directory
+# Place the .gguf file in that directory
 ```
 
-**Option B: Download from HuggingFace**
-If downloading gated models, add your HF token to `.env`:
-```env
-HF_TOKEN=your_huggingface_token_here
-```
+**Option B: Use Download Script**
+If downloading gated models, make sure you've added your HF token to `.env` (see Step 4).
 
 Then download models:
 ```bash
@@ -100,52 +111,25 @@ models/
 
 ## How to Run the Project
 
-### Pre-Run Checklist
+After completing the installation steps (Steps 1-6 above), you can run the project:
 
-Before running, ensure you have completed these steps **in order**:
+### Quick Start: Using the Experiment Script
 
-**Step 1: Dataset Setup**
+Edit `run_experiments_local.sh` to configure your experiments, then run:
+
 ```bash
-# Option A: Use included dataset (already in data/prompt.csv)
-# Option B: Download fresh dataset from HuggingFace:
-python src/utils/data_loader.py
-
-# This downloads from CategoricalHarmfulQA and HarmfulQA datasets
-# Creates data/prompt.csv (100 prompts) and data/prompt_extended.csv (full dataset)
+bash run_experiments_local.sh
 ```
 
-**Step 2: Download Models**
+The script will:
+- Activate your virtual environment
+- Run all experiments defined in the `EXPERIMENTS` array
+- Handle errors and provide progress updates
+
+### Running Directly with Python
+
+You can also run experiments directly:
 ```bash
-# Download GGUF models to models/ directory
-# Recommended: Llama-3.2-3B-Instruct (Q4_K_M quantization, ~2GB)
-
-# Option A: Manual download from HuggingFace
-# Go to: https://huggingface.co/Unsloth/Llama-3.2-3B-Instruct-GGUF
-# Download: Llama-3.2-3B-Instruct.Q4_K_M.gguf
-# Place in: models/llama3.2-3b-instruct-gguf/
-
-# Option B: Use download script (if available)
-python src/utils/download_models.py
-```
-
-**Step 3: Environment Variables**
-```bash
-# Already configured in .env file
-# Contains: PERSPECTIVE_API_KEY
-```
-
-### Quick Start Execution
-
-Once all prerequisites are ready:
-
-```bash
-# Run with default settings (uses Llama 3.2 3B, all operators)
-python src/main.py
-```
-
-### Custom Configuration
-```bash
-# Run with custom models and parameters
 python src/main.py \
     --generations 50 \
     --operators all \
@@ -154,7 +138,8 @@ python src/main.py \
     --removal-threshold 5 \
     --stagnation-limit 5 \
     --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_S.gguf \
-    --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf
+    --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf \
+    --seed-file data/prompt.csv
 ```
 
 ### Command Line Arguments
@@ -190,36 +175,6 @@ Complete reference table:
 
 - **Model arguments (`--rg`, `--pg`)**: Can specify either a direct `.gguf` file path or an alias (directory name under `models/`)
 
-### Results Output
-
-Results will be saved in `data/outputs/[timestamp]/` with:
-- `EvolutionTracker.json` - Generation-by-generation progress
-- `elites.json` - High-performing prompts
-- `non_elites.json` - Mid-performing prompts
-- `under_performing.json` - Archived prompts
-
-## System Overview
-
-## Project Structure
-
-```
-eost-cam-llm/
-├── src/
-│   ├── main.py                    # Entry point
-│   ├── ea/                        # Evolutionary algorithms
-│   │   ├── evolution_engine.py    # Core evolution logic
-│   │   ├── parent_selector.py     # Adaptive parent selection
-│   │   └── [12 operator files]    # Variation operators
-│   ├── gne/                       # Generation & evaluation
-│   │   ├── prompt_generator.py    # Prompt generation
-│   │   ├── response_generator.py  # Response generation
-│   │   └── evaluator.py           # Moderation API calls
-│   └── utils/
-│       └── population_io.py       # Population I/O & metrics
-├── config/                        # Model configurations
-├── data/                          # Input data and results
-└── experiments/                   # Analysis notebooks
-```
 
 ## Citation
 
@@ -233,14 +188,6 @@ If you use this framework in your research, please cite:
   year={2025}
 }
 ```
-
-## Contributing
-
-This is a research framework. Contributions should focus on:
-- Improving operator diversity and effectiveness
-- Enhancing population management strategies
-- Extending to additional LLM architectures
-- Advancing safety evaluation metrics
 
 ## License
 

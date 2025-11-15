@@ -1,5 +1,5 @@
 """
-Constants for the EOST-CAM-LLM framework.
+Constants for the ETG framework.
 Centralizes magic numbers and configuration values.
 """
 

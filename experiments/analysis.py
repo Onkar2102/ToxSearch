@@ -1,4 +1,3 @@
-
 import os
 import json
 import glob
@@ -9,6 +8,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
+from matplotlib.table import Table
+from scipy.stats import kruskal, mannwhitneyu, norm
+from itertools import combinations
+from pathlib import Path
+from collections import defaultdict
 
 OPERATOR_MODES = ['ops', 'comb']
 
@@ -31,6 +35,7 @@ all_dfs = {}
 dfs = {}
 
 def flatten_operator_statistics(df, col="operator_statistics"):
+    """Flattens nested operator statistics dictionary into separate columns."""
     if col not in df.columns:
         return df
     all_keys = set()
@@ -532,6 +537,7 @@ all_scores_for_avg = np.concatenate([
 avg_score_all_runs = np.mean(all_scores_for_avg) if len(all_scores_for_avg) > 0 else np.nan
 
 def count_total_genomes_per_run(run_name, base_dir):
+    """Counts total genomes across elites, non-elites, and under-performing files for a run."""
     run_dir = os.path.join(base_dir, run_name)
     if not os.path.isdir(run_dir):
         return 0
@@ -770,13 +776,12 @@ for mode in OPERATOR_MODES:
 if 'per_run_df' not in globals() or per_run_df.empty:
     raise ValueError("per_run_df not found. Please run the data processing section first.")
 
-# Aggregated overlapped plot for all modes (paper-ready styling)
 plt.figure(figsize=(7.5, 4.5))
 ax = plt.gca()
 
 mode_colors = {
-    'ops': '#1f77b4',  # blue
-    'comb': '#ff7f0e'  # orange
+    'ops': '#1f77b4',
+    'comb': '#ff7f0e'
 }
 
 all_generations = sorted(per_run_df['generation_number'].unique())
@@ -845,7 +850,6 @@ for mode in OPERATOR_MODES:
     min_vals = mode_agg_df['minimum_toxicity'].ffill().fillna(0).values
     avg_fit = mode_agg_df['average_fitness'].values
 
-    # Ensure the band is well-defined
     for i in range(len(min_vals)):
         if min_vals[i] > max_vals[i] and max_vals[i] > 0:
             min_vals[i] = max_vals[i]
@@ -855,7 +859,6 @@ for mode in OPERATOR_MODES:
     if len(generations) > 0 and len(avg_fit) > 0:
         valid_mask = (min_vals >= 0) & (max_vals >= 0) & (min_vals <= max_vals)
         if np.any(valid_mask):
-            # Shaded min--max band (no legend entry, to keep legend compact)
             ax.fill_between(
                 generations[valid_mask],
                 min_vals[valid_mask],
@@ -864,7 +867,6 @@ for mode in OPERATOR_MODES:
                 alpha=0.18
             )
 
-        # Mean trajectory line with slightly thicker width
         ax.plot(
             generations,
             avg_fit,
@@ -876,7 +878,6 @@ for mode in OPERATOR_MODES:
 
         data_plotted = True
 
-# Axis labels and ticks tuned for print readability
 ax.set_xlabel('Generated Prompts', fontsize=11, fontweight='bold')
 ax.set_ylabel('Score', fontsize=11, fontweight='bold')
 
@@ -901,9 +902,6 @@ ax.set_yticks(y_ticks)
 ax.set_xlim(left=min_gen, right=max_gen)
 ax.set_ylim(0.0, 1.0)
 
-# Cleaner title and grid for paper-style figure
-# ax.set_title('Population fitness convergence by operator mode', fontsize=12, fontweight='bold', pad=10)
-
 if data_plotted:
     ax.legend(loc='upper left', fontsize=9, frameon=False)
 
@@ -922,7 +920,6 @@ plt.close()
 try:
     
     if 'per_run_df' in globals() and not per_run_df.empty:
-        # Paper-ready unified efficiency plot (similar styling to aggregated plot)
         fig, ax = plt.subplots(figsize=(7.5, 4.5))
         
         plot_data_exists = False
@@ -970,7 +967,6 @@ try:
                     mode_efficiency_curves.append((generations, cumulative_efficiency))
             
             if mode_efficiency_curves:
-                # Build a common generation grid and interpolate each run onto it
                 all_gens = set()
                 for gens, _ in mode_efficiency_curves:
                     all_gens.update(gens)
@@ -997,11 +993,9 @@ try:
                         plot_data_exists = True
         
         if plot_data_exists:
-            # Axis labels tuned for print readability
             ax.set_xlabel('Generated Prompts', fontsize=11, fontweight='bold')
             ax.set_ylabel('Cumulative AUC per Genome', fontsize=11, fontweight='bold')
             
-            # Ticks and limits
             all_gens_global = per_run_df['generation_number'].unique()
             if len(all_gens_global) > 0:
                 max_gen = int(all_gens_global.max())
@@ -1023,10 +1017,8 @@ try:
             ax.tick_params(axis='x', labelsize=9)
             ax.tick_params(axis='y', labelsize=9)
             
-            # Legend in upper-left, no box, for compact paper style
             ax.legend(loc='upper left', fontsize=9, frameon=False)
             
-            # Light dashed grid for readability
             ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.7)
             
             plt.tight_layout()
@@ -1054,48 +1046,6 @@ if __name__ == "__main__":
     saved_files.append("unified_efficiency.pdf")
     
 
-
-
-# ============================================================================
-# RQ2 CODE STARTS HERE
-# ============================================================================
-
-
-import os
-import glob
-import re
-import json
-import numpy as np
-import pandas as pd
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib.table import Table
-from scipy.stats import kruskal, mannwhitneyu, norm
-from itertools import combinations
-
-def flatten_operator_statistics(df, col="operator_statistics"):
-    if col not in df.columns:
-        return df
-    all_keys = set()
-    for ops in df[col]:
-        if isinstance(ops, dict):
-            all_keys.update(ops.keys())
-    
-    for op_key in all_keys:
-        flat_rows = []
-        for ops in df[col]:
-            if isinstance(ops, dict) and op_key in ops and isinstance(ops[op_key], dict):
-                prefix = f"operator_statistics_{op_key}_"
-                row = {prefix + subk: subv for subk, subv in ops[op_key].items()}
-                flat_rows.append(row)
-            else:
-                flat_rows.append({})
-        flat_df = pd.DataFrame(flat_rows)
-        df = pd.concat([df.reset_index(drop=True), flat_df.reset_index(drop=True)], axis=1)
-    df = df.drop(columns=[col])
-    return df
-
 CROSSOVER_OPERATORS = {'SemanticSimilarityCrossover', 'SemanticFusionCrossover'}
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1111,6 +1061,7 @@ if not run_dirs:
     raise ValueError(f"No comb run directories found in {base_data_dir}")
 
 def process_single_run(run_dir):
+    """Processes a single run directory and extracts data from JSON and CSV files."""
     data_dir = os.path.join(base_data_dir, run_dir)
     
     if not os.path.exists(data_dir):
@@ -1371,41 +1322,6 @@ simplified_table_df = final_table_df[final_table_df['is_mean'] == True].copy()
 simplified_table_df = simplified_table_df[['Operator', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ']].copy()
 simplified_table_df = simplified_table_df.sort_values('Operator').reset_index(drop=True)
 
-fig, ax = plt.subplots(figsize=(14, len(simplified_table_df) * 0.4 + 2))
-ax.axis('tight')
-ax.axis('off')
-
-headers = ['Operator', 'NE (%)', 'EHR (%)', 'IR (%)', 'cEHR (%)', 'Δμ', 'Δσ']
-table_data = [[row['Operator'],
-               f"{row['NE']:.2f}" if not pd.isna(row['NE']) else 'N/A',
-               f"{row['EHR']:.2f}" if not pd.isna(row['EHR']) else 'N/A',
-               f"{row['IR']:.2f}" if not pd.isna(row['IR']) else 'N/A',
-               f"{row['cEHR']:.2f}" if not pd.isna(row['cEHR']) else 'N/A',
-               f"{row['Δμ']:.2f}" if not pd.isna(row['Δμ']) else 'N/A',
-               f"{row['Δσ']:.2f}" if not pd.isna(row['Δσ']) else 'N/A']
-              for _, row in simplified_table_df.iterrows()]
-
-table = ax.table(cellText=table_data, colLabels=headers, cellLoc='center', loc='center')
-table.auto_set_font_size(False)
-table.set_fontsize(10)
-table.scale(1, 2.0)
-
-for i in range(len(headers)):
-    table[(0, i)].set_facecolor('#4CAF50')
-    table[(0, i)].set_text_props(weight='bold', color='white')
-
-for row_idx in range(1, len(table_data) + 1):
-    for j in range(len(headers)):
-        table[(row_idx, j)].set_facecolor('#f0f0f0' if row_idx % 2 == 0 else 'white')
-
-plt.title('RQ2: Operator Performance Metrics (Mean Across All Runs)', fontsize=14, fontweight='bold', pad=20)
-
-filename_simplified = os.path.join(output_dir, "rq2_operator_metrics_simplified.pdf")
-if os.path.exists(filename_simplified):
-    os.remove(filename_simplified)
-plt.savefig(filename_simplified, dpi=150, bbox_inches='tight')
-plt.close()
-
 csv_filename = os.path.join(output_dir, "rq2_operator_metrics_simplified.csv")
 simplified_table_df.to_csv(csv_filename, index=False)
 
@@ -1625,21 +1541,8 @@ if pairwise_all:
     pairwise_df.to_csv(csv_filename, index=False)
 
 
-# ============================================================================
-# RQ3 CODE STARTS HERE
-# ============================================================================
-
-
-import os
-import json
-import glob
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from pathlib import Path
-from collections import defaultdict
-
 def get_max_toxicity(elite):
+    """Extracts the maximum toxicity score across all models for an elite prompt."""
     models_dict = elite.get('models', {})
     max_toxicity = 0.0
     for model_name, model_data in models_dict.items():
@@ -1649,6 +1552,7 @@ def get_max_toxicity(elite):
     return max_toxicity
 
 def extract_toxicity(record):
+    """Extracts toxicity score from moderation result in a record."""
     try:
         if 'moderation_result' in record and 'google' in record['moderation_result']:
             if 'scores' in record['moderation_result']['google']:
@@ -1658,6 +1562,7 @@ def extract_toxicity(record):
     return None
 
 def shorten_model_name(name):
+    """Shortens and normalizes model names for display purposes."""
     if name == 'Llama-3.1-8B':
         return 'Llama-3.1-8B'
     
@@ -1675,14 +1580,17 @@ def shorten_model_name(name):
     return name
 
 def normalize_prompt(prompt):
+    """Normalizes prompt text by stripping whitespace and converting to lowercase."""
     return prompt.strip().lower()
 
 def normalize_model_name(model_name):
+    """Removes .gguf suffix from model names for consistent naming."""
     if model_name.endswith('.gguf'):
         return model_name[:-5]
     return model_name
 
 def is_refusal_response(response):
+    """Checks if a response is a single-sentence refusal starting with refusal patterns."""
     if not response or not response.strip():
         return False
     
@@ -1768,6 +1676,7 @@ def is_refusal_response(response):
     return True
 
 def main():
+    """Main function that processes elite prompts and generates RQ3 analysis outputs."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
     base_data_dir = os.path.join(project_root, "data", "outputs")
@@ -2232,72 +2141,6 @@ def main():
     stats_df = pd.DataFrame(stats_rows)
 
     pub_df = stats_df.drop(columns=['n'])
-
-    display_df = pub_df.copy()
-    for col in ['Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR']:
-        display_df[col] = display_df[col].apply(lambda x: f'{x:.4f}')
-
-    plt.rcParams.update({
-        'font.size': 10,
-        'font.family': 'serif'
-    })
-    
-    fig, ax = plt.subplots(figsize=(8.0, 5.0), dpi=300)
-    ax.axis('tight')
-    ax.axis('off')
-
-    table_data = []
-    for _, row in pub_df.iterrows():
-        table_data.append([
-            row['Model'],
-            f"{row['Mean']:.3f}",
-            f"{row['Median']:.3f}",
-            f"{row['Std']:.3f}",
-            f"{row['Min']:.3f}",
-            f"{row['Max']:.3f}",
-            f"{row['Q1']:.3f}",
-            f"{row['Q3']:.3f}",
-            f"{row['IQR']:.3f}"
-        ])
-
-    table = ax.table(
-        cellText=table_data,
-        colLabels=['Model', 'Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR'],
-        cellLoc='center',
-        loc='center',
-        bbox=[0, 0, 1, 1]
-    )
-
-    table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    table.scale(1, 1.8)
-
-    n_cols = len(['Model', 'Mean', 'Median', 'Std', 'Min', 'Max', 'Q1', 'Q3', 'IQR'])
-    
-    for j in range(n_cols):
-        cell = table[(0, j)]
-        cell.set_facecolor('#E8E8E8')
-        cell.set_edgecolor('black')
-        cell.set_linewidth(1.2)
-        cell.set_text_props(weight='bold', color='black', fontsize=10)
-        cell.set_height(0.08)
-    
-    for i in range(1, len(table_data) + 1):
-        for j in range(n_cols):
-            cell = table[(i, j)]
-            if i % 2 == 0:
-                cell.set_facecolor('#F5F5F5')
-            else:
-                cell.set_facecolor('white')
-            cell.set_edgecolor('#CCCCCC')
-            cell.set_linewidth(0.8)
-            cell.set_text_props(color='black', fontsize=9)
-            cell.set_height(0.06)
-    
-
-    pdf_path = Path(script_dir) / "rq3_statistics_table.pdf"
-    plt.savefig(pdf_path, dpi=300, bbox_inches='tight', format='pdf')
-    plt.close()
 
     csv_path = Path(script_dir) / "rq3_statistics_table.csv"
     stats_df.to_csv(csv_path, index=False, float_format='%.4f')
