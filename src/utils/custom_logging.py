@@ -13,7 +13,6 @@ import sys
 import traceback
 from typing import Optional
 
-# Global variable to store the current log file path
 _CURRENT_LOG_FILE = None
 
 def get_run_id():
@@ -45,18 +44,15 @@ def get_log_filename():
     """Generate a detailed log filename with timestamp and system info"""
     global _CURRENT_LOG_FILE
     
-    # If we already have a log file for this run, return it
     if _CURRENT_LOG_FILE is not None:
         return _CURRENT_LOG_FILE
     
-    # Create a new log file only once per run
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     run_id = get_run_id()
     user = getpass.getuser()
     machine = platform.node().split('.')[0]
     device_info = f"{user}@{machine}".replace(" ", "_")
     
-    # Add Python version and platform info
     python_version = f"py{sys.version_info.major}.{sys.version_info.minor}"
     platform_info = platform.system().lower()
 
@@ -67,7 +63,7 @@ def get_detailed_formatter() -> logging.Formatter:
     """Create a detailed formatter with additional context"""
     return logging.Formatter(
         "[%(asctime)s] [%(levelname)-8s] [%(name)-20s] [%(filename)s:%(lineno)d] [%(funcName)s()]: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S.%f"[:-3]  # Include milliseconds
+        datefmt="%Y-%m-%d %H:%M:%S.%f"[:-3]
     )
 
 def get_simple_formatter() -> logging.Formatter:
@@ -81,7 +77,6 @@ def setup_exception_logging(logger: logging.Logger):
     """Setup exception logging to capture unhandled exceptions"""
     def handle_exception(exc_type, exc_value, exc_traceback):
         if issubclass(exc_type, KeyboardInterrupt):
-            # Call the default handler for keyboard interrupts
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
             return
         
@@ -93,49 +88,40 @@ def get_logger(name: str = "default_logger", log_file: Optional[str] = None) -> 
     """Get a configured logger with detailed formatting and exception handling"""
     logger = logging.getLogger(name)
     
-    # Prevent duplicate handlers
     if logger.hasHandlers():
         return logger
     
-    # Get log level from environment
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     try:
         log_level = getattr(logging, log_level)
     except AttributeError:
         log_level = logging.INFO
     
-    # Use provided log_file, or current log file, or generate new one
     if log_file is None:
         log_file = _CURRENT_LOG_FILE if _CURRENT_LOG_FILE is not None else get_log_filename()
     
-    # Create detailed formatter for file logging
     detailed_formatter = get_detailed_formatter()
     simple_formatter = get_simple_formatter()
     
-    # Console handler with simple formatting
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(simple_formatter)
-    console_handler.setLevel(logging.INFO)  # Console shows INFO and above
+    console_handler.setLevel(logging.INFO)
     logger.addHandler(console_handler)
     
-    # File handler with detailed formatting
     file_handler = RotatingFileHandler(
         log_file, 
-        maxBytes=100_000_000,  # 100MB
+        maxBytes=100_000_000,
         backupCount=10,
         encoding='utf-8'
     )
     file_handler.setFormatter(detailed_formatter)
-    file_handler.setLevel(logging.DEBUG)  # File shows all levels
+    file_handler.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)
     
-    # Set logger level
     logger.setLevel(logging.DEBUG)
     
-    # Setup exception logging
     setup_exception_logging(logger)
     
-    # Log initialization
     logger.debug("Logger '%s' initialized with file: %s", name, log_file)
     logger.info("Log level set to: %s", logging.getLevelName(log_level))
     
@@ -152,7 +138,6 @@ def log_system_info(logger: logging.Logger):
     logger.info("Working Directory: %s", os.getcwd())
     logger.info("Log File: %s", get_log_filename())
     
-    # Log environment variables (excluding sensitive ones)
     sensitive_vars = {'OPENAI_API_KEY', 'OPENAI_ORG_ID', 'OPENAI_PROJECT_ID', 'PASSWORD', 'SECRET'}
     env_vars = {k: v for k, v in os.environ.items() 
                if k.startswith(('OPENAI_', 'PYTHON_', 'PATH', 'HOME', 'USER')) 

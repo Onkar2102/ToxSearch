@@ -18,12 +18,10 @@ def load_config(config_path: str, log_file: Optional[str] = None) -> Dict[str, A
         try:
             logger.info("Loading configuration from: %s", config_path)
             
-            # Check if config file exists
             if not os.path.exists(config_path):
                 logger.error("Configuration file not found: %s", config_path)
                 raise FileNotFoundError(f"Configuration file not found: {config_path}")
             
-            # Load YAML file
             with PerformanceLogger(logger, "Parse YAML Config"):
                 try:
                     with open(config_path, 'r', encoding='utf-8') as f:
@@ -39,7 +37,6 @@ def load_config(config_path: str, log_file: Optional[str] = None) -> Dict[str, A
                     logger.error("Failed to read configuration file: %s", e, exc_info=True)
                     raise
             
-            # Validate configuration
             with PerformanceLogger(logger, "Validate Config"):
                 try:
                     validation_result = validate_config(config)
@@ -51,7 +48,6 @@ def load_config(config_path: str, log_file: Optional[str] = None) -> Dict[str, A
                         for issue in validation_result['issues']:
                             logger.warning("  - %s", issue)
                     
-                    # Log configuration summary
                     logger.info("Configuration summary:")
                     for key, value in config.items():
                         if isinstance(value, dict):
@@ -84,13 +80,11 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
                 'warnings': []
             }
             
-            # Check if config is not None
             if config is None:
                 validation_result['is_valid'] = False
                 validation_result['issues'].append("Configuration is None")
                 return validation_result
             
-            # Check required top-level keys
             required_keys = ['model', 'evolution', 'evaluation']
             for key in required_keys:
                 if key not in config:
@@ -100,25 +94,21 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
                     validation_result['is_valid'] = False
                     validation_result['issues'].append(f"Key '{key}' must be a dictionary")
             
-            # Validate model configuration
             if 'model' in config and isinstance(config['model'], dict):
                 model_validation = validate_model_config(config['model'])
                 validation_result['issues'].extend(model_validation['issues'])
                 validation_result['warnings'].extend(model_validation['warnings'])
             
-            # Validate evolution configuration
             if 'evolution' in config and isinstance(config['evolution'], dict):
                 evolution_validation = validate_evolution_config(config['evolution'])
                 validation_result['issues'].extend(evolution_validation['issues'])
                 validation_result['warnings'].extend(evolution_validation['warnings'])
             
-            # Validate evaluation configuration
             if 'evaluation' in config and isinstance(config['evaluation'], dict):
                 evaluation_validation = validate_evaluation_config(config['evaluation'])
                 validation_result['issues'].extend(evaluation_validation['issues'])
                 validation_result['warnings'].extend(evaluation_validation['warnings'])
             
-            # Update overall validity
             validation_result['is_valid'] = len(validation_result['issues']) == 0
             
             logger.debug("Configuration validation completed: %d issues, %d warnings", 
@@ -145,32 +135,27 @@ def validate_model_config(model_config: Dict[str, Any]) -> Dict[str, Any]:
     }
     
     try:
-        # Check required model keys
         required_model_keys = ['name', 'type']
         for key in required_model_keys:
             if key not in model_config:
                 validation_result['issues'].append(f"Model config missing required key: {key}")
         
-        # Validate model name
         if 'name' in model_config:
             model_name = model_config['name']
             if not isinstance(model_name, str) or not model_name.strip():
                 validation_result['issues'].append("Model name must be a non-empty string")
         
-        # Validate model type
         if 'type' in model_config:
             model_type = model_config['type']
             valid_types = ['llama', 'gpt', 'claude', 'custom']
             if model_type not in valid_types:
                 validation_result['warnings'].append(f"Model type '{model_type}' not in standard types: {valid_types}")
         
-        # Validate parameters
         if 'parameters' in model_config:
             params = model_config['parameters']
             if not isinstance(params, dict):
                 validation_result['issues'].append("Model parameters must be a dictionary")
             else:
-                # Check for common parameter types
                 for param_name, param_value in params.items():
                     if not isinstance(param_name, str):
                         validation_result['issues'].append(f"Parameter name must be string: {param_name}")
@@ -197,7 +182,6 @@ def validate_evolution_config(evolution_config: Dict[str, Any]) -> Dict[str, Any
     }
     
     try:
-        # Check for common evolution parameters
         common_params = ['population_size', 'mutation_rate', 'crossover_rate', 'generations']
         
         for param in common_params:
@@ -212,7 +196,6 @@ def validate_evolution_config(evolution_config: Dict[str, Any]) -> Dict[str, Any
                     if not isinstance(value, (int, float)) or value < 0 or value > 1:
                         validation_result['issues'].append(f"{param} must be a number between 0 and 1, got: {value}")
         
-        # Validate operators
         if 'operators' in evolution_config:
             operators = evolution_config['operators']
             if not isinstance(operators, dict):
@@ -245,7 +228,6 @@ def validate_evaluation_config(evaluation_config: Dict[str, Any]) -> Dict[str, A
     }
     
     try:
-        # Check for evaluation metrics
         if 'metrics' in evaluation_config:
             metrics = evaluation_config['metrics']
             if not isinstance(metrics, list):
@@ -255,7 +237,6 @@ def validate_evaluation_config(evaluation_config: Dict[str, Any]) -> Dict[str, A
                     if not isinstance(metric, str):
                         validation_result['issues'].append(f"Metric {i} must be a string, got: {type(metric)}")
         
-        # Validate API configuration
         if 'api' in evaluation_config:
             api_config = evaluation_config['api']
             if not isinstance(api_config, dict):
@@ -284,17 +265,14 @@ def save_config(config: Dict[str, Any], config_path: str, log_file: Optional[str
         try:
             logger.info("Saving configuration to: %s", config_path)
             
-            # Ensure directory exists
             os.makedirs(os.path.dirname(config_path), exist_ok=True)
             
-            # Validate configuration before saving
             validation_result = validate_config(config)
             if not validation_result['is_valid']:
                 logger.warning("Saving configuration with validation issues:")
                 for issue in validation_result['issues']:
                     logger.warning("  - %s", issue)
             
-            # Save configuration
             with PerformanceLogger(logger, "Write Config File"):
                 try:
                     with open(config_path, 'w', encoding='utf-8') as f:
@@ -302,7 +280,6 @@ def save_config(config: Dict[str, Any], config_path: str, log_file: Optional[str
                     
                     logger.info("Successfully saved configuration to %s", config_path)
                     
-                    # Log file size
                     file_size = os.path.getsize(config_path)
                     logger.debug("Configuration file size: %d bytes", file_size)
                     
@@ -346,13 +323,11 @@ def set_config_value(config: Dict[str, Any], key_path: str, value: Any) -> bool:
         keys = key_path.split('.')
         current = config
         
-        # Navigate to the parent of the target key
         for key in keys[:-1]:
             if key not in current:
                 current[key] = {}
             current = current[key]
         
-        # Set the value
         current[keys[-1]] = value
         
         logger.debug("Set configuration value for '%s': %s", key_path, value)

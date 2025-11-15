@@ -23,10 +23,6 @@ from .antonym_replacement import POSAwareAntonymReplacement
 from .stylistic_mutator import StylisticMutator
 from .back_translation import (
     LLMBackTranslationHIOperator
-    # Disabled non-Hindi back translation operators:
-    # LLMBackTranslationFROperator, 
-    # LLMBackTranslationDEOperator, LLMBackTranslationJAOperator, 
-    # LLMBackTranslationZHOperator
 )
 from .semantic_similarity_crossover import SemanticSimilarityCrossover
 from .fusion_crossover import SemanticFusionCrossover
@@ -36,7 +32,6 @@ from .concept_addition import ConceptAdditionOperator
 from .informed_evolution import InformedEvolutionOperator
 from .operator_statistics import OperatorStatistics
 
-# Global generator instances - will be set by main.py
 _global_response_generator = None
 _global_prompt_generator = None
 
@@ -69,28 +64,26 @@ class EvolutionEngine:
         self.next_id = 0
         self.north_star_metric = north_star_metric
         self.log_file = log_file
-        self.current_cycle = current_cycle  # Current evolution cycle number
+        self.current_cycle = current_cycle
         self.use_steady_state = True
-        self.max_variants = max_variants  # Maximum number of variants to generate per operator
-        self.operators = operators  # Operator configuration mode: "ie", "cm", or "all"
-        self.outputs_path = outputs_path  # Output directory path for this run
+        self.max_variants = max_variants
+        self.operators = operators
+        self.outputs_path = outputs_path
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("EvolutionEngine", log_file)
         self.parent_selector = ParentSelector(north_star_metric, log_file, adaptive_selection_after=adaptive_selection_after, max_num_parents=max_num_parents)
         # Initialize the shared generator instances
         self.prompt_generator = get_prompt_generator()
         self.response_generator = get_response_generator()
-        
-        # Initialize operator statistics tracking
+
         self.operator_stats = OperatorStatistics()
-        
+
         self.logger.debug(f"EvolutionEngine initialized with next_id={self.next_id}, north_star_metric={north_star_metric}, current_cycle={current_cycle}, max_variants={max_variants}, adaptive_selection_after={adaptive_selection_after}, max_num_parents={max_num_parents}, operators={operators}, use_steady_state=True")
 
     @property
     def genomes(self):
         """Lazy load genomes only when needed"""
         if not self._genomes_loaded:
-            # Load from files only when first accessed
             from utils.population_io import load_population
             self._genomes_cache = load_population(str(self.outputs_path), logger=self.logger)
             self._genomes_loaded = True
@@ -111,7 +104,7 @@ class EvolutionEngine:
         else:
             self.next_id = 1
         self.logger.debug(f"Updated next_id to {self.next_id}")
-    
+
 
     def _count_variants_from_temp(self) -> Dict[str, int]:
         """Count variants in temp.json by type (mutation/crossover)."""
@@ -122,19 +115,19 @@ class EvolutionEngine:
             
             with open(temp_path, 'r', encoding='utf-8') as f:
                 temp_variants = json.load(f)
-            
+
             mutation_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "mutation")
             crossover_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "crossover")
             total_count = mutation_count + crossover_count
             
             self.logger.debug(f"Counted variants from temp.json: {mutation_count} mutation, {crossover_count} crossover, {total_count} total")
-            
+
             return {
                 "mutation_variants": mutation_count,
                 "crossover_variants": crossover_count,
                 "variants_created": total_count
             }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to count variants from temp.json: {e}")
             return {"mutation_variants": 0, "crossover_variants": 0, "variants_created": 0}
@@ -148,8 +141,7 @@ class EvolutionEngine:
             "mutation_variants": variant_counts["mutation_variants"],
             "crossover_variants": variant_counts["crossover_variants"]
         }
-        
-        # Record selected parent metadata
+
         for parent in parents:
             generation_data["parents"].append({
                 "id": parent["id"],
@@ -157,83 +149,73 @@ class EvolutionEngine:
                 "generation": parent["generation"],
                 "type": "parent"
             })
-        
+
         return generation_data
 
     def _calculate_parent_score(self, parents: List[Dict], variant_type: str, operator: Any = None) -> float:
         """
         Calculate parent score based on variant type.
-        
+
         Args:
             parents: List of parent genomes (simplified structure with 'toxicity' field)
             variant_type: Type of variant ("mutation" or "crossover")
             operator: Operator instance (for InformedEvolutionOperator special handling)
-            
+
         Returns:
             float: Parent score (minimum 0.0001 for consistency)
         """
-        # Special handling for InformedEvolutionOperator - use top_10 average
         if operator and hasattr(operator, 'top_10_avg_score'):
             self.logger.debug(f"Using top_10 average score: {operator.top_10_avg_score:.4f}")
             return operator.top_10_avg_score
-        
-        # Parents from parents.json have simplified structure with direct 'toxicity' field
+
         if variant_type == "mutation":
-            # For mutation, use the single parent's score (minimum 0.0001)
             if not parents:
                 return 0.0001
             parent_score = parents[0].get("toxicity", 0.0001)
-            # Ensure minimum score
             return max(round(parent_score, 4), 0.0001)
         elif variant_type == "crossover":
-            # For crossover, average ALL parents' scores (don't filter out any parent)
             if not parents:
                 return 0.0001
-            # Include all parents, use default 0.0001 if toxicity missing
             scores = [max(p.get("toxicity", 0.0001), 0.0001) for p in parents]
             avg_score = sum(scores) / len(scores)
             return round(avg_score, 4)
-        
+
         return 0.0001
 
     def _create_child_genome(self, prompt: str, operator: Any, parents: List[Dict], variant_type: str) -> Dict:
         """Create a child genome from a prompt and operator."""
-        # Calculate parent score (average) once for both top-level and creation_info
         parent_score = self._calculate_parent_score(parents, variant_type, operator)
-        
-        # Store parent information with both ID and score
+
         parents_info = []
         for p in parents:
             parent_id = p.get("id")
-            # Get the toxicity score for this parent
             parent_toxicity = p.get("toxicity", 0.0001)
             parents_info.append({
                 "id": parent_id,
                 "score": round(parent_toxicity, 4)
             })
-        
+
         child = {
             "id": self.next_id,
             "prompt": prompt,
             "model_name": None,
             "moderation_result": None,
             "operator": operator.name,
-            "parents": parents_info,  # List of {id, score} objects
+            "parents": parents_info,
             "generation": self.current_cycle,
             "status": "pending_generation",
-            "parent_score": parent_score,  # Average/calculated parent score
-            "variant_type": variant_type,  # Moved to top-level
+            "parent_score": parent_score,
+            "variant_type": variant_type,
             "creation_info": {
                 "type": variant_type,
                 "operator": operator.name,
-                "parent_score": parent_score  # Also kept in creation_info for backward compatibility
+                "parent_score": parent_score
             }
         }
-        
-        # Add operator timing if available
+
         if hasattr(operator, '_last_operation_time'):
             child['variant_creation_duration'] = operator._last_operation_time.get('duration', 0.0)
-        
+
         self.next_id += 1
         return child
 
@@ -241,7 +223,7 @@ class EvolutionEngine:
         """
         Generate variants globally for evolution cycle.
         Updates temp.json with unique variants created.
-        
+
         Args:
             evolution_tracker (Dict[str, Any]): Evolution tracker data for determining parent counts
         """
@@ -251,18 +233,15 @@ class EvolutionEngine:
         # Prevents ID reuse if engine persists across cycles.
         self.update_next_id()
 
-        # Step 2: Handle different file usage patterns based on operator mode
         if self.operators == "ie":
             # Mode "ie": Only use top_10.json, skip parent selection
             self._generate_variants_ie_mode(evolution_tracker)
         elif self.operators == "cm":
-            # Mode "cm": Only use parents.json, skip top_10.json
             self._generate_variants_cm_mode(evolution_tracker)
         elif self.operators == "all":
             # Mode "all": Use both files (default behavior)
             self._generate_variants_all_mode(evolution_tracker)
         else:
-            # Default to all mode
             self.logger.warning(f"Unknown operator mode '{self.operators}', defaulting to 'all'")
             self._generate_variants_all_mode(evolution_tracker)
         
@@ -271,36 +250,30 @@ class EvolutionEngine:
 
     def _generate_variants_ie_mode(self, evolution_tracker: Dict[str, Any] = None) -> None:
         """Generate variants using only InformedEvolution operator with top_10.json"""
-        
-        # First, populate top_10.json with the most toxic examples from elites and population
+
         try:
             elites_path = str(Path(self.outputs_path) / "elites.json")
             top_10_path = str(Path(self.outputs_path) / "top_10.json")
             self.parent_selector._save_top_10_by_toxicity(elites_path, top_10_path)
-            
-            # top_10.json is already populated by parent_selector.py
-            # EvolutionTracker is already updated by parent_selector.py
-                
+
+
         except Exception as e:
             self.logger.error(f"Failed to populate top_10.json: {e}")
             return
-        
-        # Get only InformedEvolution operator
+
         ie_operators = self._get_single_parent_operators()
-        
+
         if not ie_operators:
             self.logger.error("No InformedEvolution operators found in IE mode")
             return
-        
-        # Load a real parent from top_10.json for proper genome creation
+
         top_10_path = Path(self.outputs_path) / "top_10.json"
         parent_example = None
-        
+
         if top_10_path.exists():
             with open(top_10_path, 'r', encoding='utf-8') as f:
                 top_10_examples = json.load(f)
             if top_10_examples:
-                # Use the first example as parent (InformedEvolution reads from top_10.json internally anyway)
                 parent_example = top_10_examples[0]
                 self.logger.debug(f"Using parent example from top_10.json: {parent_example['id']}")
             else:
@@ -309,56 +282,47 @@ class EvolutionEngine:
         else:
             self.logger.error("top_10.json not found")
             return
-        
-        # Determine number of calls based on selection mode
+
         if evolution_tracker is None:
             selection_mode = "default"
         else:
             selection_mode = evolution_tracker.get("selection_mode", "default")
-        
-        # Set number of calls based on mode: default=2, explore/exploit=3
+
         if selection_mode == "explore" or selection_mode == "exploit":
             num_calls = 3
-        else:  # default mode
+        else:
             num_calls = 2
-        
+
         self.logger.info(f"IE mode: Selection mode={selection_mode}, calling operator {num_calls} times")
-        
-        # Run InformedEvolution operator num_calls times
+
         for operator in ie_operators:
             try:
                 self.logger.debug(f"Running operator: {operator.__class__.__name__} {num_calls} times")
-                
+
                 variants_to_save = []
                 for variant_iteration in range(num_calls):
                     operator_input = {
                         "parent_data": parent_example
                     }
-                    
-                    # Apply operator
+
                     variants = operator.apply(operator_input)
-                    
+
                     if variants:
-                        # Create child genomes
                         variants_to_save.extend([self._create_child_genome(vp, operator, [parent_example], "mutation") for vp in variants])
                     else:
-                        # Track question mark rejections (empty variants = rejections) - same as _run_mutation_operators
                         self.operator_stats.record_question_mark_rejection(operator.name)
                         self.logger.debug(f"{operator.name} call {variant_iteration + 1}/{num_calls} returned empty variants (tracked as rejection)")
-                
+
                 if variants_to_save:
-                    # Save all variants to temp.json
                     self._append_variants_to_temp(variants_to_save)
                     self.logger.debug(f"Generated {len(variants_to_save)} variants using {operator.__class__.__name__}")
                 else:
                     self.logger.warning(f"No variants generated by {operator.__class__.__name__} after {num_calls} calls")
-                    
+
             except Exception as e:
                 self.logger.error(f"Error running operator {operator.__class__.__name__}: {e}", exc_info=True)
-                # Track question mark rejections (exceptions = rejections) - same as _run_mutation_operators
                 self.operator_stats.record_question_mark_rejection(operator.name)
-        
-        # Update EvolutionTracker and clean files after all operators have processed
+
         parents_path = Path(self.outputs_path) / "parents.json"
         self._update_evolution_tracker_from_files(parents_path, top_10_path)
         try:
@@ -371,8 +335,7 @@ class EvolutionEngine:
 
     def _generate_variants_cm_mode(self, evolution_tracker: Dict[str, Any] = None) -> None:
         """Generate variants using all operators except InformedEvolution, using parents.json"""
-        
-        # Validate that elites exist before attempting parent selection
+
         elites_path = Path(self.outputs_path) / "elites.json"
         if elites_path.exists():
             with open(elites_path, 'r', encoding='utf-8') as f:
@@ -385,36 +348,28 @@ class EvolutionEngine:
             self.logger.error("CRITICAL ERROR: elites.json does not exist - this indicates a fundamental problem")
             self.logger.error("Evolution cannot continue without elites. Stopping immediately.")
             raise RuntimeError("Missing elites.json - evolution cannot continue. This indicates a critical system failure.")
-        
-        # Run adaptive parent selection (writes parents.json & top_10.json)
+
         self.parent_selector.adaptive_tournament_selection(evolution_tracker, outputs_path=str(self.outputs_path))
-        
-        # Validate that parents were selected by checking parents.json
+
         parents = self._load_parents_from_file()
         if not parents:
             self.logger.error("No parents selected or failed to load parents from file")
             return
-        
-        # EvolutionTracker is already updated by parent_selector.py when parents.json was created
 
-        # Get operators (excluding InformedEvolution)
         single_parent_operators = self._get_single_parent_operators()
         multi_parent_operators = self._get_multi_parent_operators()
-        
-        # Run crossover phase first (multi-parent recombination for diversity)
+
         if len(parents) >= 2:
             self.logger.debug(f"Running crossover globally with {len(parents)} parents and {len(multi_parent_operators)} operators.")
             self._run_crossover_operators(parents, multi_parent_operators)
-        
-        # Run mutation phase (single-parent operations)
+
         if len(parents) >= 1:
             self.logger.debug(f"Running mutation globally with {len(parents)} parents and {len(single_parent_operators)} operators.")
             self._run_mutation_operators(parents, single_parent_operators)
 
     def _generate_variants_all_mode(self, evolution_tracker: Dict[str, Any] = None) -> None:
         """Generate variants using all operators with both parents.json and top_10.json"""
-        
-        # Validate that elites exist before attempting parent selection
+
         elites_path = Path(self.outputs_path) / "elites.json"
         if elites_path.exists():
             with open(elites_path, 'r', encoding='utf-8') as f:
@@ -427,26 +382,21 @@ class EvolutionEngine:
             self.logger.error("CRITICAL ERROR: elites.json does not exist - this indicates a fundamental problem")
             self.logger.error("Evolution cannot continue without elites. Stopping immediately.")
             raise RuntimeError("Missing elites.json - evolution cannot continue. This indicates a critical system failure.")
-        
-        # Run adaptive parent selection (writes parents.json & top_10.json)
+
         self.parent_selector.adaptive_tournament_selection(evolution_tracker, outputs_path=str(self.outputs_path))
-        
-        # Validate that parents were selected by checking parents.json
+
         parents = self._load_parents_from_file()
         if not parents:
             self.logger.error("No parents selected or failed to load parents from file")
             return
 
-        # Get all operators
         single_parent_operators = self._get_single_parent_operators()
         multi_parent_operators = self._get_multi_parent_operators()
-        
-        # Run crossover phase first (multi-parent recombination for diversity)
+
         if len(parents) >= 2:
             self.logger.debug(f"Running crossover globally with {len(parents)} parents and {len(multi_parent_operators)} operators.")
             self._run_crossover_operators(parents, multi_parent_operators)
-        
-        # Run mutation phase (single-parent operations)
+
         if len(parents) >= 1:
             self.logger.debug(f"Running mutation globally with {len(parents)} parents and {len(single_parent_operators)} operators.")
             self._run_mutation_operators(parents, single_parent_operators)
@@ -490,36 +440,29 @@ class EvolutionEngine:
             if op.operator_type != "mutation":
                 continue
 
-            # Apply mutation to all parents max_variants times each
             for parent in parents:
                 try:
                     variants_to_save = []
                     for variant_iteration in range(self.max_variants):
-                        # Pass correct input type based on operator class
                         operator_input = {
                             "parent_data": parent
                         }
                         variants = op.apply(operator_input)
                         
-                        # Collect variants
                         if variants:
                             variants_to_save.extend([self._create_child_genome(vp, op, [parent], "mutation") for vp in variants])
                         else:
-                            # Track question mark rejections (empty variants = rejections)
                             self.operator_stats.record_question_mark_rejection(op.name)
                             self.logger.warning(f"{op.name} failed to generate variants for mutation")
                     
-                    # Save all variants to temp.json
                     if variants_to_save:
                         self._append_variants_to_temp(variants_to_save)
                         self.logger.debug(f"Saved {len(variants_to_save)} mutation variants from {op.name} for parent {parent['id']} ({self.max_variants} calls)")
                         
                 except Exception as e:
                     self.logger.error(f"[Mutation Error] {op.name} with parent {parent['id']}: {e}")
-                    # Track question mark rejections (exceptions = rejections)
                     self.operator_stats.record_question_mark_rejection(op.name)
 
-        # Clean up parents and top_10 files after processing
         self.clean_parents_file()
     
     def _load_parents_from_file(self) -> List[Dict]:
@@ -538,7 +481,6 @@ class EvolutionEngine:
             with open(parents_path, 'r', encoding='utf-8') as f:
                 parents_data = json.load(f)
             
-            # Load parents data (direct array structure)
             if isinstance(parents_data, list):
                 parents = parents_data
             else:
@@ -564,17 +506,14 @@ class EvolutionEngine:
         try:
             temp_path = Path(self.outputs_path) / "temp.json"
             
-            # Load existing variants
             if temp_path.exists():
                 with open(temp_path, 'r', encoding='utf-8') as f:
                     existing_variants = json.load(f)
             else:
                 existing_variants = []
             
-            # Append new variants
             existing_variants.extend(variants)
             
-            # Save back to file
             with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(existing_variants, f, indent=2, ensure_ascii=False)
             
@@ -704,60 +643,38 @@ class EvolutionEngine:
     def _get_single_parent_operators(self):
         """Return list of mutation operators that require only a single parent."""
         
-        # Initialize operators based on configuration to avoid unnecessary initialization
         if self.operators == "ie":
-            # Only InformedEvolution operator
             filtered_operators = [
                 InformedEvolutionOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator, top_10_path=str(self.outputs_path / "top_10.json"))
             ]
             self.logger.debug("IE mode: %d operators", len(filtered_operators))
         elif self.operators == "cm":
-            # All operators except InformedEvolution
             filtered_operators = [
-                # LLM-based POS-aware operators
                 LLM_POSAwareSynonymReplacement(self.north_star_metric, log_file=self.log_file, num_POS_tags=1, generator=self.prompt_generator),
                 POSAwareAntonymReplacement(self.north_star_metric, log_file=self.log_file, num_POS_tags=1, generator=self.prompt_generator),
                 
-                # LLM-based text transformation operators
                 MLMOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # Back translation operators (Hindi only)
                 LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # Disabled non-Hindi back translation operators:
-                # LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # New mutation operators
                 NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, num_error_types=3, generator=self.prompt_generator),
                 ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, num_concept_types=1, generator=self.prompt_generator),
             ]
             self.logger.debug("CM mode: %d operators", len(filtered_operators))
         elif self.operators == "all":
-            # All operators
             filtered_operators = [
-                # LLM-based POS-aware operators
                 LLM_POSAwareSynonymReplacement(self.north_star_metric, log_file=self.log_file, num_POS_tags=1, generator=self.prompt_generator),
                 POSAwareAntonymReplacement(self.north_star_metric, log_file=self.log_file, num_POS_tags=1, generator=self.prompt_generator),
                 
-                # LLM-based text transformation operators
                 MLMOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # Back translation operators (Hindi only)
                 LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # Disabled non-Hindi back translation operators:
-                # LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # New mutation operators
                 NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, num_error_types=3, generator=self.prompt_generator),
                 ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, num_concept_types=1, generator=self.prompt_generator),
@@ -765,26 +682,16 @@ class EvolutionEngine:
             ]
             self.logger.debug("ALL mode: %d operators", len(filtered_operators))
         else:
-            # Default to all operators if invalid mode
             filtered_operators = [
-                # LLM-based POS-aware operators
                 LLM_POSAwareSynonymReplacement(self.north_star_metric, log_file=self.log_file, num_POS_tags=1, generator=self.prompt_generator),
                 POSAwareAntonymReplacement(self.north_star_metric, log_file=self.log_file, num_POS_tags=1, generator=self.prompt_generator),
                 
-                # LLM-based text transformation operators
                 MLMOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 LLMBasedParaphrasingOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 StylisticMutator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # Back translation operators (Hindi only)
                 LLMBackTranslationHIOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # Disabled non-Hindi back translation operators:
-                # LLMBackTranslationFROperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationDEOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationJAOperator(log_file=self.log_file, generator=self.prompt_generator),
-                # LLMBackTranslationZHOperator(log_file=self.log_file, generator=self.prompt_generator),
                 
-                # New mutation operators
                 NegationOperator(self.north_star_metric, log_file=self.log_file, generator=self.prompt_generator),
                 TypographicalErrorsOperator(self.north_star_metric, log_file=self.log_file, num_error_types=3, generator=self.prompt_generator),
                 ConceptAdditionOperator(self.north_star_metric, log_file=self.log_file, num_concept_types=1, generator=self.prompt_generator),
@@ -862,17 +769,14 @@ class EvolutionEngine:
 
             for v in variants:
                 if not isinstance(v, dict):
-                    # Skip invalid entries but count as removed when rewriting list
                     duplicates_removed += 1
                     continue
 
                 prompt = v.get("prompt")
                 vid = v.get("id")
 
-                # Normalize prompt for dedup
                 norm = prompt.strip().lower() if isinstance(prompt, str) else None
 
-                # Criteria: duplicate if same normalized prompt OR duplicate id already seen
                 if (norm is not None and norm in seen_prompts) or (vid is not None and vid in seen_ids):
                     duplicates_removed += 1
                     continue
@@ -883,7 +787,6 @@ class EvolutionEngine:
                     seen_ids.add(vid)
                 unique_variants.append(v)
 
-            # Only rewrite file if duplicates were removed
             if duplicates_removed > 0:
                 with open(temp_path, 'w', encoding='utf-8') as f:
                     json.dump(unique_variants, f, indent=2, ensure_ascii=False)

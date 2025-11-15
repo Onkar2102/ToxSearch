@@ -1,12 +1,4 @@
-## @file src/utils/__init__.py
-# @brief Utility functions and helper modules.
-#
-# This package provides:
-#  - custom_logging: Logging configuration and performance tracking
-#  - population_io: Population loading, saving, and management
-#  - m3_optimizer: System optimization utilities for Apple Silicon
 
-# Lazy imports to prevent circular import issues
 def get_custom_logging():
     """Lazy import of custom_logging functions"""
     from .custom_logging import get_logger, get_log_filename, log_system_info, PerformanceLogger
@@ -23,7 +15,6 @@ def get_population_io():
         load_genome_by_id,
         consolidate_generations_to_single_file,
         migrate_from_split_to_single,
-        # Steady state population management
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
@@ -39,7 +30,6 @@ def get_population_io():
         load_genome_by_id,
         consolidate_generations_to_single_file,
         migrate_from_split_to_single,
-        # Steady state population management
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,

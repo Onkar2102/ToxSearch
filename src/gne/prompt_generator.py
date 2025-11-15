@@ -12,7 +12,6 @@ from llama_cpp import Llama
 from utils import get_custom_logging
 from .model_interface import LlamaCppChatInterface
 
-# Get the functions at module level to avoid repeated calls
 get_logger, _, _, _ = get_custom_logging()
 
 class PromptGenerator:
@@ -25,7 +24,6 @@ class PromptGenerator:
         self.logger = get_logger("PromptGenerator", self.log_file)
         self.logger.debug(f"Logger correctly initialized with log_file: {self.log_file}")
 
-        # Load PG config
         try:
             with open(config_path, "r") as f:
                 config = yaml.safe_load(f)
@@ -35,7 +33,6 @@ class PromptGenerator:
                 raise ValueError(f"Model '{model_key}' not found in configuration. Available keys: {list(config.keys())}")
             self.model_cfg = config[model_key]
             
-            # Validate model configuration
             if not self.model_cfg.get("name"):
                 raise ValueError(f"Model configuration missing 'name' field for {model_key}")
                 
@@ -49,19 +46,16 @@ class PromptGenerator:
             self.logger.error(f"Failed to load model configuration: {e}")
             raise
 
-        # Initialize chat interface
         try:
             self.model_interface = LlamaCppChatInterface(self.model_cfg, log_file)
         except Exception as e:
             self.logger.error(f"Failed to initialize model interface: {e}")
             raise
         
-        # Task-specific templates and unified LLM config from PG config
         self.task_templates = config.get("task_templates", {})
         self.llm_config = config.get("llm_config", {})
         self.operator_config = config.get("operator_config", {})
 
-        # Performance tracking attributes
         self.generation_count = 0
         self.total_tokens_generated = 0
         self.total_generation_time = 0.0
@@ -79,10 +73,8 @@ class PromptGenerator:
         try:
             import re
             
-            # Clean the response first
             response = response.strip()
             
-            # Try exact tag matching first (case-sensitive)
             pattern = f'<{tag_name}>(.*?)</{tag_name}>'
             match = re.search(pattern, response, re.DOTALL)
             if match:
@@ -91,7 +83,6 @@ class PromptGenerator:
                     self.logger.debug(f"Successfully extracted {tag_name} content: {content[:50]}...")
                     return content
             
-            # Try case-insensitive matching
             pattern = f'<{tag_name.lower()}>(.*?)</{tag_name.lower()}>'
             match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
             if match:
@@ -100,7 +91,6 @@ class PromptGenerator:
                     self.logger.debug(f"Successfully extracted {tag_name} content (case-insensitive): {content[:50]}...")
                     return content
             
-            # Try with whitespace tolerance
             pattern = f'<{tag_name}\\s*>(.*?)</{tag_name}\\s*>'
             match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
             if match:
@@ -109,7 +99,6 @@ class PromptGenerator:
                     self.logger.debug(f"Successfully extracted {tag_name} content (whitespace-tolerant): {content[:50]}...")
                     return content
             
-                # Try partial tag matching (in case of typos) - only for longer tag names
                 if len(tag_name) > 3:
                     pattern = f'<{tag_name[:3]}.*?>(.*?)</{tag_name[:3]}.*?>'
                     match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
@@ -119,9 +108,7 @@ class PromptGenerator:
                             self.logger.debug(f"Successfully extracted {tag_name} content (partial match): {content[:50]}...")
                             return content
                 
-                # Try to extract content from malformed XML (e.g., "opinions</synomics>")
                 if tag_name in ['synonyms', 'antonyms']:
-                    # Look for patterns like "word</synomics>" or "word</antonyms>"
                     pattern = f'([a-zA-Z]+)</{tag_name[:3]}.*?>'
                     match = re.search(pattern, response, re.IGNORECASE)
                     if match:
@@ -130,7 +117,6 @@ class PromptGenerator:
                             self.logger.debug(f"Successfully extracted {tag_name} content (malformed XML): {content[:50]}...")
                             return content
             
-            # Log the failed extraction for debugging
             self.logger.warning(f"Failed to extract valid {tag_name} content from response: {response[:200]}...")
             return ""
             
@@ -143,30 +129,12 @@ class PromptGenerator:
         if not content or len(content.strip()) < 2:
             return False
             
-        # For question-related tags, ensure it's a question
         if tag_name in ['variant', 'paraphrase', 'modified', 'trans', 'triple_bracket']:
-            # Must be a question - accept various question marks from different languages
-            # English: ?, Japanese/Chinese: ？, Arabic: ؟, Greek: ;
             question_marks = ['?', '？', '؟', ';']
             if not any(content.endswith(qm) for qm in question_marks):
                 self.logger.warning(f"Extracted content does not end with question mark: {content}")
                 return False
                 
-        # # For word lists (synonyms, antonyms), validate single word format
-        # elif tag_name in ['synonyms', 'antonyms']:
-        #     # Should be a single word, not JSON array
-        #     if len(content.split()) > 1:
-        #         self.logger.warning(f"{tag_name} should be single word: {content}")
-        #         return False
-        #     if not content.isalpha() or len(content.strip()) < 2:
-        #         self.logger.warning(f"Invalid {tag_name} word: {content}")
-        #         return False
                 
-        # # For single word replacements
-        # elif tag_name == 'replacement':
-        #     # Allow multi-word replacements for MLM operator
-        #     if len(content.split()) > 3:
-        #         self.logger.warning(f"Replacement too long: {content}")
-        #         return False
                 
         return True

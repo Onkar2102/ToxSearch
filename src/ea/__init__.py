@@ -7,7 +7,6 @@ This package provides:
 - TextVariationOperators: concrete mutation operators
 """
 
-# Lazy imports to avoid torch dependency issues
 def get_EvolutionEngine():
     """Lazy import of EvolutionEngine to avoid torch dependency issues"""
     from ea.evolution_engine import EvolutionEngine
@@ -28,7 +27,6 @@ def get_update_evolution_tracker_with_generation_global():
     from ea.run_evolution import update_evolution_tracker_with_generation_global
     return update_evolution_tracker_with_generation_global
 
-# Mutation operators
 def get_LLM_POSAwareSynonymReplacement():
     """Lazy import of LLM_POSAwareSynonymReplacement to avoid torch dependency issues"""
     from ea.synonym_replacement import LLM_POSAwareSynonymReplacement
@@ -54,7 +52,6 @@ def get_StylisticMutator():
     from ea.stylistic_mutator import StylisticMutator
     return StylisticMutator
 
-# Back translation operators
 def get_LLMBackTranslationHIOperator():
     """Lazy import of LLMBackTranslationHIOperator to avoid torch dependency issues"""
     from ea.back_translation import LLMBackTranslationHIOperator
@@ -80,7 +77,6 @@ def get_LLMBackTranslationZHOperator():
     from ea.back_translation import LLMBackTranslationZHOperator
     return LLMBackTranslationZHOperator
 
-# New mutation operators
 def get_NegationOperator():
     """Lazy import of NegationOperator to avoid torch dependency issues"""
     from ea.negation_operator import NegationOperator
@@ -101,7 +97,6 @@ def get_InformedEvolutionOperator():
     from ea.informed_evolution import InformedEvolutionOperator
     return InformedEvolutionOperator
 
-# Crossover operators
 def get_SemanticSimilarityCrossover():
     """Lazy import of SemanticSimilarityCrossover to avoid torch dependency issues"""
     from ea.semantic_similarity_crossover import SemanticSimilarityCrossover
@@ -119,33 +114,28 @@ import logging
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    # Core evolution functions
     "get_EvolutionEngine",
     "get_run_evolution",
     "get_create_final_statistics_with_tracker",
     "get_update_evolution_tracker_with_generation_global",
     
-    # Mutation operators
     "get_LLM_POSAwareSynonymReplacement",
     "get_LLM_POSAwareAntonymReplacement",
     "get_MLMOperator",
     "get_LLMBasedParaphrasingOperator",
     "get_StylisticMutator",
     
-    # Back translation operators
     "get_LLMBackTranslationHIOperator",
     "get_LLMBackTranslationFROperator",
     "get_LLMBackTranslationDEOperator",
     "get_LLMBackTranslationJAOperator",
     "get_LLMBackTranslationZHOperator",
     
-    # New mutation operators
     "get_NegationOperator",
     "get_TypographicalErrorsOperator",
     "get_ConceptAdditionOperator",
     "get_InformedEvolutionOperator",
     
-    # Crossover operators
     "get_SemanticSimilarityCrossover",
     "get_SemanticFusionCrossover",
 ]

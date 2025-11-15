@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 download_models.py
 
@@ -27,12 +26,10 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-# Optionally load .env automatically if python-dotenv is installed
 try:
-    from dotenv import load_dotenv  # type: ignore
-    load_dotenv(override=True)  # Override shell environment with .env file values
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
 except ImportError:
-    # python-dotenv not installed, that's fine
     pass
 
 import yaml
@@ -48,65 +45,40 @@ class ModelManager:
         default_target_dir: Optional[Path] = None,
         registry_file: Optional[Path] = None,
     ):
-        # Registry: alias -> HF repo
         self.MODEL_REGISTRY = model_registry or {
-            # Meta Llama families (transformers)
             "llama3.2-1b-instruct": "meta-llama/Llama-3.2-1B-Instruct",
             "llama3.2-3b-instruct": "meta-llama/Llama-3.2-3B-Instruct",
             "llama3.1-8b-instruct": "meta-llama/Meta-Llama-3.1-8B-Instruct",
             "llama3.3-70b-instruct": "meta-llama/Llama-3.3-70B-Instruct",
 
-            # Mistral (transformers)
             "mistral-7b-instruct": "mistralai/Mistral-7B-Instruct-v0.3",
 
-            # Qwen (transformers)
             "qwen2.5-7b-instruct": "Qwen/Qwen2.5-7B-Instruct",
             "qwen2.5-7b-instruct-1m": "Qwen/Qwen2.5-7B-Instruct-1M",
 
-            # Gemma (transformers)
             "gemma-2-9b-it": "google/gemma-2-9b-it",
 
-            # Microsoft Phi (transformers)
             "phi-3.5-mini-instruct": "microsoft/Phi-3.5-mini-instruct",
 
-            # DeepSeek (transformers)
-            # "deepseek-coder-v2-instruct": "deepseek-ai/DeepSeek-Coder-V2-Instruct",
         }
         
         self.GGUF_MODEL_REGISTRY = {
-            # Meta Llama (GGUF)
-            # "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
-            # "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
-            # "llama3.1-8b-instruct-gguf": "MaziyarPanahi/Meta-Llama-3.1-8B-Instruct-GGUF",
 
-            # Mistral (GGUF)
-            # "mistral-7b-instruct-gguf": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
 
-            # Qwen (GGUF)
             "qwen2.5-7b-instruct-gguf": "bartowski/Qwen2.5-7B-Instruct-GGUF",
-            # "qwen2.5-7b-instruct-1m-gguf": "bartowski/Qwen2.5-7B-Instruct-1M-GGUF",
 
-            # Gemma (GGUF)
-            # "gemma-2-9b-it-gguf": "bartowski/gemma-2-9b-it-GGUF",
 
-            # Microsoft Phi (GGUF)
             "phi-3.5-mini-instruct-gguf": "bartowski/Phi-3.5-mini-instruct-GGUF",
 
-            # Mixtral (GGUF) - MoE architecture
             "mixtral-8x7b-instruct-gguf": "bartowski/Mixtral-8x7B-Instruct-v0.1-GGUF",
 
-            # LLaMA 3.2 (GGUF) - For size comparison
             "llama3.2-3b-instruct-gguf": "bartowski/Llama-3.2-3B-Instruct-GGUF",
             "llama3.2-1b-instruct-gguf": "bartowski/Llama-3.2-1B-Instruct-GGUF",
 
-            # Stable LM (GGUF) - Different architecture
             "stable-lm-2-1.6b-gguf": "bartowski/stable-lm-2-1.6b-GGUF",
 
-            # Falcon (GGUF) - Different architecture
             "falcon-7b-instruct-gguf": "bartowski/Falcon-7B-Instruct-GGUF",
 
-            # DeepSeek (GGUF)
-            # "deepseek-coder-v2-instruct-gguf": "bartowski/DeepSeek-Coder-V2-Instruct-GGUF",
         }
         self.DEFAULT_TARGET_DIR = default_target_dir or Path("models")
         self.REGISTRY_FILE = registry_file or Path("models/models_registry.json")
@@ -128,16 +100,13 @@ class ModelManager:
         path.mkdir(parents=True, exist_ok=True)
 
     def local_model_dir(self, target_dir: Path, alias: str) -> Path:
-        # E.g., models/llama3.2-3b-instruct
         return target_dir / alias
 
     def model_already_present(self, path: Path) -> bool:
-        # Heuristic: presence of tokenizer + model files
         required = ["config.json", "tokenizer.json", "tokenizer_config.json"]
         return path.exists() and any((path / r).exists() for r in required)
     
     def gguf_model_already_present(self, path: Path) -> bool:
-        # Check for GGUF files
         gguf_files = list(path.glob("*.gguf"))
         return path.exists() and len(gguf_files) > 0
 
@@ -149,7 +118,6 @@ class ModelManager:
         except RepositoryNotFoundError:
             return False
         except Exception:
-            # For transient errors, return False but print a warning
             print(f"[warn] Could not validate repo: {repo_id} (revision={revision})")
             return False
 
@@ -164,7 +132,6 @@ class ModelManager:
         out_dir = self.local_model_dir(target_dir, alias)
         self.ensure_dir(out_dir)
 
-        # Check if model already present
         if gguf and self.gguf_model_already_present(out_dir):
             print(f"[skip] GGUF {alias} already present at {out_dir}")
             return out_dir
@@ -180,7 +147,6 @@ class ModelManager:
         print(f"[download] {alias} ← {repo_id} -> {out_dir}")
         
         if gguf:
-            # Download only GGUF files
             snapshot_download(
                 repo_id=repo_id,
                 local_dir=str(out_dir),
@@ -189,7 +155,6 @@ class ModelManager:
                 allow_patterns=["*.gguf", "*.json", "tokenizer*"]
             )
         else:
-            # Download all files
             snapshot_download(
                 repo_id=repo_id,
                 local_dir=str(out_dir),
@@ -201,13 +166,11 @@ class ModelManager:
         return out_dir
 
     def write_registry(self, registry_path: Path, mapping: Dict[str, str]) -> None:
-        # Merge with existing (idempotent)
         existing = {}
         if registry_path.exists():
             try:
                 existing = json.loads(registry_path.read_text())
             except (json.JSONDecodeError, FileNotFoundError, PermissionError):
-                # Corrupted registry or file issues - start fresh
                 pass
         existing.update(mapping)
         tmp = registry_path.with_suffix(".json.tmp")
@@ -227,7 +190,7 @@ class ModelManager:
         if do_login:
             try:
                 print("[auth] Logging in to Hugging Face Hub…")
-                login()  # interactive if no token set
+                login()
             except Exception as e:
                 print(f"[warn] interactive login failed or skipped: {e}")
         else:
@@ -248,7 +211,6 @@ class ModelManager:
         target_dir = (target_dir or self.DEFAULT_TARGET_DIR).resolve()
         self.ensure_dir(target_dir)
 
-        # Choose registry based on GGUF flag
         registry = self.GGUF_MODEL_REGISTRY if gguf else self.MODEL_REGISTRY
         
         if all_models:
@@ -256,21 +218,18 @@ class ModelManager:
         else:
             to_get = only or []
 
-        # Validate aliases
         missing = [a for a in to_get if a not in registry]
         if missing:
             print(f"[error] Unknown model alias(es): {missing}")
             print("Available aliases:", ", ".join(registry.keys()))
             sys.exit(1)
 
-        # Download loop
         resolved = {}
         for alias in to_get:
             repo_id = registry[alias]
             path = self.download_one(alias, repo_id, target_dir, revision=revision, gguf=gguf)
             resolved[alias] = str(path)
 
-        # Write/update registry mapping alias -> local path
         self.write_registry(self.REGISTRY_FILE, resolved)
 
         print("\nDone. Local models:")
@@ -294,7 +253,6 @@ class ModelManager:
                 f"Run: python download_models.py --only {alias}"
             )
         local_path = reg[alias]
-        # Load tokenizer & model from disk
         tok = AutoTokenizer.from_pretrained(local_path, local_files_only=True)
         model = AutoModelForCausalLM.from_pretrained(
             local_path,
