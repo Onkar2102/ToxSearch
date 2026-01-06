@@ -1,0 +1,112 @@
+"""
+merging.py
+
+Island merging logic for Plan A+ speciation.
+"""
+
+from typing import Dict, List, Tuple, Optional
+
+from .island import Individual, Species, IslandMode
+from .embeddings import semantic_distance
+
+from utils import get_custom_logging
+get_logger, _, _, _ = get_custom_logging()
+
+
+def detect_merge_candidates(species: Dict[int, Species], theta_merge: float = 0.2,
+                            min_stability_gens: int = 3, current_gen: int = 0, logger=None) -> List[Tuple[int, int]]:
+    """Find pairs of species that should merge."""
+    if logger is None:
+        logger = get_logger("IslandMerging")
+    
+    merge_pairs = []
+    species_list = list(species.items())
+    
+    for i, (id1, sp1) in enumerate(species_list):
+        for j, (id2, sp2) in enumerate(species_list[i + 1:], start=i + 1):
+            if sp1.leader.embedding is None or sp2.leader.embedding is None:
+                continue
+            
+            dist = semantic_distance(sp1.leader.embedding, sp2.leader.embedding)
+            if dist < theta_merge:
+                sp1_stable = (current_gen - sp1.created_at) >= min_stability_gens
+                sp2_stable = (current_gen - sp2.created_at) >= min_stability_gens
+                if sp1_stable and sp2_stable:
+                    merge_pairs.append((id1, id2))
+    
+    return merge_pairs
+
+
+def merge_islands(sp1: Species, sp2: Species, current_generation: int,
+                  max_capacity: int = 50, logger=None) -> Species:
+    """Merge two islands into one."""
+    if logger is None:
+        logger = get_logger("IslandMerging")
+    
+    seen = set()
+    combined = []
+    for m in sp1.members + sp2.members:
+        if m.id not in seen:
+            combined.append(m)
+            seen.add(m.id)
+    
+    combined = sorted(combined, key=lambda x: x.fitness, reverse=True)[:max_capacity]
+    new_leader = max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
+    
+    if new_leader not in combined:
+        combined.insert(0, new_leader)
+        combined = combined[:max_capacity]
+    
+    merged = Species(
+        id=sp1.id, leader=new_leader, members=combined, mode=IslandMode.DEFAULT,
+        radius=max(sp1.radius, sp2.radius), stagnation_counter=0,
+        created_at=current_generation, last_improvement=current_generation
+    )
+    
+    for m in combined:
+        m.species_id = merged.id
+    
+    logger.info(f"Merged species {sp1.id} + {sp2.id} → {merged.id} ({merged.size} members)")
+    return merged
+
+
+def process_merges(species: Dict[int, Species], theta_merge: float = 0.2,
+                   min_stability_gens: int = 3, current_gen: int = 0,
+                   max_capacity: int = 50, max_merges_per_gen: int = 3, logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
+    """Process all merges for a generation."""
+    if logger is None:
+        logger = get_logger("IslandMerging")
+    
+    events = []
+    merges_done = 0
+    
+    while merges_done < max_merges_per_gen:
+        pairs = detect_merge_candidates(species, theta_merge, min_stability_gens, current_gen, logger)
+        if not pairs:
+            break
+        
+        id1, id2 = pairs[0]
+        if id1 not in species or id2 not in species:
+            continue
+        
+        sp1, sp2 = species[id1], species[id2]
+        merged = merge_islands(sp1, sp2, current_gen, max_capacity, logger)
+        
+        species.pop(id1, None)
+        species.pop(id2, None)
+        species[merged.id] = merged
+        
+        events.append({"generation": current_gen, "merged": (id1, id2), "result_id": merged.id})
+        merges_done += 1
+    
+    return species, events
+
+
+def should_merge(sp1: Species, sp2: Species, theta_merge: float, min_stability_gens: int, current_gen: int) -> bool:
+    """Check if two species should merge."""
+    if sp1.leader.embedding is None or sp2.leader.embedding is None:
+        return False
+    if (current_gen - sp1.created_at) < min_stability_gens or (current_gen - sp2.created_at) < min_stability_gens:
+        return False
+    return semantic_distance(sp1.leader.embedding, sp2.leader.embedding) < theta_merge
+
