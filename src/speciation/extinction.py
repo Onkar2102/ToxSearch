@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple, Callable, TYPE_CHECKING
 from .island import Individual, Species, IslandMode, generate_species_id
 
 if TYPE_CHECKING:
-    from .limbo import LimboBuffer
+    from .reserves import Cluster0
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -69,44 +69,50 @@ def detect_extinction_candidates(species: Dict[int, Species], max_stagnation: in
     return candidates
 
 
-def repopulate_from_limbo(limbo: "LimboBuffer", current_generation: int, population_size: int = 20,
-                          mutate_fn: Optional[Callable] = None, mutation_rate: float = 0.3,
-                          theta_sim: float = 0.4, logger=None) -> Optional[Species]:
+def repopulate_from_cluster0(
+    cluster0: "Cluster0",
+    current_generation: int,
+    theta_sim: float = 0.4,
+    population_size: int = 20,
+    mutate_fn: Optional[Callable] = None,
+    mutation_rate: float = 0.3,
+    logger=None
+) -> Optional[Species]:
     """
-    Create a new species from the best individual in limbo.
+    Create a new species from the best individual in cluster 0.
     
-    When a species goes extinct, repopulation gives high-fitness outliers (in limbo)
+    When a species goes extinct, repopulation gives high-fitness outliers (in cluster 0)
     a second chance to form their own species. This:
-    - Preserves diversity (limbo contains novel high-fitness solutions)
+    - Preserves diversity (cluster 0 contains novel high-fitness solutions)
     - Maintains genetic material across extinctions
     - Avoids losing promising unexplored regions of the search space
     
     Process:
-    1. Pop best individual from limbo as leader
+    1. Pop best individual from cluster 0 as leader
     2. Mutate to create population_size-1 new individuals
-    3. Create new species with these individuals
-    4. If limbo is empty or mutation fails, returns None (falls back to repopulate_from_global_best)
+    3. Create new species with cluster_origin="natural" (repopulation is a natural process)
+    4. If cluster 0 is empty or mutation fails, returns None
     
     Args:
-        limbo: Limbo buffer (source for repopulation)
+        cluster0: Cluster 0 (source for repopulation)
         current_generation: Current generation number
+        theta_sim: Constant radius for new species
         population_size: Size of new population to create
         mutate_fn: Mutation function (applied to leader to create new individuals)
         mutation_rate: Mutation rate parameter passed to mutate_fn
-        theta_sim: Semantic distance threshold for new species
         logger: Optional logger instance
     
     Returns:
-        New Species created from limbo, or None if limbo is empty
+        New Species created from cluster 0, or None if cluster 0 is empty
     """
     if logger is None:
         logger = get_logger("Repopulation")
     
-    if limbo.size == 0:
+    if cluster0.size == 0:
         return None
     
-    # Pop best individual from limbo to be the leader
-    leader = limbo.pop_best()
+    # Pop best individual from cluster 0 to be the leader
+    leader = cluster0.pop_best()
     if leader is None:
         return None
     
@@ -122,37 +128,52 @@ def repopulate_from_limbo(limbo: "LimboBuffer", current_generation: int, populat
                 pass
     
     # Create new species with these members
-    new_sp = Species(id=generate_species_id(), leader=leader, members=members,
-                    radius=theta_sim, created_at=current_generation, last_improvement=current_generation)
-    logger.info(f"Repopulated from limbo: species {new_sp.id}")
+    new_sp = Species(
+        id=generate_species_id(),
+        leader=leader,
+        members=members,
+        radius=theta_sim,  # Constant radius
+        created_at=current_generation,
+        last_improvement=current_generation,
+        cluster_origin="natural",  # Repopulation is a natural process
+        parent_ids=None,
+        parent_id=None
+    )
+    logger.info(f"Repopulated from cluster 0: species {new_sp.id}")
     return new_sp
 
 
-def repopulate_from_global_best(global_best: Individual, current_generation: int, population_size: int = 20,
-                                mutate_fn: Optional[Callable] = None, mutation_rate: float = 0.3,
-                                theta_sim: float = 0.4, logger=None) -> Species:
+def repopulate_from_global_best(
+    global_best: Individual,
+    current_generation: int,
+    theta_sim: float = 0.4,
+    population_size: int = 20,
+    mutate_fn: Optional[Callable] = None,
+    mutation_rate: float = 0.3,
+    logger=None
+) -> Species:
     """
     Create a new species from the global best individual (fallback repopulation).
     
-    Used when extinction requires repopulation but limbo is empty. Starting from
+    Used when extinction requires repopulation but cluster 0 is empty. Starting from
     the global best ensures the new species has high fitness. The population is
     created via mutation of the global best, exploring the local neighborhood.
     
-    This is less diverse than repopulation from limbo (which are diverse outliers),
+    This is less diverse than repopulation from cluster 0 (which are diverse outliers),
     but better than creating completely random new individuals.
     
     Process:
     1. Create copy of global best as leader
     2. Mutate global best to create population_size-1 new individuals
-    3. Create new species with these individuals
+    3. Create new species with cluster_origin="natural"
     
     Args:
         global_best: Global best individual (source for new species)
         current_generation: Current generation number
+        theta_sim: Constant radius for new species
         population_size: Size of new population to create
         mutate_fn: Mutation function (applied to global_best to create new individuals)
         mutation_rate: Mutation rate parameter passed to mutate_fn
-        theta_sim: Semantic distance threshold for new species
         logger: Optional logger instance
     
     Returns:
@@ -162,9 +183,14 @@ def repopulate_from_global_best(global_best: Individual, current_generation: int
         logger = get_logger("Repopulation")
     
     # Create a copy of global_best as the leader
-    leader = Individual(id=global_best.id, prompt=global_best.prompt, fitness=global_best.fitness,
-                       embedding=global_best.embedding, generation=current_generation,
-                       genome_data=global_best.genome_data.copy() if global_best.genome_data else None)
+    leader = Individual(
+        id=global_best.id,
+        prompt=global_best.prompt,
+        fitness=global_best.fitness,
+        embedding=global_best.embedding,
+        generation=current_generation,
+        genome_data=global_best.genome_data.copy() if global_best.genome_data else None
+    )
     
     # Start with leader as first member
     members = [leader]
@@ -178,17 +204,34 @@ def repopulate_from_global_best(global_best: Individual, current_generation: int
                 pass
     
     # Create new species with these members
-    new_sp = Species(id=generate_species_id(), leader=leader, members=members,
-                    radius=theta_sim, created_at=current_generation, last_improvement=current_generation)
+    new_sp = Species(
+        id=generate_species_id(),
+        leader=leader,
+        members=members,
+        radius=theta_sim,  # Constant radius
+        created_at=current_generation,
+        last_improvement=current_generation,
+        cluster_origin="natural",  # Repopulation is a natural process
+        parent_ids=None,
+        parent_id=None
+    )
     logger.info(f"Repopulated from global best: species {new_sp.id}")
     return new_sp
 
 
-def process_extinctions(species: Dict[int, Species], limbo: "LimboBuffer", global_best: Optional[Individual],
-                        current_generation: int, max_stagnation: int = 20, min_size: int = 2,
-                        repopulation_size: int = 20, mutation_rate: float = 0.3,
-                        mutate_fn: Optional[Callable] = None, theta_sim: float = 0.4,
-                        logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
+def process_extinctions(
+    species: Dict[int, Species],
+    cluster0: "Cluster0",
+    global_best: Optional[Individual],
+    current_generation: int,
+    theta_sim: float = 0.4,
+    max_stagnation: int = 20,
+    min_size: int = 2,
+    repopulation_size: int = 20,
+    mutation_rate: float = 0.3,
+    mutate_fn: Optional[Callable] = None,
+    logger=None
+) -> Tuple[Dict[int, Species], List[Dict]]:
     """
     Process all species extinctions and repopulation.
     
@@ -198,22 +241,23 @@ def process_extinctions(species: Dict[int, Species], limbo: "LimboBuffer", globa
     2. Stagnation >= max_stagnation AND mode == EXPLORE (stagnant explorer)
     
     After extinction, a new species is created via repopulation:
-    1. First tries to repopulate from limbo (high-fitness outliers)
-    2. Falls back to global best if limbo is empty
+    1. First tries to repopulate from cluster 0 (high-fitness outliers)
+    2. Falls back to global best if cluster 0 is empty
     
     Repopulation creates new individuals via mutation, introducing fresh diversity.
+    All repopulated species have cluster_origin="natural".
     
     Args:
         species: Dict of species (modified in-place)
-        limbo: Limbo buffer (source for repopulation)
+        cluster0: Cluster 0 (source for repopulation)
         global_best: Global best individual (fallback for repopulation)
         current_generation: Current generation number
+        theta_sim: Constant radius for new species
         max_stagnation: Maximum stagnation before extinction
         min_size: Minimum species size
         repopulation_size: Size of new repopulated species
         mutation_rate: Mutation rate for repopulation
         mutate_fn: Mutation function for creating new individuals
-        theta_sim: Semantic distance threshold for new species
         logger: Optional logger instance
     
     Returns:
@@ -232,23 +276,32 @@ def process_extinctions(species: Dict[int, Species], limbo: "LimboBuffer", globa
         sp = species.pop(sid)
         logger.info(f"Extinguished species {sid}")
         
-        event = {"generation": current_generation, "species_id": sid, "stagnation": sp.stagnation_counter}
+        event = {
+            "generation": current_generation,
+            "species_id": sid,
+            "stagnation": sp.stagnation_counter
+        }
         
         new_sp = None
-        if limbo.size > 0:
-            new_sp = repopulate_from_limbo(limbo, current_generation, repopulation_size,
-                                          mutate_fn, mutation_rate, theta_sim, logger)
+        if cluster0.size > 0:
+            new_sp = repopulate_from_cluster0(
+                cluster0, current_generation, theta_sim,
+                repopulation_size, mutate_fn, mutation_rate, logger
+            )
             if new_sp:
-                event["repopulation_source"] = "limbo"
+                event["repopulation_source"] = "cluster_0"
         
         if new_sp is None and global_best:
-            new_sp = repopulate_from_global_best(global_best, current_generation, repopulation_size,
-                                                mutate_fn, mutation_rate, theta_sim, logger)
+            new_sp = repopulate_from_global_best(
+                global_best, current_generation, theta_sim,
+                repopulation_size, mutate_fn, mutation_rate, logger
+            )
             event["repopulation_source"] = "global_best"
         
         if new_sp:
             species[new_sp.id] = new_sp
             event["new_species_id"] = new_sp.id
+            event["cluster_origin"] = "natural"
         
         events.append(event)
     
@@ -259,7 +312,7 @@ def find_global_best(species: Dict[int, Species]) -> Optional[Individual]:
     """
     Find the individual with highest fitness across all species.
     
-    Used for repopulation: when limbo is empty, global best becomes the seed
+    Used for repopulation: when cluster 0 is empty, global best becomes the seed
     for new species creation. Ensures evolutionary progress is not lost.
     
     Args:

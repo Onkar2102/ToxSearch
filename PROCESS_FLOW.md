@@ -23,23 +23,28 @@ All files are stored in `data/outputs/[timestamp]/` directory:
    - These are the best candidates found so far
    - Persists across generations
    - Used as parent pool for breeding
+   - Each species maintains up to 100 top genomes
 
-3. **`non_elites.json`** - **Non-Elite Genomes**
-   - Stores genomes that are above removal threshold but below elite threshold
-   - Also contains genomes that were removed from species (ejected members)
-   - These are candidates for further evolution
-   - Used as parent pool for breeding
+3. **`reserves.json`** - **Cluster 0 (Holding Buffer)**
+   - Stores genomes that don't fit existing species or were removed from species
+   - Genomes below `removal_threshold` are removed and archived to `under_performing/`
+   - Fixed capacity of 1000 genomes - excess removed based on fitness score
+   - Cluster 0 individuals have a Time-To-Live (TTL) and can form new species if they cluster
+   - Genomes can be promoted from Cluster 0 to species or repopulate extinct species
+   - Has a fixed species_id of 0
 
-4. **`limbo.json`** - **Limbo Buffer**
-   - Stores high-fitness outliers that don't fit existing species
-   - Genomes in limbo have fitness > viability_baseline but are semantically distant from all species
-   - Limbo individuals have a Time-To-Live (TTL) and can form new species if they cluster
-   - Genomes can be promoted from limbo to species or repopulate extinct species
-
-5. **`EvolutionTracker.json`** - **Metadata & Statistics**
+4. **`EvolutionTracker.json`** - **Metadata & Statistics**
    - Tracks evolution progress, metrics, and configuration
    - Contains per-generation statistics (fitness, counts, thresholds)
+   - Includes speciation summaries (species count, Cluster 0 size, etc.)
    - Used to resume evolution and track progress
+
+5. **`speciation_state.json`** - **Speciation Module State**
+   - Persists the full state of the speciation module across generations
+   - Contains all species with their leaders, members, and metadata
+   - Includes cluster origin tracking (merge, split, natural)
+   - Contains Cluster 0 state (individuals, TTL, capacity)
+   - Used internally by speciation module for state reconstruction
 
 6. **`parents.json`** - **Parent Selection Log**
    - Records which genomes were selected as parents
@@ -48,6 +53,13 @@ All files are stored in `data/outputs/[timestamp]/` directory:
 7. **`top_10.json`** - **Top Performers**
    - Stores the top 10 genomes from each generation
    - Used for analysis and reporting
+
+### Archive Files
+
+8. **`under_performing/`** - **Archive Directory**
+   - Contains genomes removed from Cluster 0 due to low fitness
+   - Genomes with fitness below `removal_threshold` are archived here
+   - Also contains genomes removed when Cluster 0 exceeds capacity
 
 ---
 
@@ -111,14 +123,18 @@ Step 6: Distribute Genomes
          │
          ▼
     [Distribution Logic]
-    ├─ Elite genomes → elites.json
-    ├─ Non-elite genomes → non_elites.json
-    └─ Limbo individuals → limbo.json
+    ├─ Elite genomes → elites.json (top 100 per species)
+    └─ Non-elite & removed genomes → reserves.json (Cluster 0)
          │
          ▼
-    ┌─────────────┬──────────────┬──────────────┐
-    │ elites.json │non_elites.json│  limbo.json  │
-    └─────────────┴──────────────┴──────────────┘
+    ┌─────────────────┬─────────────────────┐
+    │   elites.json   │  reserves.json (C0)    │
+    └─────────────────┴─────────────────────┘
+         │
+         ▼
+    [Cluster 0 Management]
+    ├─ Filter by removal_threshold → under_performing/
+    └─ Enforce capacity (max 1000)
          │
          ▼
     temp.json (cleared)
@@ -154,26 +170,30 @@ Step 7: Finalize Generation 0
   - `status`: "complete"
 - **Writes to**: `temp.json` (updated with scores)
 
-### Step 4: **SPECIATION** (Plan A+ Integration)
+### Step 4: **SPECIATION** (Dynamic Islands Integration)
 - **Reads from**: `temp.json` (genomes with fitness scores)
 - **What it does**:
   1. **Compute Embeddings**: Converts all prompts to 384-dimensional vectors using `all-MiniLM-L6-v2`
      - Adds `prompt_embedding` field (384-dim list) to each genome
+    - L2-normalized embeddings live on the unit hypersphere; cosine distance yields **cone-shaped** clusters (θ_sim≈0.3–0.5 ≈ 45–70°)
+    - Default path: direct 384D + Leader-Follower (fast, no training). Optional offline path: Parametric UMAP 384→16 + HDBSCAN/centroiding (better compression/visualization)
   2. **Leader-Follower Clustering**: 
      - Sorts genomes by fitness (descending)
-     - For each genome, finds nearest species leader within `theta_sim` threshold
-     - If no match, creates new species or adds to limbo buffer
-  3. **Assign Species IDs**: Adds `species_id` field to each genome
-  4. **Mark Limbo Members**: Adds `in_limbo` flag to genomes in limbo buffer
+     - For each genome, finds nearest species leader within constant `theta_sim` threshold
+     - If no match, creates new species (cluster_origin="natural") or adds to Cluster 0
+  3. **Assign Species IDs**: Adds `species_id` field to each genome (1+ for species, 0 for Cluster 0)
+  4. **Mark Cluster 0 Members**: Adds `in_limbo` flag to genomes in Cluster 0
   5. **Species Management**:
      - Updates species leaders (highest fitness member)
-     - Manages limbo buffer (high-fitness outliers)
-     - Tracks species metrics
+     - Manages Cluster 0 (holding buffer for outliers)
+     - All species have constant radius (`theta_sim`)
+     - Tracks species metrics and cluster origins
 - **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`, and `in_limbo` fields)
 - **Note**: 
   - `prompt_embedding` field is stored as a list (JSON-compatible)
-  - Species structure is ephemeral (reconstructed each generation)
-  - Persistent speciation data: `species_id`, `in_limbo`, and any intermediate state saved to `speciation_state.json`
+  - Species state persisted to `speciation_state.json`
+  - Cluster origins tracked: "natural", "merge", or "split"
+  - Persistent speciation data: `species_id`, `in_limbo`, cluster_origin, parent_ids
 
 ### Step 5: Calculate Thresholds
 - **Reads from**: `temp.json` (now with `species_id`)
@@ -187,20 +207,20 @@ Step 7: Finalize Generation 0
 - **Distribution Logic**:
   - **Elites** (toxicity >= elite_threshold) → `elites.json`
     - Contains elites from ALL species
+    - Each species maintains top 100 genomes by fitness
     - Used as primary parent pool for breeding
-  - **Non-elites** (removal_threshold < toxicity < elite_threshold) → `non_elites.json`
-    - Contains non-elite genomes from all species
-    - Also contains genomes ejected from species (if any)
-    - Used as secondary parent pool for breeding
-  - **Limbo** (high-fitness outliers in limbo buffer) → `limbo.json`
-    - Contains individuals that don't fit existing species
-    - These have fitness > viability_baseline but are semantically distant
-    - Can form new species or repopulate extinct species
-- **Writes to**: `elites.json`, `non_elites.json`, `limbo.json`
+  - **Cluster 0** (non-elites, removed genomes, outliers) → `reserves.json`
+    - Contains individuals below elite threshold
+    - Contains genomes ejected from species due to capacity limits
+    - Contains high-fitness outliers that don't fit existing species
+    - Genomes below `removal_threshold` are archived to `under_performing/`
+    - Maximum capacity of 1000 genomes (excess removed by fitness)
+    - All Cluster 0 members have `species_id: 0`
+- **Writes to**: `elites.json`, `reserves.json`
 - **Note**: 
   - All distributed genomes retain their `species_id` field
-  - Limbo individuals may not have a `species_id` (or have `null`)
-  - Distribution is based on fitness thresholds, not species membership
+  - Cluster 0 individuals have `species_id: 0` and `in_limbo: true`
+  - Distribution is based on fitness thresholds and species membership
 - **Clears**: `temp.json` (set to empty array `[]`)
 
 ### Step 7: Finalize Generation 0
@@ -215,8 +235,10 @@ Step 7: Finalize Generation 0
 For each generation, the system repeats this cycle:
 
 ### Step 1: Parent Selection & Variation (`run_evolution`)
-- **Reads from**: `elites.json` and `non_elites.json`
+- **Reads from**: `elites.json` and `reserves.json` (Cluster 0)
 - Selects parents from the population pool
+- Elite genomes are primary parent candidates
+- Cluster 0 genomes can also serve as parent candidates
 - Applies genetic operators:
   - **Mutation**: Modifies a single parent's prompt
   - **Crossover**: Combines two parents' prompts
@@ -238,22 +260,27 @@ For each generation, the system repeats this cycle:
 - Updates genomes with fitness scores
 - **Writes to**: `temp.json` (updated with scores)
 
-### Step 4: **SPECIATION** (Plan A+ Integration Point)
+### Step 4: **SPECIATION** (Dynamic Islands Integration Point)
 - **Reads from**: `temp.json` (genomes with fitness scores)
 - **What it does**:
   1. **Compute Embeddings**: Converts all prompts to 384-dimensional vectors using `all-MiniLM-L6-v2`
      - Adds `prompt_embedding` field (384-dim list) to each genome
+    - L2-normalized embeddings on the unit hypersphere; cosine distance creates **angular (cone)** clusters. θ_sim≈0.3–0.5 tunes cone width.
+    - Optional: Pretrained Parametric UMAP 384→16 for offline analysis; default runtime uses direct 384D Leader-Follower for speed.
   2. **Leader-Follower Clustering**: 
      - Sorts genomes by fitness (descending)
-     - For each genome, finds nearest species leader within `theta_sim` threshold
-     - If no match, creates new species or adds to limbo buffer
-  3. **Assign Species IDs**: Adds `species_id` field to each genome
-  4. **Mark Limbo Members**: Adds `in_limbo` flag to genomes in limbo buffer
+     - For each genome, finds nearest species leader within constant `theta_sim` threshold
+     - If no match, creates new species (cluster_origin="natural") or adds to Cluster 0
+  3. **Assign Species IDs**: Adds `species_id` field to each genome (1+ for species, 0 for Cluster 0)
+  4. **Mark Cluster 0 Members**: Adds `in_limbo` flag to genomes in Cluster 0
   5. **Species Management**:
      - Updates species leaders (highest fitness member)
-     - Manages limbo buffer (high-fitness outliers)
-     - Processes merges, extinctions, migrations
-     - Tracks speciation metrics
+     - Manages Cluster 0 (filters by removal_threshold, enforces capacity)
+     - Processes merges (cluster_origin="merge", tracks parent_ids)
+     - Processes splitting (cluster_origin="split")
+     - Handles extinctions, migrations
+     - All species maintain constant radius (`theta_sim`)
+     - Tracks speciation metrics and cluster origins
 - **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`, `in_limbo` fields)
 - **Note**: Embeddings are added to genomes in `prompt_embedding` field (stored as JSON list)
 
@@ -268,34 +295,39 @@ For each generation, the system repeats this cycle:
 - Distributes evaluated variants into:
   - **Elites** (toxicity >= elite_threshold) → `elites.json` (appended to existing elites)
     - Elites from all species are stored together
-  - **Non-elites** (removal_threshold < toxicity < elite_threshold) → `non_elites.json` (appended to existing non-elites)
-    - Non-elites from all species
-    - Also includes genomes ejected from species
-  - **Limbo** (individuals in limbo buffer) → `limbo.json` (appended to existing limbo)
-    - High-fitness outliers that don't fit existing species
-- **Writes to**: `elites.json`, `non_elites.json`, `limbo.json`
+    - Each species maintains top 100 genomes by fitness
+  - **Cluster 0** (all non-elite genomes) → `reserves.json` (appended to existing Cluster 0)
+    - All genomes below elite threshold
+    - Genomes ejected from species due to capacity limits
+    - Genomes that don't fit existing species
+- **Post-Distribution Cleanup**:
+  - Filter Cluster 0 by `removal_threshold` → archive removed to `under_performing/`
+  - Enforce Cluster 0 capacity (max 1000) → archive excess to `under_performing/`
+- **Writes to**: `elites.json`, `reserves.json`
 - **Clears**: `temp.json` (set to empty array)
 
 ### Step 7: Cleanup & Archive
-- **Reads from**: `elites.json`, `non_elites.json`, `limbo.json`
+- **Reads from**: `elites.json`, `reserves.json`
 - Removes low-performing genomes from active population
-- Low performers are removed (not archived to a separate file)
+- Low performers (below `removal_threshold`) archived to `under_performing/`
+- Excess Cluster 0 genomes (above 1000 capacity) archived to `under_performing/`
 - Updates species membership if genomes are ejected
-- **Writes to**: `elites.json`, `non_elites.json`, `limbo.json` (updated)
+- **Writes to**: `elites.json`, `reserves.json` (updated)
 
 ### Step 8: Redistribute Population
-- **Reads from**: `elites.json`, `non_elites.json`
+- **Reads from**: `elites.json`, `reserves.json`
 - Re-evaluates all genomes against current elite threshold
 - Moves genomes between files if thresholds changed
-- **Writes to**: `elites.json`, `non_elites.json` (rebalanced)
+- **Writes to**: `elites.json`, `reserves.json` (rebalanced)
 
 ### Step 9: Update Tracker
-- **Reads from**: `elites.json`, `non_elites.json`, `EvolutionTracker.json`
+- **Reads from**: `elites.json`, `reserves.json`, `EvolutionTracker.json`
 - Calculates generation statistics:
-  - Average fitness (elites, non-elites, overall)
-  - Counts (elites, variants created)
+  - Average fitness (elites, Cluster 0, overall)
+  - Counts (elites, Cluster 0 size, variants created)
   - Best/worst scores
   - Operator statistics
+  - Speciation summary (species count, merges, splits, extinctions)
 - **Writes to**: `EvolutionTracker.json` (generation N entry added)
 
 ### Step 10: Check Termination
@@ -320,10 +352,11 @@ For each generation, the system repeats this cycle:
 
 ### The "Permanent Files" Pattern
 
-`elites.json` and `non_elites.json` are **append-only** during evolution:
+`elites.json` and `reserves.json` are **append-only** during evolution:
 - New genomes are appended to existing ones
 - Cleanup happens periodically to remove low performers
 - Redistribution rebalances between files
+- Cluster 0 (`reserves.json`) has capacity limit of 1000
 
 ### The "Tracker" Pattern
 
@@ -349,8 +382,8 @@ Each genome in JSON files has this structure:
   "toxicity": 0.85,
   "north_star_score": 0.85,
   "prompt_embedding": [0.123, -0.456, ...],  // 384-dim array (added by speciation)
-  "species_id": 3,  // Added by speciation module
-  "in_limbo": false,  // Added by speciation (true if in limbo buffer)
+  "species_id": 3,  // Added by speciation module (0 = Cluster 0, 1+ = species)
+  "in_limbo": false,  // Added by speciation (true if in Cluster 0)
   "moderation_result": {
     "scores": {"toxicity": 0.85},
     "classifications": {...}
@@ -359,6 +392,10 @@ Each genome in JSON files has this structure:
   "creation_info": {...}
 }
 ```
+
+**Species ID Convention**:
+- `species_id: 0` = Cluster 0 (holding buffer, non-elite genomes)
+- `species_id: 1+` = Valid species/islands (elite clusters)
 
 ---
 
@@ -389,46 +426,55 @@ Input: temp.json (genomes with fitness scores)
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 2: Leader-Follower Clustering                         │
+│ Step 2: Leader-Follower Clustering                          │
 │  - Sort individuals by fitness (descending)                 │
 │  - For each individual:                                      │
-│    ├─ Find nearest species leader                          │
-│    ├─ If distance < theta_sim: add to species              │
-│    ├─ Else if fitness > viability_baseline: add to limbo   │
-│    └─ Else: create new species                              │
+│    ├─ Find nearest species leader                           │
+│    ├─ If distance < theta_sim: add to species               │
+│    ├─ Else if fitness > viability_baseline: add to Cluster 0│
+│    └─ Else: create new species (cluster_origin="natural")   │
+│  - All species have constant radius = theta_sim             │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 3: Limbo Management                                    │
-│  - Update TTL for limbo individuals                         │
-│  - Check if limbo cluster can form new species              │
-│  - Promote viable clusters to species                       │
+│ Step 3: Cluster 0 Management                                │
+│  - Update TTL for Cluster 0 individuals                     │
+│  - Filter by removal_threshold (archive removed genomes)    │
+│  - Enforce capacity (max 1000, archive excess)              │
+│  - Check if clusters can form new species                   │
+│  - Promote viable clusters to species (cluster_origin=      │
+│    "natural")                                               │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 4: Species Updates                                     │
-│  - Update species leaders (highest fitness member)         │
+│  - Update species leaders (highest fitness member)          │
 │  - Record fitness history for each species                  │
-│  - Update species modes (DEFAULT/EXPLORE/EXPLOIT)            │
+│  - Update species modes (DEFAULT/EXPLORE/EXPLOIT)           │
+│  - Each species maintains top 100 members (excess to C0)    │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 5: Dynamic Operations                                  │
-│  - Merge similar species (if distance < theta_merge)       │
-│  - Extinct stagnant species                                 │
-│  - Repopulate extinct species                                │
-│  - Migrate individuals between related species               │
+│  - Merge similar species (if distance < theta_merge)        │
+│    └─ Creates new species with cluster_origin="merge"       │
+│    └─ Records parent_ids=[id1, id2]                         │
+│  - Split overcrowded species (cluster_origin="split")       │
+│  - Extinct stagnant species (members → Cluster 0)           │
+│  - Repopulate from Cluster 0 (cluster_origin="natural")     │
+│  - Migrate individuals between related species              │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 6: Update Genomes                                      │
-│  - Assign species_id to each genome                         │
-│  - Mark in_limbo flag for limbo individuals                 │
+│  - Assign species_id to each genome (0 for Cluster 0)       │
+│  - Mark in_limbo flag for Cluster 0 individuals             │
 │  - Preserve all original genome data                        │
+│  - Save state to speciation_state.json                      │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
@@ -439,49 +485,66 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
 
 **For Generation 0**:
 1. **Reads** `temp.json` (initial population with fitness scores)
-2. **Computes** embeddings for all prompts (in-memory, not saved)
+2. **Computes** embeddings for all prompts and saves to `temp.json`
 3. **Clusters** genomes into species using Leader-Follower algorithm
-   - First genome becomes first species leader
+   - First genome becomes first species leader (cluster_origin="natural")
    - Subsequent genomes assigned to nearest species or create new ones
-4. **Assigns** `species_id` to each genome
-5. **Manages** initial species structure
-6. **Writes** back to `temp.json` with `species_id` added
+   - All species have constant radius (`theta_sim`)
+4. **Assigns** `species_id` to each genome (0 for Cluster 0, 1+ for species)
+5. **Manages** initial species structure and Cluster 0
+6. **Saves** speciation state to `speciation_state.json`
+7. **Writes** back to `temp.json` with `species_id` added
 
 **For Generation N**:
-1. **Reads** `temp.json` (new variants with fitness scores)
-2. **Reconstructs** existing species from `elites.json` and `non_elites.json` (if needed)
+1. **Loads** existing speciation state from `speciation_state.json`
+2. **Reads** `temp.json` (new variants with fitness scores)
 3. **Clusters** new variants into existing or new species
-4. **Manages** species dynamics (merging, extinction, migration)
-5. **Assigns** `species_id` to each variant
-6. **Writes** back to `temp.json` with `species_id` added
+4. **Manages** species dynamics:
+   - Merging (cluster_origin="merge", records parent_ids)
+   - Splitting (cluster_origin="split")
+   - Extinction (members → Cluster 0)
+   - Migration between species
+5. **Manages** Cluster 0:
+   - Filter by `removal_threshold` → archive to `under_performing/`
+   - Enforce capacity (max 1000) → archive excess to `under_performing/`
+   - Check for new species formation
+6. **Assigns** `species_id` to each variant
+7. **Saves** updated speciation state to `speciation_state.json`
+8. **Writes** back to `temp.json` with `species_id` added
 
 ### What Gets Saved
 - **`prompt_embedding`**: 384-dimensional L2-normalized embedding (saved in genome as list for JSON compatibility)
-- **`species_id`**: Integer ID of the species/island (saved in genome JSON)
-- **`in_limbo`**: Boolean flag indicating if genome is in limbo buffer (saved in genome JSON)
-- **Species metadata**: Optionally saved to `speciation_state.json` for state reconstruction
-- **Species structure**: Can be reconstructed each generation from `species_id` in genomes, or loaded from saved state
+- **`species_id`**: Integer ID of the species/island (0 = Cluster 0, 1+ = species)
+- **`in_limbo`**: Boolean flag indicating if genome is in Cluster 0 (saved in genome JSON)
+- **Species metadata**: Saved to `speciation_state.json` including:
+  - Leader embeddings, prompt, and fitness
+  - Cluster origin ("natural", "merge", "split")
+  - Parent IDs for merged clusters
+  - Species mode (DEFAULT/EXPLORE/EXPLOIT)
+- **Cluster 0 state**: Saved to `speciation_state.json` with ID 0
 
 ### Embedding Storage
 - **Stored in**: `prompt_embedding` field in each genome (as list of floats, JSON-compatible)
 - **Computation**: L2-normalized 384-dimensional vectors using `all-MiniLM-L6-v2` model
-- **Persistence**: Embeddings are saved to `temp.json` and then to permanent files (`elites.json`, `non_elites.json`, `limbo.json`)
+- **Persistence**: Embeddings are saved to `temp.json` and then to permanent files (`elites.json`, `reserves.json`)
 - **Efficiency**: While embeddings add size (~1.5 KB per genome), they enable:
   - Fast re-clustering in subsequent generations
   - Offline analysis of species structure
-  - Reduced computational overhead if speciation state is persisted
+  - Reduced computational overhead since speciation state is persisted
 - **Processing**: When loading embeddings from JSON, convert list back to numpy array for distance computations
 
 ### Generation 0 Specifics
 
 **Initial Clustering**:
 - Generation 0 has no existing species
-- First genome becomes the first species leader
+- First genome becomes the first species leader (cluster_origin="natural")
 - All subsequent genomes are compared against existing species leaders
-- High-fitness outliers may go to limbo buffer
+- High-fitness outliers may go to Cluster 0 (species_id=0)
+- All species have constant radius = `theta_sim`
 
 **Species Formation**:
 - Species form naturally as genomes cluster by semantic similarity
+- All new species have `cluster_origin: "natural"`
 - Number of initial species depends on:
   - Diversity of seed prompts
   - `theta_sim` threshold (default: 0.4)
@@ -490,7 +553,8 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
 **Example**:
 - 100 seed prompts → ~5-15 initial species (depending on diversity)
 - Each species contains semantically similar prompts
-- Species IDs assigned: 1, 2, 3, ... (sequential)
+- Species IDs assigned: 1, 2, 3, ... (sequential, 0 reserved for Cluster 0)
+- Each species maintains up to 100 members (top by fitness)
 
 ---
 
@@ -501,39 +565,45 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
 3. **Moderate**: Adds scores to 100 genomes → `temp.json` (100 genomes with scores)
 4. **Speciate**: 
    - Computes embeddings for 100 prompts and adds `prompt_embedding` field
-   - Groups into 8 species based on semantic similarity
-   - Adds `species_id` (1-8) to each genome
-   - Marks 5 high-fitness outliers with `in_limbo: true`
+   - Groups into 8 species based on semantic similarity (cluster_origin="natural")
+   - Adds `species_id` (1-8) to each genome, 0 for Cluster 0
+   - Marks 5 high-fitness outliers with `in_limbo: true` (species_id: 0)
+   - Saves state to `speciation_state.json`
    - → `temp.json` (100 genomes with prompt_embedding, species_id, in_limbo)
 5. **Thresholds**: Calculates elite_threshold = 0.75, removal_threshold = 0.10
 6. **Distribute**: 
-   - 25 genomes → `elites.json` (25 total, from all species)
-   - 70 genomes → `non_elites.json` (70 total, from all species)
-   - 5 genomes → `limbo.json` (5 total, high-fitness outliers)
-7. **Finalize**: Updates `EvolutionTracker.json` with Generation 0 stats
+   - 25 genomes → `elites.json` (25 total, top 100 per species)
+   - 75 genomes → `reserves.json` (Cluster 0, species_id: 0)
+   - Cluster 0 cleanup: 10 below removal_threshold → `under_performing/`
+7. **Finalize**: Updates `EvolutionTracker.json` with Generation 0 stats + speciation summary
 8. **Complete**: Generation 0 done, ready for Generation 1
 
 ## Example Flow: Generation 1
 
-1. **Start**: `elites.json` has 25 genomes, `non_elites.json` has 70 genomes, `limbo.json` has 5 genomes
-2. **run_evolution**: Selects 50 parents, creates 50 variants → `temp.json` (50 genomes)
-3. **Generate**: Adds responses to 50 variants → `temp.json` (50 genomes with responses)
-4. **Moderate**: Adds scores to 50 variants → `temp.json` (50 genomes with scores)
-5. **Speciate**: 
+1. **Start**: `elites.json` has 25 genomes, `reserves.json` has 65 genomes (Cluster 0)
+2. **Load State**: Speciation module loads `speciation_state.json`
+3. **run_evolution**: Selects 50 parents from elites + Cluster 0, creates 50 variants → `temp.json` (50 genomes)
+4. **Generate**: Adds responses to 50 variants → `temp.json` (50 genomes with responses)
+5. **Moderate**: Adds scores to 50 variants → `temp.json` (50 genomes with scores)
+6. **Speciate**: 
    - Computes embeddings for 50 new variants and adds `prompt_embedding` field
    - Clusters into existing species (from Gen 0) or creates new ones
-   - Adds `species_id` to each variant
-   - Marks 2 high-fitness outliers with `in_limbo: true`
+   - Adds `species_id` to each variant (0 for Cluster 0)
+   - Marks Cluster 0 members with `in_limbo: true`
+   - May merge species (cluster_origin="merge", records parent_ids)
+   - May split overcrowded species (cluster_origin="split")
+   - Saves updated state to `speciation_state.json`
    - → `temp.json` (50 genomes with prompt_embedding, species_id, in_limbo)
-6. **Thresholds**: Calculates elite_threshold = 0.80
-7. **Distribute**: 
-   - 15 variants → `elites.json` (now 40 total, from all species)
-   - 30 variants → `non_elites.json` (now 100 total, from all species)
-   - 2 variants → `limbo.json` (now 7 total, high-fitness outliers)
-8. **Cleanup**: Removes 10 low performers from `non_elites.json` (removed, not archived)
-9. **Redistribute**: Moves 5 genomes between files based on new thresholds
-10. **Update Tracker**: Records Generation 1 stats in `EvolutionTracker.json`
-11. **Continue**: Loop to Generation 2
+7. **Thresholds**: Calculates elite_threshold = 0.80
+8. **Distribute**: 
+   - 15 variants → `elites.json` (now 40 total, top 100 per species)
+   - 35 variants → `reserves.json` (Cluster 0, species_id: 0)
+9. **Cleanup**: 
+   - Remove genomes below removal_threshold → `under_performing/`
+   - Enforce Cluster 0 capacity (max 1000) → archive excess
+10. **Redistribute**: Moves genomes between files based on new thresholds
+11. **Update Tracker**: Records Generation 1 stats + speciation summary in `EvolutionTracker.json`
+12. **Continue**: Loop to Generation 2
 
 ---
 
@@ -541,10 +611,13 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
 
 1. **File-based communication**: All components communicate through JSON files
 2. **temp.json is transient**: Used as staging area, cleared after distribution
-3. **Permanent files accumulate**: `elites.json` and `non_elites.json` grow over time
-4. **Tracker maintains state**: `EvolutionTracker.json` tracks evolution progress
-5. **Speciation adds metadata**: Adds `species_id` to genomes, doesn't change file structure
-6. **Embeddings are ephemeral**: Computed in-memory, not persisted
+3. **Permanent files accumulate**: `elites.json` and `reserves.json` grow over time
+4. **Cluster 0 has limits**: Maximum 1000 genomes, filtered by removal_threshold
+5. **Tracker maintains state**: `EvolutionTracker.json` tracks evolution progress + speciation summary
+6. **Speciation state persisted**: `speciation_state.json` stores full species structure
+7. **Species ID convention**: 0 = Cluster 0, 1+ = valid species
+8. **Constant radius**: All species have same radius threshold (`theta_sim`)
+9. **Cluster origin tracking**: Species record how they formed (natural, merge, split)
 
 ---
 
@@ -577,15 +650,17 @@ ToxSearch uses a **file-based state management** approach where all data persist
 - **Atomic Operations**: File writes are atomic (complete or fail, no partial writes)
 
 #### 3. **Data Accumulation**
-- **Append Pattern**: New genomes are appended to `elites.json`, `non_elites.json`, and `limbo.json`
+- **Append Pattern**: New genomes are appended to `elites.json` and `reserves.json`
 - **Growth Over Time**: These files grow as evolution progresses
-- **Limbo Pattern**: High-fitness outliers stored in `limbo.json` (can form new species or repopulate extinct ones)
+- **Cluster 0 Pattern**: Non-elite genomes and outliers stored in `reserves.json` (Cluster 0)
+- **Capacity Limits**: Cluster 0 has max capacity of 1000 genomes
 
 #### 4. **Data Cleanup**
-- **Periodic Cleanup**: Low performers removed from active population
-- **Removal Pattern**: Low performers are removed (not archived to a separate file)
-- **Limbo Management**: High-fitness outliers stored in `limbo.json` (can form new species)
-- **No Permanent Archive**: Low performers are simply removed, not kept in a separate archive
+- **Periodic Cleanup**: Low performers removed from Cluster 0
+- **Removal Threshold**: Genomes below `removal_threshold` are archived
+- **Capacity Enforcement**: Excess Cluster 0 genomes (above 1000) are archived
+- **Archive Location**: Removed genomes go to `under_performing/` directory
+- **Cluster 0 Management**: Can form new species or repopulate extinct ones
 
 ### State Management
 
@@ -618,38 +693,54 @@ ToxSearch uses a **file-based state management** approach where all data persist
 - **Per-Generation Updates**: Each generation adds/updates its entry
 - **Resume Capability**: System reads this file to determine current generation
 
-#### Speciation State (Optional)
+#### Speciation State (`speciation_state.json`)
 
-**Purpose**: Tracks species/island structure and limbo buffer
+**Purpose**: Persists full species/island structure and Cluster 0 state
 
 **Storage**: 
-- **In-Memory**: Species structure maintained in memory during processing
-- **Optional Persistence**: Can be saved to `speciation_state.json` if needed
-- **Reconstruction**: Species can be reconstructed from `species_id` in genomes
+- **Persistent**: Full state saved to `speciation_state.json` each generation
+- **Auto-Load**: Loaded at start of each generation's speciation process
+- **Internal Use**: Used only within speciation module (not exposed externally)
 
 **State Structure**:
 ```json
 {
   "config": {...},
   "species": {
-    "1": {"leader_id": 45, "members": [45, 67, 89], ...},
-    "2": {"leader_id": 123, "members": [123, 145], ...}
+    "0": {
+      "cluster_id": 0,
+      "individuals": [...],
+      "ttl": {...},
+      "max_capacity": 1000,
+      "removal_threshold": 0.1
+    },
+    "1": {
+      "id": 1, "leader_id": 45, "members": [45, 67, 89],
+      "cluster_origin": "natural", "parent_ids": null,
+      "radius": 0.4, ...
+    },
+    "2": {
+      "id": 2, "leader_id": 123, "members": [123, 145],
+      "cluster_origin": "merge", "parent_ids": [3, 5],
+      "radius": 0.4, ...
+    }
   },
-  "limbo": {"individuals": [...], "ttl": {...}},
   "global_best_id": 45,
   "metrics": {...}
 }
 ```
 
-**When to Save**:
-- **Checkpointing**: Before major operations
-- **Resume**: If speciation state needs to persist across restarts
-- **Analysis**: For post-hoc analysis of species evolution
+**Key Fields**:
+- **`cluster_origin`**: How species was created ("natural", "merge", "split")
+- **`parent_ids`**: For merged species, IDs of parent species [id1, id2]
+- **`radius`**: Constant radius threshold (`theta_sim`) for all species
+- **`max_capacity`**: Cluster 0 max size (1000)
+- **`removal_threshold`**: Minimum fitness for Cluster 0 members
 
-**Note**: Currently, speciation state is **ephemeral** - species are reconstructed each generation from genome `species_id` fields. This is sufficient because:
-- Species structure changes each generation
-- Genomes already have `species_id` assigned
-- Reconstruction is fast (O(n) operation)
+**When Saved**:
+- **Every Generation**: Auto-saved after speciation processing
+- **After Merges**: Records merged species with parent_ids
+- **After Splits**: Records split species with cluster_origin="split"
 
 ### File Management Patterns
 
@@ -667,33 +758,35 @@ ToxSearch uses a **file-based state management** approach where all data persist
 - Clear after successful distribution
 - Don't rely on `temp.json` for persistence
 
-#### Pattern 2: Accumulation Files (`elites.json`, `non_elites.json`)
-
-**Lifecycle**:
-1. **Initialized**: Empty arrays `[]` at start
-2. **Appended**: New genomes added each generation
-3. **Cleaned**: Low performers removed periodically
-4. **Redistributed**: Genomes moved between files based on thresholds
-
-**Best Practices**:
-- **Append-Only During Evolution**: Don't overwrite, append new genomes
-- **Periodic Cleanup**: Remove low performers to prevent unbounded growth
-- **Validation**: Check file integrity before operations
-- **Backup**: Consider backing up before major cleanup operations
-
-#### Pattern 3: Limbo File (`limbo.json`)
+#### Pattern 2: Accumulation File (`elites.json`)
 
 **Lifecycle**:
 1. **Initialized**: Empty array `[]` at start
-2. **Appended**: High-fitness outliers added here (don't fit existing species)
-3. **Managed**: Limbo individuals have TTL and can form new species
-4. **Promoted**: Can be moved to species or used to repopulate extinct species
+2. **Appended**: Elite genomes added each generation
+3. **Capacity Managed**: Each species maintains top 100 genomes by fitness
+4. **Redistributed**: Genomes moved between elites/Cluster 0 based on thresholds
 
 **Best Practices**:
-- **TTL Management**: Update TTL for limbo individuals each generation
-- **Species Formation**: Check if limbo clusters can form new species
-- **Repopulation**: Use limbo individuals to repopulate extinct species
-- **Size Control**: Limbo size controlled by TTL expiration
+- **Append During Evolution**: New elite genomes appended
+- **Capacity Enforcement**: Excess genomes per species moved to Cluster 0
+- **Validation**: Check file integrity before operations
+- **Backup**: Consider backing up before major operations
+
+#### Pattern 3: Cluster 0 File (`reserves.json`)
+
+**Lifecycle**:
+1. **Initialized**: Empty array `[]` at start
+2. **Appended**: Non-elite genomes, ejected species members, outliers
+3. **Filtered**: Genomes below `removal_threshold` archived to `under_performing/`
+4. **Capacity Enforced**: Max 1000 genomes, excess archived by fitness
+5. **Promoted**: Can form new species or repopulate extinct species
+
+**Best Practices**:
+- **TTL Management**: Update TTL for Cluster 0 individuals each generation
+- **Threshold Filtering**: Remove genomes below `removal_threshold`
+- **Capacity Enforcement**: Archive excess when above 1000
+- **Species Formation**: Check if Cluster 0 clusters can form new species
+- **Repopulation**: Use Cluster 0 individuals to repopulate extinct species
 
 #### Pattern 4: Metadata File (`EvolutionTracker.json`)
 
@@ -738,10 +831,10 @@ ToxSearch uses a **file-based state management** approach where all data persist
 #### Resuming Evolution
 
 **How It Works**:
-1. **Check Files**: System checks if `elites.json` or `non_elites.json` exist
+1. **Check Files**: System checks if `elites.json` or `reserves.json` exist
 2. **Read Tracker**: Loads `EvolutionTracker.json` to find last generation
 3. **Resume Point**: Continues from last completed generation
-4. **State Reconstruction**: Reconstructs state from files
+4. **State Reconstruction**: Loads speciation state from `speciation_state.json`
 
 **Resume Logic** (from `main.py`):
 ```python
@@ -759,53 +852,51 @@ else:
 
 #### Speciation Resume
 
-**Current Approach**: **Reconstruct from Genomes**
-- Species structure is **not persisted** between runs
+**Current Approach**: **Load from `speciation_state.json`**
+- Full species structure is **persisted** to `speciation_state.json`
 - Each generation, speciation module:
-  1. Reads all genomes from `temp.json`
-  2. Reconstructs species from `species_id` in genomes
-  3. Re-clusters if needed (for new variants)
-  4. Assigns new `species_id` if genome doesn't have one
+  1. Loads existing state from `speciation_state.json`
+  2. Reads new genomes from `temp.json`
+  3. Clusters new variants into existing or new species
+  4. Updates Cluster 0 (filters, enforces capacity)
+  5. Saves updated state back to `speciation_state.json`
 
-**Alternative Approach**: **Persist Speciation State**
-- Save speciation state to `speciation_state.json`
-- Load state at startup
-- Continue with existing species structure
-- **Trade-off**: More complex, but preserves species history
-
-**Recommendation**: Current approach (reconstruction) is sufficient because:
-- Species evolve each generation anyway
-- Genomes already have `species_id` for tracking
-- Simpler and more robust
+**State Persistence Benefits**:
+- Preserves species structure across generations
+- Maintains cluster origin history (natural, merge, split)
+- Tracks parent IDs for merged species
+- Enables accurate speciation metrics over time
+- Allows for resume without re-clustering entire population
 
 ### Data Cleanup Strategy
 
 #### When Cleanup Happens
 
-1. **After Distribution**: Low performers moved to archive
-2. **Periodic Cleanup**: Removes low performers from active files
-3. **Before Redistribution**: Ensures clean state
+1. **After Distribution**: Low performers moved to `under_performing/` archive
+2. **Cluster 0 Filtering**: Genomes below `removal_threshold` archived
+3. **Capacity Enforcement**: Excess Cluster 0 genomes (above 1000) archived
 
 #### Cleanup Process
 
-**Step 1: Identify Low Performers**
-- Compare scores against `removal_threshold`
-- Mark genomes for removal
+**Step 1: Filter Cluster 0 by Removal Threshold**
+- Compare Cluster 0 scores against `removal_threshold`
+- Archive genomes below threshold to `under_performing/`
+- Log removed IDs
 
-**Step 2: Remove Low Performers**
-- Remove from `elites.json` and `non_elites.json`
-- Low performers are not archived (simply removed)
+**Step 2: Enforce Cluster 0 Capacity**
+- Check if Cluster 0 size > 1000
+- Archive excess genomes (lowest fitness first) to `under_performing/`
 - Log removed IDs
 
 **Step 3: Update Species Membership**
-- Update species if genomes are ejected
-- Move ejected genomes to `non_elites.json` if they're above removal threshold
+- Update species if genomes are ejected (capacity = 100 per species)
+- Ejected genomes from species move to Cluster 0
 
 #### Cleanup Frequency
 
 - **Every Generation**: After distribution step
-- **Before Redistribution**: Ensures clean state
-- **Configurable**: Can be adjusted based on file sizes
+- **Cluster 0 Cleanup**: Each generation after clustering
+- **Species Capacity**: Enforced during survivor selection
 
 ### Backup Strategy
 
@@ -833,14 +924,16 @@ else:
 #### File Size Growth
 
 **Expected Growth**:
-- `elites.json`: Grows slowly (only high performers from all species)
-- `non_elites.json`: Grows moderately (breeding pool, includes ejected genomes)
-- `limbo.json`: Grows/shrinks dynamically (high-fitness outliers, TTL-managed)
+- `elites.json`: Grows slowly (top 100 per species × number of species)
+- `reserves.json`: Bounded (max 1000 genomes in Cluster 0)
 - `EvolutionTracker.json`: Grows linearly (one entry per generation)
+- `speciation_state.json`: Grows slowly (species metadata only)
 
 #### Size Limits
 
-**No Hard Limits**: System doesn't enforce file size limits
+**Hard Limits**:
+- **Species Capacity**: 100 genomes per species (enforced)
+- **Cluster 0 Capacity**: 1000 genomes maximum (enforced)
 
 **Practical Considerations**:
 - **Memory**: Large files take longer to load

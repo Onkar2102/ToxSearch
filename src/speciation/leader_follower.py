@@ -14,7 +14,7 @@ from .island import Individual, Species, generate_species_id
 from .distance import semantic_distance, semantic_distances_batch
 
 if TYPE_CHECKING:
-    from .limbo import LimboBuffer
+    from .reserves import Cluster0
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -24,10 +24,11 @@ def leader_follower_clustering(
     temp_path: str,
     theta_sim: float,
     viability_baseline: float = 0.3,
-    limbo: Optional["LimboBuffer"] = None,
+    cluster0: Optional["Cluster0"] = None,
     current_generation: int = 0,
     existing_species: Optional[Dict[int, Species]] = None,
-    logger=None) -> Tuple[Dict[int, Species], List[Individual]]:
+    logger=None
+) -> Tuple[Dict[int, Species], List[Individual]]:
     """
     Assign individuals to species using Leader-Follower clustering algorithm.
     
@@ -43,30 +44,31 @@ def leader_follower_clustering(
         4. First individual becomes first leader (creates first species)
         5. For each remaining individual:
            a. Find nearest leader (minimum semantic distance)
-           b. If distance < theta_sim → assign as follower to that species
+           b. If distance < theta_sim -> assign as follower to that species
            c. Else:
-              - If fitness > viability_baseline → send to limbo (high-fitness outlier)
-              - Else → create new species with this individual as leader
+              - If fitness > viability_baseline -> send to cluster 0 (high-fitness outlier)
+              - Else -> create new species with this individual as leader
     
     Key properties:
     - Fitness-based ordering ensures high-quality leaders
     - Semantic distance threshold (theta_sim) controls species granularity
-    - High-fitness outliers go to limbo for potential speciation
+    - High-fitness outliers go to cluster 0 for potential speciation
     - Low-fitness outliers create new species (exploration)
+    - All new species have cluster_origin="natural"
     
     Args:
         temp_path: Path to temp.json file with genomes (must have prompt_embedding field)
-        theta_sim: Semantic distance threshold for species assignment
-        viability_baseline: Minimum fitness to enter limbo (vs creating new species)
-        limbo: Optional limbo buffer (for tracking, not modified here)
+        theta_sim: Semantic distance threshold for species assignment (also used as constant radius)
+        viability_baseline: Minimum fitness to enter cluster 0 (vs creating new species)
+        cluster0: Optional cluster 0 (for tracking, not modified here)
         current_generation: Current generation number (for species metadata)
         existing_species: Optional existing species dict (for incremental clustering)
         logger: Optional logger instance
     
     Returns:
         Tuple of:
-        - species: Dict mapping species_id -> Species
-        - limbo_candidates: List of individuals that should enter limbo
+        - species: Dict mapping species_id -> Species (all with cluster_origin="natural")
+        - cluster0_candidates: List of individuals that should enter cluster 0
     """
     if logger is None:
         logger = get_logger("LeaderFollowerClustering")
@@ -103,14 +105,21 @@ def leader_follower_clustering(
     
     species: Dict[int, Species] = {}
     leaders: List[Tuple[int, np.ndarray]] = []  # (species_id, leader_embedding) for fast lookup
-    limbo_candidates: List[Individual] = []
+    cluster0_candidates: List[Individual] = []
     
     # Step 1: First individual becomes first leader (creates first species)
     first = sorted_pop[0]
     first_species_id = generate_species_id()
     first_species = Species(
-        id=first_species_id, leader=first, members=[first],
-        radius=theta_sim, created_at=current_generation, last_improvement=current_generation
+        id=first_species_id,
+        leader=first,
+        members=[first],
+        radius=theta_sim,  # Constant radius for all species
+        created_at=current_generation,
+        last_improvement=current_generation,
+        cluster_origin="natural",  # Formed naturally through clustering
+        parent_ids=None,
+        parent_id=None
     )
     species[first_species_id] = first_species
     leaders.append((first_species_id, first.embedding))
@@ -133,27 +142,34 @@ def leader_follower_clustering(
             min_dist = semantic_distance(ind.embedding, leaders[0][1])
             nearest_leader_id = leaders[0][0]
         
-        # Decision: assign to species, limbo, or create new species
+        # Decision: assign to species, cluster 0, or create new species
         if min_dist < theta_sim:
-            # Within threshold → assign as follower
+            # Within threshold -> assign as follower
             species[nearest_leader_id].add_member(ind)
         else:
-            # Outside threshold → decide based on fitness
+            # Outside threshold -> decide based on fitness
             if ind.fitness > viability_baseline:
-                # High-fitness outlier → preserve in limbo
-                limbo_candidates.append(ind)
+                # High-fitness outlier -> preserve in cluster 0
+                cluster0_candidates.append(ind)
             else:
-                # Low-fitness outlier → create new species (exploration)
+                # Low-fitness outlier -> create new species (exploration)
                 new_species_id = generate_species_id()
                 new_species = Species(
-                    id=new_species_id, leader=ind, members=[ind],
-                    radius=theta_sim, created_at=current_generation, last_improvement=current_generation
+                    id=new_species_id,
+                    leader=ind,
+                    members=[ind],
+                    radius=theta_sim,  # Constant radius
+                    created_at=current_generation,
+                    last_improvement=current_generation,
+                    cluster_origin="natural",  # Formed naturally
+                    parent_ids=None,
+                    parent_id=None
                 )
                 species[new_species_id] = new_species
                 leaders.append((new_species_id, ind.embedding))
     
-    logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals → {len(species)} species, {len(limbo_candidates)} limbo candidates")
-    return species, limbo_candidates
+    logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals -> {len(species)} species, {len(cluster0_candidates)} cluster 0 candidates")
+    return species, cluster0_candidates
 
 
 def find_nearest_leader(embedding: np.ndarray, species: Dict[int, Species]) -> Tuple[Optional[int], float]:
@@ -232,26 +248,26 @@ def incremental_clustering(
     Algorithm:
         For each new individual:
         1. Find nearest existing leader
-        2. If distance < theta_sim → assign to that species
-        3. Else if fitness > viability_baseline → send to limbo
-        4. Else → create new species
+        2. If distance < theta_sim -> assign to that species
+        3. Else if fitness > viability_baseline -> send to cluster 0
+        4. Else -> create new species with cluster_origin="natural"
     
     Args:
         new_individuals: List of new individuals to assign
         existing_species: Dict of existing species (modified in-place)
-        theta_sim: Semantic distance threshold
-        viability_baseline: Minimum fitness for limbo
+        theta_sim: Semantic distance threshold (also used as constant radius)
+        viability_baseline: Minimum fitness for cluster 0
         current_generation: Current generation number
         logger: Optional logger instance
     
     Returns:
-        Tuple of (existing_species, limbo_candidates)
+        Tuple of (existing_species, cluster0_candidates)
         Note: existing_species is modified in-place, returned for convenience
     """
     if logger is None:
         logger = get_logger("IncrementalClustering")
     
-    limbo_candidates = []
+    cluster0_candidates = []
     
     for ind in new_individuals:
         # Skip individuals without embeddings
@@ -263,19 +279,28 @@ def incremental_clustering(
         
         # Decision logic (same as leader_follower_clustering)
         if nearest_id is not None and min_dist < theta_sim:
-            # Within threshold → assign to existing species
+            # Within threshold -> assign to existing species
             existing_species[nearest_id].add_member(ind)
         elif ind.fitness > viability_baseline:
-            # High-fitness outlier → limbo
-            limbo_candidates.append(ind)
+            # High-fitness outlier -> cluster 0
+            cluster0_candidates.append(ind)
         else:
-            # Low-fitness outlier → new species
+            # Low-fitness outlier -> new species
             new_id = generate_species_id()
-            new_sp = Species(id=new_id, leader=ind, members=[ind], radius=theta_sim,
-                           created_at=current_generation, last_improvement=current_generation)
+            new_sp = Species(
+                id=new_id,
+                leader=ind,
+                members=[ind],
+                radius=theta_sim,  # Constant radius
+                created_at=current_generation,
+                last_improvement=current_generation,
+                cluster_origin="natural",  # Formed naturally
+                parent_ids=None,
+                parent_id=None
+            )
             existing_species[new_id] = new_sp
     
-    return existing_species, limbo_candidates
+    return existing_species, cluster0_candidates
 
 
 def reassign_to_species(individual: Individual, species: Dict[int, Species], theta_sim: float) -> Optional[int]:

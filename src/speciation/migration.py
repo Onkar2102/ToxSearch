@@ -12,7 +12,7 @@ from .island import Individual, Species
 from .distance import semantic_distance, semantic_distances_batch
 
 if TYPE_CHECKING:
-    from .limbo import LimboBuffer
+    from .reserves import Cluster0
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -110,10 +110,16 @@ def select_migrant(members: List[Individual], target_leader_embedding: np.ndarra
         return random.choice(candidates)
 
 
-def perform_migration(species: Dict[int, Species], topology: Dict[int, List[int]],
-                     current_generation: int, migration_frequency: int = 5,
-                     max_capacity: int = 50, selection_method: str = "most_unique",
-                     limbo: Optional["LimboBuffer"] = None, logger=None) -> List[Dict]:
+def perform_migration(
+    species: Dict[int, Species],
+    topology: Dict[int, List[int]],
+    current_generation: int,
+    migration_frequency: int = 5,
+    max_capacity: int = 100,
+    selection_method: str = "most_unique",
+    cluster0: Optional["Cluster0"] = None,
+    logger=None
+) -> List[Dict]:
     """
     Execute migration events between neighboring islands.
     
@@ -122,7 +128,7 @@ def perform_migration(species: Dict[int, Species], topology: Dict[int, List[int]
     2. Select a random neighbor to migrate to
     3. Select a migrant using selection_method
     4. Move migrant from source to target island
-    5. If target exceeds capacity, eject weakest member to limbo
+    5. If target exceeds capacity (100), eject weakest member to cluster 0
     
     This implements island hopping: individuals move between islands following
     the semantic topology (similar species are neighbors).
@@ -132,9 +138,9 @@ def perform_migration(species: Dict[int, Species], topology: Dict[int, List[int]
         topology: Migration topology (species_id -> list of neighbor IDs)
         current_generation: Current generation number
         migration_frequency: Perform migration every N generations (check before calling)
-        max_capacity: Maximum members per species after migration
+        max_capacity: Maximum members per species after migration (default: 100)
         selection_method: Migrant selection strategy
-        limbo: Optional limbo buffer (for ejected members)
+        cluster0: Optional cluster 0 (for ejected members)
         logger: Optional logger instance
     
     Returns:
@@ -171,15 +177,16 @@ def perform_migration(species: Dict[int, Species], topology: Dict[int, List[int]
         
         event = {"generation": current_generation, "from": sid1, "to": sid2, "migrant_id": migrant.id}
         
-        # Handle capacity overflow in target
+        # Handle capacity overflow in target (max 100 per species)
         if sp2.size > max_capacity:
             # Eject weakest non-leader member
             weakest = min([m for m in sp2.members if m != sp2.leader], key=lambda x: x.fitness, default=None)
             if weakest:
                 sp2.remove_member(weakest)
                 event["ejected_id"] = weakest.id
-                if limbo:
-                    limbo.add(weakest, current_generation)
+                # Send ejected to cluster 0
+                if cluster0:
+                    cluster0.add(weakest, current_generation)
         
         events.append(event)
         logger.debug(f"Migration: {migrant.id} from {sid1} to {sid2}")
@@ -190,10 +197,16 @@ def perform_migration(species: Dict[int, Species], topology: Dict[int, List[int]
     return events
 
 
-def process_migrations(species: Dict[int, Species], current_generation: int,
-                       migration_frequency: int = 5, k_neighbors: int = 3,
-                       max_capacity: int = 50, selection_method: str = "most_unique",
-                       limbo: Optional["LimboBuffer"] = None, logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
+def process_migrations(
+    species: Dict[int, Species],
+    current_generation: int,
+    migration_frequency: int = 5,
+    k_neighbors: int = 3,
+    max_capacity: int = 100,
+    selection_method: str = "most_unique",
+    cluster0: Optional["Cluster0"] = None,
+    logger=None
+) -> Tuple[Dict[int, Species], List[Dict]]:
     """
     Full migration processing pipeline.
     
@@ -207,9 +220,9 @@ def process_migrations(species: Dict[int, Species], current_generation: int,
         current_generation: Current generation number
         migration_frequency: Perform migration every N generations
         k_neighbors: Number of nearest neighbors for topology
-        max_capacity: Maximum members per species
+        max_capacity: Maximum members per species (default: 100)
         selection_method: Migrant selection strategy
-        limbo: Optional limbo buffer
+        cluster0: Optional cluster 0 for ejected members
         logger: Optional logger instance
     
     Returns:
@@ -224,7 +237,7 @@ def process_migrations(species: Dict[int, Species], current_generation: int,
     
     # Build topology and perform migration
     topology = compute_semantic_topology(species, k_neighbors)
-    events = perform_migration(species, topology, current_generation, 1, max_capacity, selection_method, limbo, logger)
+    events = perform_migration(species, topology, current_generation, 1, max_capacity, selection_method, cluster0, logger)
     
     return species, events
 

@@ -165,6 +165,15 @@ d_semantic(u, v) = 1 - cos(u, v) = 1 - (u · v)
 ```
 where u, v are L2-normalized embeddings. Range: [0, 2]
 
+**Geometry Note**:
+- All embeddings live on the 384D unit hypersphere (L2-normalized). Cosine distance creates **cone-shaped** clusters, not Euclidean spheres.
+- Thresholds correspond to angles: e.g., `theta_sim = 0.3` ⇒ cos > 0.7 ⇒ angle < ~45° around each leader.
+
+**Embedding / Dimensionality Reduction Options**:
+- **Direct 384D (default, online)**: Leader-Follower clustering with cosine distance; fastest, no training, higher memory footprint.
+- **Parametric UMAP 384→16 (offline, analysis/quality)**: Trained once on Gen0; preserves geometry (kNN-IoU ≈ 0.55, distance r ≈ 0.85); cluster with HDBSCAN or centroids.
+- **Hybrid**: Use Parametric UMAP for offline analysis/visualization; use direct 384D Leader-Follower for real-time evolution.
+
 **Clustering Thresholds**:
 - `θ_sim`: Similarity threshold for species assignment (default: 0.4)
 - `θ_merge`: Merge threshold, tighter than θ_sim (default: 0.2)
@@ -291,38 +300,6 @@ Species(
 
 ✅ **Implemented**: All speciation components are complete and tested
 ⏳ **Pending**: Integration into `main.py` evolution loop (after fitness evaluation)
-
-### Usage
-
-Once integrated, speciation runs automatically each generation after fitness evaluation:
-
-```python
-from speciation import SpeciationModule, PlanAPlusConfig
-
-# Initialize (once, before evolution loop)
-speciation_module = SpeciationModule(PlanAPlusConfig())
-
-# In generation loop, after fitness evaluation:
-species, limbo = speciation_module.process_generation(
-    temp_variants,  # List of genome dicts with fitness
-    current_generation=generation_count
-)
-
-# Update genomes with species IDs
-temp_variants = speciation_module.update_genomes_with_species(temp_variants)
-```
-
-### Configuration
-
-Key parameters in `PlanAPlusConfig`:
-- `theta_sim=0.4`: Similarity threshold for species assignment
-- `theta_merge=0.2`: Merge threshold (tighter than theta_sim)
-- `max_island_capacity=50`: Maximum individuals per island
-- `limbo_ttl=10`: Generations before limbo individuals expire
-- `migration_frequency=5`: Migrate every N generations
-- `silhouette_threshold=0.5`: Trigger split if silhouette below this
-
-See `src/speciation/config.py` for full configuration options.
 
 ### Usage
 

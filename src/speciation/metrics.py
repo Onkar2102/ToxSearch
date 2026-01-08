@@ -22,7 +22,7 @@ class GenerationMetrics:
     generation: int
     species_count: int
     total_population: int
-    limbo_size: int
+    reserves_size: int
     best_fitness: float
     avg_fitness: float
     fitness_std: float
@@ -40,7 +40,7 @@ class GenerationMetrics:
     def to_dict(self) -> Dict:
         return {
             "generation": self.generation, "species_count": self.species_count,
-            "total_population": self.total_population, "limbo_size": self.limbo_size,
+            "total_population": self.total_population, "reserves_size": self.reserves_size,
             "best_fitness": self.best_fitness, "avg_fitness": self.avg_fitness,
             "avg_silhouette": self.avg_silhouette, "mode_counts": self.mode_counts,
             "speciation_events": self.speciation_events, "merge_events": self.merge_events,
@@ -59,7 +59,7 @@ class SpeciationMetricsTracker:
         self.total_extinctions = 0
         self.total_migrations = 0
     
-    def record_generation(self, generation: int, species: Dict[int, Species], limbo_size: int = 0,
+    def record_generation(self, generation: int, species: Dict[int, Species], reserves_size: int = 0,
                           speciation_events: int = 0, merge_events: int = 0,
                           extinction_events: int = 0, migration_events: int = 0) -> GenerationMetrics:
         """Record metrics for a generation."""
@@ -87,7 +87,7 @@ class SpeciationMetricsTracker:
         
         metrics = GenerationMetrics(
             generation=generation, species_count=species_count, total_population=total_pop,
-            limbo_size=limbo_size, best_fitness=float(best), avg_fitness=float(avg),
+            reserves_size=reserves_size, best_fitness=float(best), avg_fitness=float(avg),
             fitness_std=float(std), avg_silhouette=float(np.mean(sil_vals)),
             min_silhouette=float(np.min(sil_vals)), max_silhouette=float(np.max(sil_vals)),
             mode_counts=mode_counts, speciation_events=speciation_events,
@@ -242,14 +242,14 @@ def get_species_statistics(species: Dict[int, Species]) -> Dict:
     }
 
 
-def log_generation_summary(generation: int, species: Dict[int, Species], limbo_size: int = 0,
+def log_generation_summary(generation: int, species: Dict[int, Species], reserves_size: int = 0,
                            events: Dict[str, int] = None, logger=None) -> None:
     """
     Log a summary of generation statistics.
     
     Writes generation summary to logger including:
     - Species count and total population
-    - Limbo buffer size
+    - Reserves buffer size
     - Best and average fitness
     - Event counts (speciation, merges, extinctions, migrations)
     
@@ -258,7 +258,7 @@ def log_generation_summary(generation: int, species: Dict[int, Species], limbo_s
     Args:
         generation: Generation number
         species: Dict of all current species
-        limbo_size: Number of individuals in limbo
+        reserves_size: Number of individuals in reserves
         events: Dict of event counts {"speciation": N, "merge": N, etc}
         logger: Optional logger instance
     """
@@ -273,6 +273,6 @@ def log_generation_summary(generation: int, species: Dict[int, Species], limbo_s
     
     # Log summary
     logger.info(f"Gen {generation}: {stats['count']} species, {stats['total_population']} pop, "
-                f"limbo={limbo_size}, best={stats['fitness']['global_best']:.4f}, "
+                f"reserves={reserves_size}, best={stats['fitness']['global_best']:.4f}, "
                 f"avg={stats['fitness']['global_avg']:.4f}" + (f", events: {event_str}" if event_str else ""))
 

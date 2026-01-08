@@ -1,7 +1,9 @@
 """
 adaptive_threshold.py
 
-Adaptive threshold management and cluster refinement.
+Cluster refinement and silhouette-based splitting for speciation.
+Note: Dynamic radius adjustment has been removed. All species use constant radius (theta_sim).
+Capacity management is now handled by Species.enforce_capacity() which sends excess to cluster 0.
 """
 
 import numpy as np
@@ -12,69 +14,10 @@ from .island import Individual, Species, generate_species_id
 from .distance import semantic_distance
 
 if TYPE_CHECKING:
-    from .limbo import LimboBuffer
+    from .reserves import Cluster0
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
-
-
-def adjust_island_radius(island: Species, max_capacity: int = 50, shrink_factor: float = 0.9,
-                         limbo: Optional["LimboBuffer"] = None, current_generation: int = 0,
-                         logger=None) -> List[Individual]:
-    """
-    Adjust island radius when over capacity and eject fringe members.
-    
-    When an island exceeds max_capacity, it shrinks its radius and ejects
-    members that are now outside the new radius (fringe members). This:
-    - Maintains island size within capacity
-    - Preserves core members (closest to leader)
-    - Sends fringe members to limbo (if provided)
-    
-    Radius adjustment: new_radius = old_radius * shrink_factor
-    
-    Args:
-        island: Species to adjust
-        max_capacity: Maximum allowed members
-        shrink_factor: Factor to shrink radius (0 < factor < 1)
-        limbo: Optional limbo buffer for ejected members
-        current_generation: Current generation number
-        logger: Optional logger instance
-    
-    Returns:
-        List of ejected individuals
-    """
-    if logger is None:
-        logger = get_logger("AdaptiveThreshold")
-    
-    ejected = []
-    if island.size <= max_capacity:
-        return ejected
-    
-    old_radius = island.radius
-    island.radius *= shrink_factor
-    
-    fringe = []
-    for m in island.members:
-        if m == island.leader or m.embedding is None or island.leader.embedding is None:
-            continue
-        dist = semantic_distance(m.embedding, island.leader.embedding)
-        if dist > island.radius:
-            fringe.append((m, dist))
-    
-    fringe.sort(key=lambda x: x[1], reverse=True)
-    
-    for m, _ in fringe:
-        if island.size <= max_capacity:
-            break
-        island.remove_member(m)
-        ejected.append(m)
-        if limbo:
-            limbo.add(m, current_generation)
-    
-    if ejected:
-        logger.debug(f"Island {island.id}: radius {old_radius:.4f} → {island.radius:.4f}, ejected {len(ejected)}")
-    
-    return ejected
 
 
 def compute_silhouette_score(island: Species, all_species: Dict[int, Species]) -> float:
@@ -131,9 +74,14 @@ def compute_silhouette_score(island: Species, all_species: Dict[int, Species]) -
     return np.mean(scores) if scores else 0.0
 
 
-def trigger_split_event(island: Species, all_species: Dict[int, Species],
-                        silhouette_threshold: float = 0.5, current_generation: int = 0,
-                        logger=None) -> List[Species]:
+def trigger_split_event(
+    island: Species,
+    all_species: Dict[int, Species],
+    silhouette_threshold: float = 0.5,
+    theta_sim: float = 0.4,
+    current_generation: int = 0,
+    logger=None
+) -> List[Species]:
     """
     Split an island into multiple new islands if heterogeneous.
     
@@ -146,14 +94,15 @@ def trigger_split_event(island: Species, all_species: Dict[int, Species],
     Algorithm:
     1. Compute silhouette score
     2. If above threshold, return empty (no split needed)
-    3. Perform hierarchical clustering at reduced threshold
+    3. Perform hierarchical clustering at theta_sim threshold
     4. Filter clusters with <2 members or insufficient total clusters
-    5. Create new species from each cluster
+    5. Create new species from each cluster with cluster_origin="split"
     
     Args:
         island: Species to potentially split
         all_species: All current species (for silhouette computation)
         silhouette_threshold: Trigger split if silhouette below this
+        theta_sim: Constant radius threshold for new species (same for all)
         current_generation: Current generation number
         logger: Optional logger instance
     
@@ -174,9 +123,8 @@ def trigger_split_event(island: Species, all_species: Dict[int, Species],
     if len(members) < 4:
         return []  # Too small to split meaningfully
     
-    # Use reduced threshold for clustering (tighter than island radius)
-    threshold = island.radius * 0.7
-    clusters = _cluster(members, threshold)
+    # Use theta_sim as the clustering threshold (constant radius)
+    clusters = _cluster(members, theta_sim)
     
     # Filter out small clusters (need at least 2 members per cluster)
     valid = [c for c in clusters if len(c) >= 2]
@@ -188,9 +136,17 @@ def trigger_split_event(island: Species, all_species: Dict[int, Species],
     for cluster in valid:
         # Highest-fitness member becomes leader
         leader = max(cluster, key=lambda x: x.fitness)
-        sp = Species(id=generate_species_id(), leader=leader, members=list(cluster),
-                    radius=threshold, created_at=current_generation,
-                    last_improvement=current_generation, parent_id=island.id)
+        sp = Species(
+            id=generate_species_id(),
+            leader=leader,
+            members=list(cluster),
+            radius=theta_sim,  # Constant radius for all species
+            created_at=current_generation,
+            last_improvement=current_generation,
+            cluster_origin="split",  # Created via split
+            parent_id=island.id,  # Single parent (the split island)
+            parent_ids=None
+        )
         new_species.append(sp)
     
     logger.info(f"Split island {island.id} into {len(new_species)} new islands (silhouette={silhouette:.4f})")
@@ -241,29 +197,31 @@ def _cluster(individuals: List[Individual], threshold: float) -> List[List[Indiv
     return list(clusters.values())
 
 
-def process_adaptive_thresholds(species: Dict[int, Species], current_generation: int,
-                                max_capacity: int = 50, shrink_factor: float = 0.9,
-                                silhouette_threshold: float = 0.5,
-                                silhouette_check_frequency: int = 10,
-                                limbo: Optional["LimboBuffer"] = None,
-                                logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
+def process_adaptive_thresholds(
+    species: Dict[int, Species],
+    current_generation: int,
+    theta_sim: float = 0.4,
+    silhouette_threshold: float = 0.5,
+    silhouette_check_frequency: int = 10,
+    cluster0: Optional["Cluster0"] = None,
+    logger=None
+) -> Tuple[Dict[int, Species], List[Dict]]:
     """
-    Process adaptive threshold adjustments for all islands.
+    Process adaptive threshold adjustments for all islands (splitting only).
     
-    Orchestrates radius adjustment and splitting:
-    1. Adjust island radii if over capacity (shrink and eject fringe members)
-    2. Periodically check silhouette scores and split heterogeneous islands
+    Note: Dynamic radius adjustment has been removed. All species use constant radius.
+    This function now only handles silhouette-based splitting.
     
-    This maintains population constraints and promotes island cohesion.
+    Periodically check silhouette scores and split heterogeneous islands.
+    This promotes island cohesion by breaking up diverse species.
     
     Args:
         species: Dict of all current species (modified in-place)
         current_generation: Current generation number
-        max_capacity: Maximum members per island
-        shrink_factor: Radius shrink factor when over capacity (0 < factor < 1)
+        theta_sim: Constant radius threshold for all species
         silhouette_threshold: Trigger split if silhouette below this
         silhouette_check_frequency: Check silhouette every N generations
-        limbo: Optional limbo buffer for ejected members
+        cluster0: Optional cluster 0 (unused, kept for API compatibility)
         logger: Optional logger instance
     
     Returns:
@@ -274,14 +232,8 @@ def process_adaptive_thresholds(species: Dict[int, Species], current_generation:
     
     events = []
     
-    # Step 1: Adjust island radii if over capacity
-    for sid, island in list(species.items()):
-        ejected = adjust_island_radius(island, max_capacity, shrink_factor, limbo, current_generation, logger)
-        if ejected:
-            events.append({"type": "radius", "species_id": sid, "ejected": len(ejected)})
-    
-    # Step 2: Periodically check silhouette and split heterogeneous islands
-    if current_generation % silhouette_check_frequency == 0:
+    # Periodically check silhouette and split heterogeneous islands
+    if current_generation % silhouette_check_frequency == 0 and current_generation > 0:
         # Compute silhouettes
         to_split = [(sid, island, compute_silhouette_score(island, species))
                     for sid, island in species.items()]
@@ -290,13 +242,21 @@ def process_adaptive_thresholds(species: Dict[int, Species], current_generation:
         
         # Perform splits
         for sid, island, silhouette in to_split:
-            new_list = trigger_split_event(island, species, silhouette_threshold, current_generation, logger)
+            new_list = trigger_split_event(
+                island, species, silhouette_threshold, theta_sim,
+                current_generation, logger
+            )
             if new_list:
                 # Remove original island and add new ones
                 species.pop(sid, None)
                 for sp in new_list:
                     species[sp.id] = sp
-                events.append({"type": "split", "original_id": sid, "new_ids": [sp.id for sp in new_list]})
+                events.append({
+                    "type": "split",
+                    "original_id": sid,
+                    "new_ids": [sp.id for sp in new_list],
+                    "silhouette": silhouette
+                })
     
     return species, events
 
@@ -319,8 +279,8 @@ def get_adaptive_statistics(species: Dict[int, Species]) -> Dict:
     Get adaptive threshold statistics.
     
     Computes:
-    - Average island radius
-    - Min/max island radii
+    - Average island radius (should be constant = theta_sim)
+    - Min/max island radii (should all be equal)
     - Average silhouette score across all islands
     
     Used for monitoring clustering cohesion and population structure.
@@ -334,7 +294,7 @@ def get_adaptive_statistics(species: Dict[int, Species]) -> Dict:
     if not species:
         return {"avg_radius": 0.0, "avg_silhouette": 0.0}
     
-    # Collect radii for all species
+    # Collect radii for all species (should all be theta_sim)
     radii = [sp.radius for sp in species.values()]
     # Compute silhouette scores
     silhouettes = compute_all_silhouette_scores(species)

@@ -1,7 +1,7 @@
 """
-limbo.py
+reserves.py
 
-Cluster 0 (formerly limbo buffer) management for speciation.
+Cluster 0 (reserves buffer) management for speciation.
 Holding area for individuals that don't fit existing species (ID >= 1).
 Cluster 0 is a special cluster with ID 0 that holds outliers and removed individuals.
 """
@@ -28,15 +28,15 @@ CLUSTER_0_ID = 0
 @dataclass
 class Cluster0Individual:
     """
-    Wrapper for individuals in cluster 0 with TTL (Time-To-Live) tracking.
+    Wrapper for individuals in Cluster 0 (reserves) with TTL (Time-To-Live) tracking.
     
     Cluster 0 individuals are outliers that don't fit existing species.
     They are preserved for a limited time (TTL) to allow potential speciation
     if enough similar individuals accumulate.
     
     Attributes:
-        individual: The Individual instance in cluster 0
-        entered_at: Generation when individual entered cluster 0
+        individual: The Individual instance in Cluster 0 (reserves)
+        entered_at: Generation when individual entered Cluster 0 (reserves)
         ttl: Time-to-live (remaining generations before expiration)
     """
     individual: Individual
@@ -54,7 +54,7 @@ class Cluster0Individual:
 
 class Cluster0:
     """
-    Cluster 0 (formerly limbo buffer) for individuals that don't fit existing species.
+    Cluster 0 (reserves) for individuals that don't fit existing species.
     
     Cluster 0 (ID=0) is a special holding area for:
     1. High-fitness outliers that are semantically distant from all species leaders
@@ -65,8 +65,8 @@ class Cluster0:
     - TTL mechanism: Individuals expire after TTL generations (prevents unbounded growth)
     - Max capacity: Limited to cluster0_max_capacity (default 1000) individuals
     - Removal threshold: Individuals below removal_threshold are archived
-    - Speciation detection: When cluster 0 individuals form cohesive clusters, they create new species
-    - Agglomerative clustering: Uses hierarchical clustering to find groups in cluster 0
+    - Speciation detection: When Cluster 0 individuals form cohesive clusters, they create new species
+    - Agglomerative clustering: Uses hierarchical clustering to find groups in Cluster 0
     
     This preserves diversity by giving novel high-fitness solutions a chance to
     form new species rather than being discarded.
@@ -82,13 +82,13 @@ class Cluster0:
         logger=None
     ):
         """
-        Initialize cluster 0.
+        Initialize Cluster 0 (reserves).
         
         Args:
             default_ttl: Default time-to-live in generations
             min_cluster_size: Minimum cluster size for speciation
             theta_sim: Semantic distance threshold for clustering (also used as species radius)
-            max_capacity: Maximum number of individuals in cluster 0 (default: 1000)
+            max_capacity: Maximum number of individuals in Cluster 0 (reserves) (default: 1000)
             removal_threshold: Fitness threshold for removal (individuals below are archived)
             logger: Optional logger instance
         """
@@ -99,11 +99,11 @@ class Cluster0:
         self.max_capacity = max_capacity
         self.removal_threshold = removal_threshold
         self.logger = logger or get_logger("Cluster0")
-        self.speciation_events: List[Dict] = []  # Track speciation events from cluster 0
+        self.speciation_events: List[Dict] = []  # Track speciation events from Cluster 0 (reserves)
     
     @property
     def size(self) -> int:
-        """Number of individuals in cluster 0."""
+        """Number of individuals in Cluster 0 (reserves)."""
         return len(self.members)
     
     @property
@@ -113,9 +113,9 @@ class Cluster0:
     
     def add(self, individual: Individual, generation: int, ttl: Optional[int] = None) -> None:
         """
-        Add individual to cluster 0.
+        Add individual to Cluster 0 (reserves).
         
-        Sets the individual's species_id to 0 (cluster 0).
+        Sets the individual's species_id to 0 (Cluster 0).
         
         Args:
             individual: Individual to add
@@ -127,7 +127,7 @@ class Cluster0:
             if lm.individual.id == individual.id:
                 return
         
-        # Mark individual as belonging to cluster 0
+        # Mark individual as belonging to Cluster 0 (reserves)
         individual.species_id = CLUSTER_0_ID
         
         self.members.append(Cluster0Individual(
@@ -137,12 +137,12 @@ class Cluster0:
         ))
     
     def add_batch(self, individuals: List[Individual], generation: int, ttl: Optional[int] = None) -> None:
-        """Add multiple individuals to cluster 0."""
+        """Add multiple individuals to Cluster 0 (reserves)."""
         for ind in individuals:
             self.add(ind, generation, ttl)
     
     def remove(self, individual: Individual) -> bool:
-        """Remove an individual from cluster 0."""
+        """Remove an individual from Cluster 0 (reserves)."""
         for i, lm in enumerate(self.members):
             if lm.individual.id == individual.id:
                 self.members.pop(i)
@@ -150,7 +150,7 @@ class Cluster0:
         return False
     
     def remove_batch(self, individuals: List[Individual]) -> int:
-        """Remove multiple individuals from cluster 0. Returns count removed."""
+        """Remove multiple individuals from Cluster 0 (reserves). Returns count removed."""
         ids = {ind.id for ind in individuals}
         original = len(self.members)
         self.members = [lm for lm in self.members if lm.individual.id not in ids]
@@ -158,7 +158,7 @@ class Cluster0:
     
     def update_ttl(self, current_generation: int) -> List[Individual]:
         """
-        Decrement TTL for all cluster 0 individuals and remove expired ones.
+        Decrement TTL for all Cluster 0 (reserves) individuals and remove expired ones.
         
         Called each generation to manage cluster 0 size. Expired individuals
         are removed to prevent unbounded growth.
@@ -167,7 +167,7 @@ class Cluster0:
             current_generation: Current generation number (for logging)
         
         Returns:
-            List of expired individuals (removed from cluster 0)
+            List of expired individuals (removed from Cluster 0)
         """
         expired = []
         remaining = []
@@ -179,7 +179,7 @@ class Cluster0:
                 remaining.append(lm)  # Keep
         self.members = remaining
         if expired:
-            self.logger.info(f"Expired {len(expired)} individuals from cluster 0")
+            self.logger.info(f"Expired {len(expired)} individuals from Cluster 0 (reserves)")
         return expired
     
     def filter_by_removal_threshold(self, removal_threshold: Optional[float] = None) -> List[Individual]:
@@ -211,7 +211,7 @@ class Cluster0:
         self.members = remaining
         
         if removed:
-            self.logger.info(f"Removed {len(removed)} individuals below removal threshold ({threshold:.4f}) from cluster 0")
+            self.logger.info(f"Removed {len(removed)} individuals below removal threshold ({threshold:.4f}) from Cluster 0 (reserves)")
         
         return removed
     
@@ -219,7 +219,7 @@ class Cluster0:
         """
         Enforce maximum capacity by removing lowest-fitness individuals.
         
-        If cluster 0 size exceeds max_capacity, removes individuals until
+        If Cluster 0 (reserves) size exceeds max_capacity, removes individuals until
         size equals max_capacity, keeping highest-fitness individuals.
         
         Removed individuals should be archived to under_performing.json.
@@ -240,24 +240,24 @@ class Cluster0:
         removed = [lm.individual for lm in removed_members]
         
         if removed:
-            self.logger.info(f"Enforced capacity: removed {len(removed)} lowest-fitness individuals from cluster 0")
+            self.logger.info(f"Enforced capacity: removed {len(removed)} lowest-fitness individuals from Cluster 0 (reserves)")
         
         return removed
     
     def check_speciation(self, current_generation: int) -> Optional[Species]:
         """
-        Check if cluster 0 individuals can form a new species via clustering.
+        Check if Cluster 0 (reserves) individuals can form a new species via clustering.
         
-        This is the key mechanism for creating new species from cluster 0. When enough
+        This is the key mechanism for creating new species from Cluster 0. When enough
         similar high-fitness individuals accumulate, they can form a cohesive cluster
         and create a new species.
         
         Algorithm:
-        1. Check if enough individuals in cluster 0 (>= min_cluster_size)
-        2. Perform agglomerative clustering on cluster 0 individuals
+        1. Check if enough individuals in Cluster 0 (>= min_cluster_size)
+        2. Perform agglomerative clustering on Cluster 0 individuals
         3. Find largest cohesive cluster (all pairwise distances < theta_sim)
         4. If cluster size >= min_cluster_size, create new species
-        5. Remove cluster members from cluster 0
+        5. Remove cluster members from Cluster 0
         
         Args:
             current_generation: Current generation number
@@ -290,11 +290,11 @@ class Cluster0:
                     radius=self.theta_sim,  # Constant radius
                     created_at=current_generation,
                     last_improvement=current_generation,
-                    cluster_origin="natural",  # Formed naturally from cluster 0
+                    cluster_origin="natural",  # Formed naturally from Cluster 0
                     parent_ids=None,
                     parent_id=None
                 )
-                # Remove from cluster 0 (they're now in a species)
+                # Remove from Cluster 0 (they're now in a species)
                 self.remove_batch(cluster)
                 # Track speciation event
                 self.speciation_events.append({
@@ -304,13 +304,13 @@ class Cluster0:
                     "leader_fitness": leader.fitness,
                     "origin": "cluster_0_speciation"
                 })
-                self.logger.info(f"Speciation event! Created species {new_species.id} from {len(cluster)} cluster 0 individuals")
+                self.logger.info(f"Speciation event! Created species {new_species.id} from {len(cluster)} Cluster 0 (reserves) individuals")
                 return new_species
         return None
     
     def _agglomerative_clustering(self, individuals: List[Individual], threshold: float) -> List[List[Individual]]:
         """
-        Perform agglomerative hierarchical clustering on cluster 0 individuals.
+        Perform agglomerative hierarchical clustering on Cluster 0 (reserves) individuals.
         
         Uses scipy's linkage and fcluster to find groups of similar individuals.
         
@@ -385,11 +385,11 @@ class Cluster0:
         return self.members.pop(best_idx).individual
     
     def clear(self) -> None:
-        """Clear all members from cluster 0."""
+        """Clear all members from Cluster 0 (reserves)."""
         self.members = []
     
     def to_dict(self) -> Dict:
-        """Serialize cluster 0 to dictionary for JSON storage."""
+        """Serialize Cluster 0 (reserves) to dictionary for JSON storage."""
         return {
             "cluster_id": CLUSTER_0_ID,
             "size": self.size,
@@ -418,9 +418,9 @@ def should_enter_cluster0(
     viability_baseline: float
 ) -> bool:
     """
-    Check if an individual should enter cluster 0.
+    Check if an individual should enter Cluster 0 (reserves).
     
-    An individual should enter cluster 0 if:
+    An individual should enter Cluster 0 if:
     1. Has an embedding (can be clustered)
     2. Has fitness > viability_baseline (high-fitness outlier)
     3. Is semantically distant from all existing species leaders (doesn't fit anywhere)
@@ -429,10 +429,10 @@ def should_enter_cluster0(
         individual: Individual to check
         species: Dict of existing species (ID >= 1)
         theta_sim: Semantic distance threshold
-        viability_baseline: Minimum fitness for cluster 0
+        viability_baseline: Minimum fitness for Cluster 0
     
     Returns:
-        True if individual should enter cluster 0, else False
+        True if individual should enter Cluster 0 (reserves), else False
     """
     # Must have embedding and sufficient fitness
     if individual.embedding is None or individual.fitness <= viability_baseline:
@@ -441,7 +441,5 @@ def should_enter_cluster0(
     for sp in species.values():
         if sp.leader.embedding is not None:
             if semantic_distance(individual.embedding, sp.leader.embedding) < theta_sim:
-                return False  # Fits into existing species, don't send to cluster 0
-    return True  # Doesn't fit anywhere and has high fitness → cluster 0
-
-
+                return False  # Fits into existing species, don't send to Cluster 0
+    return True  # Doesn't fit anywhere and has high fitness → Cluster 0

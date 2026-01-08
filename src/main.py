@@ -217,9 +217,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         )
         
         if speciation_result.get("success"):
-            logger.info("Speciation complete: %d species, %d in limbo, %d genomes updated",
+            logger.info("Speciation complete: %d species, %d in reserves, %d genomes updated",
                        speciation_result.get("species_count", 0),
-                       speciation_result.get("limbo_size", 0),
+                       speciation_result.get("reserves_size", 0),
                        speciation_result.get("genomes_updated", 0))
         else:
             logger.warning("Speciation completed with warnings: %s", speciation_result.get("error", "unknown"))
@@ -445,10 +445,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 )
                 
                 if speciation_result.get("success"):
-                    logger.info("Gen %d speciation: %d species, %d in limbo",
+                    logger.info("Gen %d speciation: %d species, %d in reserves",
                                generation_count,
                                speciation_result.get("species_count", 0),
-                               speciation_result.get("limbo_size", 0))
+                               speciation_result.get("reserves_size", 0))
                 else:
                     logger.warning("Gen %d speciation completed with warnings: %s", 
                                   generation_count, speciation_result.get("error", "unknown"))
@@ -609,9 +609,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         north_star_metric=north_star_metric,
                         logger=logger
                     )
-                    logger.debug("Distribution: %d to elites, %d to non_elites, %d to limbo", 
+                    logger.debug("Distribution: %d to elites, %d to non_elites, %d to reserves", 
                                distribution_result["elites_moved"], distribution_result["population_moved"], 
-                               distribution_result.get("limbo_moved", 0))
+                               distribution_result.get("reserves_moved", 0))
                     
                     removal_results = remove_worse_performing_genomes_from_all_files(
                         outputs_path=outputs_path,

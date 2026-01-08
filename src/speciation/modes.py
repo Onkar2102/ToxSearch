@@ -10,8 +10,8 @@ from typing import Dict, List, Optional, TYPE_CHECKING
 from .island import Individual, Species, IslandMode
 
 if TYPE_CHECKING:
-    from .limbo import LimboBuffer
-    from .config import PlanAPlusConfig
+    from .reserves import Cluster0
+    from .config import SpeciationConfig
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -36,7 +36,7 @@ def detect_stagnation(island: Species, window: int = 5, current_gen: int = 0) ->
     return current_gen - island.last_improvement >= window
 
 
-def enter_explore_mode(island: Species, limbo: Optional["LimboBuffer"] = None,
+def enter_explore_mode(island: Species, reserves: Optional["Cluster0"] = None,
                        explore_mutation_multiplier: float = 2.0,
                        explore_selection_pressure: float = 0.7, logger=None) -> None:
     """
@@ -46,11 +46,11 @@ def enter_explore_mode(island: Species, limbo: Optional["LimboBuffer"] = None,
     It increases diversity to help escape local optima:
     - Higher mutation rate (explore_mutation_multiplier, default 2.0x)
     - Relaxed selection pressure (explore_selection_pressure, default 0.7)
-    - External parents from limbo (high-fitness outliers)
+    - External parents from reserves (high-fitness outliers)
     
     Args:
         island: Species to switch to EXPLORE mode
-        limbo: Optional limbo buffer (source for external parents)
+        reserves: Optional reserves buffer (source for external parents)
         explore_mutation_multiplier: Mutation rate multiplier (>1)
         explore_selection_pressure: Selection pressure (0-1, lower = more relaxed)
         logger: Optional logger instance
@@ -63,9 +63,9 @@ def enter_explore_mode(island: Species, limbo: Optional["LimboBuffer"] = None,
     # Increase mutation rate for exploration
     island.mutation_rate = explore_mutation_multiplier
     
-    # Optionally assign external parent from limbo (for diversity)
-    if limbo and limbo.size > 0:
-        candidates = limbo.individuals
+    # Optionally assign external parent from reserves (for diversity)
+    if reserves and reserves.size > 0:
+        candidates = reserves.individuals
         if candidates:
             island.external_parent = random.choice(candidates)
     
@@ -133,7 +133,7 @@ def enter_default_mode(island: Species, logger=None) -> None:
         logger.debug(f"Island {island.id}: {old_mode.value} → DEFAULT")
 
 
-def update_island_mode(island: Species, current_gen: int, limbo: Optional["LimboBuffer"] = None,
+def update_island_mode(island: Species, current_gen: int, reserves: Optional["Cluster0"] = None,
                        window: int = 5, improvement_slope_threshold: float = 0.01,
                        decline_slope_threshold: float = -0.001,
                        explore_mutation_multiplier: float = 2.0,
@@ -157,12 +157,12 @@ def update_island_mode(island: Species, current_gen: int, limbo: Optional["Limbo
     Mode switching affects:
     - Mutation rate (EXPLORE: higher, EXPLOIT: lower)
     - Selection pressure (EXPLORE: relaxed, EXPLOIT: elite-focused)
-    - External parent selection (EXPLORE: may use limbo individuals)
+    - External parent selection (EXPLORE: may use reserves individuals)
     
     Args:
         island: Species to update
         current_gen: Current generation number
-        limbo: Optional limbo buffer (for EXPLORE mode external parents)
+        reserves: Optional reserves buffer (for EXPLORE mode external parents)
         window: Number of generations to analyze for slope
         improvement_slope_threshold: Slope threshold for EXPLOIT mode
         decline_slope_threshold: Slope threshold for EXPLORE mode
@@ -187,7 +187,7 @@ def update_island_mode(island: Species, current_gen: int, limbo: Optional["Limbo
             enter_exploit_mode(island, exploit_mutation_multiplier, logger)
     elif slope < decline_slope_threshold:
         if island.mode != IslandMode.EXPLORE:
-            enter_explore_mode(island, limbo, explore_mutation_multiplier, explore_selection_pressure, logger)
+            enter_explore_mode(island, reserves, explore_mutation_multiplier, explore_selection_pressure, logger)
     else:
         if island.mode != IslandMode.DEFAULT:
             enter_default_mode(island, logger)
@@ -196,8 +196,8 @@ def update_island_mode(island: Species, current_gen: int, limbo: Optional["Limbo
 
 
 def update_all_island_modes(species: Dict[int, Species], current_gen: int,
-                            limbo: Optional["LimboBuffer"] = None,
-                            config: Optional["PlanAPlusConfig"] = None, logger=None) -> Dict[str, int]:
+                            reserves: Optional["Cluster0"] = None,
+                            config: Optional["SpeciationConfig"] = None, logger=None) -> Dict[str, int]:
     """
     Update modes for all islands based on fitness trends.
     
@@ -207,7 +207,7 @@ def update_all_island_modes(species: Dict[int, Species], current_gen: int,
     Args:
         species: Dict of all current species (modified in-place)
         current_gen: Current generation number
-        limbo: Optional limbo buffer (for EXPLORE mode)
+        reserves: Optional reserves buffer (for EXPLORE mode)
         config: Configuration object with mode parameters (or None for defaults)
         logger: Optional logger instance
     
@@ -230,7 +230,7 @@ def update_all_island_modes(species: Dict[int, Species], current_gen: int,
     
     for sp in species.values():
         # Update mode based on fitness trend
-        mode = update_island_mode(sp, current_gen, limbo, window, improvement_slope, decline_slope,
+        mode = update_island_mode(sp, current_gen, reserves, window, improvement_slope, decline_slope,
                                   explore_mult, exploit_mult, explore_pressure, logger)
         # Track mode distribution
         mode_counts[mode.value] += 1

@@ -48,7 +48,7 @@ class Individual:
         fitness: Fitness score (typically toxicity score, range [0, 1])
         embedding: L2-normalized semantic embedding vector (384-dim for all-MiniLM-L6-v2)
                    Used for semantic distance computation in clustering
-        species_id: ID of the species this individual belongs to (None if unassigned)
+        species_id: ID of the species this individual belongs to (None if unassigned, 0 for cluster 0)
         generation: Generation number when this individual was created
         genome_data: Original genome dictionary (for preserving metadata)
     """
@@ -134,7 +134,7 @@ class Individual:
         Convert Individual back to genome dictionary format.
         
         Updates the original genome dict with speciation information:
-        - species_id: Which species this individual belongs to
+        - species_id: Which species this individual belongs to (0 = cluster 0)
         - fitness: Current fitness value
         
         Returns:
@@ -166,27 +166,31 @@ class Species:
     A Species is a cluster of semantically similar individuals that evolve together.
     Each species has:
     - A leader (highest fitness individual, defines species center)
-    - Members (all individuals assigned to this species)
-    - A radius (semantic distance threshold for membership)
+    - Members (all individuals assigned to this species, max 100)
+    - A radius (constant, equal to theta_sim for all species)
     - A mode (DEFAULT/EXPLORE/EXPLOIT) that controls evolutionary strategy
     - Fitness tracking for stagnation detection and mode switching
+    - Origin tracking (how the species was created: merge/split/natural)
     
     Species evolve independently, can merge with similar species, can go extinct,
     and can split if they become too heterogeneous (low silhouette score).
     
+    Note: Species IDs start from 1. ID 0 is reserved for Cluster 0 (reserves).
+    
     Attributes:
-        id: Unique species identifier
+        id: Unique species identifier (1+, 0 reserved for cluster 0)
         leader: Leader individual (highest fitness, defines species center)
-        members: List of all individuals in this species (includes leader)
+        members: List of all individuals in this species (includes leader, max 100)
         mode: Current operating mode (DEFAULT/EXPLORE/EXPLOIT)
-        radius: Semantic distance threshold for species membership
-                Individuals within this distance of leader can join
+        radius: Semantic distance threshold for species membership (constant = theta_sim)
         stagnation_counter: Number of generations without improvement
         created_at: Generation when this species was created
         last_improvement: Generation when fitness last improved
         fitness_history: List of best fitness values over time (for trend analysis)
-        parent_id: ID of parent species if this was created via split
-        external_parent: External parent for EXPLORE mode (from limbo or other species)
+        cluster_origin: How this species was created ("merge", "split", "natural", or None)
+        parent_ids: List of parent species IDs if created via merge [id1, id2]
+        parent_id: ID of parent species if this was created via split (single parent)
+        external_parent: External parent for EXPLORE mode (from cluster 0 or other species)
         mutation_rate: Current mutation rate multiplier (varies by mode)
         breeding_budget: Number of offspring to produce this generation
     """
@@ -194,12 +198,14 @@ class Species:
     leader: Individual
     members: List[Individual] = field(default_factory=list)
     mode: IslandMode = IslandMode.DEFAULT
-    radius: float = 0.4
+    radius: float = 0.4  # Constant radius (theta_sim), no dynamic adjustment
     stagnation_counter: int = 0
     created_at: int = 0
     last_improvement: int = 0
     fitness_history: List[float] = field(default_factory=list)
-    parent_id: Optional[int] = None
+    cluster_origin: Optional[str] = None  # "merge", "split", "natural", or None
+    parent_ids: Optional[List[int]] = None  # For merged species: [parent1_id, parent2_id]
+    parent_id: Optional[int] = None  # For split species: single parent ID
     external_parent: Optional[Individual] = None
     mutation_rate: float = 1.0
     breeding_budget: int = 5
@@ -333,11 +339,46 @@ class Species:
         """
         return sorted(self.members, key=lambda x: x.fitness, reverse=reverse)
     
+    def enforce_capacity(self, max_capacity: int = 100) -> List[Individual]:
+        """
+        Enforce maximum capacity by removing lowest-fitness members.
+        
+        Keeps the top `max_capacity` individuals by fitness.
+        Removed individuals should be sent to cluster 0.
+        
+        Args:
+            max_capacity: Maximum number of members to keep (default: 100)
+        
+        Returns:
+            List of removed individuals (to be sent to cluster 0)
+        """
+        if self.size <= max_capacity:
+            return []
+        
+        # Sort by fitness (highest first) and keep top max_capacity
+        sorted_members = self.get_sorted_members(reverse=True)
+        keep = sorted_members[:max_capacity]
+        removed = sorted_members[max_capacity:]
+        
+        # Update members list
+        self.members = keep
+        
+        # Clear species_id for removed individuals
+        for ind in removed:
+            ind.species_id = None
+        
+        # Ensure leader is still in the list
+        if self.leader not in self.members and self.members:
+            self.leader = self.members[0]
+        
+        return removed
+    
     def to_dict(self) -> Dict[str, Any]:
         """
         Serialize species to dictionary for JSON storage.
         
         Includes leader embedding for state restoration across generations.
+        Includes cluster_origin and parent_ids for origin tracking.
         """
         return {
             "id": self.id,
@@ -352,13 +393,17 @@ class Species:
             "created_at": self.created_at,
             "last_improvement": self.last_improvement,
             "fitness_history": self.fitness_history[-20:],
+            "cluster_origin": self.cluster_origin,
+            "parent_ids": self.parent_ids,
+            "parent_id": self.parent_id,
             "size": self.size,
             "best_fitness": self.best_fitness,
             "avg_fitness": self.avg_fitness,
         }
     
     def __repr__(self):
-        return f"Species(id={self.id}, size={self.size}, mode={self.mode.value}, best={self.best_fitness:.4f})"
+        origin_str = f", origin={self.cluster_origin}" if self.cluster_origin else ""
+        return f"Species(id={self.id}, size={self.size}, mode={self.mode.value}, best={self.best_fitness:.4f}{origin_str})"
 
 
 class SpeciesIdGenerator:
@@ -366,7 +411,7 @@ class SpeciesIdGenerator:
     Thread-safe species ID generator (singleton pattern).
     
     Ensures unique species IDs across the entire evolution run.
-    IDs are sequential integers starting from 1.
+    IDs are sequential integers starting from 1 (ID 0 is reserved for cluster 0).
     """
     _current_id: int = 0  # Class variable (shared across all instances)
     
@@ -376,7 +421,7 @@ class SpeciesIdGenerator:
         Generate next unique species ID.
         
         Returns:
-            Next sequential species ID
+            Next sequential species ID (starts from 1, 0 reserved for cluster 0)
         """
         cls._current_id += 1
         return cls._current_id
@@ -409,7 +454,6 @@ def generate_species_id() -> int:
     Convenience function to generate a new species ID.
     
     Returns:
-        New unique species ID
+        New unique species ID (1+, 0 is reserved for cluster 0)
     """
     return SpeciesIdGenerator.next_id()
-

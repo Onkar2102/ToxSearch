@@ -11,7 +11,7 @@ from .island import Individual, Species, IslandMode
 from .distance import semantic_distance
 
 if TYPE_CHECKING:
-    from .limbo import LimboBuffer
+    from .reserves import Cluster0
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -25,7 +25,7 @@ def select_parents_elite_focused(island: Species, alpha: float = 0.5,
     Parent selection varies by island mode:
     - DEFAULT: Balanced elite + diversity selection
     - EXPLOIT: Hyper-elitist (top 3 only)
-    - EXPLORE: Relaxed selection with potential external parent from limbo
+    - EXPLORE: Relaxed selection with potential external parent from cluster 0
     
     This ensures each mode has appropriate selection pressure:
     - EXPLOIT focuses on best solutions (exploitation)
@@ -131,10 +131,10 @@ def _select_explore_parents(island: Species, sorted_members: List[Individual], a
     EXPLORE mode parent selection: relaxed selection with external parent.
     
     Parent1: Relaxed selection (weaker exponential bias than DEFAULT)
-    Parent2: Either external parent from limbo (if available) or blended selection
+    Parent2: Either external parent from cluster 0 (if available) or blended selection
     
     This enables exploration by allowing lower-fitness members to breed
-    and potentially introducing novel genetic material from limbo.
+    and potentially introducing novel genetic material from cluster 0.
     
     Args:
         island: Species to select parents from
@@ -152,7 +152,7 @@ def _select_explore_parents(island: Species, sorted_members: List[Individual], a
     probs = probs / probs.sum()
     parent1 = sorted_members[np.random.choice(n, p=probs)]
     
-    # Parent 2: External parent from limbo if available, else blended selection
+    # Parent 2: External parent from cluster 0 if available, else blended selection
     if island.external_parent is not None:
         parent2 = island.external_parent
         island.external_parent = None  # One-time use
@@ -166,30 +166,37 @@ def _select_explore_parents(island: Species, sorted_members: List[Individual], a
     return parent1, parent2
 
 
-def survivor_selection(island: Species, offspring: List[Individual], max_capacity: int = 50,
-                       limbo: Optional["LimboBuffer"] = None, logger=None) -> List[Individual]:
+def survivor_selection(
+    island: Species,
+    offspring: List[Individual],
+    max_capacity: int = 100,
+    cluster0: Optional["Cluster0"] = None,
+    current_generation: int = 0,
+    logger=None
+) -> List[Individual]:
     """
     Select survivors for island after breeding.
     
     Survivor selection determines which individuals remain in the island for the next
     generation. The process:
     1. Always keep the leader (elitism)
-    2. Add unique offspring (by prompt) sorted by fitness
-    3. Add remaining high-fitness members from current population
-    4. Truncate to max_capacity
-    5. Eject lowest-fitness individuals over capacity to limbo
+    2. Combine current members and offspring, sort by fitness
+    3. Keep top max_capacity (default 100) individuals
+    4. Send ALL removed individuals to cluster 0
     
-    This maintains genetic material while enforcing population constraints.
+    Note: Unlike before, ALL removed genomes go to cluster 0 (not just high-fitness ones).
+    Cluster 0 handles removal threshold filtering separately.
     
     Args:
         island: Species to perform survivor selection on
         offspring: New offspring generated from breeding
-        max_capacity: Maximum members to keep
-        limbo: Optional limbo buffer for rejected members
+        max_capacity: Maximum members to keep (default: 100)
+        cluster0: Optional cluster 0 for removed individuals
+        current_generation: Current generation number
         logger: Optional logger instance
     
     Returns:
-        List of ejected individuals (sent to limbo)
+        List of ejected individuals (sent to cluster 0)
     """
     if logger is None:
         logger = get_logger("SurvivorSelection")
@@ -213,16 +220,20 @@ def survivor_selection(island: Species, offspring: List[Individual], max_capacit
             if len(survivors) >= max_capacity:
                 break
     
-    # If still over capacity, trim to max_capacity
-    if len(survivors) > max_capacity:
-        ejected = survivors[max_capacity:]
-        survivors = survivors[:max_capacity]
+    # Collect remaining candidates as ejected
+    remaining_candidates = [ind for ind in candidates if ind not in survivors and ind != leader]
+    ejected = remaining_candidates
     
     # Update island members
     island.members = survivors
     # Ensure all survivors know their species assignment
     for m in island.members:
         m.species_id = island.id
+    
+    # Send all ejected individuals to cluster 0
+    if cluster0 and ejected:
+        cluster0.add_batch(ejected, current_generation)
+        logger.debug(f"Sent {len(ejected)} ejected individuals from species {island.id} to cluster 0")
     
     return ejected
 

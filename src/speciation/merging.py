@@ -6,7 +6,7 @@ Island merging logic for speciation.
 
 from typing import Dict, List, Tuple, Optional
 
-from .island import Individual, Species, IslandMode
+from .island import Individual, Species, IslandMode, generate_species_id
 from .distance import semantic_distance
 
 from utils import get_custom_logging
@@ -60,34 +60,44 @@ def detect_merge_candidates(species: Dict[int, Species], theta_merge: float = 0.
     return merge_pairs
 
 
-def merge_islands(sp1: Species, sp2: Species, current_generation: int,
-                  max_capacity: int = 50, logger=None) -> Species:
+def merge_islands(
+    sp1: Species,
+    sp2: Species,
+    current_generation: int,
+    theta_sim: float = 0.4,
+    max_capacity: int = 100,
+    logger=None
+) -> Species:
     """
     Merge two islands into a single species.
     
     Merging combines two similar species into one:
-    - Members: All members from both species (deduplicated by prompt)
-    - Leader: Highest-fitness individual (usually from one of the two)
+    - Members: All members from both species (deduplicated by ID)
+    - Leader: Highest-fitness individual (from either species)
     - Mode: Reset to DEFAULT (forces re-adaptation)
-    - Radius: Max of the two radii (use larger threshold)
+    - Radius: Constant theta_sim (same for all species)
     - Stagnation: Reset to 0 (fresh start for merged species)
+    - Origin: "merge" with parent_ids = [sp1.id, sp2.id]
     
-    If total members exceed max_capacity, keeps highest-fitness individuals.
+    If total members exceed max_capacity (100), keeps highest-fitness individuals.
+    
+    Note: Creates a NEW species ID (not reusing sp1.id or sp2.id) to avoid confusion.
     
     Args:
         sp1: First species to merge
         sp2: Second species to merge
         current_generation: Current generation number
-        max_capacity: Maximum members after merge (trims if exceeded)
+        theta_sim: Constant radius for the merged species (default: 0.4)
+        max_capacity: Maximum members after merge (default: 100)
         logger: Optional logger instance
     
     Returns:
-        New merged Species (uses sp1.id as result ID)
+        New merged Species with cluster_origin="merge" and parent_ids=[sp1.id, sp2.id]
     """
     if logger is None:
         logger = get_logger("IslandMerging")
     
-    # Combine members, deduplicating by prompt
+    # Combine members, deduplicating by ID
     seen = set()
     combined = []
     for m in sp1.members + sp2.members:
@@ -104,24 +114,39 @@ def merge_islands(sp1: Species, sp2: Species, current_generation: int,
         combined.insert(0, new_leader)
         combined = combined[:max_capacity]
     
-    # Create merged species
+    # Create merged species with NEW ID (not reusing old IDs)
     merged = Species(
-        id=sp1.id, leader=new_leader, members=combined, mode=IslandMode.DEFAULT,
-        radius=max(sp1.radius, sp2.radius), stagnation_counter=0,
-        created_at=current_generation, last_improvement=current_generation
+        id=generate_species_id(),  # New ID for clarity
+        leader=new_leader,
+        members=combined,
+        mode=IslandMode.DEFAULT,
+        radius=theta_sim,  # Constant radius for all species
+        stagnation_counter=0,
+        created_at=current_generation,
+        last_improvement=current_generation,
+        cluster_origin="merge",  # Created via merge
+        parent_ids=[sp1.id, sp2.id],  # Both parent IDs
+        parent_id=None  # Not a split (single parent)
     )
     
     # Update species assignments
     for m in combined:
         m.species_id = merged.id
     
-    logger.info(f"Merged species {sp1.id} + {sp2.id} → {merged.id} ({merged.size} members)")
+    logger.info(f"Merged species {sp1.id} + {sp2.id} -> {merged.id} ({merged.size} members)")
     return merged
 
 
-def process_merges(species: Dict[int, Species], theta_merge: float = 0.2,
-                   min_stability_gens: int = 3, current_gen: int = 0,
-                   max_capacity: int = 50, max_merges_per_gen: int = 3, logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
+def process_merges(
+    species: Dict[int, Species],
+    theta_merge: float = 0.2,
+    theta_sim: float = 0.4,
+    min_stability_gens: int = 3,
+    current_gen: int = 0,
+    max_capacity: int = 100,
+    max_merges_per_gen: int = 3,
+    logger=None
+) -> Tuple[Dict[int, Species], List[Dict]]:
     """
     Process all species merges for a generation.
     
@@ -134,6 +159,8 @@ def process_merges(species: Dict[int, Species], theta_merge: float = 0.2,
     - Combines all members (deduplicated)
     - Keeps highest-fitness leader
     - Resets to DEFAULT mode
+    - Uses constant theta_sim radius
+    - Has cluster_origin="merge" and parent_ids=[id1, id2]
     - Truncates to max_capacity if needed
     
     Process iteratively (up to max_merges_per_gen) until no more merges found.
@@ -141,9 +168,10 @@ def process_merges(species: Dict[int, Species], theta_merge: float = 0.2,
     Args:
         species: Dict of species (modified in-place)
         theta_merge: Merge distance threshold (must be < theta_sim)
+        theta_sim: Constant radius for merged species
         min_stability_gens: Minimum age for species to be mergeable
         current_gen: Current generation number
-        max_capacity: Maximum members after merge
+        max_capacity: Maximum members after merge (default: 100)
         max_merges_per_gen: Maximum merges per generation (prevents excessive merging)
         logger: Optional logger instance
     
@@ -166,13 +194,20 @@ def process_merges(species: Dict[int, Species], theta_merge: float = 0.2,
             continue
         
         sp1, sp2 = species[id1], species[id2]
-        merged = merge_islands(sp1, sp2, current_gen, max_capacity, logger)
+        merged = merge_islands(sp1, sp2, current_gen, theta_sim, max_capacity, logger)
         
+        # Remove old species and add merged
         species.pop(id1, None)
         species.pop(id2, None)
         species[merged.id] = merged
         
-        events.append({"generation": current_gen, "merged": (id1, id2), "result_id": merged.id})
+        events.append({
+            "generation": current_gen,
+            "merged": (id1, id2),
+            "result_id": merged.id,
+            "cluster_origin": "merge",
+            "parent_ids": [id1, id2]
+        })
         merges_done += 1
     
     return species, events
@@ -204,4 +239,3 @@ def should_merge(sp1: Species, sp2: Species, theta_merge: float, min_stability_g
         return False
     # Check distance threshold
     return semantic_distance(sp1.leader.embedding, sp2.leader.embedding) < theta_merge
-

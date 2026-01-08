@@ -656,14 +656,14 @@ def load_and_initialize_population(
                     json.dump(empty_elites, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized empty elites.json")
 
-            # ----------------------------- Initialize empty limbo.json ----------------------------
-            with PerformanceLogger(logger, "Initialize empty limbo.json"):
-                # limbo.json starts empty - buffer for high-fitness outliers that don't fit species
-                empty_limbo = []
-                limbo_path = Path(output_path) / "limbo.json"
-                limbo_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(limbo_path, 'w', encoding='utf-8') as f:
-                    json.dump(empty_limbo, f, indent=2, ensure_ascii=False)
+            # ----------------------------- Initialize empty reserves.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty reserves.json"):
+                # reserves.json starts empty - buffer for high-fitness outliers that don't fit species
+                empty_reserves = []
+                reserves_path = Path(output_path) / "reserves.json"
+                reserves_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(reserves_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_reserves, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized empty limbo.json")
 
             # ----------------------------- Initialize empty parents.json ----------------------------

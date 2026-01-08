@@ -5,10 +5,11 @@ Configuration parameters for Dynamic Islands speciation framework.
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
-class PlanAPlusConfig:
+class SpeciationConfig:
     """
     Configuration parameters for speciation framework.
     
@@ -21,33 +22,43 @@ class PlanAPlusConfig:
                   Individuals within this distance of a leader become followers.
                   Range: [0, 2] where 0 = identical, 2 = maximally different.
                   Default: 0.4 (moderate similarity required)
+                  Also used as the constant radius for all species.
         
         theta_merge: Merge threshold for combining similar islands.
                      Species with leader distance < theta_merge are candidates for merging.
                      Must be < theta_sim to prevent premature merging.
                      Default: 0.2 (tighter than theta_sim)
         
-        # Limbo Buffer Parameters
-        viability_baseline: Minimum fitness required to enter limbo buffer.
+        # Cluster 0 Parameters
+        viability_baseline: Minimum fitness required to enter cluster 0.
                            High-fitness outliers that don't fit existing species
                            are preserved here for potential speciation.
                            Range: [0, 1]
                            Default: 0.3 (moderate fitness threshold)
         
-        limbo_ttl: Time-to-live in generations for limbo individuals.
-                   After this many generations without speciation, individuals expire.
-                   Prevents limbo from growing unbounded.
-                   Default: 10 generations
+        cluster0_ttl: Time-to-live in generations for cluster 0 individuals.
+                      After this many generations without speciation, individuals expire.
+                      Prevents cluster 0 from growing unbounded.
+                      Default: 10 generations
         
-        limbo_min_cluster_size: Minimum cluster size required for limbo speciation.
-                                When limbo individuals form a cohesive cluster of this size,
-                                they can create a new species.
-                                Default: 2 (minimum viable species)
+        cluster0_min_cluster_size: Minimum cluster size required for cluster 0 speciation.
+                                   When cluster 0 individuals form a cohesive cluster of this size,
+                                   they can create a new species.
+                                   Default: 2 (minimum viable species)
+        
+        cluster0_max_capacity: Maximum individuals in cluster 0.
+                               When exceeded, lowest-fitness individuals are removed.
+                               Default: 1000 individuals
+        
+        removal_threshold: Fitness threshold for removing individuals from cluster 0.
+                          Individuals with fitness below this are archived to under_performing.json.
+                          If None, no threshold filtering is applied.
+                          Default: None (set dynamically based on population)
         
         # Island Management Parameters
-        max_island_capacity: Maximum individuals per island before radius adjustment.
-                             When exceeded, island radius shrinks and fringe members are ejected.
-                             Default: 50 individuals
+        max_island_capacity: Maximum individuals per species (keeps top by fitness).
+                             When exceeded, lowest-fitness members are sent to cluster 0.
+                             Default: 100 individuals
         
         min_island_size: Minimum island size before extinction.
                          Islands smaller than this are considered extinct.
@@ -102,11 +113,6 @@ class PlanAPlusConfig:
                               Range: [-1, 1], typically [0, 1]
                               Default: 0.5 (moderate cohesion)
         
-        radius_shrink_factor: Factor to shrink radius when island exceeds capacity.
-                              Multiplied with current radius: new_radius = old_radius * factor
-                              Range: (0, 1)
-                              Default: 0.9 (10% reduction)
-        
         silhouette_check_frequency: Check silhouette scores every N generations.
                                     Silhouette computation is expensive, so done periodically.
                                     Default: 10 (every 10 generations)
@@ -131,7 +137,7 @@ class PlanAPlusConfig:
                                      Default: 0.3 (moderate mutation)
         
         repopulation_size: Initial size of repopulated islands.
-                           New islands created from limbo or global best start with this many members.
+                           New islands created from cluster 0 or global best start with this many members.
                            Default: 20 individuals
     """
     
@@ -139,13 +145,15 @@ class PlanAPlusConfig:
     theta_sim: float = 0.4
     theta_merge: float = 0.2
     
-    # Limbo
+    # Cluster 0
     viability_baseline: float = 0.3
-    limbo_ttl: int = 10
-    limbo_min_cluster_size: int = 2
+    cluster0_ttl: int = 10
+    cluster0_min_cluster_size: int = 2
+    cluster0_max_capacity: int = 1000
+    removal_threshold: Optional[float] = None
     
     # Island Management
-    max_island_capacity: int = 50
+    max_island_capacity: int = 100
     min_island_size: int = 2
     stagnation_window: int = 5
     max_stagnation: int = 20
@@ -162,9 +170,8 @@ class PlanAPlusConfig:
     k_neighbors: int = 3
     migration_selection: str = "most_unique"
     
-    # Adaptive Thresholds
+    # Adaptive Thresholds (splitting only, no radius adjustment)
     silhouette_threshold: float = 0.5
-    radius_shrink_factor: float = 0.9
     silhouette_check_frequency: int = 10
     
     # Embedding
@@ -190,15 +197,17 @@ class PlanAPlusConfig:
         # Merge threshold must be tighter than similarity threshold
         assert self.theta_merge < self.theta_sim, "theta_merge should be < theta_sim"
         
-        # Validate limbo parameters
+        # Validate cluster 0 parameters
         assert 0 <= self.viability_baseline <= 1, "viability_baseline must be in [0, 1]"
-        assert self.limbo_ttl > 0, "limbo_ttl must be positive"
+        assert self.cluster0_ttl > 0, "cluster0_ttl must be positive"
+        assert self.cluster0_max_capacity > 0, "cluster0_max_capacity must be positive"
         
         # Validate island management
         assert self.max_island_capacity > 0, "max_island_capacity must be positive"
         
-        # Validate adaptive threshold
-        assert 0 < self.radius_shrink_factor < 1, "radius_shrink_factor must be in (0, 1)"
+        # Validate removal threshold if provided
+        if self.removal_threshold is not None:
+            assert 0 <= self.removal_threshold <= 1, "removal_threshold must be in [0, 1]"
     
     def to_dict(self) -> dict:
         """
@@ -212,8 +221,10 @@ class PlanAPlusConfig:
             "theta_sim": self.theta_sim,
             "theta_merge": self.theta_merge,
             "viability_baseline": self.viability_baseline,
-            "limbo_ttl": self.limbo_ttl,
-            "limbo_min_cluster_size": self.limbo_min_cluster_size,
+            "cluster0_ttl": self.cluster0_ttl,
+            "cluster0_min_cluster_size": self.cluster0_min_cluster_size,
+            "cluster0_max_capacity": self.cluster0_max_capacity,
+            "removal_threshold": self.removal_threshold,
             "max_island_capacity": self.max_island_capacity,
             "min_island_size": self.min_island_size,
             "stagnation_window": self.stagnation_window,
@@ -227,7 +238,6 @@ class PlanAPlusConfig:
             "k_neighbors": self.k_neighbors,
             "migration_selection": self.migration_selection,
             "silhouette_threshold": self.silhouette_threshold,
-            "radius_shrink_factor": self.radius_shrink_factor,
             "silhouette_check_frequency": self.silhouette_check_frequency,
             "embedding_model": self.embedding_model,
             "embedding_dim": self.embedding_dim,
@@ -237,24 +247,23 @@ class PlanAPlusConfig:
         }
     
     @classmethod
-    def from_dict(cls, config_dict: dict) -> "PlanAPlusConfig":
+    def from_dict(cls, config_dict: dict) -> "SpeciationConfig":
         """
-        Create PlanAPlusConfig instance from dictionary.
+        Create SpeciationConfig instance from dictionary.
         
         Args:
             config_dict: Dictionary with configuration parameters.
                         Unknown keys are ignored (filtered by dataclass fields).
         
         Returns:
-            PlanAPlusConfig instance with values from dictionary.
+            SpeciationConfig instance with values from dictionary.
         
         Example:
-            >>> config = PlanAPlusConfig.from_dict({"theta_sim": 0.5, "limbo_ttl": 15})
+            >>> config = SpeciationConfig.from_dict({"theta_sim": 0.5, "cluster0_ttl": 15})
         """
         # Filter to only include valid dataclass fields
         return cls(**{k: v for k, v in config_dict.items() if k in cls.__dataclass_fields__})
 
 
 # Default configuration instance for convenience
-DEFAULT_CONFIG = PlanAPlusConfig()
-
+DEFAULT_CONFIG = SpeciationConfig()

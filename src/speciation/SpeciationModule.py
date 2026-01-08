@@ -9,11 +9,11 @@ import json
 from typing import Dict, List, Optional, Tuple, Callable, Any
 from pathlib import Path
 
-from .config import PlanAPlusConfig
+from .config import SpeciationConfig
 from .island import Individual, Species, IslandMode, SpeciesIdGenerator
 from .embeddings import compute_and_save_embeddings, get_embedding_model
 from .leader_follower import leader_follower_clustering, update_species_leaders
-from .limbo import LimboBuffer
+from .reserves import Cluster0, CLUSTER_0_ID
 from .modes import update_all_island_modes
 from .intra_island import select_parents_elite_focused
 from .merging import process_merges
@@ -36,37 +36,49 @@ class SpeciationModule:
     Manages:
     1. Embedding computation
     2. Leader-Follower clustering
-    3. Limbo buffer management
+    3. Cluster 0 (reserves) management with max 1000 individuals
     4. Mode switching (Explore/Exploit/Default)
     5. Island merging
     6. Extinction and repopulation
     7. Inter-island migration
-    8. Adaptive threshold adjustment
+    8. Silhouette-based splitting (no dynamic radius adjustment)
+    9. Species capacity (max 100 per species)
+    
+    Key changes from original design:
+    - Species limited to top 100 genomes by fitness
+    - All removed genomes go to cluster 0 (no non_elites.json)
+    - Cluster 0 limited to 1000, with removal_threshold filtering
+    - Removed genomes below threshold are archived to under_performing.json
+    - Constant radius (theta_sim) for all species - no dynamic adjustment
+    - Cluster origin tracking (merge/split/natural) in speciation_state.json
     
     Usage:
-        >>> config = PlanAPlusConfig()
+        >>> config = SpeciationConfig()
         >>> module = SpeciationModule(config)
-        >>> species, limbo = module.process_generation(genomes, current_generation)
+        >>> species, cluster0 = module.process_generation(genomes, current_generation)
     """
     
-    def __init__(self, config: Optional[PlanAPlusConfig] = None, logger=None):
-        self.config = config or PlanAPlusConfig()
+    def __init__(self, config: Optional[SpeciationConfig] = None, logger=None):
+        self.config = config or SpeciationConfig()
         self.logger = logger or get_logger("SpeciationModule")
         
         self.species: Dict[int, Species] = {}
-        self.limbo = LimboBuffer(
-            default_ttl=self.config.limbo_ttl,
-            min_cluster_size=self.config.limbo_min_cluster_size,
+        self.cluster0 = Cluster0(
+            default_ttl=self.config.cluster0_ttl,
+            min_cluster_size=self.config.cluster0_min_cluster_size,
             theta_sim=self.config.theta_sim,
+            max_capacity=self.config.cluster0_max_capacity,
+            removal_threshold=self.config.removal_threshold,
             logger=self.logger
         )
         self.global_best: Optional[Individual] = None
         self.metrics_tracker = SpeciationMetricsTracker(logger=self.logger)
         
-        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0}
+        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0, "split": 0}
         self._embedding_model = None
+        self._archived_count = 0  # Count of genomes archived this generation
         
-        self.logger.info(f"SpeciationModule initialized with config: theta_sim={self.config.theta_sim}")
+        self.logger.info(f"SpeciationModule initialized with config: theta_sim={self.config.theta_sim}, max_capacity={self.config.max_island_capacity}")
     
     @property
     def embedding_model(self):
@@ -75,7 +87,7 @@ class SpeciationModule:
         return self._embedding_model
     
     def process_generation(self, population: List[Dict[str, Any]], current_generation: int,
-                           mutate_fn: Optional[Callable] = None, temp_path: Optional[str] = None) -> Tuple[Dict[int, Species], LimboBuffer]:
+                           mutate_fn: Optional[Callable] = None, temp_path: Optional[str] = None) -> Tuple[Dict[int, Species], Cluster0]:
         """
         Process a single generation with full speciation pipeline.
         
@@ -83,14 +95,15 @@ class SpeciationModule:
         
         1. Compute embeddings: Read temp.json, compute embeddings, add "prompt_embedding" field, save back
         2. Leader-Follower clustering: Read temp.json, convert to Individuals, assign to species
-        3. Limbo update: Check for speciation events in limbo
-        4. Update leaders: Ensure leaders are highest-fitness members
-        5. Mode switching: Adapt island modes based on fitness trends
-        6. Island merging: Combine similar species
-        7. Extinction & repopulation: Remove stagnant species, create new ones
-        8. Migration: Exchange individuals between related species
-        9. Adaptive thresholds: Adjust radii and split heterogeneous islands
-        10. Record metrics: Track generation statistics
+        3. Cluster 0 update: Check for speciation events, filter by removal threshold, enforce capacity
+        4. Enforce species capacity: Keep top 100 per species, send excess to cluster 0
+        5. Update leaders: Ensure leaders are highest-fitness members
+        6. Mode switching: Adapt island modes based on fitness trends
+        7. Island merging: Combine similar species with cluster_origin="merge"
+        8. Extinction & repopulation: Remove stagnant species, create new ones
+        9. Migration: Exchange individuals between related species
+        10. Silhouette-based splitting: Split heterogeneous islands (no radius adjustment)
+        11. Record metrics: Track generation statistics
         
         Note: The embedding computation modifies temp.json in-place by adding "prompt_embedding"
         field to each genome. If embeddings already exist, computation is skipped.
@@ -102,11 +115,12 @@ class SpeciationModule:
             temp_path: Optional path to temp.json (for embedding computation)
         
         Returns:
-            Tuple of (species_dict, limbo_buffer)
+            Tuple of (species_dict, cluster0)
         """
         self.logger.info(f"=== Speciation Generation {current_generation} ===")
         
-        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0}
+        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0, "split": 0}
+        self._archived_count = 0
         
         # Auto-load previous state if not first generation
         if current_generation > 0:
@@ -129,68 +143,103 @@ class SpeciationModule:
         )
         
         # Step 2: Leader-Follower clustering (reads directly from temp.json)
-        self.species, limbo_candidates = leader_follower_clustering(
+        self.species, cluster0_candidates = leader_follower_clustering(
             temp_path=temp_path, theta_sim=self.config.theta_sim,
             viability_baseline=self.config.viability_baseline,
             current_generation=current_generation, logger=self.logger
         )
-        self.limbo.add_batch(limbo_candidates, current_generation)
+        self.cluster0.add_batch(cluster0_candidates, current_generation)
         
-        # Step 3: Limbo update
-        self.limbo.update_ttl(current_generation)
-        new_species = self.limbo.check_speciation(current_generation)
+        # Step 3: Cluster 0 management
+        # 3a: Update TTL (decrement and remove expired)
+        expired = self.cluster0.update_ttl(current_generation)
+        self._archive_individuals(expired, current_generation, "expired_from_cluster0")
+        
+        # 3b: Filter by removal threshold (archive those below threshold)
+        removed_by_threshold = self.cluster0.filter_by_removal_threshold()
+        self._archive_individuals(removed_by_threshold, current_generation, "below_removal_threshold")
+        
+        # 3c: Enforce capacity (archive excess beyond 1000)
+        removed_by_capacity = self.cluster0.enforce_capacity()
+        self._archive_individuals(removed_by_capacity, current_generation, "cluster0_capacity_exceeded")
+        
+        # 3d: Check for speciation events in cluster 0
+        new_species = self.cluster0.check_speciation(current_generation)
         if new_species:
             self.species[new_species.id] = new_species
             self._current_gen_events["speciation"] += 1
         
-        # Step 4: Update leaders and record fitness
+        # Step 4: Enforce species capacity (top 100 per species)
+        for sp in list(self.species.values()):
+            removed = sp.enforce_capacity(self.config.max_island_capacity)
+            if removed:
+                # Send all removed individuals to cluster 0
+                self.cluster0.add_batch(removed, current_generation)
+        
+        # Re-apply cluster 0 capacity after receiving from species
+        removed_by_capacity = self.cluster0.enforce_capacity()
+        self._archive_individuals(removed_by_capacity, current_generation, "cluster0_capacity_exceeded_after_species_enforcement")
+        
+        # Step 5: Update leaders and record fitness
         update_species_leaders(self.species)
         for sp in self.species.values():
             sp.record_fitness(current_generation)
         
-        # Step 5: Mode switching
-        update_all_island_modes(self.species, current_generation, self.limbo, self.config, self.logger)
+        # Step 6: Mode switching
+        update_all_island_modes(self.species, current_generation, self.cluster0, self.config, self.logger)
         
-        # Step 6: Island merging
+        # Step 7: Island merging
         self.species, merge_events = process_merges(
-            self.species, self.config.theta_merge, current_gen=current_generation,
-            max_capacity=self.config.max_island_capacity, logger=self.logger
+            self.species, 
+            theta_merge=self.config.theta_merge,
+            theta_sim=self.config.theta_sim,  # Constant radius for merged species
+            current_gen=current_generation,
+            max_capacity=self.config.max_island_capacity, 
+            logger=self.logger
         )
         self._current_gen_events["merge"] = len(merge_events)
         
-        # Step 7: Extinction and repopulation
+        # Step 8: Extinction and repopulation
         self.global_best = find_global_best(self.species)
         self.species, extinction_events = process_extinctions(
-            self.species, self.limbo, self.global_best, current_generation,
-            self.config.max_stagnation, self.config.min_island_size,
-            self.config.repopulation_size, self.config.repopulation_mutation_rate,
-            mutate_fn, self.config.theta_sim, self.logger
+            self.species, self.cluster0, self.global_best, current_generation,
+            theta_sim=self.config.theta_sim,
+            max_stagnation=self.config.max_stagnation,
+            min_size=self.config.min_island_size,
+            repopulation_size=self.config.repopulation_size,
+            mutation_rate=self.config.repopulation_mutation_rate,
+            mutate_fn=mutate_fn,
+            logger=self.logger
         )
         self._current_gen_events["extinction"] = len(extinction_events)
         
-        # Step 8: Migration
+        # Step 9: Migration
         self.species, migration_events = process_migrations(
             self.species, current_generation, self.config.migration_frequency,
             self.config.k_neighbors, self.config.max_island_capacity,
-            self.config.migration_selection, self.limbo, self.logger
+            self.config.migration_selection, self.cluster0, self.logger
         )
         self._current_gen_events["migration"] = len(migration_events)
         
-        # Step 9: Adaptive threshold adjustment
-        self.species, _ = process_adaptive_thresholds(
-            self.species, current_generation, self.config.max_island_capacity,
-            self.config.radius_shrink_factor, self.config.silhouette_threshold,
-            self.config.silhouette_check_frequency, self.limbo, self.logger
+        # Step 10: Silhouette-based splitting (no radius adjustment)
+        self.species, split_events = process_adaptive_thresholds(
+            self.species, current_generation,
+            theta_sim=self.config.theta_sim,
+            silhouette_threshold=self.config.silhouette_threshold,
+            silhouette_check_frequency=self.config.silhouette_check_frequency,
+            cluster0=self.cluster0,
+            logger=self.logger
         )
+        self._current_gen_events["split"] = len([e for e in split_events if e.get("type") == "split"])
         
-        # Step 10: Record metrics
+        # Step 11: Record metrics
         self.metrics_tracker.record_generation(
-            current_generation, self.species, self.limbo.size,
+            current_generation, self.species, self.cluster0.size,
             self._current_gen_events["speciation"], self._current_gen_events["merge"],
             self._current_gen_events["extinction"], self._current_gen_events["migration"]
         )
         
-        log_generation_summary(current_generation, self.species, self.limbo.size,
+        log_generation_summary(current_generation, self.species, self.cluster0.size,
                                self._current_gen_events, self.logger)
         
         # Auto-save state after processing
@@ -198,7 +247,48 @@ class SpeciationModule:
         state_path = str(outputs_path / "speciation_state.json")
         self.save_state(state_path)
         
-        return self.species, self.limbo
+        return self.species, self.cluster0
+    
+    def _archive_individuals(self, individuals: List[Individual], generation: int, reason: str) -> None:
+        """
+        Archive individuals to under_performing.json.
+        
+        Args:
+            individuals: List of individuals to archive
+            generation: Current generation number
+            reason: Reason for archiving (for logging)
+        """
+        if not individuals:
+            return
+        
+        self._archived_count += len(individuals)
+        
+        try:
+            outputs_path = get_outputs_path()
+            archive_path = outputs_path / "under_performing.json"
+            
+            # Load existing archive
+            if archive_path.exists():
+                with open(archive_path, 'r', encoding='utf-8') as f:
+                    archive = json.load(f)
+            else:
+                archive = []
+            
+            # Add new entries
+            for ind in individuals:
+                entry = ind.to_genome() if hasattr(ind, 'to_genome') else {"id": ind.id}
+                entry["archived_at_generation"] = generation
+                entry["archive_reason"] = reason
+                archive.append(entry)
+            
+            # Save updated archive
+            with open(archive_path, 'w', encoding='utf-8') as f:
+                json.dump(archive, f, indent=2, ensure_ascii=False)
+            
+            self.logger.debug(f"Archived {len(individuals)} individuals ({reason}) to under_performing.json")
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to archive individuals: {e}")
     
     def _prepare_individuals(self, population: List[Dict[str, Any]]) -> List[Individual]:
         """
@@ -219,11 +309,16 @@ class SpeciationModule:
         Returns:
             List of Individual objects with embeddings extracted from genomes
         """
-        # Individual.from_genome() will extract embeddings from "prompt_embedding" field
         return [Individual.from_genome(genome) for genome in population]
     
     def get_species_for_genome(self, genome_id: int) -> Optional[int]:
-        """Get species ID for a genome."""
+        """Get species ID for a genome (0 for cluster 0, None if not found)."""
+        # Check cluster 0 first
+        for ind in self.cluster0.individuals:
+            if ind.id == genome_id:
+                return CLUSTER_0_ID
+        
+        # Check species
         for sp in self.species.values():
             for m in sp.members:
                 if m.id == genome_id:
@@ -251,7 +346,7 @@ class SpeciationModule:
     
     def add_offspring(self, offspring: List[Dict[str, Any]], current_generation: int, temp_path: Optional[str] = None) -> None:
         """
-        Add offspring to species or limbo.
+        Add offspring to species or cluster 0.
         
         Note: Assumes embeddings are already computed and in "prompt_embedding" field.
         If not, call compute_and_save_embeddings() first.
@@ -273,7 +368,6 @@ class SpeciationModule:
             )
             # Reload genomes with embeddings
             with open(temp_path, 'r', encoding='utf-8') as f:
-                import json
                 all_genomes = json.load(f)
                 # Match offspring by ID
                 offspring_dict = {g.get("id"): g for g in offspring}
@@ -287,41 +381,39 @@ class SpeciationModule:
             if nearest_id and min_dist < self.config.theta_sim:
                 self.species[nearest_id].add_member(ind)
             elif ind.fitness > self.config.viability_baseline:
-                self.limbo.add(ind, current_generation)
+                self.cluster0.add(ind, current_generation)
     
     def update_genomes_with_species(self, genomes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Update genomes with species IDs and limbo status."""
-        # Get IDs of limbo individuals
-        limbo_ids = {ind.id for ind in self.limbo.individuals}
-        
+        """Update genomes with species IDs (0 for cluster 0)."""
         for g in genomes:
             genome_id = g.get("id")
-            g["species_id"] = self.get_species_for_genome(genome_id)
-            # Mark if in limbo
-            g["in_limbo"] = genome_id in limbo_ids
+            species_id = self.get_species_for_genome(genome_id)
+            g["species_id"] = species_id
+            # Note: species_id=0 means cluster 0, None means not assigned
         return genomes
     
     def get_state(self) -> Dict:
         """Get state for serialization."""
         return {
             "config": self.config.to_dict(),
-            "species": {sid: sp.to_dict() for sid, sp in self.species.items()},
-            "limbo": self.limbo.to_dict(),
+            "species": {str(sid): sp.to_dict() for sid, sp in self.species.items()},
+            "cluster0": self.cluster0.to_dict(),
             "global_best_id": self.global_best.id if self.global_best else None,
             "metrics": self.metrics_tracker.to_dict()
         }
     
     def save_state(self, path: str) -> None:
         """Save state to file."""
-        with open(path, 'w') as f:
-            json.dump(self.get_state(), f, indent=2)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(self.get_state(), f, indent=2, ensure_ascii=False)
         self.logger.info(f"Saved speciation state to {path}")
     
     def load_state(self, path: str) -> bool:
         """
-        Load state from file and restore species, limbo, and metrics.
+        Load state from file and restore species, cluster 0, and metrics.
         
         Restores species structure with leader embeddings for distance comparisons.
+        Includes cluster_origin and parent_ids for tracking species history.
         Individual objects are reconstructed with minimal data; full genome data
         is matched by ID during processing.
         
@@ -344,8 +436,11 @@ class SpeciationModule:
             
             # Restore species
             self.species = {}
+            max_species_id = 0
+            
             for sid_str, sp_dict in state.get("species", {}).items():
                 sid = int(sid_str)
+                max_species_id = max(max_species_id, sid)
                 
                 # Reconstruct leader Individual from saved data
                 leader_embedding = None
@@ -361,7 +456,7 @@ class SpeciationModule:
                     species_id=sid
                 )
                 
-                # Reconstruct species
+                # Reconstruct species with origin tracking
                 species = Species(
                     id=sid,
                     leader=leader,
@@ -371,13 +466,17 @@ class SpeciationModule:
                     stagnation_counter=sp_dict.get("stagnation_counter", 0),
                     created_at=sp_dict.get("created_at", 0),
                     last_improvement=sp_dict.get("last_improvement", 0),
-                    fitness_history=sp_dict.get("fitness_history", [])
+                    fitness_history=sp_dict.get("fitness_history", []),
+                    cluster_origin=sp_dict.get("cluster_origin"),
+                    parent_ids=sp_dict.get("parent_ids"),
+                    parent_id=sp_dict.get("parent_id")
                 )
                 
                 self.species[sid] = species
-                
-                # Update SpeciesIdGenerator to avoid ID conflicts
-                SpeciesIdGenerator.set_min_id(sid + 1)
+            
+            # Update SpeciesIdGenerator to avoid ID conflicts
+            # Species IDs start from 1 (0 is reserved for cluster 0)
+            SpeciesIdGenerator.set_min_id(max_species_id + 1)
             
             self.logger.info(f"Loaded speciation state from {path}: {len(self.species)} species")
             return True
@@ -389,22 +488,28 @@ class SpeciationModule:
     def reset(self) -> None:
         """Reset all state."""
         self.species = {}
-        self.limbo = LimboBuffer(self.config.limbo_ttl, self.config.limbo_min_cluster_size,
-                                 self.config.theta_sim, self.logger)
+        self.cluster0 = Cluster0(
+            default_ttl=self.config.cluster0_ttl,
+            min_cluster_size=self.config.cluster0_min_cluster_size,
+            theta_sim=self.config.theta_sim,
+            max_capacity=self.config.cluster0_max_capacity,
+            removal_threshold=self.config.removal_threshold,
+            logger=self.logger
+        )
         self.global_best = None
         self.metrics_tracker = SpeciationMetricsTracker(self.logger)
         SpeciesIdGenerator.reset()
         self.logger.info("Speciation module reset")
     
     def __repr__(self):
-        return f"SpeciationModule(species={len(self.species)}, limbo={self.limbo.size})"
+        return f"SpeciationModule(species={len(self.species)}, cluster0={self.cluster0.size})"
 
 
 # Global speciation module instance (singleton pattern)
 _speciation_module: Optional[SpeciationModule] = None
 
 
-def get_speciation_module(config: Optional[PlanAPlusConfig] = None, logger=None) -> SpeciationModule:
+def get_speciation_module(config: Optional[SpeciationConfig] = None, logger=None) -> SpeciationModule:
     """
     Get or create the global speciation module instance.
     
@@ -436,9 +541,11 @@ def reset_speciation_module() -> None:
 def run_speciation(
     temp_path: Optional[str] = None,
     current_generation: int = 0,
-    config: Optional[PlanAPlusConfig] = None,
+    config: Optional[SpeciationConfig] = None,
     log_file: Optional[str] = None,
-    mutate_fn: Optional[Any] = None) -> Dict[str, Any]:
+    mutate_fn: Optional[Any] = None,
+    removal_threshold: Optional[float] = None
+) -> Dict[str, Any]:
     """
     Run speciation processing for a single generation.
     
@@ -446,26 +553,29 @@ def run_speciation(
     It handles:
     1. Loading genomes from temp.json (or provided path)
     2. Running speciation pipeline
-    3. Updating genomes with species_id
+    3. Updating genomes with species_id (0 for cluster 0)
     4. Saving updated genomes back to temp.json
     
     Args:
         temp_path: Path to temp.json file with evaluated genomes.
                    If None, uses default outputs_path / "temp.json"
         current_generation: Current generation number
-        config: Optional PlanAPlusConfig (uses defaults if None)
+        config: Optional SpeciationConfig (uses defaults if None)
         log_file: Optional log file path
         mutate_fn: Optional mutation function for repopulation
+        removal_threshold: Optional fitness threshold for cluster 0 filtering
         
     Returns:
         Dict with speciation results:
         {
             "species_count": int,
-            "limbo_size": int,
+            "cluster0_size": int,
             "speciation_events": int,
             "merge_events": int,
             "extinction_events": int,
             "migration_events": int,
+            "split_events": int,
+            "archived_count": int,
             "genomes_updated": int,
             "success": bool
         }
@@ -490,11 +600,13 @@ def run_speciation(
         logger.error("Temp file not found: %s", temp_path)
         return {
             "species_count": 0,
-            "limbo_size": 0,
+            "cluster0_size": 0,
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
             "migration_events": 0,
+            "split_events": 0,
+            "archived_count": 0,
             "genomes_updated": 0,
             "success": False,
             "error": "temp_file_not_found"
@@ -509,11 +621,13 @@ def run_speciation(
             logger.warning("No genomes found in temp.json")
             return {
                 "species_count": 0,
-                "limbo_size": 0,
+                "cluster0_size": 0,
                 "speciation_events": 0,
                 "merge_events": 0,
                 "extinction_events": 0,
                 "migration_events": 0,
+                "split_events": 0,
+                "archived_count": 0,
                 "genomes_updated": 0,
                 "success": False,
                 "error": "no_genomes"
@@ -521,12 +635,19 @@ def run_speciation(
         
         logger.debug("Loaded %d genomes for speciation", len(genomes))
         
+        # Create config with removal_threshold if provided
+        if config is None:
+            config = SpeciationConfig()
+        if removal_threshold is not None:
+            config = SpeciationConfig(
+                **{**config.to_dict(), "removal_threshold": removal_threshold}
+            )
+        
         # Get speciation module
         speciation_module = get_speciation_module(config=config, logger=logger)
         
         # Run speciation (embeddings will be computed and saved to temp.json)
-        # leader_follower_clustering reads directly from temp.json
-        species, limbo = speciation_module.process_generation(
+        species, cluster0 = speciation_module.process_generation(
             population=genomes,
             current_generation=current_generation,
             mutate_fn=mutate_fn,
@@ -549,21 +670,25 @@ def run_speciation(
         
         result = {
             "species_count": len(species),
-            "limbo_size": limbo.size,
+            "cluster0_size": cluster0.size,
+            "reserves_size": cluster0.size,
             "speciation_events": events.get("speciation", 0),
             "merge_events": events.get("merge", 0),
             "extinction_events": events.get("extinction", 0),
             "migration_events": events.get("migration", 0),
+            "split_events": events.get("split", 0),
+            "archived_count": speciation_module._archived_count,
             "genomes_updated": len(updated_genomes),
             "success": True
         }
         
         logger.info(
-            "Speciation completed: %d species, %d in limbo, "
-            "events: speciation=%d, merge=%d, extinction=%d, migration=%d",
-            result["species_count"], result["limbo_size"],
+            "Speciation completed: %d species, %d in cluster 0, "
+            "events: speciation=%d, merge=%d, extinction=%d, migration=%d, split=%d, archived=%d",
+            result["species_count"], result["cluster0_size"],
             result["speciation_events"], result["merge_events"],
-            result["extinction_events"], result["migration_events"]
+            result["extinction_events"], result["migration_events"],
+            result["split_events"], result["archived_count"]
         )
         
         # Update EvolutionTracker with speciation data
@@ -587,11 +712,14 @@ def run_speciation(
         logger.error("Speciation failed: %s", e, exc_info=True)
         return {
             "species_count": 0,
-            "limbo_size": 0,
+            "cluster0_size": 0,
+            "reserves_size": 0,
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
             "migration_events": 0,
+            "split_events": 0,
+            "archived_count": 0,
             "genomes_updated": 0,
             "success": False,
             "error": str(e)
@@ -615,7 +743,8 @@ def get_speciation_statistics(log_file: Optional[str] = None) -> Dict[str, Any]:
         return {
             "initialized": False,
             "species_count": 0,
-            "limbo_size": 0
+            "cluster0_size": 0,
+            "reserves_size": 0
         }
     
     metrics_summary = _speciation_module.metrics_tracker.get_summary()
@@ -623,7 +752,8 @@ def get_speciation_statistics(log_file: Optional[str] = None) -> Dict[str, Any]:
     return {
         "initialized": True,
         "species_count": len(_speciation_module.species),
-        "limbo_size": _speciation_module.limbo.size,
+        "cluster0_size": _speciation_module.cluster0.size,
+        "reserves_size": _speciation_module.cluster0.size,
         "global_best_fitness": _speciation_module.global_best.fitness if _speciation_module.global_best else None,
         "metrics_summary": metrics_summary
     }
@@ -702,7 +832,7 @@ def update_evolution_tracker_with_speciation(
     """
     Update EvolutionTracker.json with speciation data.
     
-    This function is called from main.py to integrate speciation metrics
+    This function is called internally to integrate speciation metrics
     into the evolution tracker. The speciation_state.json file remains
     internal to the speciation module.
     
@@ -748,11 +878,13 @@ def update_evolution_tracker_with_speciation(
         # Prepare speciation summary for generation entry
         speciation_summary = {
             "species_count": speciation_result.get("species_count", 0),
-            "limbo_size": speciation_result.get("limbo_size", 0),
+            "cluster0_size": speciation_result.get("cluster0_size", 0),
             "speciation_events": speciation_result.get("speciation_events", 0),
             "merge_events": speciation_result.get("merge_events", 0),
             "extinction_events": speciation_result.get("extinction_events", 0),
             "migration_events": speciation_result.get("migration_events", 0),
+            "split_events": speciation_result.get("split_events", 0),
+            "archived_count": speciation_result.get("archived_count", 0),
         }
         
         # Add detailed metrics if available
@@ -789,7 +921,7 @@ def update_evolution_tracker_with_speciation(
         
         evolution_tracker["speciation_summary"].update({
             "current_species_count": speciation_result.get("species_count", 0),
-            "current_limbo_size": speciation_result.get("limbo_size", 0),
+            "current_cluster0_size": speciation_result.get("cluster0_size", 0),
             "total_speciation_events": metrics_summary.get("total_speciation_events", 0),
             "total_merge_events": metrics_summary.get("total_merge_events", 0),
             "total_extinction_events": metrics_summary.get("total_extinction_events", 0),

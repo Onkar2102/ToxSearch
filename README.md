@@ -2,6 +2,13 @@
 
 This repository implements a black-box evolutionary framework for systematically testing Large Language Model (LLM) safety through LLM-guided prompt evolution to elicit toxic responses.
 
+## Current Approach Highlights
+- **Distance metric**: Cosine distance on **L2-normalized 384D** embeddings; clusters are angular (cone-shaped), not Euclidean spheres.
+- **Speciation options**:
+  - **Leader-Follower (online, fast)**: Directly clusters 384D embeddings with cosine thresholds (θ_sim≈0.3–0.5); no training required.
+  - **Parametric UMAP (offline, high quality)**: Trains a 384→16 encoder once on Gen0; preserves geometry (kNN-IoU≈0.55, r≈0.85), then clusters with HDBSCAN or centroiding.
+  - **Hybrid**: Use Parametric UMAP for analysis/visualization; use Leader-Follower for real-time evolution.
+
 ## Abstract
 
 Large Language Models remain vulnerable to adversarial prompts that elicit toxic content even after safety alignment. We present a black-box evolutionary framework that tests model safety by evolving prompts in a synchronous, steady-state $(\mu+\lambda)$ loop. The system employs a diverse operator suite, including lexical substitutions, negation, back-translation, paraphrasing, and two semantic crossover operators, while a moderation oracle provides fitness guidance. Under a fixed generation budget, a few-shot global rewrite operator achieves the highest progress \emph{per evaluated prompt} but plateaus at substantially lower best-of-run toxicity than our engineered lexical operators, which more reliably push populations toward high-toxicity regimes. Operator-level analysis reveals significant heterogeneity, as lexical substitutions offer the best yield–variance trade-off, semantic-similarity crossover acts as a precise low-throughput inserter, and global rewrites exhibit high variance with elevated refusal costs. Using elite prompts evolved on LLaMA~3.1~8B, we observe practically meaningful but attenuated cross-model transfer. Toxicity drops by roughly half on most targets, with smaller LLaMA~3.2 variants showing the strongest resistance and some cross-architecture models (e.g., Qwen and Mistral) retaining higher toxicity. Overall, our results indicate that small, controllable perturbations serve as reliable vehicles for systematic red-teaming, while defenses should anticipate cross-model prompt reuse rather than focusing solely on single-model hardening.
