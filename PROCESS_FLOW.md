@@ -158,20 +158,22 @@ Step 7: Finalize Generation 0
 - **Reads from**: `temp.json` (genomes with fitness scores)
 - **What it does**:
   1. **Compute Embeddings**: Converts all prompts to 384-dimensional vectors using `all-MiniLM-L6-v2`
+     - Adds `prompt_embedding` field (384-dim list) to each genome
   2. **Leader-Follower Clustering**: 
      - Sorts genomes by fitness (descending)
      - For each genome, finds nearest species leader within `theta_sim` threshold
      - If no match, creates new species or adds to limbo buffer
   3. **Assign Species IDs**: Adds `species_id` field to each genome
-  4. **Species Management**:
+  4. **Mark Limbo Members**: Adds `in_limbo` flag to genomes in limbo buffer
+  5. **Species Management**:
      - Updates species leaders (highest fitness member)
      - Manages limbo buffer (high-fitness outliers)
      - Tracks species metrics
-- **Writes to**: `temp.json` (genomes updated with `species_id` field)
+- **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`, and `in_limbo` fields)
 - **Note**: 
-  - Embeddings computed in-memory only (not saved)
+  - `prompt_embedding` field is stored as a list (JSON-compatible)
   - Species structure is ephemeral (reconstructed each generation)
-  - `species_id` is the only persistent speciation data
+  - Persistent speciation data: `species_id`, `in_limbo`, and any intermediate state saved to `speciation_state.json`
 
 ### Step 5: Calculate Thresholds
 - **Reads from**: `temp.json` (now with `species_id`)
@@ -240,18 +242,20 @@ For each generation, the system repeats this cycle:
 - **Reads from**: `temp.json` (genomes with fitness scores)
 - **What it does**:
   1. **Compute Embeddings**: Converts all prompts to 384-dimensional vectors using `all-MiniLM-L6-v2`
+     - Adds `prompt_embedding` field (384-dim list) to each genome
   2. **Leader-Follower Clustering**: 
      - Sorts genomes by fitness (descending)
      - For each genome, finds nearest species leader within `theta_sim` threshold
      - If no match, creates new species or adds to limbo buffer
   3. **Assign Species IDs**: Adds `species_id` field to each genome
-  4. **Species Management**:
+  4. **Mark Limbo Members**: Adds `in_limbo` flag to genomes in limbo buffer
+  5. **Species Management**:
      - Updates species leaders (highest fitness member)
      - Manages limbo buffer (high-fitness outliers)
      - Processes merges, extinctions, migrations
      - Tracks speciation metrics
-- **Writes to**: `temp.json` (genomes updated with `species_id` field)
-- **Note**: Embeddings are computed in-memory only, NOT saved to files
+- **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`, `in_limbo` fields)
+- **Note**: Embeddings are added to genomes in `prompt_embedding` field (stored as JSON list)
 
 ### Step 5: Calculate Thresholds
 - **Reads from**: `temp.json`, `elites.json`
@@ -344,7 +348,9 @@ Each genome in JSON files has this structure:
   "parents": [45, 67],
   "toxicity": 0.85,
   "north_star_score": 0.85,
+  "prompt_embedding": [0.123, -0.456, ...],  // 384-dim array (added by speciation)
   "species_id": 3,  // Added by speciation module
+  "in_limbo": false,  // Added by speciation (true if in limbo buffer)
   "moderation_result": {
     "scores": {"toxicity": 0.85},
     "classifications": {...}
@@ -374,10 +380,11 @@ Input: temp.json (genomes with fitness scores)
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Step 1: Prepare Individuals                                 │
-│  - Extract prompts from genomes                             │
-│  - Compute embeddings (384-dim vectors)                    │
-│  - Create Individual objects with fitness + embedding       │
+│ Step 1: Compute Embeddings                                  │
+│  - Extract prompts from genomes in temp.json                │
+│  - Compute L2-normalized embeddings (384-dim)               │
+│  - Add "prompt_embedding" field to each genome              │
+│  - Save updated genomes back to temp.json                   │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
@@ -420,11 +427,12 @@ Input: temp.json (genomes with fitness scores)
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 6: Update Genomes                                      │
 │  - Assign species_id to each genome                         │
+│  - Mark in_limbo flag for limbo individuals                 │
 │  - Preserve all original genome data                        │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
-Output: temp.json (genomes with species_id added)
+Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
 ```
 
 ### What Speciation Does
@@ -448,16 +456,21 @@ Output: temp.json (genomes with species_id added)
 6. **Writes** back to `temp.json` with `species_id` added
 
 ### What Gets Saved
+- **`prompt_embedding`**: 384-dimensional L2-normalized embedding (saved in genome as list for JSON compatibility)
 - **`species_id`**: Integer ID of the species/island (saved in genome JSON)
-- **Embeddings**: NOT saved (computed fresh each generation)
-- **Species metadata**: Tracked in-memory, can be logged to EvolutionTracker if needed
-- **Species structure**: Reconstructed each generation from `species_id` in genomes
+- **`in_limbo`**: Boolean flag indicating if genome is in limbo buffer (saved in genome JSON)
+- **Species metadata**: Optionally saved to `speciation_state.json` for state reconstruction
+- **Species structure**: Can be reconstructed each generation from `species_id` in genomes, or loaded from saved state
 
-### Why Embeddings Aren't Saved
-- Embeddings are 384-dimensional vectors (~1.5 KB each)
-- Prompts evolve each generation, so most embeddings would be new anyway
-- Computation is fast (100-5000 prompts/sec on GPU)
-- Would bloat JSON files significantly (1.5 MB for 1000 genomes)
+### Embedding Storage
+- **Stored in**: `prompt_embedding` field in each genome (as list of floats, JSON-compatible)
+- **Computation**: L2-normalized 384-dimensional vectors using `all-MiniLM-L6-v2` model
+- **Persistence**: Embeddings are saved to `temp.json` and then to permanent files (`elites.json`, `non_elites.json`, `limbo.json`)
+- **Efficiency**: While embeddings add size (~1.5 KB per genome), they enable:
+  - Fast re-clustering in subsequent generations
+  - Offline analysis of species structure
+  - Reduced computational overhead if speciation state is persisted
+- **Processing**: When loading embeddings from JSON, convert list back to numpy array for distance computations
 
 ### Generation 0 Specifics
 
@@ -487,11 +500,11 @@ Output: temp.json (genomes with species_id added)
 2. **Generate**: Adds responses to 100 genomes → `temp.json` (100 genomes with responses)
 3. **Moderate**: Adds scores to 100 genomes → `temp.json` (100 genomes with scores)
 4. **Speciate**: 
-   - Computes embeddings for 100 prompts
+   - Computes embeddings for 100 prompts and adds `prompt_embedding` field
    - Groups into 8 species based on semantic similarity
    - Adds `species_id` (1-8) to each genome
-   - 5 high-fitness outliers go to limbo buffer
-   - → `temp.json` (100 genomes with species_id, limbo info tracked)
+   - Marks 5 high-fitness outliers with `in_limbo: true`
+   - → `temp.json` (100 genomes with prompt_embedding, species_id, in_limbo)
 5. **Thresholds**: Calculates elite_threshold = 0.75, removal_threshold = 0.10
 6. **Distribute**: 
    - 25 genomes → `elites.json` (25 total, from all species)
@@ -507,11 +520,11 @@ Output: temp.json (genomes with species_id added)
 3. **Generate**: Adds responses to 50 variants → `temp.json` (50 genomes with responses)
 4. **Moderate**: Adds scores to 50 variants → `temp.json` (50 genomes with scores)
 5. **Speciate**: 
-   - Computes embeddings for 50 new variants
+   - Computes embeddings for 50 new variants and adds `prompt_embedding` field
    - Clusters into existing species (from Gen 0) or creates new ones
    - Adds `species_id` to each variant
-   - 2 high-fitness outliers go to limbo buffer
-   - → `temp.json` (50 genomes with species_id)
+   - Marks 2 high-fitness outliers with `in_limbo: true`
+   - → `temp.json` (50 genomes with prompt_embedding, species_id, in_limbo)
 6. **Thresholds**: Calculates elite_threshold = 0.80
 7. **Distribute**: 
    - 15 variants → `elites.json` (now 40 total, from all species)

@@ -98,6 +98,10 @@ def normalize_embedding(embedding: np.ndarray) -> np.ndarray:
     - Cosine similarity = dot product
     - Consistent distance computations
     
+    Used to prepare embeddings for semantic distance computation. All embeddings
+    in the speciation framework should be L2-normalized to ensure consistent
+    distance metrics across the system.
+    
     Args:
         embedding: Embedding vector (any shape, will be flattened if needed)
     
@@ -105,5 +109,7 @@ def normalize_embedding(embedding: np.ndarray) -> np.ndarray:
         L2-normalized embedding (same shape as input)
         Returns original if norm is zero (avoids division by zero)
     """
+    # Compute L2 norm (Euclidean length)
     norm = np.linalg.norm(embedding)
+    # Divide by norm to normalize, or return original if norm is 0 (avoid division by zero)
     return embedding / norm if norm > 0 else embedding

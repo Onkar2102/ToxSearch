@@ -117,13 +117,33 @@ class SpeciationMetricsTracker:
 
 
 def compute_diversity_metrics(species: Dict[int, Species]) -> tuple:
-    """Compute inter/intra species diversity."""
+    """
+    Compute inter-species and intra-species diversity metrics.
+    
+    Diversity metrics measure:
+    - Inter-species diversity: Average distance between species leaders
+      (high = species are diverse, low = species are similar/redundant)
+    - Intra-species diversity: Average distance within each species
+      (high = members are diverse, low = members are homogeneous)
+    
+    These metrics help assess population diversity and speciation effectiveness:
+    - High inter-species + low intra-species = ideal (distinct, cohesive species)
+    - Low inter-species = species are too similar (should merge)
+    - High intra-species = species are too diverse (should split)
+    
+    Args:
+        species: Dict of all current species
+    
+    Returns:
+        Tuple of (inter_species_diversity, intra_species_diversity)
+        Values in range [0, 2] (semantic distance range)
+    """
     if not species:
         return 0.0, 0.0
     
     species_list = list(species.values())
     
-    # Inter-species
+    # Compute inter-species diversity (distance between leaders)
     inter = []
     for i, sp1 in enumerate(species_list):
         for sp2 in species_list[i + 1:]:
@@ -131,12 +151,13 @@ def compute_diversity_metrics(species: Dict[int, Species]) -> tuple:
                 inter.append(semantic_distance(sp1.leader.embedding, sp2.leader.embedding))
     inter_div = np.mean(inter) if inter else 0.0
     
-    # Intra-species
+    # Compute intra-species diversity (distances within each species)
     intra_divs = []
     for sp in species_list:
         members = [m for m in sp.members if m.embedding is not None]
         if len(members) < 2:
             continue
+        # All pairwise distances within species
         dists = [semantic_distance(members[i].embedding, members[j].embedding)
                  for i in range(len(members)) for j in range(i + 1, len(members))]
         if dists:
@@ -147,15 +168,36 @@ def compute_diversity_metrics(species: Dict[int, Species]) -> tuple:
 
 
 def compute_solution_diversity(species: Dict[int, Species], fitness_threshold: float = 0.5) -> int:
-    """Count distinct high-fitness strategies."""
+    """
+    Count distinct high-fitness strategies.
+    
+    Identifies high-quality (fitness >= threshold) individuals that are semantically
+    distinct from each other. This measures solution diversity - how many different
+    approaches to solving the problem have been found.
+    
+    Algorithm:
+    1. Collect all high-fitness individuals across species
+    2. Greedily select distinct solutions (distance >= threshold from previous)
+    3. Count selected solutions
+    
+    Args:
+        species: Dict of all current species
+        fitness_threshold: Minimum fitness for "high-quality" solution
+    
+    Returns:
+        Number of distinct high-fitness solutions found
+    """
     high_fitness = [m for sp in species.values() for m in sp.members
                     if m.fitness >= fitness_threshold and m.embedding is not None]
     if not high_fitness:
         return 0
     
+    # Greedily select distinct solutions
     strategies = []
-    threshold = 0.3
+    threshold = 0.3  # Minimum semantic distance to be considered "distinct"
+    # Sort by fitness (descending) to prioritize best solutions
     for ind in sorted(high_fitness, key=lambda x: x.fitness, reverse=True):
+        # Check if this solution is distinct from all previously selected
         is_distinct = all(semantic_distance(ind.embedding, s.embedding) >= threshold for s in strategies)
         if is_distinct:
             strategies.append(ind)
@@ -163,7 +205,24 @@ def compute_solution_diversity(species: Dict[int, Species], fitness_threshold: f
 
 
 def get_species_statistics(species: Dict[int, Species]) -> Dict:
-    """Get detailed species statistics."""
+    """
+    Get detailed species statistics for a generation.
+    
+    Computes aggregate statistics across all species:
+    - Count: Number of species
+    - Sizes: Distribution of species sizes
+    - Population: Total individuals
+    - Fitness: Global best and average
+    - Modes: Count of each mode type
+    
+    Used for logging and analysis.
+    
+    Args:
+        species: Dict of all current species
+    
+    Returns:
+        Dict with species statistics
+    """
     if not species:
         return {"count": 0, "total_population": 0}
     
@@ -185,14 +244,34 @@ def get_species_statistics(species: Dict[int, Species]) -> Dict:
 
 def log_generation_summary(generation: int, species: Dict[int, Species], limbo_size: int = 0,
                            events: Dict[str, int] = None, logger=None) -> None:
-    """Log generation summary."""
+    """
+    Log a summary of generation statistics.
+    
+    Writes generation summary to logger including:
+    - Species count and total population
+    - Limbo buffer size
+    - Best and average fitness
+    - Event counts (speciation, merges, extinctions, migrations)
+    
+    Useful for tracking evolution progress and debugging.
+    
+    Args:
+        generation: Generation number
+        species: Dict of all current species
+        limbo_size: Number of individuals in limbo
+        events: Dict of event counts {"speciation": N, "merge": N, etc}
+        logger: Optional logger instance
+    """
     if logger is None:
         logger = get_logger("SpeciationMetrics")
     
+    # Gather statistics
     stats = get_species_statistics(species)
     events = events or {}
+    # Format event string (only include non-zero events)
     event_str = ", ".join(f"{k}={v}" for k, v in events.items() if v > 0)
     
+    # Log summary
     logger.info(f"Gen {generation}: {stats['count']} species, {stats['total_population']} pop, "
                 f"limbo={limbo_size}, best={stats['fitness']['global_best']:.4f}, "
                 f"avg={stats['fitness']['global_avg']:.4f}" + (f", events: {event_str}" if event_str else ""))

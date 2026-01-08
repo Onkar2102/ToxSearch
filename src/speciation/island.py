@@ -334,9 +334,17 @@ class Species:
         return sorted(self.members, key=lambda x: x.fitness, reverse=reverse)
     
     def to_dict(self) -> Dict[str, Any]:
+        """
+        Serialize species to dictionary for JSON storage.
+        
+        Includes leader embedding for state restoration across generations.
+        """
         return {
             "id": self.id,
             "leader_id": self.leader.id,
+            "leader_prompt": self.leader.prompt,
+            "leader_embedding": self.leader.embedding.tolist() if self.leader.embedding is not None else None,
+            "leader_fitness": self.leader.fitness,
             "member_ids": [m.id for m in self.members],
             "mode": self.mode.value,
             "radius": self.radius,
@@ -382,6 +390,18 @@ class SpeciesIdGenerator:
             start: Starting ID value (default: 0, so first ID will be 1)
         """
         cls._current_id = start
+    
+    @classmethod
+    def set_min_id(cls, min_id: int) -> None:
+        """
+        Ensure ID counter is at least min_id (for state restoration).
+        
+        Used when loading species from saved state to avoid ID conflicts.
+        
+        Args:
+            min_id: Minimum ID value to set (counter will be max of current and min_id)
+        """
+        cls._current_id = max(cls._current_id, min_id)
 
 
 def generate_species_id() -> int:

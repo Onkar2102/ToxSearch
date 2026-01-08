@@ -108,6 +108,14 @@ class SpeciationModule:
         
         self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0}
         
+        # Auto-load previous state if not first generation
+        if current_generation > 0:
+            outputs_path = get_outputs_path()
+            state_path = str(outputs_path / "speciation_state.json")
+            if Path(state_path).exists():
+                self.load_state(state_path)
+                self.logger.info("Restored speciation state from previous generation")
+        
         # Step 1: Compute and save embeddings to temp.json
         if temp_path is None:
             outputs_path = get_outputs_path()
@@ -184,6 +192,11 @@ class SpeciationModule:
         
         log_generation_summary(current_generation, self.species, self.limbo.size,
                                self._current_gen_events, self.logger)
+        
+        # Auto-save state after processing
+        outputs_path = get_outputs_path()
+        state_path = str(outputs_path / "speciation_state.json")
+        self.save_state(state_path)
         
         return self.species, self.limbo
     
@@ -303,6 +316,75 @@ class SpeciationModule:
         with open(path, 'w') as f:
             json.dump(self.get_state(), f, indent=2)
         self.logger.info(f"Saved speciation state to {path}")
+    
+    def load_state(self, path: str) -> bool:
+        """
+        Load state from file and restore species, limbo, and metrics.
+        
+        Restores species structure with leader embeddings for distance comparisons.
+        Individual objects are reconstructed with minimal data; full genome data
+        is matched by ID during processing.
+        
+        Args:
+            path: Path to speciation_state.json file
+            
+        Returns:
+            True if loaded successfully, False otherwise
+        """
+        import numpy as np
+        
+        state_path = Path(path)
+        if not state_path.exists():
+            self.logger.warning(f"Speciation state file not found: {path}")
+            return False
+        
+        try:
+            with open(state_path, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            
+            # Restore species
+            self.species = {}
+            for sid_str, sp_dict in state.get("species", {}).items():
+                sid = int(sid_str)
+                
+                # Reconstruct leader Individual from saved data
+                leader_embedding = None
+                if sp_dict.get("leader_embedding"):
+                    leader_embedding = np.array(sp_dict["leader_embedding"])
+                
+                # Create leader Individual with saved embedding
+                leader = Individual(
+                    id=sp_dict["leader_id"],
+                    prompt=sp_dict.get("leader_prompt", ""),
+                    fitness=sp_dict.get("leader_fitness", 0.0),
+                    embedding=leader_embedding,
+                    species_id=sid
+                )
+                
+                # Reconstruct species
+                species = Species(
+                    id=sid,
+                    leader=leader,
+                    members=[leader],  # Will be populated during clustering
+                    mode=IslandMode(sp_dict.get("mode", "DEFAULT")),
+                    radius=sp_dict.get("radius", self.config.theta_sim),
+                    stagnation_counter=sp_dict.get("stagnation_counter", 0),
+                    created_at=sp_dict.get("created_at", 0),
+                    last_improvement=sp_dict.get("last_improvement", 0),
+                    fitness_history=sp_dict.get("fitness_history", [])
+                )
+                
+                self.species[sid] = species
+                
+                # Update SpeciesIdGenerator to avoid ID conflicts
+                SpeciesIdGenerator.set_min_id(sid + 1)
+            
+            self.logger.info(f"Loaded speciation state from {path}: {len(self.species)} species")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load speciation state: {e}", exc_info=True)
+            return False
     
     def reset(self) -> None:
         """Reset all state."""
@@ -484,6 +566,21 @@ def run_speciation(
             result["extinction_events"], result["migration_events"]
         )
         
+        # Update EvolutionTracker with speciation data
+        try:
+            outputs_path = get_outputs_path()
+            evolution_tracker_path = str(outputs_path / "EvolutionTracker.json")
+            speciation_stats = get_speciation_statistics(log_file)
+            update_evolution_tracker_with_speciation(
+                evolution_tracker_path=evolution_tracker_path,
+                current_generation=current_generation,
+                speciation_result=result,
+                speciation_stats=speciation_stats,
+                logger=logger
+            )
+        except Exception as e:
+            logger.warning("Failed to update EvolutionTracker with speciation data: %s", e)
+        
         return result
         
     except Exception as e:
@@ -534,7 +631,7 @@ def get_speciation_statistics(log_file: Optional[str] = None) -> Dict[str, Any]:
 
 def save_speciation_state(output_path: Optional[str] = None, log_file: Optional[str] = None) -> bool:
     """
-    Save current speciation state to file.
+    Save current speciation state to file (internal use).
     
     Args:
         output_path: Optional path to save state (defaults to outputs_path / "speciation_state.json")
@@ -560,4 +657,151 @@ def save_speciation_state(output_path: Optional[str] = None, log_file: Optional[
         return True
     except Exception as e:
         logger.error("Failed to save speciation state: %s", e)
+        return False
+
+
+def load_speciation_state(output_path: Optional[str] = None, log_file: Optional[str] = None) -> bool:
+    """
+    Load speciation state from file (internal use only).
+    
+    Restores species structure with leader embeddings for distance comparisons
+    in subsequent generations. Called automatically at the start of process_generation().
+    
+    Args:
+        output_path: Optional path to load state (defaults to outputs_path / "speciation_state.json")
+        log_file: Optional log file path
+        
+    Returns:
+        True if loaded successfully, False otherwise
+    """
+    logger = get_logger("RunSpeciation", log_file)
+    
+    global _speciation_module
+    if _speciation_module is None:
+        logger.warning("No speciation module to load state into")
+        return False
+    
+    try:
+        if output_path is None:
+            outputs_path = get_outputs_path()
+            output_path = str(outputs_path / "speciation_state.json")
+        
+        return _speciation_module.load_state(output_path)
+    except Exception as e:
+        logger.error("Failed to load speciation state: %s", e)
+        return False
+
+
+def update_evolution_tracker_with_speciation(
+    evolution_tracker_path: str,
+    current_generation: int,
+    speciation_result: Dict[str, Any],
+    speciation_stats: Optional[Dict[str, Any]] = None,
+    logger=None
+) -> bool:
+    """
+    Update EvolutionTracker.json with speciation data.
+    
+    This function is called from main.py to integrate speciation metrics
+    into the evolution tracker. The speciation_state.json file remains
+    internal to the speciation module.
+    
+    Adds speciation summary to:
+    1. Current generation entry (speciation field)
+    2. Top-level summary (speciation_summary field)
+    
+    Args:
+        evolution_tracker_path: Path to EvolutionTracker.json
+        current_generation: Current generation number
+        speciation_result: Result dict from run_speciation()
+        speciation_stats: Optional detailed stats from get_speciation_statistics()
+        logger: Optional logger instance
+        
+    Returns:
+        True if updated successfully, False otherwise
+    """
+    if logger is None:
+        logger = get_logger("UpdateEvolutionTracker")
+    
+    try:
+        tracker_path = Path(evolution_tracker_path)
+        if not tracker_path.exists():
+            logger.warning("EvolutionTracker.json not found at %s", evolution_tracker_path)
+            return False
+        
+        # Read current tracker
+        with open(tracker_path, 'r', encoding='utf-8') as f:
+            evolution_tracker = json.load(f)
+        
+        # Get detailed metrics if available
+        if speciation_stats is None:
+            speciation_stats = get_speciation_statistics()
+        
+        metrics_summary = speciation_stats.get("metrics_summary", {})
+        
+        # Get current metrics from speciation module
+        global _speciation_module
+        current_metrics = None
+        if _speciation_module is not None and _speciation_module.metrics_tracker.history:
+            current_metrics = _speciation_module.metrics_tracker.history[-1]
+        
+        # Prepare speciation summary for generation entry
+        speciation_summary = {
+            "species_count": speciation_result.get("species_count", 0),
+            "limbo_size": speciation_result.get("limbo_size", 0),
+            "speciation_events": speciation_result.get("speciation_events", 0),
+            "merge_events": speciation_result.get("merge_events", 0),
+            "extinction_events": speciation_result.get("extinction_events", 0),
+            "migration_events": speciation_result.get("migration_events", 0),
+        }
+        
+        # Add detailed metrics if available
+        if current_metrics:
+            speciation_summary.update({
+                "avg_silhouette": round(current_metrics.avg_silhouette, 4),
+                "inter_species_diversity": round(current_metrics.inter_species_diversity, 4),
+                "intra_species_diversity": round(current_metrics.intra_species_diversity, 4),
+                "mode_distribution": current_metrics.mode_counts,
+            })
+        
+        # Update or create generation entry
+        generations = evolution_tracker.get("generations", [])
+        gen_entry = None
+        for gen in generations:
+            if gen.get("generation_number") == current_generation:
+                gen_entry = gen
+                break
+        
+        if gen_entry:
+            gen_entry["speciation"] = speciation_summary
+        else:
+            # Create new generation entry if it doesn't exist
+            gen_entry = {
+                "generation_number": current_generation,
+                "speciation": speciation_summary
+            }
+            generations.append(gen_entry)
+            evolution_tracker["generations"] = generations
+        
+        # Update top-level speciation summary
+        if "speciation_summary" not in evolution_tracker:
+            evolution_tracker["speciation_summary"] = {}
+        
+        evolution_tracker["speciation_summary"].update({
+            "current_species_count": speciation_result.get("species_count", 0),
+            "current_limbo_size": speciation_result.get("limbo_size", 0),
+            "total_speciation_events": metrics_summary.get("total_speciation_events", 0),
+            "total_merge_events": metrics_summary.get("total_merge_events", 0),
+            "total_extinction_events": metrics_summary.get("total_extinction_events", 0),
+        })
+        
+        # Save updated tracker
+        with open(tracker_path, 'w', encoding='utf-8') as f:
+            json.dump(evolution_tracker, f, indent=2, ensure_ascii=False)
+        
+        logger.info("Updated EvolutionTracker.json with speciation data for generation %d", current_generation)
+        return True
+        
+    except Exception as e:
+        logger.error("Failed to update EvolutionTracker with speciation data: %s", e, exc_info=True)
         return False

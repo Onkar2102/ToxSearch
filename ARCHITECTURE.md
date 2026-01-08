@@ -204,7 +204,7 @@ For each generation:
    - Update `temp.json` with fitness scores (`toxicity`, `north_star_score`)
 
 4. **Speciation Phase** (Plan A+):
-   - **Embedding Computation**: Compute L2-normalized embeddings for all prompts
+   - **Embedding Computation**: Compute L2-normalized embeddings for all prompts (saved to `prompt_embedding` field in each genome)
    - **Leader-Follower Clustering**: Assign genomes to species based on semantic similarity
    - **Limbo Management**: Update TTL, check for speciation events from limbo clusters
    - **Mode Switching**: Update island modes (Explore/Exploit/Default) based on fitness trends
@@ -213,7 +213,7 @@ For each generation:
    - **Migration**: Transfer individuals between semantically similar islands (every N generations)
    - **Adaptive Thresholds**: Adjust island radii, trigger splits based on silhouette scores
    - **Metrics Recording**: Track species count, diversity, churn, silhouette scores
-   - Update all genomes in `temp.json` with `species_id` fields
+   - Update all genomes in `temp.json` with `species_id` and `in_limbo` fields
 
 5. **Distribution Phase**:
    - Calculate elite thresholds based on max toxicity
@@ -323,22 +323,6 @@ Key parameters in `PlanAPlusConfig`:
 - `silhouette_threshold=0.5`: Trigger split if silhouette below this
 
 See `src/speciation/config.py` for full configuration options.
-
-## Summary: Plan A+ Speciation Integration
-
-### Benefits
-
-1. **Diversity Preservation**: Semantic clustering maintains distinct evolutionary niches
-2. **Parallel Search**: Multiple islands explore different regions of the fitness landscape simultaneously
-3. **Adaptive Behavior**: Islands switch between Explore/Exploit modes based on local fitness trends
-4. **Outlier Management**: Limbo buffer preserves high-fitness outliers that don't fit existing species
-5. **Dynamic Adaptation**: Islands merge, split, and repopulate based on performance
-6. **Semantic Coherence**: Migration only occurs between semantically similar islands
-
-### Integration Status
-
-✅ **Implemented**: All speciation components are complete and tested
-⏳ **Pending**: Integration into `main.py` evolution loop (after fitness evaluation)
 
 ### Usage
 

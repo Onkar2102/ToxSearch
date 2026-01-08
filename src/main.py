@@ -206,7 +206,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         return
 
     try:
-        # Step 4: SPECIATION - Cluster initial population into species
         logger.info("Running speciation on evaluated genomes...")
         from speciation import run_speciation
         
@@ -434,6 +433,27 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 north_star_metric=north_star_metric,
                 moderation_methods=moderation_methods
             )
+            
+            # Run speciation on evaluated genomes
+            try:
+                from speciation import run_speciation
+                
+                speciation_result = run_speciation(
+                    temp_path=temp_path,
+                    current_generation=generation_count,
+                    log_file=log_file
+                )
+                
+                if speciation_result.get("success"):
+                    logger.info("Gen %d speciation: %d species, %d in limbo",
+                               generation_count,
+                               speciation_result.get("species_count", 0),
+                               speciation_result.get("limbo_size", 0))
+                else:
+                    logger.warning("Gen %d speciation completed with warnings: %s", 
+                                  generation_count, speciation_result.get("error", "unknown"))
+            except Exception as e:
+                logger.error("Gen %d speciation failed: %s", generation_count, e, exc_info=True)
             
             variant_counts = {"variants_created": 0, "mutation_variants": 0, "crossover_variants": 0}
             temp_path = get_outputs_path() / "temp.json"

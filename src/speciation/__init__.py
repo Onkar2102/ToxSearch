@@ -79,7 +79,8 @@ from .SpeciationModule import (
     get_speciation_module,
     reset_speciation_module,
     get_speciation_statistics,
-    save_speciation_state
+    update_evolution_tracker_with_speciation
+    # save_speciation_state is internal - auto-saved/loaded by process_generation()
 )
 
 __all__ = [
@@ -109,6 +110,6 @@ __all__ = [
     "get_speciation_module",
     "reset_speciation_module",
     "get_speciation_statistics",
-    "save_speciation_state",
+    "update_evolution_tracker_with_speciation",
 ]
 
