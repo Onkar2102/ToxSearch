@@ -1,5 +1,5 @@
 """
-Speciation module for Plan A+ Dynamic Islands framework.
+Speciation module for Dynamic Islands framework.
 
 Implements Leader-Follower clustering with semantic embeddings for maintaining
 diverse species (islands) that evolve independently.
@@ -16,8 +16,12 @@ from .island import Individual, Species, IslandMode, generate_species_id, Specie
 
 # Embeddings
 from .embeddings import (
-    EmbeddingModel, compute_embedding, compute_embeddings_batch,
-    semantic_distance, semantic_distances_batch, get_embedding_model,
+    EmbeddingModel, compute_and_save_embeddings, get_embedding_model
+)
+
+# Distance functions
+from .distance import (
+    semantic_distance, semantic_distances_batch,
     cosine_similarity, normalize_embedding
 )
 
@@ -69,11 +73,20 @@ from .metrics import (
     compute_solution_diversity, get_species_statistics, log_generation_summary
 )
 
+# Main entry point (similar to run_evolution)
+from .SpeciationModule import (
+    run_speciation,
+    get_speciation_module,
+    reset_speciation_module,
+    get_speciation_statistics,
+    save_speciation_state
+)
+
 __all__ = [
     "SpeciationModule", "PlanAPlusConfig",
     "Individual", "Species", "IslandMode", "generate_species_id", "SpeciesIdGenerator",
-    "EmbeddingModel", "compute_embedding", "compute_embeddings_batch",
-    "semantic_distance", "semantic_distances_batch", "get_embedding_model",
+    "EmbeddingModel", "compute_and_save_embeddings", "get_embedding_model",
+    "semantic_distance", "semantic_distances_batch",
     "cosine_similarity", "normalize_embedding",
     "leader_follower_clustering", "incremental_clustering", "reassign_to_species",
     "find_nearest_leader", "update_species_leaders",
@@ -91,5 +104,11 @@ __all__ = [
     "process_adaptive_thresholds", "compute_all_silhouette_scores", "get_adaptive_statistics",
     "GenerationMetrics", "SpeciationMetricsTracker", "compute_diversity_metrics",
     "compute_solution_diversity", "get_species_statistics", "log_generation_summary",
+    # Main entry point
+    "run_speciation",
+    "get_speciation_module",
+    "reset_speciation_module",
+    "get_speciation_statistics",
+    "save_speciation_state",
 ]
 

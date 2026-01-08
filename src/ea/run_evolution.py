@@ -115,41 +115,41 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
 def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metric, logger, removal_threshold=None, north_star_threshold=0.99):
     """
     Distribute genomes from temp.json based on thresholds into 3 categories:
-    - Genomes >= elite_threshold → elites.json (elite genomes)
+    - Genomes >= elite_threshold → elites.json (elite genomes from all species)
     - Genomes between removal_threshold and elite_threshold → non_elites.json (for further evolution)
-    - Genomes <= removal_threshold → under_performing.json (archived low-performers)
+    - Genomes in limbo buffer → limbo.json (high-fitness outliers that don't fit species)
 
     Args:
         temp_path: Path to temp.json file
         elite_threshold: Toxicity threshold for elite selection
         north_star_metric: The metric to use for scoring
         logger: Logger instance
-        removal_threshold: Toxicity threshold for removal/archiving (default: None, no archiving)
+        removal_threshold: Toxicity threshold for removal (default: None, no removal)
         north_star_threshold: Threshold for toxic genomes (default: 0.99)
 
     Returns:
-        dict: Distribution statistics with elites_moved, population_moved, under_performing_moved, total_processed
+        dict: Distribution statistics with elites_moved, population_moved, limbo_moved, total_processed
     """
     try:
         outputs_path = get_outputs_path()
         elites_path = outputs_path / "elites.json"
         population_path = outputs_path / "non_elites.json"
-        under_performing_path = outputs_path / "under_performing.json"
+        limbo_path = outputs_path / "limbo.json"
 
         if not temp_path.exists():
             logger.warning("temp.json not found for distribution")
-            return {"elites_moved": 0, "population_moved": 0, "under_performing_moved": 0, "total_processed": 0}
+            return {"elites_moved": 0, "population_moved": 0, "limbo_moved": 0, "total_processed": 0}
 
         with open(temp_path, 'r', encoding='utf-8') as f:
             temp_variants = json.load(f)
 
         if not temp_variants:
             logger.debug("No variants in temp.json to distribute")
-            return {"elites_moved": 0, "population_moved": 0, "under_performing_moved": 0, "total_processed": 0}
+            return {"elites_moved": 0, "population_moved": 0, "limbo_moved": 0, "total_processed": 0}
 
         elites_to_move = []
         population_to_move = []
-        under_performing_to_move = []
+        limbo_to_move = []
 
         for variant in temp_variants:
             if not variant or not variant.get("prompt"):
@@ -157,15 +157,21 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
 
             toxicity_score = _extract_north_star_score(variant, north_star_metric)
             genome_id = variant.get("id")
+            in_limbo = variant.get("in_limbo", False)
 
-            if toxicity_score >= elite_threshold:
+            # Check if in limbo first (high-fitness outliers that don't fit species)
+            if in_limbo:
+                variant["initial_state"] = "limbo"
+                limbo_to_move.append(variant)
+                logger.debug(f"Genome {genome_id} marked as limbo (score: {toxicity_score:.3f})")
+            elif toxicity_score >= elite_threshold:
                 variant["initial_state"] = "elite"
                 elites_to_move.append(variant)
                 logger.debug(f"Genome {genome_id} marked as elite (score: {toxicity_score:.3f})")
             elif removal_threshold is not None and toxicity_score <= removal_threshold:
-                variant["initial_state"] = "inefficient"
-                under_performing_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} marked as under-performing (score: {toxicity_score:.3f}) - will be archived")
+                # Low performers are simply removed, not archived
+                logger.debug(f"Genome {genome_id} below removal threshold (score: {toxicity_score:.3f}) - will be removed")
+                continue
             else:
                 variant["initial_state"] = "non_elite"
                 population_to_move.append(variant)
@@ -197,18 +203,18 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
 
             logger.debug(f"Moved {len(population_to_move)} genomes to non_elites.json")
 
-        if under_performing_to_move:
-            under_performing_to_save = []
-            if under_performing_path.exists():
-                with open(under_performing_path, 'r', encoding='utf-8') as f:
-                    under_performing_to_save = json.load(f)
+        if limbo_to_move:
+            limbo_to_save = []
+            if limbo_path.exists():
+                with open(limbo_path, 'r', encoding='utf-8') as f:
+                    limbo_to_save = json.load(f)
 
-            under_performing_to_save.extend(under_performing_to_move)
+            limbo_to_save.extend(limbo_to_move)
 
-            with open(under_performing_path, 'w', encoding='utf-8') as f:
-                json.dump(under_performing_to_save, f, indent=2, ensure_ascii=False)
+            with open(limbo_path, 'w', encoding='utf-8') as f:
+                json.dump(limbo_to_save, f, indent=2, ensure_ascii=False)
 
-            logger.debug(f"Archived {len(under_performing_to_move)} under-performing genomes")
+            logger.debug(f"Moved {len(limbo_to_move)} limbo genomes to limbo.json")
 
         with open(temp_path, 'w', encoding='utf-8') as f:
             json.dump([], f, indent=2, ensure_ascii=False)
@@ -216,14 +222,14 @@ def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metri
         distribution_stats = {
             "elites_moved": len(elites_to_move),
             "population_moved": len(population_to_move),
-            "under_performing_moved": len(under_performing_to_move),
+            "limbo_moved": len(limbo_to_move),
             "total_processed": len(temp_variants)
         }
 
         logger.debug(f"Distribution complete: {distribution_stats['total_processed']} variants → "
                    f"{distribution_stats['elites_moved']} elites, "
                    f"{distribution_stats['population_moved']} population, "
-                   f"{distribution_stats['under_performing_moved']} archived")
+                   f"{distribution_stats['limbo_moved']} limbo")
 
         return distribution_stats
 

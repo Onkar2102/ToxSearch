@@ -1,7 +1,7 @@
 """
 migration.py
 
-Inter-island migration for Plan A+ speciation.
+Inter-island migration for speciation.
 """
 
 import random
@@ -9,7 +9,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 
 from .island import Individual, Species
-from .embeddings import semantic_distance, semantic_distances_batch
+from .distance import semantic_distance, semantic_distances_batch
 
 if TYPE_CHECKING:
     from .limbo import LimboBuffer
@@ -19,7 +19,25 @@ get_logger, _, _, _ = get_custom_logging()
 
 
 def compute_semantic_topology(species: Dict[int, Species], k_neighbors: int = 3) -> Dict[int, List[int]]:
-    """Build neighbor graph based on leader distances."""
+    """
+    Build semantic neighbor graph for migration topology.
+    
+    Creates a graph where each species is connected to its k nearest semantic neighbors
+    (based on leader embedding distances). This topology determines which species
+    can exchange migrants.
+    
+    Migration topology enables:
+    - Genetic exchange between related species
+    - Diversity transfer without breaking species boundaries
+    - Exploration of semantic space between species
+    
+    Args:
+        species: Dict of species
+        k_neighbors: Number of nearest neighbors per species
+    
+    Returns:
+        Dict mapping species_id -> list of neighbor species_ids
+    """
     topology = {sid: [] for sid in species.keys()}
     species_list = list(species.items())
     

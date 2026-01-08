@@ -1,7 +1,7 @@
 """
 extinction.py
 
-Island extinction and repopulation for Plan A+ speciation.
+Island extinction and repopulation for speciation.
 """
 
 from typing import Dict, List, Optional, Tuple, Callable, TYPE_CHECKING
@@ -90,7 +90,36 @@ def process_extinctions(species: Dict[int, Species], limbo: "LimboBuffer", globa
                         repopulation_size: int = 20, mutation_rate: float = 0.3,
                         mutate_fn: Optional[Callable] = None, theta_sim: float = 0.4,
                         logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
-    """Process all extinctions."""
+    """
+    Process all species extinctions and repopulation.
+    
+    Extinction removes stagnant or too-small species to make room for new diversity.
+    A species is extinguished if:
+    1. Size < min_size (too small to be viable)
+    2. Stagnation >= max_stagnation AND mode == EXPLORE (stagnant explorer)
+    
+    After extinction, a new species is created via repopulation:
+    1. First tries to repopulate from limbo (high-fitness outliers)
+    2. Falls back to global best if limbo is empty
+    
+    Repopulation creates new individuals via mutation, introducing fresh diversity.
+    
+    Args:
+        species: Dict of species (modified in-place)
+        limbo: Limbo buffer (source for repopulation)
+        global_best: Global best individual (fallback for repopulation)
+        current_generation: Current generation number
+        max_stagnation: Maximum stagnation before extinction
+        min_size: Minimum species size
+        repopulation_size: Size of new repopulated species
+        mutation_rate: Mutation rate for repopulation
+        mutate_fn: Mutation function for creating new individuals
+        theta_sim: Semantic distance threshold for new species
+        logger: Optional logger instance
+    
+    Returns:
+        Tuple of (updated_species, extinction_events)
+    """
     if logger is None:
         logger = get_logger("Extinction")
     

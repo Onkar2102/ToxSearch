@@ -1,7 +1,7 @@
 """
 modes.py
 
-Explore/Exploit/Default mode switching logic for Plan A+ islands.
+Explore/Exploit/Default mode switching logic for islands.
 """
 
 import random
@@ -76,7 +76,41 @@ def update_island_mode(island: Species, current_gen: int, limbo: Optional["Limbo
                        explore_mutation_multiplier: float = 2.0,
                        exploit_mutation_multiplier: float = 0.5,
                        explore_selection_pressure: float = 0.7, logger=None) -> IslandMode:
-    """Update island mode based on fitness trend."""
+    """
+    Update island mode based on fitness trend analysis.
+    
+    This is the core adaptive mode switching logic. Islands dynamically switch
+    between DEFAULT, EXPLORE, and EXPLOIT modes based on their fitness trajectory:
+    
+    - EXPLOIT: Triggered when fitness slope > improvement_slope_threshold
+      (island is improving → focus on exploitation)
+    
+    - EXPLORE: Triggered when fitness slope < decline_slope_threshold
+      (island is declining → need diversity)
+    
+    - DEFAULT: Triggered when fitness slope is between thresholds
+      (island is stable → balanced strategy)
+    
+    Mode switching affects:
+    - Mutation rate (EXPLORE: higher, EXPLOIT: lower)
+    - Selection pressure (EXPLORE: relaxed, EXPLOIT: elite-focused)
+    - External parent selection (EXPLORE: may use limbo individuals)
+    
+    Args:
+        island: Species to update
+        current_gen: Current generation number
+        limbo: Optional limbo buffer (for EXPLORE mode external parents)
+        window: Number of generations to analyze for slope
+        improvement_slope_threshold: Slope threshold for EXPLOIT mode
+        decline_slope_threshold: Slope threshold for EXPLORE mode
+        explore_mutation_multiplier: Mutation multiplier for EXPLORE mode
+        exploit_mutation_multiplier: Mutation multiplier for EXPLOIT mode
+        explore_selection_pressure: Selection pressure for EXPLORE mode
+        logger: Optional logger instance
+    
+    Returns:
+        Updated IslandMode
+    """
     if logger is None:
         logger = get_logger("ModeSwitch")
     

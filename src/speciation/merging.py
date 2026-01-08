@@ -1,13 +1,13 @@
 """
 merging.py
 
-Island merging logic for Plan A+ speciation.
+Island merging logic for speciation.
 """
 
 from typing import Dict, List, Tuple, Optional
 
 from .island import Individual, Species, IslandMode
-from .embeddings import semantic_distance
+from .distance import semantic_distance
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -73,7 +73,34 @@ def merge_islands(sp1: Species, sp2: Species, current_generation: int,
 def process_merges(species: Dict[int, Species], theta_merge: float = 0.2,
                    min_stability_gens: int = 3, current_gen: int = 0,
                    max_capacity: int = 50, max_merges_per_gen: int = 3, logger=None) -> Tuple[Dict[int, Species], List[Dict]]:
-    """Process all merges for a generation."""
+    """
+    Process all species merges for a generation.
+    
+    Merging combines similar species to prevent excessive fragmentation.
+    Two species merge if:
+    1. Leader distance < theta_merge (very similar)
+    2. Both species are stable (existed for min_stability_gens)
+    
+    Merged species:
+    - Combines all members (deduplicated)
+    - Keeps highest-fitness leader
+    - Resets to DEFAULT mode
+    - Truncates to max_capacity if needed
+    
+    Process iteratively (up to max_merges_per_gen) until no more merges found.
+    
+    Args:
+        species: Dict of species (modified in-place)
+        theta_merge: Merge distance threshold (must be < theta_sim)
+        min_stability_gens: Minimum age for species to be mergeable
+        current_gen: Current generation number
+        max_capacity: Maximum members after merge
+        max_merges_per_gen: Maximum merges per generation (prevents excessive merging)
+        logger: Optional logger instance
+    
+    Returns:
+        Tuple of (updated_species, merge_events)
+    """
     if logger is None:
         logger = get_logger("IslandMerging")
     

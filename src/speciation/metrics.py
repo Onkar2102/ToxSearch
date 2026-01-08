@@ -1,7 +1,7 @@
 """
 metrics.py
 
-Validation metrics for Plan A+ speciation.
+Validation metrics for speciation.
 """
 
 import numpy as np
@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
 from .island import Individual, Species
-from .embeddings import semantic_distance
+from .distance import semantic_distance
 from .adaptive_threshold import compute_all_silhouette_scores
 
 from utils import get_custom_logging

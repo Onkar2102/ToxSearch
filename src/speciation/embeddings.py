@@ -1,23 +1,42 @@
 """
 embeddings.py
 
-Prompt embedding computation using sentence-transformers for Plan A+ speciation.
+Prompt embedding computation using sentence-transformers for speciation.
+Reads from temp.json, computes embeddings, and adds "prompt_embedding" field to genomes.
+
 Model: all-MiniLM-L6-v2 (384-dimensional, L2-normalized embeddings)
 """
 
+import json
 import numpy as np
 from typing import List, Union, Optional
+from pathlib import Path
 
 from utils import get_custom_logging
 from utils.device_utils import get_optimal_device
+from utils import get_system_utils
 
 get_logger, _, _, _ = get_custom_logging()
+_, _, _, get_outputs_path, _, _ = get_system_utils()
 
 
 class EmbeddingModel:
     """
-    Embedding model wrapper using sentence-transformers.
-    Uses all-MiniLM-L6-v2 for fast, high-quality 384-dimensional embeddings.
+    Embedding model wrapper using sentence-transformers library.
+    
+    This class manages the semantic embedding model used for converting text prompts
+    into high-dimensional vectors. The default model is all-MiniLM-L6-v2, which:
+    - Produces 384-dimensional embeddings
+    - Is fast and efficient (good for large batches)
+    - Provides high-quality semantic representations
+    - Supports L2-normalization for cosine distance computation
+    
+    Embeddings are L2-normalized by default, which ensures:
+    - Cosine similarity = dot product (for normalized vectors)
+    - Semantic distance = 1 - cosine_similarity
+    - All vectors lie on the unit hypersphere
+    
+    The model is loaded on the optimal available device (CUDA > MPS > CPU).
     """
     
     def __init__(
@@ -26,26 +45,42 @@ class EmbeddingModel:
         device: Optional[str] = None,
         normalize: bool = True
     ):
+        """
+        Initialize embedding model.
+        
+        Args:
+            model_name: Name of sentence-transformer model (must be compatible)
+            device: Target device ("cuda", "mps", "cpu", or None for auto-detect)
+            normalize: If True, L2-normalize embeddings (required for cosine distance)
+        """
         self.logger = get_logger("EmbeddingModel")
         self.model_name = model_name
         self.normalize = normalize
-        self.embedding_dim = 384
+        self.embedding_dim = 384  # Default for all-MiniLM-L6-v2
         
+        # Auto-detect optimal device if not specified
         if device is None:
             device = get_optimal_device()
         self.device = device
         
-        self._model = None
+        self._model = None  # Lazy-loaded SentenceTransformer instance
         self._load_model()
         
     def _load_model(self) -> None:
-        """Load the sentence-transformer model."""
+        """
+        Load the sentence-transformer model (private method).
+        
+        Loads the model onto the specified device and verifies embedding dimension.
+        Raises ImportError if sentence-transformers is not installed.
+        """
         try:
             from sentence_transformers import SentenceTransformer
             
             self.logger.info(f"Loading embedding model '{self.model_name}' on device '{self.device}'")
+            # Load model (will download if not cached)
             self._model = SentenceTransformer(self.model_name, device=self.device)
             
+            # Verify embedding dimension with test encoding
             test_embedding = self._model.encode("test", normalize_embeddings=self.normalize)
             self.embedding_dim = len(test_embedding)
             
@@ -60,17 +95,34 @@ class EmbeddingModel:
         text: Union[str, List[str]],
         batch_size: int = 64,
         show_progress: bool = False
-    ) -> np.ndarray:
-        """Encode text(s) into L2-normalized embedding vector(s)."""
+        ) -> np.ndarray:
+        """
+        Encode text(s) into L2-normalized embedding vector(s).
+        
+        Args:
+            text: Single string or list of strings to encode
+            batch_size: Number of texts to process in parallel (larger = faster but more memory)
+            show_progress: If True, show progress bar for large batches
+        
+        Returns:
+            numpy array of embeddings:
+            - Single text: shape (embedding_dim,)
+            - Multiple texts: shape (num_texts, embedding_dim)
+            - All embeddings are L2-normalized if normalize=True
+        
+        Raises:
+            RuntimeError: If model not loaded
+        """
         if self._model is None:
             raise RuntimeError("Embedding model not loaded")
         
+        # Encode with normalization and numpy conversion
         return self._model.encode(
             text,
             batch_size=batch_size,
             show_progress_bar=show_progress,
-            normalize_embeddings=self.normalize,
-            convert_to_numpy=True
+            normalize_embeddings=self.normalize,  # L2-normalize for cosine distance
+            convert_to_numpy=True  # Return numpy array (not torch tensor)
         )
     
     def __repr__(self) -> str:
@@ -84,8 +136,24 @@ def get_embedding_model(
     model_name: str = "all-MiniLM-L6-v2",
     device: Optional[str] = None,
     force_reload: bool = False
-) -> EmbeddingModel:
-    """Get or create singleton embedding model instance."""
+    ) -> EmbeddingModel:
+    """
+    Get or create singleton embedding model instance.
+    
+    Uses singleton pattern to ensure only one model is loaded in memory,
+    which is important because:
+    - Model loading is expensive (time and memory)
+    - Multiple instances would waste GPU/CPU memory
+    - Model can be reused across all embedding computations
+    
+    Args:
+        model_name: Name of sentence-transformer model
+        device: Target device (None for auto-detect)
+        force_reload: If True, reload model even if already loaded (useful for testing)
+    
+    Returns:
+        Singleton EmbeddingModel instance
+    """
     global _embedding_model
     
     if _embedding_model is None or force_reload:
@@ -94,58 +162,85 @@ def get_embedding_model(
     return _embedding_model
 
 
-def compute_embedding(prompt: str, model: Optional[EmbeddingModel] = None) -> np.ndarray:
-    """Compute L2-normalized embedding for a single prompt."""
-    if model is None:
-        model = get_embedding_model()
-    
-    embedding = model.encode(prompt)
-    if embedding.ndim > 1:
-        embedding = embedding.squeeze()
-    
-    return embedding
-
-
-def compute_embeddings_batch(
-    prompts: List[str],
-    model: Optional[EmbeddingModel] = None,
+def compute_and_save_embeddings(
+    temp_path: Optional[str] = None,
+    model_name: str = "all-MiniLM-L6-v2",
     batch_size: int = 64,
-    show_progress: bool = False
-) -> np.ndarray:
-    """Compute L2-normalized embeddings for a batch of prompts."""
-    if model is None:
-        model = get_embedding_model()
+    show_progress: bool = False,
+    logger=None) -> None:
+    """
+    Read temp.json, compute embeddings for all prompts, and save back to temp.json.
     
-    if not prompts:
-        return np.array([]).reshape(0, model.embedding_dim)
+    This function:
+    1. Reads genomes from temp.json
+    2. Extracts prompts from genomes
+    3. Computes L2-normalized embeddings in batch
+    4. Adds "prompt_embedding" field to each genome (as list for JSON serialization)
+    5. Saves updated genomes back to temp.json
     
-    return model.encode(prompts, batch_size=batch_size, show_progress=show_progress)
-
-
-def semantic_distance(e1: np.ndarray, e2: np.ndarray) -> float:
-    """Compute cosine distance: d(u,v) = 1 - cos(u,v) = 1 - u·v for normalized vectors."""
-    cosine_similarity = np.dot(e1, e2)
-    cosine_similarity = np.clip(cosine_similarity, -1.0, 1.0)
-    return float(1.0 - cosine_similarity)
-
-
-def semantic_distances_batch(query_embedding: np.ndarray, embeddings: np.ndarray) -> np.ndarray:
-    """Compute distances from query to multiple embeddings."""
-    if embeddings.ndim == 1:
-        embeddings = embeddings.reshape(1, -1)
+    The "prompt_embedding" field is stored as a list of floats (JSON-compatible format).
+    When reading embeddings later, convert back to numpy array.
     
-    cosine_similarities = embeddings @ query_embedding
-    cosine_similarities = np.clip(cosine_similarities, -1.0, 1.0)
-    return 1.0 - cosine_similarities
-
-
-def cosine_similarity(e1: np.ndarray, e2: np.ndarray) -> float:
-    """Compute cosine similarity between two embeddings."""
-    return float(np.clip(np.dot(e1, e2), -1.0, 1.0))
-
-
-def normalize_embedding(embedding: np.ndarray) -> np.ndarray:
-    """L2-normalize an embedding vector."""
-    norm = np.linalg.norm(embedding)
-    return embedding / norm if norm > 0 else embedding
+    Args:
+        temp_path: Path to temp.json file. If None, uses default outputs_path / "temp.json"
+        model_name: Name of sentence-transformer model
+        batch_size: Batch size for embedding computation
+        show_progress: If True, show progress bar
+        logger: Optional logger instance
+    
+    Raises:
+        FileNotFoundError: If temp.json doesn't exist
+        ValueError: If temp.json is empty or invalid
+    """
+    if logger is None:
+        logger = get_logger("Embeddings")
+    
+    # Determine temp path
+    if temp_path is None:
+        outputs_path = get_outputs_path()
+        temp_path = str(outputs_path / "temp.json")
+    
+    temp_path_obj = Path(temp_path)
+    if not temp_path_obj.exists():
+        raise FileNotFoundError(f"Temp file not found: {temp_path}")
+    
+    logger.info(f"Computing embeddings for genomes in {temp_path}")
+    
+    # Load genomes from temp.json
+    with open(temp_path_obj, 'r', encoding='utf-8') as f:
+        genomes = json.load(f)
+    
+    if not genomes:
+        logger.warning("No genomes found in temp.json")
+        return
+    
+    # Check if embeddings already exist (skip if already computed)
+    if all("prompt_embedding" in g for g in genomes):
+        logger.info("Embeddings already exist in temp.json, skipping computation")
+        return
+    
+    # Extract prompts
+    prompts = [g.get("prompt", "") for g in genomes]
+    
+    # Get embedding model
+    model = get_embedding_model(model_name=model_name)
+    
+    # Compute embeddings in batch
+    logger.info(f"Computing embeddings for {len(prompts)} prompts...")
+    embeddings = model.encode(
+        prompts,
+        batch_size=batch_size,
+        show_progress=show_progress
+    )
+    
+    # Add embeddings to genomes (convert numpy array to list for JSON)
+    for i, genome in enumerate(genomes):
+        # Convert numpy array to list (JSON-compatible)
+        genome["prompt_embedding"] = embeddings[i].tolist()
+    
+    # Save updated genomes back to temp.json
+    with open(temp_path_obj, 'w', encoding='utf-8') as f:
+        json.dump(genomes, f, indent=2, ensure_ascii=False)
+    
+    logger.info(f"Successfully computed and saved embeddings for {len(genomes)} genomes")
 

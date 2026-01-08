@@ -206,6 +206,29 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         return
 
     try:
+        # Step 4: SPECIATION - Cluster initial population into species
+        logger.info("Running speciation on evaluated genomes...")
+        from speciation import run_speciation
+        
+        temp_path = str(get_outputs_path() / "temp.json")
+        speciation_result = run_speciation(
+            temp_path=temp_path,
+            current_generation=0,
+            log_file=log_file
+        )
+        
+        if speciation_result.get("success"):
+            logger.info("Speciation complete: %d species, %d in limbo, %d genomes updated",
+                       speciation_result.get("species_count", 0),
+                       speciation_result.get("limbo_size", 0),
+                       speciation_result.get("genomes_updated", 0))
+        else:
+            logger.warning("Speciation completed with warnings: %s", speciation_result.get("error", "unknown"))
+    except Exception as e:
+        logger.error("Speciation failed: %s", e, exc_info=True)
+        return
+
+    try:
         logger.info("Updating evolution tracker for generation 0 and calculating elite threshold...")
         
         temp_path = get_outputs_path() / "temp.json"
@@ -566,9 +589,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         north_star_metric=north_star_metric,
                         logger=logger
                     )
-                    logger.debug("Distribution: %d to elites, %d to non_elites, %d archived", 
+                    logger.debug("Distribution: %d to elites, %d to non_elites, %d to limbo", 
                                distribution_result["elites_moved"], distribution_result["population_moved"], 
-                               distribution_result.get("under_performing_moved", 0))
+                               distribution_result.get("limbo_moved", 0))
                     
                     removal_results = remove_worse_performing_genomes_from_all_files(
                         outputs_path=outputs_path,

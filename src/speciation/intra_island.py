@@ -8,7 +8,7 @@ import numpy as np
 from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 
 from .island import Individual, Species, IslandMode
-from .embeddings import semantic_distance
+from .distance import semantic_distance
 
 if TYPE_CHECKING:
     from .limbo import LimboBuffer
@@ -19,7 +19,27 @@ get_logger, _, _, _ = get_custom_logging()
 
 def select_parents_elite_focused(island: Species, alpha: float = 0.5,
                                   mode: Optional[IslandMode] = None) -> Tuple[Individual, Individual]:
-    """Select parents with tiered approach based on island mode."""
+    """
+    Select parents for breeding with mode-adaptive selection strategy.
+    
+    Parent selection varies by island mode:
+    - DEFAULT: Balanced elite + diversity selection
+    - EXPLOIT: Hyper-elitist (top 3 only)
+    - EXPLORE: Relaxed selection with potential external parent from limbo
+    
+    This ensures each mode has appropriate selection pressure:
+    - EXPLOIT focuses on best solutions (exploitation)
+    - EXPLORE allows more diversity (exploration)
+    - DEFAULT balances both
+    
+    Args:
+        island: Species to select parents from
+        alpha: Selection pressure parameter (higher = more elite-focused)
+        mode: Optional mode override (uses island.mode if None)
+    
+    Returns:
+        Tuple of (parent1, parent2) for breeding
+    """
     if mode is None:
         mode = island.mode
     

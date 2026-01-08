@@ -9,7 +9,7 @@ from scipy.cluster.hierarchy import linkage, fcluster
 from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 
 from .island import Individual, Species, generate_species_id
-from .embeddings import semantic_distance
+from .distance import semantic_distance
 
 if TYPE_CHECKING:
     from .limbo import LimboBuffer
@@ -21,7 +21,28 @@ get_logger, _, _, _ = get_custom_logging()
 def adjust_island_radius(island: Species, max_capacity: int = 50, shrink_factor: float = 0.9,
                          limbo: Optional["LimboBuffer"] = None, current_generation: int = 0,
                          logger=None) -> List[Individual]:
-    """Shrink radius if over capacity and eject fringe members."""
+    """
+    Adjust island radius when over capacity and eject fringe members.
+    
+    When an island exceeds max_capacity, it shrinks its radius and ejects
+    members that are now outside the new radius (fringe members). This:
+    - Maintains island size within capacity
+    - Preserves core members (closest to leader)
+    - Sends fringe members to limbo (if provided)
+    
+    Radius adjustment: new_radius = old_radius * shrink_factor
+    
+    Args:
+        island: Species to adjust
+        max_capacity: Maximum allowed members
+        shrink_factor: Factor to shrink radius (0 < factor < 1)
+        limbo: Optional limbo buffer for ejected members
+        current_generation: Current generation number
+        logger: Optional logger instance
+    
+    Returns:
+        List of ejected individuals
+    """
     if logger is None:
         logger = get_logger("AdaptiveThreshold")
     
@@ -57,7 +78,27 @@ def adjust_island_radius(island: Species, max_capacity: int = 50, shrink_factor:
 
 
 def compute_silhouette_score(island: Species, all_species: Dict[int, Species]) -> float:
-    """Compute average silhouette score for an island."""
+    """
+    Compute average silhouette score for an island.
+    
+    Silhouette score measures cluster cohesion:
+    - High score (>0.5): Good cohesion (members similar to each other, different from others)
+    - Low score (<0.5): Poor cohesion (members too diverse or too similar to other species)
+    
+    Formula: s = (b - a) / max(a, b)
+    where:
+    - a = average intra-species distance (to own members)
+    - b = average inter-species distance (to nearest other species)
+    
+    Used to detect when islands should split (low silhouette = heterogeneous).
+    
+    Args:
+        island: Species to compute silhouette for
+        all_species: All species (for inter-species distance computation)
+    
+    Returns:
+        Average silhouette score in range [-1, 1] (typically [0, 1])
+    """
     if island.size < 2:
         return 1.0
     
