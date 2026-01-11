@@ -103,7 +103,7 @@ class ResponseGenerator:
             self.logger.error(f"Generation failed: {e}", exc_info=True)
             return "", time.time() - start_time
 
-    def process_population(self, pop_path: str = "data/outputs/non_elites.json") -> None:
+    def process_population(self, pop_path: str = "data/outputs/temp.json") -> None:
         """Process entire population for text generation one genome at a time."""
         try:
             self.logger.info("Starting population processing for text generation with chat completions")

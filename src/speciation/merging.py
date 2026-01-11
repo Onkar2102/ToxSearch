@@ -6,58 +6,11 @@ Island merging logic for speciation.
 
 from typing import Dict, List, Tuple, Optional
 
-from .species import Individual, Species, SpeciesMode, IslandMode, generate_species_id
+from .species import Individual, Species, generate_species_id
 from .distance import semantic_distance
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
-
-
-def detect_merge_candidates(species: Dict[int, Species], theta_merge: float = 0.2,
-                            min_stability_gens: int = 3, current_gen: int = 0, logger=None) -> List[Tuple[int, int]]:
-    """
-    Find pairs of species that should merge.
-    
-    Two species are candidates for merging if:
-    1. Leader embeddings are semantically close (distance < theta_merge)
-    2. Both species are stable (have existed for min_stability_gens generations)
-    
-    Stability requirement prevents merging of newly created species too quickly,
-    giving them time to establish their own identity before combining.
-    
-    Args:
-        species: Dict of all current species
-        theta_merge: Semantic distance threshold for merging (must be < theta_sim)
-        min_stability_gens: Minimum generations a species must exist before merging
-        current_gen: Current generation number
-        logger: Optional logger instance
-    
-    Returns:
-        List of (species_id1, species_id2) pairs to merge
-    """
-    if logger is None:
-        logger = get_logger("IslandMerging")
-    
-    merge_pairs = []
-    species_list = list(species.items())
-    
-    # Check all pairs of species
-    for i, (id1, sp1) in enumerate(species_list):
-        for j, (id2, sp2) in enumerate(species_list[i + 1:], start=i + 1):
-            # Skip pairs with missing embeddings
-            if sp1.leader.embedding is None or sp2.leader.embedding is None:
-                continue
-            
-            # Check if leaders are close enough to merge
-            dist = semantic_distance(sp1.leader.embedding, sp2.leader.embedding)
-            if dist < theta_merge:
-                # Check stability: both must have existed long enough
-                sp1_stable = (current_gen - sp1.created_at) >= min_stability_gens
-                sp2_stable = (current_gen - sp2.created_at) >= min_stability_gens
-                if sp1_stable and sp2_stable:
-                    merge_pairs.append((id1, id2))
-    
-    return merge_pairs
 
 
 def merge_islands(
@@ -119,9 +72,10 @@ def merge_islands(
         id=generate_species_id(),  # New ID for clarity
         leader=new_leader,
         members=combined,
-        mode=IslandMode.DEFAULT,
         radius=theta_sim,  # Constant radius for all species
-        stagnation_counter=0,
+        stagnation=0,
+        max_fitness=max(sp1.leader.fitness, sp2.leader.fitness),
+        species_state="active",
         created_at=current_generation,
         last_improvement=current_generation,
         cluster_origin="merge",  # Created via merge
@@ -185,11 +139,24 @@ def process_merges(
     merges_done = 0
     
     while merges_done < max_merges_per_gen:
-        pairs = detect_merge_candidates(species, theta_merge, min_stability_gens, current_gen, logger)
-        if not pairs:
+        # Find merge candidates: pairs with leader distance <= theta_merge and both stable
+        merge_pairs = []
+        species_list = list(species.items())
+        for i, (id1, sp1) in enumerate(species_list):
+            for j, (id2, sp2) in enumerate(species_list[i + 1:], start=i + 1):
+                if sp1.leader.embedding is None or sp2.leader.embedding is None:
+                    continue
+                dist = semantic_distance(sp1.leader.embedding, sp2.leader.embedding)
+                if dist <= theta_merge:
+                    sp1_stable = (current_gen - sp1.created_at) >= min_stability_gens
+                    sp2_stable = (current_gen - sp2.created_at) >= min_stability_gens
+                    if sp1_stable and sp2_stable:
+                        merge_pairs.append((id1, id2))
+        
+        if not merge_pairs:
             break
         
-        id1, id2 = pairs[0]
+        id1, id2 = merge_pairs[0]
         if id1 not in species or id2 not in species:
             continue
         
@@ -211,31 +178,3 @@ def process_merges(
         merges_done += 1
     
     return species, events
-
-
-def should_merge(sp1: Species, sp2: Species, theta_merge: float, min_stability_gens: int, current_gen: int) -> bool:
-    """
-    Check if two species should merge based on similarity and stability.
-    
-    Two species merge if:
-    1. Leader distance < theta_merge (very similar semantically)
-    2. Both species stable (age >= min_stability_gens)
-    
-    Args:
-        sp1: First species
-        sp2: Second species
-        theta_merge: Merge distance threshold
-        min_stability_gens: Minimum stability age
-        current_gen: Current generation number
-    
-    Returns:
-        True if species should merge, False otherwise
-    """
-    # Check for embeddings
-    if sp1.leader.embedding is None or sp2.leader.embedding is None:
-        return False
-    # Check stability requirement
-    if (current_gen - sp1.created_at) < min_stability_gens or (current_gen - sp2.created_at) < min_stability_gens:
-        return False
-    # Check distance threshold
-    return semantic_distance(sp1.leader.embedding, sp2.leader.embedding) < theta_merge

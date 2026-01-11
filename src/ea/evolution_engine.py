@@ -71,7 +71,7 @@ class EvolutionEngine:
         self.outputs_path = outputs_path
         get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("EvolutionEngine", log_file)
-        self.parent_selector = ParentSelector(north_star_metric, log_file, adaptive_selection_after=adaptive_selection_after, max_num_parents=max_num_parents)
+        self.parent_selector = ParentSelector(north_star_metric, log_file)
         # Initialize the shared generator instances
         self.prompt_generator = get_prompt_generator()
         self.response_generator = get_response_generator()
@@ -370,18 +370,21 @@ class EvolutionEngine:
     def _generate_variants_all_mode(self, evolution_tracker: Dict[str, Any] = None) -> None:
         """Generate variants using all operators with both parents.json and top_10.json"""
 
+        # Check for population files - elites.json is preferred, but reserves.json can be used as fallback
         elites_path = Path(self.outputs_path) / "elites.json"
-        if elites_path.exists():
-            with open(elites_path, 'r', encoding='utf-8') as f:
-                elites = json.load(f)
-            if not elites:
-                self.logger.error("CRITICAL ERROR: elites.json exists but is empty - this indicates a fundamental problem")
-                self.logger.error("Evolution cannot continue without elites. Stopping immediately.")
-                raise RuntimeError("Empty elites.json - evolution cannot continue. This indicates a critical system failure.")
-        else:
-            self.logger.error("CRITICAL ERROR: elites.json does not exist - this indicates a fundamental problem")
-            self.logger.error("Evolution cannot continue without elites. Stopping immediately.")
-            raise RuntimeError("Missing elites.json - evolution cannot continue. This indicates a critical system failure.")
+        reserves_path = Path(self.outputs_path) / "reserves.json"
+        
+        has_elites = elites_path.exists() and json.loads(elites_path.read_text()) if elites_path.exists() else False
+        has_reserves = reserves_path.exists() and json.loads(reserves_path.read_text()) if reserves_path.exists() else False
+        
+        if not has_elites and not has_reserves:
+            self.logger.error("CRITICAL ERROR: No population files found (elites.json or reserves.json)")
+            self.logger.error("Evolution cannot continue without any genomes. Stopping immediately.")
+            raise RuntimeError("No population files found - evolution cannot continue. This indicates a critical system failure.")
+        
+        if not has_elites:
+            # Fallback: use reserves for parent selection
+            self.logger.warning("elites.json is empty, using reserves.json for parent selection")
 
         self.parent_selector.adaptive_tournament_selection(evolution_tracker, outputs_path=str(self.outputs_path))
 
@@ -596,7 +599,7 @@ class EvolutionEngine:
                     # Population statistics (after distribution)
                     "avg_fitness_generation": 0.0001,
                     "avg_fitness_elites": 0.0001,
-                    "avg_fitness_non_elites": 0.0001,
+                    "avg_fitness_reserves": 0.0001,
                     "parents": [],
                     "top_10": [],
                     "variants_created": 0,

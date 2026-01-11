@@ -25,13 +25,14 @@ All files are stored in `data/outputs/[timestamp]/` directory:
    - Used as parent pool for breeding
    - Each species maintains up to 100 top genomes
 
-3. **`reserves.json`** - **Cluster 0 (Holding Buffer)**
-   - Stores genomes that don't fit existing species or were removed from species
-   - Genomes below `removal_threshold` are removed and archived to `under_performing/`
-   - Fixed capacity of 1000 genomes - excess removed based on fitness score
-   - Cluster 0 individuals have a Time-To-Live (TTL) and can form new species if they cluster
-   - Genomes can be promoted from Cluster 0 to species or repopulate extinct species
+3. **`reserves.json`** - **Cluster 0 (Outliers)**
+   - Stores genomes that don't fit existing species (semantic outliers)
+   - These are high-fitness outliers that don't match any existing species leader
+   - Part of the **active population** (population = elites + reserves)
+   - Fixed capacity of 1000 genomes - excess removed based on fitness score and archived
+   - Genomes removed from reserves due to capacity limits go to `archive.json`
    - Has a fixed species_id of 0
+   - Can form new species if enough similar outliers cluster together
 
 4. **`EvolutionTracker.json`** - **Metadata & Statistics**
    - Tracks evolution progress, metrics, and configuration
@@ -42,7 +43,7 @@ All files are stored in `data/outputs/[timestamp]/` directory:
 5. **`speciation_state.json`** - **Speciation Module State**
    - Persists the full state of the speciation module across generations
    - Contains all species with their leaders, members, and metadata
-   - Includes cluster origin tracking (merge, split, natural)
+   - Includes cluster origin tracking (merge, natural)
    - Contains Cluster 0 state (individuals, TTL, capacity)
    - Used internally by speciation module for state reconstruction
 
@@ -56,10 +57,11 @@ All files are stored in `data/outputs/[timestamp]/` directory:
 
 ### Archive Files
 
-8. **`under_performing/`** - **Archive Directory**
-   - Contains genomes removed from Cluster 0 due to low fitness
-   - Genomes with fitness below `removal_threshold` are archived here
-   - Also contains genomes removed when Cluster 0 exceeds capacity
+8. **`archive.json`** - **Archived Genomes (NOT part of population)**
+   - Contains genomes removed from the active population
+   - Genomes removed from species when capacity exceeded
+   - Genomes removed from reserves when capacity exceeded
+   - **NOT included in population statistics** (population = elites + reserves only)
 
 ---
 
@@ -182,45 +184,42 @@ Step 7: Finalize Generation 0
      - For each genome, finds nearest species leader within constant `theta_sim` threshold
      - If no match, creates new species (cluster_origin="natural") or adds to Cluster 0
   3. **Assign Species IDs**: Adds `species_id` field to each genome (1+ for species, 0 for Cluster 0)
-  4. **Mark Cluster 0 Members**: Adds `in_limbo` flag to genomes in Cluster 0
+  4. **Mark Cluster 0 Membership**: Genomes in Cluster 0 are identified by `species_id: 0` (some outputs may also include an `in_reserves` flag)
   5. **Species Management**:
      - Updates species leaders (highest fitness member)
      - Manages Cluster 0 (holding buffer for outliers)
      - All species have constant radius (`theta_sim`)
      - Tracks species metrics and cluster origins
-- **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`, and `in_limbo` fields)
+- **Writes to**: `temp.json` (genomes updated with `prompt_embedding` and `species_id`; some outputs may also include an `in_reserves` flag)
 - **Note**: 
   - `prompt_embedding` field is stored as a list (JSON-compatible)
   - Species state persisted to `speciation_state.json`
   - Cluster origins tracked: "natural", "merge", or "split"
-  - Persistent speciation data: `species_id`, `in_limbo`, cluster_origin, parent_ids
+  - Persistent speciation data: `species_id`, cluster_origin, parent_ids (some tooling may include an `in_reserves` flag)
 
-### Step 5: Calculate Thresholds
-- **Reads from**: `temp.json` (now with `species_id`)
-- Calculates:
-  - `elite_threshold`: Top 25% (or configurable) toxicity score
-  - `removal_threshold`: Bottom 5% (or configurable) toxicity score
-- **Writes to**: `EvolutionTracker.json` (thresholds and generation 0 stats)
-
-### Step 6: Distribute Genomes
-- **Reads from**: `temp.json` (with `species_id` and thresholds)
-- **Distribution Logic**:
-  - **Elites** (toxicity >= elite_threshold) → `elites.json`
-    - Contains elites from ALL species
-    - Each species maintains top 100 genomes by fitness
+### Step 5: Distribute Genomes
+- **Reads from**: `temp.json` (with `species_id` assigned by speciation)
+- **Distribution Logic** (handled by speciation module):
+  - **Elites** (species_id > 0) → `elites.json`
+    - Contains genomes assigned to species (species_id 1, 2, 3, ...)
+    - Each species maintains top genomes by fitness (up to `species_capacity`)
+    - Genomes exceeding species capacity are archived to `archive.json`
     - Used as primary parent pool for breeding
-  - **Cluster 0** (non-elites, removed genomes, outliers) → `reserves.json`
-    - Contains individuals below elite threshold
-    - Contains genomes ejected from species due to capacity limits
+  - **Reserves** (species_id == 0) → `reserves.json`
     - Contains high-fitness outliers that don't fit existing species
-    - Genomes below `removal_threshold` are archived to `under_performing/`
-    - Maximum capacity of 1000 genomes (excess removed by fitness)
-    - All Cluster 0 members have `species_id: 0`
-- **Writes to**: `elites.json`, `reserves.json`
+    - Contains genomes removed from species when capacity exceeded (archived, not moved here)
+    - Maximum capacity of 1000 genomes - excess removed by fitness and archived
+    - All reserves have `species_id: 0`
+    - Part of **active population** (population = elites + reserves)
+- **Archive** → `archive.json`
+  - Contains genomes removed from species/reserves when capacity exceeded
+  - Contains low-fitness genomes removed from reserves
+  - **NOT part of active population**
+- **Writes to**: `elites.json`, `reserves.json`, `archive.json`
 - **Note**: 
   - All distributed genomes retain their `species_id` field
-  - Cluster 0 individuals have `species_id: 0` and `in_limbo: true`
-  - Distribution is based on fitness thresholds and species membership
+  - Active population = elites.json + reserves.json (archive.json excluded)
+  - Distribution is based on species_id assigned during speciation
 - **Clears**: `temp.json` (set to empty array `[]`)
 
 ### Step 7: Finalize Generation 0
@@ -272,7 +271,7 @@ For each generation, the system repeats this cycle:
      - For each genome, finds nearest species leader within constant `theta_sim` threshold
      - If no match, creates new species (cluster_origin="natural") or adds to Cluster 0
   3. **Assign Species IDs**: Adds `species_id` field to each genome (1+ for species, 0 for Cluster 0)
-  4. **Mark Cluster 0 Members**: Adds `in_limbo` flag to genomes in Cluster 0
+  4. **Mark Cluster 0 Membership**: Genomes in Cluster 0 are identified by `species_id: 0` (some outputs may also include an `in_reserves` flag)
   5. **Species Management**:
      - Updates species leaders (highest fitness member)
      - Manages Cluster 0 (filters by removal_threshold, enforces capacity)
@@ -281,7 +280,7 @@ For each generation, the system repeats this cycle:
      - Handles extinctions, migrations
      - All species maintain constant radius (`theta_sim`)
      - Tracks speciation metrics and cluster origins
-- **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`, `in_limbo` fields)
+- **Writes to**: `temp.json` (genomes updated with `prompt_embedding`, `species_id`; some outputs may include `in_reserves` flag)
 - **Note**: Embeddings are added to genomes in `prompt_embedding` field (stored as JSON list)
 
 ### Step 5: Calculate Thresholds
@@ -383,7 +382,7 @@ Each genome in JSON files has this structure:
   "north_star_score": 0.85,
   "prompt_embedding": [0.123, -0.456, ...],  // 384-dim array (added by speciation)
   "species_id": 3,  // Added by speciation module (0 = Cluster 0, 1+ = species)
-  "in_limbo": false,  // Added by speciation (true if in Cluster 0)
+  "in_reserves": false,  // Optional flag (true if in Cluster 0 / reserves)
   "moderation_result": {
     "scores": {"toxicity": 0.85},
     "classifications": {...}
@@ -472,13 +471,13 @@ Input: temp.json (genomes with fitness scores)
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 6: Update Genomes                                      │
 │  - Assign species_id to each genome (0 for Cluster 0)       │
-│  - Mark in_limbo flag for Cluster 0 individuals             │
+│  - Some outputs may mark in_reserves flag for Cluster 0     │
 │  - Preserve all original genome data                        │
 │  - Save state to speciation_state.json                      │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
-Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
+Output: temp.json (genomes with prompt_embedding, species_id; may include in_reserves flag)
 ```
 
 ### What Speciation Does
@@ -515,7 +514,7 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
 ### What Gets Saved
 - **`prompt_embedding`**: 384-dimensional L2-normalized embedding (saved in genome as list for JSON compatibility)
 - **`species_id`**: Integer ID of the species/island (0 = Cluster 0, 1+ = species)
-- **`in_limbo`**: Boolean flag indicating if genome is in Cluster 0 (saved in genome JSON)
+- **`in_reserves`**: Optional boolean flag indicating if genome is in Cluster 0 (some outputs include this)
 - **Species metadata**: Saved to `speciation_state.json` including:
   - Leader embeddings, prompt, and fitness
   - Cluster origin ("natural", "merge", "split")
@@ -567,9 +566,9 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
    - Computes embeddings for 100 prompts and adds `prompt_embedding` field
    - Groups into 8 species based on semantic similarity (cluster_origin="natural")
    - Adds `species_id` (1-8) to each genome, 0 for Cluster 0
-   - Marks 5 high-fitness outliers with `in_limbo: true` (species_id: 0)
+   - Marks 5 high-fitness outliers as reserves (species_id: 0)
    - Saves state to `speciation_state.json`
-   - → `temp.json` (100 genomes with prompt_embedding, species_id, in_limbo)
+   - → `temp.json` (100 genomes with prompt_embedding, species_id)
 5. **Thresholds**: Calculates elite_threshold = 0.75, removal_threshold = 0.10
 6. **Distribute**: 
    - 25 genomes → `elites.json` (25 total, top 100 per species)
@@ -589,11 +588,11 @@ Output: temp.json (genomes with prompt_embedding, species_id, in_limbo added)
    - Computes embeddings for 50 new variants and adds `prompt_embedding` field
    - Clusters into existing species (from Gen 0) or creates new ones
    - Adds `species_id` to each variant (0 for Cluster 0)
-   - Marks Cluster 0 members with `in_limbo: true`
+   - Cluster 0 members have species_id: 0 (some outputs may include in_reserves flag)
    - May merge species (cluster_origin="merge", records parent_ids)
    - May split overcrowded species (cluster_origin="split")
    - Saves updated state to `speciation_state.json`
-   - → `temp.json` (50 genomes with prompt_embedding, species_id, in_limbo)
+   - → `temp.json` (50 genomes with prompt_embedding, species_id)
 7. **Thresholds**: Calculates elite_threshold = 0.80
 8. **Distribute**: 
    - 15 variants → `elites.json` (now 40 total, top 100 per species)

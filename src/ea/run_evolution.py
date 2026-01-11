@@ -112,138 +112,8 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
         raise
 
 
-def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metric, logger, removal_threshold=None, north_star_threshold=0.99):
-    """
-    Distribute genomes from temp.json based on thresholds into 2 categories:
-    - Genomes >= elite_threshold → elites.json (elite genomes from all species)
-    - All other genomes (including cluster 0 / reserves) → reserves.json (non-elite pool)
-    - Genomes below removal_threshold are archived to under_performing.json
-    
-    Note: non_elites.json is no longer used. All non-elite genomes go to reserves.json,
-    which represents cluster 0 in the speciation framework.
-
-    Args:
-        temp_path: Path to temp.json file
-        elite_threshold: Toxicity threshold for elite selection
-        north_star_metric: The metric to use for scoring
-        logger: Logger instance
-        removal_threshold: Toxicity threshold for removal (default: None, no removal)
-        north_star_threshold: Threshold for toxic genomes (default: 0.99)
-
-    Returns:
-        dict: Distribution statistics with elites_moved, cluster0_moved, archived, total_processed
-    """
-    try:
-        outputs_path = get_outputs_path()
-        elites_path = outputs_path / "elites.json"
-        reserves_path = outputs_path / "reserves.json"
-        under_performing_path = outputs_path / "under_performing.json"
-
-        if not temp_path.exists():
-            logger.warning("temp.json not found for distribution")
-            return {"elites_moved": 0, "cluster0_moved": 0, "archived": 0, "total_processed": 0}
-
-        with open(temp_path, 'r', encoding='utf-8') as f:
-            temp_variants = json.load(f)
-
-        if not temp_variants:
-            logger.debug("No variants in temp.json to distribute")
-            return {"elites_moved": 0, "cluster0_moved": 0, "archived": 0, "total_processed": 0}
-
-        elites_to_move = []
-        cluster0_to_move = []  # Formerly population_to_move and limbo_to_move combined
-        to_archive = []
-
-        for variant in temp_variants:
-            if not variant or not variant.get("prompt"):
-                continue
-
-            toxicity_score = _extract_north_star_score(variant, north_star_metric)
-            genome_id = variant.get("id")
-            species_id = variant.get("species_id")
-
-            # Check removal threshold first - archive low performers
-            if removal_threshold is not None and toxicity_score <= removal_threshold:
-                variant["archive_reason"] = "below_removal_threshold"
-                to_archive.append(variant)
-                logger.debug(f"Genome {genome_id} below removal threshold (score: {toxicity_score:.3f}) - archiving")
-                continue
-            
-            # Elite genomes (high fitness) go to elites.json
-            if toxicity_score >= elite_threshold:
-                variant["initial_state"] = "elite"
-                elites_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} marked as elite (score: {toxicity_score:.3f})")
-            else:
-                # All other genomes go to reserves.json (cluster 0)
-                # This includes both in-species genomes and cluster 0 genomes
-                variant["initial_state"] = "cluster_0"
-                variant["species_id"] = species_id if species_id is not None else 0
-                cluster0_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} added to cluster 0 (score: {toxicity_score:.3f})")
-
-        if elites_to_move:
-            elites_to_save = []
-            if elites_path.exists():
-                with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites_to_save = json.load(f)
-
-            elites_to_save.extend(elites_to_move)
-
-            with open(elites_path, 'w', encoding='utf-8') as f:
-                json.dump(elites_to_save, f, indent=2, ensure_ascii=False)
-
-            logger.debug(f"Moved {len(elites_to_move)} elite genomes to elites.json")
-
-        if cluster0_to_move:
-            cluster0_to_save = []
-            if reserves_path.exists():
-                with open(reserves_path, 'r', encoding='utf-8') as f:
-                    cluster0_to_save = json.load(f)
-
-            cluster0_to_save.extend(cluster0_to_move)
-
-            with open(reserves_path, 'w', encoding='utf-8') as f:
-                json.dump(cluster0_to_save, f, indent=2, ensure_ascii=False)
-
-            logger.debug(f"Moved {len(cluster0_to_move)} genomes to reserves.json (cluster 0)")
-
-        if to_archive:
-            archive_to_save = []
-            if under_performing_path.exists():
-                with open(under_performing_path, 'r', encoding='utf-8') as f:
-                    archive_to_save = json.load(f)
-
-            archive_to_save.extend(to_archive)
-
-            with open(under_performing_path, 'w', encoding='utf-8') as f:
-                json.dump(archive_to_save, f, indent=2, ensure_ascii=False)
-
-            logger.debug(f"Archived {len(to_archive)} low-performing genomes to under_performing.json")
-
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            json.dump([], f, indent=2, ensure_ascii=False)
-
-        distribution_stats = {
-            "elites_moved": len(elites_to_move),
-            "cluster0_moved": len(cluster0_to_move),
-            "archived": len(to_archive),
-            "total_processed": len(temp_variants),
-            # Backward compatibility aliases
-            "population_moved": len(cluster0_to_move),
-            "limbo_moved": 0
-        }
-
-        logger.debug(f"Distribution complete: {distribution_stats['total_processed']} variants → "
-                   f"{distribution_stats['elites_moved']} elites, "
-                   f"{distribution_stats['population_moved']} population, "
-                   f"{distribution_stats['limbo_moved']} limbo")
-
-        return distribution_stats
-
-    except Exception as e:
-        logger.error(f"Failed to distribute genomes by threshold: {e}")
-        raise
+# Distribution logic has been moved to speciation module
+# Use SpeciationModule.distribute_genomes() instead
 
 
 population_path = None
@@ -318,7 +188,7 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "avg_fitness_variants": 0.0001,
                     "avg_fitness_generation": 0.0001,
                     "avg_fitness_elites": 0.0001,
-                    "avg_fitness_non_elites": 0.0001,
+                    "avg_fitness_reserves": 0.0001,
                     "parents": None,
                     "top_10": None,
                     "variants_created": None,
@@ -367,6 +237,8 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
 
         best_genome_id = None
         best_score = 0.0001
+        min_score = 0.0001
+        avg_score = 0.0001
 
         if population and north_star_metric:
             generation_genomes = [g for g in population if g.get("generation") == gen_number]
@@ -380,7 +252,10 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
 
                 if genome_scores:
                     best_genome_id, best_score = max(genome_scores, key=lambda x: x[1])
-                    _logger.info(f"Generation {gen_number} best score: {best_score} (genome {best_genome_id})")
+                    _, min_score = min(genome_scores, key=lambda x: x[1])
+                    all_scores = [s for _, s in genome_scores]
+                    avg_score = round(sum(all_scores) / len(all_scores), 4) if all_scores else 0.0001
+                    _logger.info(f"Generation {gen_number} scores: max={best_score:.4f}, min={min_score:.4f}, avg={avg_score:.4f}")
                 else:
                     _logger.warning(f"No valid scores found for generation {gen_number}")
             else:
@@ -440,11 +315,12 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "genome_id": best_genome_id,
                 "avg_fitness": round(avg_fitness, 4),
                 "max_score_variants": best_score,
-                "min_score_variants": 0.0001,
-                "avg_fitness_variants": 0.0001,
-                "avg_fitness_generation": 0.0001,
+                "min_score_variants": min_score,
+                "avg_fitness_variants": avg_score,
+                "avg_fitness_generation": round(avg_fitness, 4),
                 "avg_fitness_elites": 0.0001,
-                "avg_fitness_non_elites": 0.0001,
+                "avg_fitness_reserves": 0.0001,
+                "avg_fitness_reserves": 0.0001,
                 "parents": [],
                 "top_10": [],
                 "variants_created": variants_created,
@@ -453,6 +329,7 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "elites_threshold": 0.0001,
                 "removal_threshold": 0.0001,
                 "elites_count": 0,
+                "reserves_count": 0,
                 "selection_mode": selection_mode,
             }
             evolution_tracker.setdefault("generations", []).append(new_gen)
@@ -598,18 +475,21 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=1, max_num_parents=4, operators="all"):
     """Run one evolution generation with comprehensive logging and steady state support"""
     outputs_path = get_outputs_path()
-    limbo_path = outputs_path / "limbo.json"  # Population now in limbo.json (cluster 0)
+    # Check for population files - use reserves.json (cluster 0) or elites.json
+    reserves_path = outputs_path / "reserves.json"
+    elites_path = outputs_path / "elites.json"
     evolution_tracker_path = outputs_path / "EvolutionTracker.json"
 
     logger = get_logger("RunEvolution", log_file)
     logger.info("Starting evolution: cycle=%s, metric=%s", current_cycle, north_star_metric)
 
-    if not limbo_path.exists():
-        logger.error("Population file not found: %s", limbo_path)
-        raise FileNotFoundError(f"Population file not found: {limbo_path}")
+    # Check if any population file exists
+    if not reserves_path.exists() and not elites_path.exists():
+        logger.error("No population file found: checked reserves.json and elites.json")
+        raise FileNotFoundError(f"No population file found in {outputs_path}")
 
     try:
-        _, _, load_population, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+        _, _, load_population, _, _, _, _, _, _, _, _, _ = get_population_io()
         population = load_population(str(outputs_path), logger=logger)
         logger.debug("Loaded %d genomes", len(population))
     except Exception as e:

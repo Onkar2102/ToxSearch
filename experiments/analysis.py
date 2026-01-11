@@ -537,13 +537,17 @@ all_scores_for_avg = np.concatenate([
 avg_score_all_runs = np.mean(all_scores_for_avg) if len(all_scores_for_avg) > 0 else np.nan
 
 def count_total_genomes_per_run(run_name, base_dir):
-    """Counts total genomes across elites, non-elites, and under-performing files for a run."""
+    """Counts total genomes across elites and reserves files for a run.
+    
+    Note: We only maintain elites in our project. Active population = elites + reserves.
+    Archive.json is NOT part of the population and is excluded from this count.
+    """
     run_dir = os.path.join(base_dir, run_name)
     if not os.path.isdir(run_dir):
         return 0
     
     total_count = 0
-    for filename in ['elites.json', 'non_elites.json', 'under_performing.json']:
+    for filename in ['elites.json', 'reserves.json']:
         file_path = os.path.join(run_dir, filename)
         if os.path.exists(file_path):
             try:

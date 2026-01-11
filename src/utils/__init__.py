@@ -18,8 +18,7 @@ def get_population_io():
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
-        get_population_stats_steady_state,
-        finalize_initial_population
+        get_population_stats_steady_state
     )
     return (
         load_and_initialize_population, 
@@ -33,8 +32,7 @@ def get_population_io():
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
-        get_population_stats_steady_state,
-        finalize_initial_population
+        get_population_stats_steady_state
     )
 
 def get_system_utils():

@@ -127,14 +127,14 @@ def leader_follower_clustering(
                 )
                 
                 # Reconstruct species (members will be populated during clustering)
-                from .species import SpeciesMode
                 species = Species(
                     id=sid,
                     leader=leader,
                     members=[leader],
-                    mode=SpeciesMode(sp_dict.get("mode", "DEFAULT")),
                     radius=sp_dict.get("radius", theta_sim),
-                    stagnation_counter=sp_dict.get("stagnation_counter", 0),
+                    stagnation=sp_dict.get("stagnation", 0),
+                    max_fitness=sp_dict.get("max_fitness", leader.fitness),
+                    species_state=sp_dict.get("species_state", "active"),
                     created_at=sp_dict.get("created_at", 0),
                     last_improvement=sp_dict.get("last_improvement", 0),
                     fitness_history=sp_dict.get("fitness_history", []),
@@ -191,7 +191,6 @@ def leader_follower_clustering(
     if is_generation_0:
         first = sorted_pop[0]
         first_species_id = 1  # Species IDs start from 1
-        from .species import SpeciesMode
         first_species = Species(
             id=first_species_id,
             leader=first,
@@ -201,8 +200,7 @@ def leader_follower_clustering(
             last_improvement=current_generation,
             cluster_origin="natural",
             parent_ids=None,
-            parent_id=None,
-            mode=SpeciesMode.DEFAULT
+            parent_id=None
         )
         species[first_species_id] = first_species
         leaders.append((first_species_id, first.embedding))
@@ -241,19 +239,23 @@ def leader_follower_clustering(
         # Decision: assign to species or create new species
         if nearest_leader_id is not None and min_dist < theta_sim:
             # Within threshold -> assign as follower
-            species[nearest_leader_id].add_member(ind)
+            sp = species[nearest_leader_id]
+            sp.add_member(ind)
             ind.species_id = nearest_leader_id
-            # Update leader if this new member has higher fitness
-            species[nearest_leader_id].update_leader()
-            # Update leader embedding in leaders list
-            for i, (sid, _) in enumerate(leaders):
-                if sid == nearest_leader_id:
-                    leaders[i] = (sid, species[nearest_leader_id].leader.embedding)
-                    break
+            # Immediately update leader if this new member has higher fitness
+            if ind.fitness > sp.leader.fitness:
+                if ind.fitness > sp.max_fitness:
+                    sp.max_fitness = ind.fitness
+                    sp.stagnation = 0  # Reset stagnation when max_fitness improves
+                sp.leader = ind
+                # Update leader embedding in leaders list
+                for i, (sid, _) in enumerate(leaders):
+                    if sid == nearest_leader_id:
+                        leaders[i] = (sid, sp.leader.embedding)
+                        break
         else:
             # Outside threshold -> create new species
             new_species_id = generate_species_id()
-            from .species import SpeciesMode
             new_species = Species(
                 id=new_species_id,
                 leader=ind,
@@ -263,8 +265,7 @@ def leader_follower_clustering(
                 last_improvement=current_generation,
                 cluster_origin="natural",
                 parent_ids=None,
-                parent_id=None,
-                mode=SpeciesMode.DEFAULT
+                parent_id=None
             )
             species[new_species_id] = new_species
             ind.species_id = new_species_id
@@ -328,48 +329,3 @@ def leader_follower_clustering(
     
     logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals -> {len(species)} species")
     return species
-
-
-def update_species_leaders(species: Dict[int, Species]) -> None:
-    """
-    Update leaders for all species to highest-fitness members.
-    
-    Should be called after fitness updates or member changes to ensure
-    leaders accurately represent species centers.
-    
-    Args:
-        species: Dict of species to update
-    """
-    for sp in species.values():
-        sp.update_leader()
-
-
-def find_nearest_leader(embedding: np.ndarray, species: Dict[int, Species]) -> Tuple[Optional[int], float]:
-    """
-    Find the nearest species leader to a given embedding.
-    
-    Args:
-        embedding: Query embedding vector (L2-normalized)
-        species: Dict of existing species
-    
-    Returns:
-        Tuple of (species_id, distance):
-        - species_id: ID of nearest species (None if no species)
-        - distance: Semantic distance to nearest leader (inf if no species)
-    """
-    if not species:
-        return None, float('inf')
-    
-    leaders = [(sid, sp.leader.embedding) for sid, sp in species.items() if sp.leader.embedding is not None]
-    if not leaders:
-        return None, float('inf')
-    
-    if len(leaders) > 1:
-        leader_ids = [sid for sid, _ in leaders]
-        leader_embeddings = np.array([emb for _, emb in leaders])
-        distances = semantic_distances_batch(embedding, leader_embeddings)
-        min_idx = np.argmin(distances)
-        return leader_ids[min_idx], distances[min_idx]
-    else:
-        sid, emb = leaders[0]
-        return sid, semantic_distance(embedding, emb)

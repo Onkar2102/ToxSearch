@@ -2,20 +2,20 @@
 
 ## Overview
 
-This system implements a genetic algorithm framework with **Plan A+ Dynamic Islands speciation** for evolving text prompts to elicit toxic responses from large language models, enabling comprehensive AI safety evaluation through adversarial prompt generation.
+This system implements a genetic algorithm framework with **semantic speciation** (Leader-Follower clustering) for evolving text prompts to elicit toxic responses from large language models, enabling comprehensive AI safety evaluation through adversarial prompt generation.
 
 ## Core Algorithm
 
 ### Evolutionary Process
-The system uses a steady-state genetic algorithm with **semantic speciation** (Plan A+ Dynamic Islands) with the following components:
+The system uses a steady-state genetic algorithm with **semantic speciation** (Leader-Follower clustering) with the following components:
 
 1. **Population Initialization**: Load initial prompts from CSV
 2. **Parent Selection**: Adaptive tournament selection (can be species-aware)
 3. **Variation**: Apply 12 different operators to generate offspring
 4. **Response Generation**: LLM generates responses to evolved prompts
 5. **Fitness Evaluation**: Score responses using Google Perspective API (toxicity)
-6. **Speciation** (Plan A+): Semantic clustering into species/islands with dynamic adaptation
-7. **Selection**: Distribute offspring into elite/non-elite/under-performing categories (species-aware)
+6. **Speciation**: Semantic clustering into species using Leader-Follower algorithm
+7. **Distribution**: Distribute genomes into elites.json (species_id > 0) and reserves.json (species_id == 0)
 8. **Termination**: Stop when convergence criteria are met
 
 ### Mathematical Framework
@@ -27,10 +27,12 @@ f(x) = toxicity_score(response to prompt x) ∈ [0, 1]
 
 The fitness function evaluates toxicity in the LLM's response, not the prompt itself.
 
-**Threshold Calculations**:
+**Population Structure**:
 ```
-elite_threshold = max_toxicity × (100 - elite_percentage) / 100
-removal_threshold = max_toxicity × removal_percentage / 100
+Active Population = elites.json + reserves.json
+- elites.json: Genomes with species_id > 0 (assigned to species)
+- reserves.json: Cluster 0 outliers (species_id == 0, don't fit existing species)
+- archive.json: Archived genomes (NOT part of population)
 ```
 
 ## System Architecture
@@ -42,8 +44,8 @@ flowchart TB
   IN["Seed Prompts<br/>(prompt.csv)"] --> INIT["Population Initialization<br/>(Generation 0)"]
   INIT --> RG0["Response Generator<br/>LLM generates responses"]
   RG0 --> MOD0["Moderation Oracle<br/>Perspective API"]
-  MOD0 --> SPEC0["Speciation Module<br/>Plan A+ Clustering"]
-  SPEC0 --> CLS0["Initial Distribution<br/>elites/non_elites"]
+  MOD0 --> SPEC0["Speciation Module<br/>Leader-Follower Clustering"]
+  SPEC0 --> CLS0["Initial Distribution<br/>elites/reserves"]
   
   CLS0 --> LOOP["Evolution Loop<br/>(Generation N)"]
   
@@ -51,18 +53,18 @@ flowchart TB
   SEL --> VAR["Variation Operators<br/>12 mutation/crossover ops"]
   VAR --> RG["Response Generator<br/>LLM generates responses"]
   RG --> MOD["Moderation Oracle<br/>Perspective API<br/>(fitness evaluation)"]
-  MOD --> SPEC["Speciation Module<br/>Plan A+ Dynamic Islands"]
+  MOD --> SPEC["Speciation Module<br/>Leader-Follower Clustering"]
   
-  SPEC --> SPEC1["Leader-Follower<br/>Clustering"]
-  SPEC1 --> SPEC2["Limbo Buffer<br/>TTL + Speciation"]
-  SPEC2 --> SPEC3["Mode Switching<br/>Explore/Exploit/Default"]
-  SPEC3 --> SPEC4["Island Operations<br/>Merge/Extinction/Migration"]
-  SPEC4 --> SPEC5["Adaptive Thresholds<br/>Radius + Silhouette"]
+  SPEC --> SPEC1["Leader-Follower<br/>Clustering<br/>(theta_sim threshold)"]
+    SPEC1 --> SPEC2["Reserves (Cluster 0)<br/>Outliers (species_id=0)"]
+  SPEC2 --> SPEC3["Species Merging<br/>(theta_merge threshold)"]
+  SPEC3 --> SPEC4["Extinction Check<br/>(stagnation limit)"]
+  SPEC4 --> SPEC5["Capacity Enforcement<br/>(species_capacity, cluster0_capacity)"]
   
   SPEC5 --> CLS["Selection & Distribution<br/>(species-aware<br/>elitism / tiers)"]
-  CLS --> EL["elites.json<br/>(with species_id)"]
-  CLS --> NE["non_elites.json<br/>(with species_id)"]
-  CLS --> UP["under_performing.json"]
+  CLS --> EL["elites.json<br/>(species_id > 0)"]
+  CLS --> RES["reserves.json<br/>(Cluster 0, species_id=0)<br/>Part of active population"]
+  CLS --> ARCH["archive.json<br/>(NOT part of population)"]
   CLS --> TRACK["Evolution Tracker<br/>(+ speciation metrics)"]
   TRACK --> TERM{"Termination?"}
   TERM -->|No| LOOP
@@ -74,27 +76,29 @@ flowchart TB
 ```mermaid
 flowchart LR
   POP["Population<br/>(genomes with fitness)"] --> EMB["Embedding<br/>Computation<br/>all-MiniLM-L6-v2"]
-  EMB --> LF["Leader-Follower<br/>Clustering<br/>θ_sim threshold"]
-  LF --> SP["Species/Islands<br/>(semantic clusters)"]
-  LF --> LIM["Limbo Buffer<br/>(high-fitness outliers)"]
+  EMB --> LF["Leader-Follower<br/>Clustering<br/>theta_sim threshold"]
+  LF --> SP["Species<br/>(species_id > 0)"]
+    LF --> RES["Reserves (Cluster 0)<br/>(species_id = 0)<br/>Outliers"]
   
-  SP --> MODE["Mode Detection<br/>Fitness slope analysis"]
-  MODE --> EXP["EXPLORE Mode<br/>High mutation<br/>External breeding"]
-  MODE --> EXP2["EXPLOIT Mode<br/>Low mutation<br/>Elite selection"]
-  MODE --> DEF["DEFAULT Mode<br/>Balanced"]
+  SP --> MERGE["Species Merging<br/>theta_merge threshold"]
+  SP --> EXT["Extinction Check<br/>Stagnation > max_stagnation"]
+  SP --> CAP["Capacity Enforcement<br/>Remove excess genomes"]
   
-  SP --> MERGE["Island Merging<br/>θ_merge threshold"]
-  SP --> EXT["Extinction Check<br/>Stagnation > max"]
-  EXT --> REP["Repopulation<br/>From limbo/global best"]
+  RES --> CAP2["Reserves Capacity<br/>Remove excess to archive"]
   
-  SP --> MIG["Migration<br/>Semantic topology<br/>k-nearest neighbors"]
+  CAP --> ARCH["archive.json<br/>(NOT in population)"]
+  CAP2 --> ARCH
   
-  SP --> ADAPT["Adaptive Thresholds<br/>Radius adjustment<br/>Silhouette splits"]
+  SP --> DIST["Distribution<br/>elites.json"]
+  RES --> DIST2["Distribution<br/>reserves.json"]
   
-  SP --> MET["Metrics Tracking<br/>Species count<br/>Diversity<br/>Churn"]
+  DIST --> OUT["Active Population<br/>= elites + reserves"]
+  DIST2 --> OUT
   
-  SP --> OUT["Output<br/>(genomes + species_id)"]
-  LIM --> OUT
+  SP --> MET["Metrics Tracking<br/>Species count<br/>Diversity"]
+  
+  SP --> OUT2["Output<br/>(genomes + species_id)"]
+  RES --> OUT2
 ```
 
 ## Component Architecture
@@ -108,9 +112,9 @@ Adaptive parent selection mechanism that adjusts selection strategy based on evo
 **Selection Modes**:
 | Mode | Parents | Trigger |
 |------|---------|---------|
-| **DEFAULT** | 1 elite + 1 non-elite | First `m` generations |
-| **EXPLORE** | 1 elite + 2 non-elites | Stagnation > `m` generations |
-| **EXPLOIT** | 2 elites + 1 non-elite | Fitness slope < 0 |
+| **DEFAULT** | 1 elite + 1 from reserves | First `m` generations |
+| **EXPLORE** | 1 elite + 2 from reserves | Stagnation > `m` generations |
+| **EXPLOIT** | 2 elites + 1 from reserves | Fitness slope < 0 |
 
 ### Variation Operators (12 Total)
 
@@ -139,21 +143,21 @@ Evaluates generated responses for toxicity using Google Perspective API. Provide
 ### Population Management
 Manages population state, handles I/O operations, and maintains population statistics. Supports both monolithic and split file formats for scalability.
 
-### Plan A+ Speciation Module
-Implements Dynamic Islands framework using Leader-Follower clustering with semantic embeddings to maintain diverse species (islands) that evolve independently.
+### Speciation Module
+Implements Leader-Follower clustering with semantic embeddings to maintain diverse species that evolve independently.
 
 **Key Components**:
 
 1. **Embedding Computation**: L2-normalized 384-dim embeddings using `all-MiniLM-L6-v2`
-2. **Leader-Follower Clustering**: Fitness-sorted assignment to species based on semantic distance
-3. **Limbo Buffer**: Holding area for high-fitness outliers with TTL and speciation incubation
-4. **Mode Switching**: Adaptive Explore/Exploit/Default modes based on fitness trends
-5. **Island Operations**:
-   - **Merging**: Combine similar islands when leaders are close (θ_merge)
-   - **Extinction**: Remove stagnant islands and repopulate from limbo/global best
-   - **Migration**: Transfer individuals between semantically similar islands
-6. **Adaptive Thresholds**: Dynamic radius adjustment and silhouette-based splits
-7. **Metrics Tracking**: Species count, diversity, churn, silhouette scores
+2. **Leader-Follower Clustering**: Fitness-sorted assignment to species based on semantic distance (theta_sim threshold)
+3. **Reserves (Cluster 0)**: Holding area for high-fitness outliers that don't fit existing species
+   - Part of active population (population = elites + reserves)
+   - Fixed capacity (cluster0_max_capacity), excess archived
+4. **Species Operations**:
+   - **Merging**: Combine similar species when leaders are close (theta_merge threshold)
+   - **Extinction**: Freeze stagnant species (stagnation > max_stagnation)
+   - **Capacity Enforcement**: Remove excess genomes from species/reserves when capacity exceeded
+5. **Metrics Tracking**: Species count, diversity, merge/extinction events
 
 **Integration Point**: After fitness evaluation (moderation), before distribution. Each genome receives a `species_id` field for species-aware operations.
 
@@ -175,13 +179,13 @@ where u, v are L2-normalized embeddings. Range: [0, 2]
 - **Hybrid**: Use Parametric UMAP for offline analysis/visualization; use direct 384D Leader-Follower for real-time evolution.
 
 **Clustering Thresholds**:
-- `θ_sim`: Similarity threshold for species assignment (default: 0.4)
-- `θ_merge`: Merge threshold, tighter than θ_sim (default: 0.2)
+- `theta_sim`: Similarity threshold for species assignment (default: 0.4) - constant radius for all species
+- `theta_merge`: Merge threshold, tighter than theta_sim (default: 0.2)
 
-**Mode Switching**:
-- **EXPLOIT**: Triggered when fitness slope > improvement_threshold (default: 0.01)
-- **EXPLORE**: Triggered when fitness slope < decline_threshold (default: -0.001)
-- **DEFAULT**: Balanced mode otherwise
+**Capacity Limits**:
+- `species_capacity`: Maximum genomes per species (default: 100)
+- `cluster0_max_capacity`: Maximum genomes in reserves (default: 1000)
+- Excess genomes are archived to `archive.json` (NOT part of population)
 
 **Complexity**: O(N × K × d) per generation where N = population size, K = number of species, d = embedding dimension (384)
 
@@ -192,14 +196,14 @@ where u, v are L2-normalized embeddings. Range: [0, 2]
 2. Generate responses using Response Generator (LLM)
 3. Evaluate fitness using Moderation Oracle (Perspective API)
 4. **Run Speciation**: Leader-Follower clustering creates initial species
-5. Distribute into `elites.json` and `non_elites.json` (with `species_id` fields)
+5. Distribute into `elites.json` and `reserves.json` (with `species_id` fields)
 6. Calculate elite thresholds and population statistics
 
 ### Generation N (Evolution Loop)
 For each generation:
 
 1. **Evolution Phase**:
-   - Load population from `elites.json` and `non_elites.json`
+   - Load population from `elites.json` and `reserves.json`
    - Parent Selection (adaptive tournament, optionally species-aware)
    - Apply Variation Operators (12 mutation/crossover operators)
    - Save variants to `temp.json`
@@ -212,22 +216,23 @@ For each generation:
    - Evaluate toxicity using Moderation Oracle (Perspective API)
    - Update `temp.json` with fitness scores (`toxicity`, `north_star_score`)
 
-4. **Speciation Phase** (Plan A+):
+4. **Speciation Phase**:
    - **Embedding Computation**: Compute L2-normalized embeddings for all prompts (saved to `prompt_embedding` field in each genome)
-   - **Leader-Follower Clustering**: Assign genomes to species based on semantic similarity
-   - **Limbo Management**: Update TTL, check for speciation events from limbo clusters
-   - **Mode Switching**: Update island modes (Explore/Exploit/Default) based on fitness trends
-   - **Island Merging**: Merge similar islands if leaders are close (θ_merge)
-   - **Extinction & Repopulation**: Remove stagnant islands, repopulate from limbo/global best
-   - **Migration**: Transfer individuals between semantically similar islands (every N generations)
-   - **Adaptive Thresholds**: Adjust island radii, trigger splits based on silhouette scores
-   - **Metrics Recording**: Track species count, diversity, churn, silhouette scores
-   - Update all genomes in `temp.json` with `species_id` and `in_limbo` fields
+   - **Leader-Follower Clustering**: Assign genomes to species based on semantic similarity (theta_sim threshold)
+   - **Reserves Management**: Assign outliers to Cluster 0 (species_id = 0)
+   - **Species Merging**: Merge similar species if leaders are close (theta_merge threshold)
+   - **Extinction Check**: Freeze stagnant species (stagnation > max_stagnation)
+   - **Capacity Enforcement**: Remove excess genomes from species/reserves when capacity exceeded, archive to `archive.json`
+   - **Metrics Recording**: Track species count, diversity, merge/extinction events
+   - Update all genomes in `temp.json` with `species_id` (Cluster 0 = 0)
+   - Remove `prompt_embedding` from `temp.json` after speciation to reduce storage
 
 5. **Distribution Phase**:
-   - Calculate elite thresholds based on max toxicity
-   - Distribute genomes to `elites.json`, `non_elites.json`, or archive
-   - All genomes now have `species_id` for species-aware operations
+   - Distribute genomes based on `species_id`:
+     - `species_id > 0` → `elites.json` (part of active population)
+     - `species_id == 0` → `reserves.json` (part of active population)
+   - Archived genomes → `archive.json` (NOT part of population)
+   - Active population = elites.json + reserves.json
 
 6. **Tracking Phase**:
    - Update EvolutionTracker.json with generation metrics
@@ -245,11 +250,11 @@ prompt.csv (seed)
     ↓
 Generation 0: [Response Gen] → [Moderation] → [Speciation] → [Distribution]
     ↓
-elites.json + non_elites.json (with species_id)
+elites.json + reserves.json (with species_id)
     ↓
 Generation N: [Evolution] → [Response Gen] → [Moderation] → [Speciation] → [Distribution]
     ↓
-elites.json + non_elites.json (updated with species_id)
+elites.json + reserves.json (updated with species_id)
     ↓
 [Repeat until termination]
 ```
@@ -285,51 +290,56 @@ Species(
 )
 ```
 
-## Summary: Plan A+ Speciation Integration
+## Summary: Speciation Integration
 
 ### Benefits
 
 1. **Diversity Preservation**: Semantic clustering maintains distinct evolutionary niches
-2. **Parallel Search**: Multiple islands explore different regions of the fitness landscape simultaneously
-3. **Adaptive Behavior**: Islands switch between Explore/Exploit modes based on local fitness trends
-4. **Outlier Management**: Limbo buffer preserves high-fitness outliers that don't fit existing species
-5. **Dynamic Adaptation**: Islands merge, split, and repopulate based on performance
-6. **Semantic Coherence**: Migration only occurs between semantically similar islands
+2. **Parallel Search**: Multiple species explore different regions of the fitness landscape simultaneously
+3. **Outlier Management**: Reserves (Cluster 0) preserves high-fitness outliers that don't fit existing species
+4. **Dynamic Adaptation**: Species merge when similar, freeze when stagnant
+5. **Capacity Management**: Automatic archiving of excess genomes maintains population size
 
 ### Integration Status
 
-✅ **Implemented**: All speciation components are complete and tested
-⏳ **Pending**: Integration into `main.py` evolution loop (after fitness evaluation)
+✅ **Implemented**: All speciation components are complete and integrated into `main.py`
 
 ### Usage
 
-Once integrated, speciation runs automatically each generation after fitness evaluation:
+Speciation runs automatically each generation after fitness evaluation:
 
 ```python
-from speciation import SpeciationModule, PlanAPlusConfig
+from speciation import run_speciation
+from speciation.config import SpeciationConfig
 
-# Initialize (once, before evolution loop)
-speciation_module = SpeciationModule(PlanAPlusConfig())
-
-# In generation loop, after fitness evaluation:
-species, limbo = speciation_module.process_generation(
-    temp_variants,  # List of genome dicts with fitness
-    current_generation=generation_count
+# Create config (or use defaults)
+config = SpeciationConfig(
+    theta_sim=0.4,
+    theta_merge=0.2,
+    species_capacity=100,
+    cluster0_max_capacity=1000
 )
 
-# Update genomes with species IDs
-temp_variants = speciation_module.update_genomes_with_species(temp_variants)
+# In generation loop, after fitness evaluation:
+result = run_speciation(
+    temp_path="data/outputs/temp.json",
+    current_generation=generation_count,
+    config=config
+)
+
+# Genomes are automatically distributed to elites.json and reserves.json
+# based on species_id assigned during clustering
 ```
 
 ### Configuration
 
-Key parameters in `PlanAPlusConfig`:
-- `theta_sim=0.4`: Similarity threshold for species assignment
+Key parameters in `SpeciationConfig`:
+- `theta_sim=0.4`: Similarity threshold for species assignment (constant radius for all species)
 - `theta_merge=0.2`: Merge threshold (tighter than theta_sim)
-- `max_island_capacity=50`: Maximum individuals per island
-- `limbo_ttl=10`: Generations before limbo individuals expire
-- `migration_frequency=5`: Migrate every N generations
-- `silhouette_threshold=0.5`: Trigger split if silhouette below this
+- `species_capacity=100`: Maximum individuals per species
+- `cluster0_max_capacity=1000`: Maximum individuals in reserves (Cluster 0)
+- `max_stagnation=20`: Maximum generations without improvement before species is frozen
+- `min_island_size=2`: Minimum species size before moving to reserves
 
 See `src/speciation/config.py` for full configuration options.
 

@@ -10,7 +10,26 @@ fi
 
 # Define your experiments here (one per line)
 EXPERIMENTS=(
-    "python src/main.py --generations 0 --operators all --max-variants 1 --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_S.gguf --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf --seed-file data/prompt.csv"
+    "python src/main.py \
+        --generations 3 \
+        --threshold 0.99 \
+        --moderation-methods google \
+        --stagnation-limit 5 \
+        --theta-sim 0.4 \
+        --theta-merge 0.2 \
+        --species-capacity 100 \
+        --cluster0-max-capacity 1000 \
+        --cluster0-min-cluster-size 2 \
+        --min-island-size 2 \
+        --max-stagnation 20 \
+        --embedding-model all-MiniLM-L6-v2 \
+        --embedding-dim 384 \
+        --embedding-batch-size 64 \
+        --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_S.gguf \
+        --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q3_K_M.gguf \
+        --operators all \
+        --max-variants 1 \
+        --seed-file data/prompt.csv"
 )
 
 echo "Starting ${#EXPERIMENTS[@]} experiments..."
