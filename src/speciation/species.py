@@ -1,7 +1,7 @@
 """
-island.py
+species.py
 
-Species/Island data structures for Dynamic Islands framework.
+Species data structures for speciation framework.
 """
 
 import numpy as np
@@ -10,11 +10,11 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 
 
-class IslandMode(Enum):
+class SpeciesMode(Enum):
     """
-    Operating mode for an island (species).
+    Operating mode for a species.
     
-    Islands dynamically switch between modes based on fitness trends:
+    Species dynamically switch between modes based on fitness trends:
     - DEFAULT: Normal operation, balanced exploration/exploitation
     - EXPLORE: Increased diversity, relaxed selection, higher mutation
     - EXPLOIT: Focused exploitation, elite selection, lower mutation
@@ -27,6 +27,10 @@ class IslandMode(Enum):
     DEFAULT = "DEFAULT"  # Balanced mode
     EXPLORE = "EXPLORE"   # Diversity-focused mode
     EXPLOIT = "EXPLOIT"   # Elite-focused mode
+
+
+# Backward compatibility alias
+IslandMode = SpeciesMode
 
 
 @dataclass
@@ -161,7 +165,7 @@ class Individual:
 @dataclass
 class Species:
     """
-    Represents a species (island) in the Dynamic Islands framework.
+    Represents a species in the speciation framework.
     
     A Species is a cluster of semantically similar individuals that evolve together.
     Each species has:
@@ -197,7 +201,7 @@ class Species:
     id: int
     leader: Individual
     members: List[Individual] = field(default_factory=list)
-    mode: IslandMode = IslandMode.DEFAULT
+    mode: SpeciesMode = SpeciesMode.DEFAULT
     radius: float = 0.4  # Constant radius (theta_sim), no dynamic adjustment
     stagnation_counter: int = 0
     created_at: int = 0

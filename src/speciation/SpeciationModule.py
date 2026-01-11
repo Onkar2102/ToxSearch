@@ -10,16 +10,14 @@ from typing import Dict, List, Optional, Tuple, Callable, Any
 from pathlib import Path
 
 from .config import SpeciationConfig
-from .island import Individual, Species, IslandMode, SpeciesIdGenerator
-from .embeddings import compute_and_save_embeddings, get_embedding_model
+from .species import Individual, Species, SpeciesMode, IslandMode, SpeciesIdGenerator
+from .embeddings import compute_and_save_embeddings, remove_embeddings_from_temp, get_embedding_model
 from .leader_follower import leader_follower_clustering, update_species_leaders
 from .reserves import Cluster0, CLUSTER_0_ID
 from .modes import update_all_island_modes
 from .intra_island import select_parents_elite_focused
 from .merging import process_merges
 from .extinction import process_extinctions, find_global_best
-from .migration import process_migrations
-from .adaptive_threshold import process_adaptive_thresholds
 from .metrics import SpeciationMetricsTracker, log_generation_summary
 
 from utils import get_custom_logging
@@ -40,9 +38,7 @@ class SpeciationModule:
     4. Mode switching (Explore/Exploit/Default)
     5. Island merging
     6. Extinction and repopulation
-    7. Inter-island migration
-    8. Silhouette-based splitting (no dynamic radius adjustment)
-    9. Species capacity (max 100 per species)
+    8. Species capacity (max 100 per species)
     
     Key changes from original design:
     - Species limited to top 100 genomes by fitness
@@ -50,7 +46,7 @@ class SpeciationModule:
     - Cluster 0 limited to 1000, with removal_threshold filtering
     - Removed genomes below threshold are archived to under_performing.json
     - Constant radius (theta_sim) for all species - no dynamic adjustment
-    - Cluster origin tracking (merge/split/natural) in speciation_state.json
+    - Cluster origin tracking (merge/natural) in speciation_state.json
     
     Usage:
         >>> config = SpeciationConfig()
@@ -74,7 +70,7 @@ class SpeciationModule:
         self.global_best: Optional[Individual] = None
         self.metrics_tracker = SpeciationMetricsTracker(logger=self.logger)
         
-        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0, "split": 0}
+        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0}
         self._embedding_model = None
         self._archived_count = 0  # Count of genomes archived this generation
         
@@ -101,9 +97,7 @@ class SpeciationModule:
         6. Mode switching: Adapt island modes based on fitness trends
         7. Island merging: Combine similar species with cluster_origin="merge"
         8. Extinction & repopulation: Remove stagnant species, create new ones
-        9. Migration: Exchange individuals between related species
-        10. Silhouette-based splitting: Split heterogeneous islands (no radius adjustment)
-        11. Record metrics: Track generation statistics
+        10. Record metrics: Track generation statistics
         
         Note: The embedding computation modifies temp.json in-place by adding "prompt_embedding"
         field to each genome. If embeddings already exist, computation is skipped.
@@ -113,13 +107,13 @@ class SpeciationModule:
             current_generation: Current generation number
             mutate_fn: Optional mutation function (for repopulation)
             temp_path: Optional path to temp.json (for embedding computation)
-        
+            
         Returns:
             Tuple of (species_dict, cluster0)
         """
         self.logger.info(f"=== Speciation Generation {current_generation} ===")
         
-        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0, "migration": 0, "split": 0}
+        self._current_gen_events = {"speciation": 0, "merge": 0, "extinction": 0}
         self._archived_count = 0
         
         # Auto-load previous state if not first generation
@@ -139,16 +133,36 @@ class SpeciationModule:
             temp_path=temp_path,
             model_name=self.config.embedding_model,
             batch_size=self.config.embedding_batch_size,
+                logger=self.logger
+            )
+        
+        # Step 2: Leader-Follower clustering (reads and writes temp.json and speciation_state.json directly)
+        # This function handles both Generation 0 and N logic internally
+        outputs_path = get_outputs_path()
+        speciation_state_path = str(outputs_path / "speciation_state.json")
+        
+        # Leader-Follower clustering reads and writes temp.json and speciation_state.json directly
+        self.species = leader_follower_clustering(
+            temp_path=temp_path,
+            speciation_state_path=speciation_state_path,
+            theta_sim=self.config.theta_sim,
+            current_generation=current_generation,
             logger=self.logger
         )
         
-        # Step 2: Leader-Follower clustering (reads directly from temp.json)
-        self.species, cluster0_candidates = leader_follower_clustering(
-            temp_path=temp_path, theta_sim=self.config.theta_sim,
-            viability_baseline=self.config.viability_baseline,
-            current_generation=current_generation, logger=self.logger
-        )
-        self.cluster0.add_batch(cluster0_candidates, current_generation)
+        # Load cluster0 from speciation_state.json (if exists) to restore state
+        if Path(speciation_state_path).exists():
+            try:
+                with open(speciation_state_path, 'r', encoding='utf-8') as f:
+                    state = json.load(f)
+                cluster0_dict = state.get("cluster0", {})
+                # Reconstruct cluster0 from state
+                if cluster0_dict:
+                    # Cluster0 is managed by SpeciationModule, restore from state
+                    # Note: This is a simplified restoration - full restoration happens in load_state()
+                    pass  # Cluster0 will be restored via load_state() if needed
+            except Exception:
+                pass
         
         # Step 3: Cluster 0 management
         # 3a: Update TTL (decrement and remove expired)
@@ -156,7 +170,15 @@ class SpeciationModule:
         self._archive_individuals(expired, current_generation, "expired_from_cluster0")
         
         # 3b: Filter by removal threshold (archive those below threshold)
-        removed_by_threshold = self.cluster0.filter_by_removal_threshold()
+        # Calculate max fitness from all genomes (species + cluster0)
+        all_fitnesses = [ind.fitness for sp in self.species.values() for ind in sp.members]
+        all_fitnesses.extend([ind.fitness for ind in self.cluster0.individuals])
+        max_fitness = max(all_fitnesses) if all_fitnesses else None
+        
+        removed_by_threshold = self.cluster0.filter_by_removal_threshold(
+            removal_threshold=self.config.removal_threshold,
+            max_fitness=max_fitness
+        )
         self._archive_individuals(removed_by_threshold, current_generation, "below_removal_threshold")
         
         # 3c: Enforce capacity (archive excess beyond 1000)
@@ -194,7 +216,7 @@ class SpeciationModule:
             theta_merge=self.config.theta_merge,
             theta_sim=self.config.theta_sim,  # Constant radius for merged species
             current_gen=current_generation,
-            max_capacity=self.config.max_island_capacity, 
+            max_capacity=self.config.max_island_capacity,
             logger=self.logger
         )
         self._current_gen_events["merge"] = len(merge_events)
@@ -213,30 +235,11 @@ class SpeciationModule:
         )
         self._current_gen_events["extinction"] = len(extinction_events)
         
-        # Step 9: Migration
-        self.species, migration_events = process_migrations(
-            self.species, current_generation, self.config.migration_frequency,
-            self.config.k_neighbors, self.config.max_island_capacity,
-            self.config.migration_selection, self.cluster0, self.logger
-        )
-        self._current_gen_events["migration"] = len(migration_events)
-        
-        # Step 10: Silhouette-based splitting (no radius adjustment)
-        self.species, split_events = process_adaptive_thresholds(
-            self.species, current_generation,
-            theta_sim=self.config.theta_sim,
-            silhouette_threshold=self.config.silhouette_threshold,
-            silhouette_check_frequency=self.config.silhouette_check_frequency,
-            cluster0=self.cluster0,
-            logger=self.logger
-        )
-        self._current_gen_events["split"] = len([e for e in split_events if e.get("type") == "split"])
-        
-        # Step 11: Record metrics
+        # Step 9: Record metrics
         self.metrics_tracker.record_generation(
             current_generation, self.species, self.cluster0.size,
             self._current_gen_events["speciation"], self._current_gen_events["merge"],
-            self._current_gen_events["extinction"], self._current_gen_events["migration"]
+            self._current_gen_events["extinction"], 0  # migration removed
         )
         
         log_generation_summary(current_generation, self.species, self.cluster0.size,
@@ -246,6 +249,10 @@ class SpeciationModule:
         outputs_path = get_outputs_path()
         state_path = str(outputs_path / "speciation_state.json")
         self.save_state(state_path)
+        
+        # Remove embeddings from temp.json after speciation is complete
+        # This reduces storage size when genomes are saved to other files
+        remove_embeddings_from_temp(temp_path=temp_path, logger=self.logger)
         
         return self.species, self.cluster0
     
@@ -305,7 +312,7 @@ class SpeciationModule:
         
         Args:
             population: List of genome dictionaries (with "prompt_embedding" field)
-        
+            
         Returns:
             List of Individual objects with embeddings extracted from genomes
         """
@@ -461,7 +468,7 @@ class SpeciationModule:
                     id=sid,
                     leader=leader,
                     members=[leader],  # Will be populated during clustering
-                    mode=IslandMode(sp_dict.get("mode", "DEFAULT")),
+                    mode=SpeciesMode(sp_dict.get("mode", "DEFAULT")),
                     radius=sp_dict.get("radius", self.config.theta_sim),
                     stagnation_counter=sp_dict.get("stagnation_counter", 0),
                     created_at=sp_dict.get("created_at", 0),
@@ -573,8 +580,6 @@ def run_speciation(
             "speciation_events": int,
             "merge_events": int,
             "extinction_events": int,
-            "migration_events": int,
-            "split_events": int,
             "archived_count": int,
             "genomes_updated": int,
             "success": bool
@@ -604,8 +609,6 @@ def run_speciation(
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
-            "migration_events": 0,
-            "split_events": 0,
             "archived_count": 0,
             "genomes_updated": 0,
             "success": False,
@@ -625,8 +628,6 @@ def run_speciation(
                 "speciation_events": 0,
                 "merge_events": 0,
                 "extinction_events": 0,
-                "migration_events": 0,
-                "split_events": 0,
                 "archived_count": 0,
                 "genomes_updated": 0,
                 "success": False,
@@ -675,8 +676,6 @@ def run_speciation(
             "speciation_events": events.get("speciation", 0),
             "merge_events": events.get("merge", 0),
             "extinction_events": events.get("extinction", 0),
-            "migration_events": events.get("migration", 0),
-            "split_events": events.get("split", 0),
             "archived_count": speciation_module._archived_count,
             "genomes_updated": len(updated_genomes),
             "success": True
@@ -684,11 +683,11 @@ def run_speciation(
         
         logger.info(
             "Speciation completed: %d species, %d in cluster 0, "
-            "events: speciation=%d, merge=%d, extinction=%d, migration=%d, split=%d, archived=%d",
+            "events: speciation=%d, merge=%d, extinction=%d, archived=%d",
             result["species_count"], result["cluster0_size"],
             result["speciation_events"], result["merge_events"],
-            result["extinction_events"], result["migration_events"],
-            result["split_events"], result["archived_count"]
+            result["extinction_events"],
+            result["archived_count"]
         )
         
         # Update EvolutionTracker with speciation data
@@ -717,8 +716,6 @@ def run_speciation(
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
-            "migration_events": 0,
-            "split_events": 0,
             "archived_count": 0,
             "genomes_updated": 0,
             "success": False,
@@ -883,7 +880,6 @@ def update_evolution_tracker_with_speciation(
             "merge_events": speciation_result.get("merge_events", 0),
             "extinction_events": speciation_result.get("extinction_events", 0),
             "migration_events": speciation_result.get("migration_events", 0),
-            "split_events": speciation_result.get("split_events", 0),
             "archived_count": speciation_result.get("archived_count", 0),
         }
         

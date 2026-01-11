@@ -2,7 +2,8 @@
 leader_follower.py
 
 Leader-Follower clustering algorithm for speciation.
-Reads genomes directly from temp.json and performs clustering.
+Reads temp.json and speciation_state.json directly, performs clustering,
+and updates both files directly.
 """
 
 import json
@@ -10,176 +11,342 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional, TYPE_CHECKING
 from pathlib import Path
 
-from .island import Individual, Species, generate_species_id
+from .species import Individual, Species, generate_species_id, SpeciesIdGenerator
 from .distance import semantic_distance, semantic_distances_batch
+from .reserves import CLUSTER_0_ID
 
 if TYPE_CHECKING:
     from .reserves import Cluster0
 
 from utils import get_custom_logging
+from utils import get_system_utils
+
 get_logger, _, _, _ = get_custom_logging()
+_, _, _, get_outputs_path, _, _ = get_system_utils()
 
 
 def leader_follower_clustering(
-    temp_path: str,
-    theta_sim: float,
-    viability_baseline: float = 0.3,
-    cluster0: Optional["Cluster0"] = None,
+    temp_path: Optional[str] = None,
+    speciation_state_path: Optional[str] = None,
+    theta_sim: float = 0.4,
     current_generation: int = 0,
-    existing_species: Optional[Dict[int, Species]] = None,
-    logger=None
-) -> Tuple[Dict[int, Species], List[Individual]]:
+    logger=None) -> Dict[int, Species]:
     """
-    Assign individuals to species using Leader-Follower clustering algorithm.
+    Leader-Follower clustering algorithm that reads and writes files directly.
     
-    This function reads genomes directly from temp.json, converts them to Individuals,
-    and performs clustering. It is the core clustering algorithm for speciation.
-    It assigns individuals to species based on semantic similarity to existing leaders,
-    with fitness-based prioritization.
-    
-    Algorithm:
-        1. Read genomes from temp.json (with prompt_embedding field)
-        2. Convert genomes to Individual objects
-        3. Sort population by fitness (descending) - fitness determines processing order
-        4. First individual becomes first leader (creates first species)
-        5. For each remaining individual:
-           a. Find nearest leader (minimum semantic distance)
-           b. If distance < theta_sim -> assign as follower to that species
-           c. Else:
-              - If fitness > viability_baseline -> send to cluster 0 (high-fitness outlier)
-              - Else -> create new species with this individual as leader
-    
-    Key properties:
-    - Fitness-based ordering ensures high-quality leaders
-    - Semantic distance threshold (theta_sim) controls species granularity
-    - High-fitness outliers go to cluster 0 for potential speciation
-    - Low-fitness outliers create new species (exploration)
-    - All new species have cluster_origin="natural"
+    This function:
+    1. Reads genomes from temp.json (must have prompt_embedding field)
+    2. Reads existing species from speciation_state.json (if exists)
+    3. Checks if any species exist (excluding species 0)
+    4. If no species exist, treats as Generation 0:
+       - Sorts genomes by fitness (descending)
+       - Assigns highest fitness genome as leader of species 1
+       - For each remaining genome, checks distance to all leaders
+       - If within theta_sim, assigns to that species and updates leader if needed
+       - If not, creates new species
+       - After processing all, moves single-member species to species 0 (reserves)
+    5. If species exist (Generation N):
+       - Checks each genome against all existing species leaders
+       - Also checks against reserves genomes (if speciation_state.json has cluster0)
+       - Assigns to nearest species if within theta_sim, else creates new species
+    6. Updates temp.json with species_id for each genome
+    7. Updates speciation_state.json with new species structure
     
     Args:
-        temp_path: Path to temp.json file with genomes (must have prompt_embedding field)
-        theta_sim: Semantic distance threshold for species assignment (also used as constant radius)
-        viability_baseline: Minimum fitness to enter cluster 0 (vs creating new species)
-        cluster0: Optional cluster 0 (for tracking, not modified here)
-        current_generation: Current generation number (for species metadata)
-        existing_species: Optional existing species dict (for incremental clustering)
+        temp_path: Path to temp.json (defaults to outputs_path / "temp.json")
+        speciation_state_path: Path to speciation_state.json (defaults to outputs_path / "speciation_state.json")
+        theta_sim: Semantic distance threshold for species assignment
+        current_generation: Current generation number
         logger: Optional logger instance
     
     Returns:
-        Tuple of:
-        - species: Dict mapping species_id -> Species (all with cluster_origin="natural")
-        - cluster0_candidates: List of individuals that should enter cluster 0
+        Dict mapping species_id -> Species
     """
     if logger is None:
         logger = get_logger("LeaderFollowerClustering")
     
-    # Read genomes from temp.json
+    # Determine file paths
+    if temp_path is None:
+        outputs_path = get_outputs_path()
+        temp_path = str(outputs_path / "temp.json")
+    
+    if speciation_state_path is None:
+        outputs_path = get_outputs_path()
+        speciation_state_path = str(outputs_path / "speciation_state.json")
+    
     temp_path_obj = Path(temp_path)
+    speciation_state_path_obj = Path(speciation_state_path)
+    
     if not temp_path_obj.exists():
         logger.error(f"Temp file not found: {temp_path}")
-        return {}, []
+        return {}
     
+    # Read genomes from temp.json
     with open(temp_path_obj, 'r', encoding='utf-8') as f:
         genomes = json.load(f)
     
     if not genomes:
         logger.warning("No genomes found in temp.json")
-        return {}, []
+        return {}
     
-    # Convert genomes to Individual objects (embeddings from prompt_embedding field)
+    # Convert genomes to Individual objects
     population = [Individual.from_genome(genome) for genome in genomes]
     
-    # Handle empty population
-    if not population:
-        logger.error("No individuals found in population in temp.json")
-        return {}, []
-    
-    # Filter out individuals without embeddings (can't cluster without embeddings)
+    # Filter out individuals without embeddings
     valid_population = [ind for ind in population if ind.embedding is not None]
     if not valid_population:
         logger.error("No individuals with embeddings")
-        return {}, []
+        return {}
     
-    # Sort by fitness (descending) - highest fitness processed first
+    # Read existing species from speciation_state.json (if exists)
+    existing_species: Dict[int, Species] = {}
+    cluster0_individuals: List[Individual] = []
+    
+    if speciation_state_path_obj.exists():
+        try:
+            with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            
+            # Restore species (excluding species 0)
+            for sid_str, sp_dict in state.get("species", {}).items():
+                sid = int(sid_str)
+                if sid == CLUSTER_0_ID:
+                    continue  # Skip species 0 (it's cluster0/reserves)
+                
+                # Reconstruct leader Individual
+                leader_embedding = None
+                if sp_dict.get("leader_embedding"):
+                    leader_embedding = np.array(sp_dict["leader_embedding"])
+                
+                leader = Individual(
+                    id=sp_dict["leader_id"],
+                    prompt=sp_dict.get("leader_prompt", ""),
+                    fitness=sp_dict.get("leader_fitness", 0.0),
+                    embedding=leader_embedding,
+                    species_id=sid
+                )
+                
+                # Reconstruct species (members will be populated during clustering)
+                from .species import SpeciesMode
+                species = Species(
+                    id=sid,
+                    leader=leader,
+                    members=[leader],
+                    mode=SpeciesMode(sp_dict.get("mode", "DEFAULT")),
+                    radius=sp_dict.get("radius", theta_sim),
+                    stagnation_counter=sp_dict.get("stagnation_counter", 0),
+                    created_at=sp_dict.get("created_at", 0),
+                    last_improvement=sp_dict.get("last_improvement", 0),
+                    fitness_history=sp_dict.get("fitness_history", []),
+                    cluster_origin=sp_dict.get("cluster_origin"),
+                    parent_ids=sp_dict.get("parent_ids"),
+                    parent_id=sp_dict.get("parent_id")
+                )
+                existing_species[sid] = species
+            
+            # Restore cluster0 individuals (for Generation N checking)
+            cluster0_dict = state.get("cluster0", {})
+            cluster0_members = cluster0_dict.get("members", [])
+            for member_dict in cluster0_members:
+                ind_dict = member_dict.get("individual", {})
+                embedding = None
+                if ind_dict.get("embedding"):
+                    embedding = np.array(ind_dict["embedding"])
+                
+                cluster0_ind = Individual(
+                    id=ind_dict.get("id"),
+                    prompt=ind_dict.get("prompt", ""),
+                    fitness=ind_dict.get("fitness", 0.0),
+                    embedding=embedding,
+                    species_id=CLUSTER_0_ID
+                )
+                cluster0_individuals.append(cluster0_ind)
+            
+            # Update SpeciesIdGenerator to avoid ID conflicts
+            if existing_species:
+                max_species_id = max(existing_species.keys())
+                SpeciesIdGenerator.set_min_id(max_species_id + 1)
+            
+            logger.info(f"Loaded {len(existing_species)} existing species from speciation_state.json")
+            
+        except Exception as e:
+            logger.warning(f"Failed to load speciation_state.json: {e}, starting fresh")
+            existing_species = {}
+    
+    # Determine if this is Generation 0 (no species exist, or only species 0)
+    is_generation_0 = len(existing_species) == 0
+    
+    # Sort population by fitness (descending) - highest fitness processed first
     sorted_pop = sorted(valid_population, key=lambda x: x.fitness, reverse=True)
     
-    species: Dict[int, Species] = {}
-    leaders: List[Tuple[int, np.ndarray]] = []  # (species_id, leader_embedding) for fast lookup
-    cluster0_candidates: List[Individual] = []
+    # Initialize species dict
+    species: Dict[int, Species] = existing_species.copy() if existing_species else {}
+    leaders: List[Tuple[int, np.ndarray]] = [
+        (sid, sp.leader.embedding) 
+        for sid, sp in species.items() 
+        if sp.leader.embedding is not None
+    ]
     
-    # Step 1: First individual becomes first leader (creates first species)
-    first = sorted_pop[0]
-    first_species_id = generate_species_id()
-    first_species = Species(
-        id=first_species_id,
-        leader=first,
-        members=[first],
-        radius=theta_sim,  # Constant radius for all species
-        created_at=current_generation,
-        last_improvement=current_generation,
-        cluster_origin="natural",  # Formed naturally through clustering
-        parent_ids=None,
-        parent_id=None
-    )
-    species[first_species_id] = first_species
-    leaders.append((first_species_id, first.embedding))
+    # For Generation 0: First individual (highest fitness) becomes leader of species 1
+    if is_generation_0:
+        first = sorted_pop[0]
+        first_species_id = 1  # Species IDs start from 1
+        from .species import SpeciesMode
+        first_species = Species(
+            id=first_species_id,
+            leader=first,
+            members=[first],
+            radius=theta_sim,
+            created_at=current_generation,
+            last_improvement=current_generation,
+            cluster_origin="natural",
+            parent_ids=None,
+            parent_id=None,
+            mode=SpeciesMode.DEFAULT
+        )
+        species[first_species_id] = first_species
+        leaders.append((first_species_id, first.embedding))
+        remaining_pop = sorted_pop[1:]
+    else:
+        # Generation N: process all individuals
+        remaining_pop = sorted_pop
     
-    # Step 2: Process remaining individuals
-    for ind in sorted_pop[1:]:
+    # Process remaining individuals
+    for ind in remaining_pop:
         min_dist = float('inf')
         nearest_leader_id = None
         
-        # Find nearest leader (optimized for multiple leaders)
-        if len(leaders) > 1:
-            # Vectorized batch computation for efficiency
-            leader_embeddings = np.array([emb for _, emb in leaders])
-            distances = semantic_distances_batch(ind.embedding, leader_embeddings)
-            min_idx = np.argmin(distances)
-            min_dist = distances[min_idx]
-            nearest_leader_id = leaders[min_idx][0]
-        elif len(leaders) == 1:
-            # Single leader case (direct computation)
-            min_dist = semantic_distance(ind.embedding, leaders[0][1])
-            nearest_leader_id = leaders[0][0]
+        # Find nearest leader from existing species
+        if leaders:
+            if len(leaders) > 1:
+                leader_embeddings = np.array([emb for _, emb in leaders])
+                distances = semantic_distances_batch(ind.embedding, leader_embeddings)
+                min_idx = np.argmin(distances)
+                min_dist = distances[min_idx]
+                nearest_leader_id = leaders[min_idx][0]
+            elif len(leaders) == 1:
+                min_dist = semantic_distance(ind.embedding, leaders[0][1])
+                nearest_leader_id = leaders[0][0]
         
-        # Decision: assign to species, cluster 0, or create new species
-        if min_dist < theta_sim:
+        # For Generation N: also check against reserves genomes
+        if not is_generation_0 and cluster0_individuals:
+            reserves_embeddings = np.array([rind.embedding for rind in cluster0_individuals if rind.embedding is not None])
+            if len(reserves_embeddings) > 0:
+                reserves_distances = semantic_distances_batch(ind.embedding, reserves_embeddings)
+                min_reserves_dist = np.min(reserves_distances)
+                # If closer to a reserve genome, still create new species (reserves are potential new species)
+                if min_reserves_dist < min_dist:
+                    min_dist = min_reserves_dist  # Update for logging
+        
+        # Decision: assign to species or create new species
+        if nearest_leader_id is not None and min_dist < theta_sim:
             # Within threshold -> assign as follower
             species[nearest_leader_id].add_member(ind)
+            ind.species_id = nearest_leader_id
+            # Update leader if this new member has higher fitness
+            species[nearest_leader_id].update_leader()
+            # Update leader embedding in leaders list
+            for i, (sid, _) in enumerate(leaders):
+                if sid == nearest_leader_id:
+                    leaders[i] = (sid, species[nearest_leader_id].leader.embedding)
+                    break
         else:
-            # Outside threshold -> decide based on fitness
-            if ind.fitness > viability_baseline:
-                # High-fitness outlier -> preserve in cluster 0
-                cluster0_candidates.append(ind)
-            else:
-                # Low-fitness outlier -> create new species (exploration)
-                new_species_id = generate_species_id()
-                new_species = Species(
-                    id=new_species_id,
-                    leader=ind,
-                    members=[ind],
-                    radius=theta_sim,  # Constant radius
-                    created_at=current_generation,
-                    last_improvement=current_generation,
-                    cluster_origin="natural",  # Formed naturally
-                    parent_ids=None,
-                    parent_id=None
-                )
-                species[new_species_id] = new_species
-                leaders.append((new_species_id, ind.embedding))
+            # Outside threshold -> create new species
+            new_species_id = generate_species_id()
+            from .species import SpeciesMode
+            new_species = Species(
+                id=new_species_id,
+                leader=ind,
+                members=[ind],
+                radius=theta_sim,
+                created_at=current_generation,
+                last_improvement=current_generation,
+                cluster_origin="natural",
+                parent_ids=None,
+                parent_id=None,
+                mode=SpeciesMode.DEFAULT
+            )
+            species[new_species_id] = new_species
+            ind.species_id = new_species_id
+            leaders.append((new_species_id, ind.embedding))
     
-    logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals -> {len(species)} species, {len(cluster0_candidates)} cluster 0 candidates")
-    return species, cluster0_candidates
+    # For Generation 0: Move single-member species to species 0 (reserves)
+    # Minimum species size is 2 (leader + at least one follower)
+    if is_generation_0:
+        single_member_species = []
+        for sid, sp in list(species.items()):
+            if len(sp.members) == 1:
+                # Only leader, no followers -> move to species 0
+                single_member_species.append(sid)
+                sp.members[0].species_id = CLUSTER_0_ID
+        
+        # Remove single-member species
+        for sid in single_member_species:
+            del species[sid]
+            leaders = [(lid, emb) for lid, emb in leaders if lid != sid]
+        
+        if single_member_species:
+            logger.info(f"Moved {len(single_member_species)} single-member species to reserves (minimum species size is 2)")
+    
+    # Update temp.json with species_id for each genome
+    genome_id_to_species = {ind.id: ind.species_id for ind in valid_population}
+    for genome in genomes:
+        genome_id = genome.get("id")
+        if genome_id in genome_id_to_species:
+            genome["species_id"] = genome_id_to_species[genome_id]
+        else:
+            # Genome without embedding gets species_id=None
+            genome["species_id"] = None
+    
+    # Save updated temp.json
+    with open(temp_path_obj, 'w', encoding='utf-8') as f:
+        json.dump(genomes, f, indent=2, ensure_ascii=False)
+    
+    # Update speciation_state.json with new species structure
+    # Note: This only updates species, cluster0 is managed separately by SpeciationModule
+    state_dict = {
+        "species": {str(sid): sp.to_dict() for sid, sp in species.items()},
+        "generation": current_generation
+    }
+    
+    # If speciation_state.json exists, preserve cluster0 and other fields
+    if speciation_state_path_obj.exists():
+        try:
+            with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
+                existing_state = json.load(f)
+            # Preserve cluster0 and other fields
+            state_dict["cluster0"] = existing_state.get("cluster0", {})
+            state_dict["config"] = existing_state.get("config", {})
+            state_dict["global_best_id"] = existing_state.get("global_best_id")
+            state_dict["metrics"] = existing_state.get("metrics", {})
+        except Exception:
+            pass  # If can't read, just save new structure
+    
+    # Save updated speciation_state.json
+    with open(speciation_state_path_obj, 'w', encoding='utf-8') as f:
+        json.dump(state_dict, f, indent=2, ensure_ascii=False)
+    
+    logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals -> {len(species)} species")
+    return species
+
+
+def update_species_leaders(species: Dict[int, Species]) -> None:
+    """
+    Update leaders for all species to highest-fitness members.
+    
+    Should be called after fitness updates or member changes to ensure
+    leaders accurately represent species centers.
+    
+    Args:
+        species: Dict of species to update
+    """
+    for sp in species.values():
+        sp.update_leader()
 
 
 def find_nearest_leader(embedding: np.ndarray, species: Dict[int, Species]) -> Tuple[Optional[int], float]:
     """
     Find the nearest species leader to a given embedding.
-    
-    Used for:
-    - Incremental clustering (assigning new individuals to existing species)
-    - Migration (finding target species)
-    - Reassignment after species changes
     
     Args:
         embedding: Query embedding vector (L2-normalized)
@@ -193,133 +360,16 @@ def find_nearest_leader(embedding: np.ndarray, species: Dict[int, Species]) -> T
     if not species:
         return None, float('inf')
     
-    # Collect all leader embeddings (filter out None)
     leaders = [(sid, sp.leader.embedding) for sid, sp in species.items() if sp.leader.embedding is not None]
     if not leaders:
         return None, float('inf')
     
-    # Optimize based on number of leaders
     if len(leaders) > 1:
-        # Multiple leaders: use vectorized batch computation
         leader_ids = [sid for sid, _ in leaders]
         leader_embeddings = np.array([emb for _, emb in leaders])
         distances = semantic_distances_batch(embedding, leader_embeddings)
         min_idx = np.argmin(distances)
         return leader_ids[min_idx], distances[min_idx]
     else:
-        # Single leader: direct computation
         sid, emb = leaders[0]
         return sid, semantic_distance(embedding, emb)
-
-
-def update_species_leaders(species: Dict[int, Species]) -> None:
-    """
-    Update leaders for all species to highest-fitness members.
-    
-    Should be called after fitness updates or member changes to ensure
-    leaders accurately represent species centers. Leader updates affect:
-    - Species center for distance computations
-    - Leader-follower clustering decisions
-    - Migration topology
-    
-    Args:
-        species: Dict of species to update
-    """
-    for sp in species.values():
-        sp.update_leader()
-
-
-def incremental_clustering(
-    new_individuals: List[Individual],
-    existing_species: Dict[int, Species],
-    theta_sim: float,
-    viability_baseline: float = 0.3,
-    current_generation: int = 0,
-    logger=None
-) -> Tuple[Dict[int, Species], List[Individual]]:
-    """
-    Incrementally add new individuals to existing species.
-    
-    This is used when new individuals are generated (e.g., offspring) and need
-    to be assigned to existing species. Unlike leader_follower_clustering(),
-    this doesn't create a new clustering from scratch - it assigns to existing
-    species or creates new ones if needed.
-    
-    Algorithm:
-        For each new individual:
-        1. Find nearest existing leader
-        2. If distance < theta_sim -> assign to that species
-        3. Else if fitness > viability_baseline -> send to cluster 0
-        4. Else -> create new species with cluster_origin="natural"
-    
-    Args:
-        new_individuals: List of new individuals to assign
-        existing_species: Dict of existing species (modified in-place)
-        theta_sim: Semantic distance threshold (also used as constant radius)
-        viability_baseline: Minimum fitness for cluster 0
-        current_generation: Current generation number
-        logger: Optional logger instance
-    
-    Returns:
-        Tuple of (existing_species, cluster0_candidates)
-        Note: existing_species is modified in-place, returned for convenience
-    """
-    if logger is None:
-        logger = get_logger("IncrementalClustering")
-    
-    cluster0_candidates = []
-    
-    for ind in new_individuals:
-        # Skip individuals without embeddings
-        if ind.embedding is None:
-            continue
-        
-        # Find nearest existing leader
-        nearest_id, min_dist = find_nearest_leader(ind.embedding, existing_species)
-        
-        # Decision logic (same as leader_follower_clustering)
-        if nearest_id is not None and min_dist < theta_sim:
-            # Within threshold -> assign to existing species
-            existing_species[nearest_id].add_member(ind)
-        elif ind.fitness > viability_baseline:
-            # High-fitness outlier -> cluster 0
-            cluster0_candidates.append(ind)
-        else:
-            # Low-fitness outlier -> new species
-            new_id = generate_species_id()
-            new_sp = Species(
-                id=new_id,
-                leader=ind,
-                members=[ind],
-                radius=theta_sim,  # Constant radius
-                created_at=current_generation,
-                last_improvement=current_generation,
-                cluster_origin="natural",  # Formed naturally
-                parent_ids=None,
-                parent_id=None
-            )
-            existing_species[new_id] = new_sp
-    
-    return existing_species, cluster0_candidates
-
-
-def reassign_to_species(individual: Individual, species: Dict[int, Species], theta_sim: float) -> Optional[int]:
-    """
-    Find suitable species for an individual (without assigning).
-    
-    Used to check if an individual can be assigned to a species without
-    actually performing the assignment. Useful for validation or conditional logic.
-    
-    Args:
-        individual: Individual to check
-        species: Dict of existing species
-        theta_sim: Semantic distance threshold
-    
-    Returns:
-        species_id if suitable species found (distance < theta_sim), else None
-    """
-    if individual.embedding is None or not species:
-        return None
-    nearest_id, min_dist = find_nearest_leader(individual.embedding, species)
-    return nearest_id if min_dist < theta_sim else None
-

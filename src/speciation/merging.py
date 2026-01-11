@@ -6,7 +6,7 @@ Island merging logic for speciation.
 
 from typing import Dict, List, Tuple, Optional
 
-from .island import Individual, Species, IslandMode, generate_species_id
+from .species import Individual, Species, SpeciesMode, IslandMode, generate_species_id
 from .distance import semantic_distance
 
 from utils import get_custom_logging

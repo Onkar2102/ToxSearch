@@ -171,18 +171,21 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     logger.info("Starting evolutionary run: metric=%s, threshold=%.4f, max_generations=%s", 
                 north_star_metric, north_star_threshold, max_generations)
 
+    # Resolve RG/PG model paths (aliases → concrete GGUF files) before initialization
     try:
         update_model_configs(rg_model, pg_model, logger)
     except Exception as e:
         logger.error("Config update failed: %s", e, exc_info=True)
         return
 
+    # Boot model instances, outputs directory, and seed data
     try:
         response_generator, prompt_generator = initialize_system(logger, log_file, seed_file=seed_file)
     except Exception as e:
         logger.error("System initialization failed: %s", e, exc_info=True)
         return
 
+    # Generate initial candidates into temp.json
     try:
         logger.info("Generating responses using response generation model...")
         temp_path = str(get_outputs_path() / "temp.json")
@@ -191,6 +194,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.error("Generation failed: %s", e, exc_info=True)
         return
 
+    # Score generated candidates via moderation APIs
     try:
         run_moderation_on_population = get_run_moderation_on_population()
         logger.info("Evaluating generated responses using moderation (%s)...", " + ".join(moderation_methods))
@@ -205,6 +209,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.error("Evaluation failed: %s", e, exc_info=True)
         return
 
+    # Assign species/reserves for generation 0
     try:
         logger.info("Running speciation on evaluated genomes...")
         from speciation import run_speciation
@@ -227,6 +232,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.error("Speciation failed: %s", e, exc_info=True)
         return
 
+    # Derive elite threshold and initialize tracker for gen 0
     try:
         logger.info("Updating evolution tracker for generation 0 and calculating elite threshold...")
         
@@ -281,6 +287,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.error("Evolution tracker update failed: %s", e, exc_info=True)
         return
 
+    # Normalize initial files (elites/non_elites), purge weak genomes, compute redistribution
     try:
         _, _, _, _, _, _, _, _, _, _, _, _, finalize_initial_population = get_population_io()
         logger.info("Finalizing initial population after evaluation...")
@@ -399,11 +406,13 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         elite_threshold = phase_3b_results["elite_threshold"]
         logger.debug("Starting fresh, elite_threshold=%.4f", elite_threshold)
     
+    # Evolution loop: generate → moderate → speciate → redistribute each generation
     while max_generations is None or generation_count < max_generations:
         generation_count += 1
         logger.info("=== Starting Generation %d ===", generation_count)
         
         operator_statistics = {}
+        # Create new variants for this generation
         try:
             evolution_result = run_evolution(
                 north_star_metric=north_star_metric,
@@ -422,6 +431,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             logger.error("Evolution failed: %s", e, exc_info=True)
             break
 
+        # Score variants, then assign species/reserves for this generation
         try:
             temp_path = str(get_outputs_path() / "temp.json")
             response_generator.process_population(pop_path=temp_path)
@@ -513,6 +523,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             except Exception as e:
                 logger.error("Failed to update EvolutionTracker with generation data: %s", e, exc_info=True)
             
+            # Recompute thresholds, redistribute files, and update tracker for this generation
             try:
                 previous_max_toxicity = 0.0001
                 evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"

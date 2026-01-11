@@ -7,7 +7,7 @@ Intra-island evolution: parent selection and survivor selection.
 import numpy as np
 from typing import List, Tuple, Dict, Optional, TYPE_CHECKING
 
-from .island import Individual, Species, IslandMode
+from .species import Individual, Species, SpeciesMode, IslandMode
 from .distance import semantic_distance
 
 if TYPE_CHECKING:

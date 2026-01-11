@@ -7,7 +7,7 @@ Explore/Exploit/Default mode switching logic for islands.
 import random
 from typing import Dict, List, Optional, TYPE_CHECKING
 
-from .island import Individual, Species, IslandMode
+from .species import Individual, Species, SpeciesMode, IslandMode
 
 if TYPE_CHECKING:
     from .reserves import Cluster0

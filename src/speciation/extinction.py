@@ -6,7 +6,7 @@ Island extinction and repopulation for speciation.
 
 from typing import Dict, List, Optional, Tuple, Callable, TYPE_CHECKING
 
-from .island import Individual, Species, IslandMode, generate_species_id
+from .species import Individual, Species, SpeciesMode, IslandMode, generate_species_id
 
 if TYPE_CHECKING:
     from .reserves import Cluster0

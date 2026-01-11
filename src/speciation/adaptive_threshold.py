@@ -10,7 +10,7 @@ import numpy as np
 from scipy.cluster.hierarchy import linkage, fcluster
 from typing import Dict, List, Tuple, Optional, TYPE_CHECKING
 
-from .island import Individual, Species, generate_species_id
+from .species import Individual, Species, generate_species_id
 from .distance import semantic_distance
 
 if TYPE_CHECKING:

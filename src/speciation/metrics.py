@@ -8,7 +8,7 @@ import numpy as np
 from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
-from .island import Individual, Species
+from .species import Individual, Species
 from .distance import semantic_distance
 from .adaptive_threshold import compute_all_silhouette_scores
 

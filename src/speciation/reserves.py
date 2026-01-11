@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
 from scipy.cluster.hierarchy import linkage, fcluster
 
-from .island import Individual, Species, generate_species_id
+from .species import Individual, Species, generate_species_id
 from .distance import semantic_distance
 
 if TYPE_CHECKING:
@@ -182,22 +182,29 @@ class Cluster0:
             self.logger.info(f"Expired {len(expired)} individuals from Cluster 0 (reserves)")
         return expired
     
-    def filter_by_removal_threshold(self, removal_threshold: Optional[float] = None) -> List[Individual]:
+    def filter_by_removal_threshold(self, removal_threshold: Optional[float] = None, max_fitness: Optional[float] = None) -> List[Individual]:
         """
-        Remove individuals with fitness below removal_threshold.
+        Remove individuals with fitness below (removal_threshold)% of population's max fitness.
+        
+        For reserves (Cluster 0), we keep genomes scoring equal to or more than 
+        (removal_threshold)% of population's max fitness score.
         
         These individuals should be archived to under_performing.json.
         
         Args:
-            removal_threshold: Fitness threshold (uses instance value if not provided)
+            removal_threshold: Percentage threshold (0-1, e.g., 0.1 = 10%) (uses instance value if not provided)
+            max_fitness: Maximum fitness in the population (required if removal_threshold is provided)
         
         Returns:
             List of removed individuals (to be archived)
         """
-        threshold = removal_threshold if removal_threshold is not None else self.removal_threshold
+        threshold_pct = removal_threshold if removal_threshold is not None else self.removal_threshold
         
-        if threshold is None:
-            return []  # No threshold, nothing to filter
+        if threshold_pct is None or max_fitness is None:
+            return []  # No threshold or max_fitness, nothing to filter
+        
+        # Calculate actual threshold: (removal_threshold)% of max fitness
+        threshold = threshold_pct * max_fitness
         
         removed = []
         remaining = []
@@ -211,7 +218,7 @@ class Cluster0:
         self.members = remaining
         
         if removed:
-            self.logger.info(f"Removed {len(removed)} individuals below removal threshold ({threshold:.4f}) from Cluster 0 (reserves)")
+            self.logger.info(f"Removed {len(removed)} individuals below {threshold_pct*100:.1f}% of max fitness ({threshold:.4f}) from Cluster 0 (reserves)")
         
         return removed
     

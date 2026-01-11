@@ -244,3 +244,58 @@ def compute_and_save_embeddings(
     
     logger.info(f"Successfully computed and saved embeddings for {len(genomes)} genomes")
 
+
+def remove_embeddings_from_temp(
+    temp_path: Optional[str] = None,
+    logger=None) -> None:
+    """
+    Remove "prompt_embedding" field from all genomes in temp.json.
+    
+    This function is called after speciation is complete to reduce storage size
+    when genomes are saved to other files (elites.json, etc.). The embeddings
+    are only needed during the clustering process, not for storage.
+    
+    This function directly reads and updates temp.json.
+    
+    Args:
+        temp_path: Path to temp.json file. If None, uses default outputs_path / "temp.json"
+        logger: Optional logger instance
+    
+    Raises:
+        FileNotFoundError: If temp.json doesn't exist
+    """
+    if logger is None:
+        logger = get_logger("Embeddings")
+    
+    # Determine temp path
+    if temp_path is None:
+        outputs_path = get_outputs_path()
+        temp_path = str(outputs_path / "temp.json")
+    
+    temp_path_obj = Path(temp_path)
+    if not temp_path_obj.exists():
+        raise FileNotFoundError(f"Temp file not found: {temp_path}")
+    
+    logger.info(f"Removing embeddings from genomes in {temp_path}")
+    
+    # Load genomes from temp.json
+    with open(temp_path_obj, 'r', encoding='utf-8') as f:
+        genomes = json.load(f)
+    
+    if not genomes:
+        logger.warning("No genomes found in temp.json")
+        return
+    
+    # Remove prompt_embedding field from all genomes
+    removed_count = 0
+    for genome in genomes:
+        if "prompt_embedding" in genome:
+            del genome["prompt_embedding"]
+            removed_count += 1
+    
+    # Save updated genomes back to temp.json
+    with open(temp_path_obj, 'w', encoding='utf-8') as f:
+        json.dump(genomes, f, indent=2, ensure_ascii=False)
+    
+    logger.info(f"Successfully removed embeddings from {removed_count} genomes")
+
