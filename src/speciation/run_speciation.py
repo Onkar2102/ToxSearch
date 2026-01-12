@@ -36,7 +36,8 @@ def _init_state(config: Optional[SpeciationConfig] = None, logger=None) -> None:
         _state = {
             "config": config or SpeciationConfig(),
             "logger": logger or get_logger("Speciation"),
-            "species": {},
+            "species": {},  # Active species only (state="active")
+            "historical_species": {},  # Frozen and incubator species (preserved for reference)
             "cluster0": Cluster0(
                 min_cluster_size=(config or SpeciationConfig()).cluster0_min_cluster_size,
                 theta_sim=(config or SpeciationConfig()).theta_sim,
@@ -45,7 +46,7 @@ def _init_state(config: Optional[SpeciationConfig] = None, logger=None) -> None:
             ),
             "global_best": None,
             "metrics_tracker": SpeciationMetricsTracker(logger=logger or get_logger("Speciation")),
-            "_current_gen_events": {"speciation": 0, "merge": 0, "extinction": 0},
+            "_current_gen_events": {"speciation": 0, "merge": 0, "extinction": 0, "moved_to_cluster0": 0},
             "_embedding_model": None,
             "_archived_count": 0
         }
@@ -81,9 +82,36 @@ def _archive_individuals(individuals: List[Individual], generation: int, reason:
         
         # Add new entries
         for ind in individuals:
-            entry = ind.to_genome() if hasattr(ind, 'to_genome') else {"id": ind.id}
+            if hasattr(ind, 'to_genome'):
+                entry = ind.to_genome()
+                # Ensure entry has required fields
+                if not entry:
+                    entry = {}
+                if "id" not in entry:
+                    entry["id"] = ind.id
+                if "prompt" not in entry and hasattr(ind, 'prompt'):
+                    entry["prompt"] = ind.prompt
+            else:
+                # Fallback: create minimal entry
+                entry = {"id": ind.id}
+                if hasattr(ind, 'prompt'):
+                    entry["prompt"] = ind.prompt
+            
             entry["archived_at_generation"] = generation
             entry["archive_reason"] = reason
+            # Preserve fitness if available
+            if hasattr(ind, 'fitness') and "fitness" not in entry:
+                entry["fitness"] = ind.fitness
+            if hasattr(ind, 'species_id') and "species_id" not in entry:
+                entry["species_id"] = ind.species_id
+            # Set initial_state for operator effectiveness metrics
+            # Genomes archived due to capacity limits are non-elites
+            if "initial_state" not in entry:
+                if "capacity" in reason.lower():
+                    entry["initial_state"] = "non-elite"
+                else:
+                    # For other reasons (extinction, etc.), preserve existing or default to elite
+                    entry["initial_state"] = entry.get("initial_state", "elite")
             archive.append(entry)
         
         # Save updated archive
@@ -125,7 +153,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state = _get_state()
     
     state["logger"].info(f"=== Speciation Generation {current_generation} ===")
-    state["_current_gen_events"] = {"speciation": 0, "merge": 0, "extinction": 0}
+    state["_current_gen_events"] = {"speciation": 0, "merge": 0, "extinction": 0, "moved_to_cluster0": 0}
     state["_archived_count"] = 0
     
     # Auto-load previous state if not first generation
@@ -152,7 +180,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     outputs_path = get_outputs_path()
     speciation_state_path = str(outputs_path / "speciation_state.json")
     
-    state["species"] = leader_follower_clustering(
+    state["species"], species_with_new_members = leader_follower_clustering(
         temp_path=temp_path,
         speciation_state_path=speciation_state_path,
         theta_sim=state["config"].theta_sim,
@@ -162,9 +190,74 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         logger=state["logger"]
     )
     
+    # Step 2b: Post-processing - remove genomes outside radius after all variants processed
+    # When leader was updated, remaining genomes were assigned using updated leader
+    # Now we need to verify all members are still within radius of the (possibly updated) leader
+    from .distance import ensemble_distance
+    
+    for sid in list(species_with_new_members):
+        if sid not in state["species"]:
+            continue
+        sp = state["species"][sid]
+        if sp.leader is None or sp.leader.embedding is None:
+            continue
+        
+        # Recalculate distances and remove members outside radius
+        members_to_keep = []
+        members_to_remove = []
+        
+        for member in sp.members:
+            if member.id == sp.leader.id:
+                # Leader always stays
+                members_to_keep.append(member)
+                continue
+            
+            if member.embedding is None:
+                # Members without embeddings go to cluster 0
+                members_to_remove.append(member)
+                continue
+            
+            dist = ensemble_distance(
+                member.embedding, sp.leader.embedding,
+                member.phenotype, sp.leader.phenotype,
+                state["config"].w_genotype, state["config"].w_phenotype
+            )
+            
+            if dist < state["config"].theta_sim:
+                members_to_keep.append(member)
+            else:
+                members_to_remove.append(member)
+        
+        # Update species members
+        if members_to_remove:
+            state["logger"].debug(f"Species {sid}: removing {len(members_to_remove)} members outside radius")
+            sp.members = members_to_keep
+            
+            # Move removed members to cluster 0
+            for member in members_to_remove:
+                if state["cluster0"].size < state["config"].cluster0_max_capacity:
+                    state["cluster0"].add(member, current_generation)
+            
+            # Check if species is now empty (only leader)
+            if len(sp.members) <= 1:
+                # Species is empty (only leader) - move to incubator state
+                sp.species_state = "incubator"
+                sp.members = []  # Clear members
+                
+                # Move leader to cluster 0
+                if state["cluster0"].size < state["config"].cluster0_max_capacity:
+                    state["cluster0"].add(sp.leader, current_generation)
+                
+                # Remove from active species (will be preserved in speciation_state.json with incubator state)
+                del state["species"][sid]
+                state["logger"].info(f"Species {sid} became empty after radius cleanup - moved to incubator")
+    
     # Step 3: Enforce capacities directly (species and cluster 0)
-    # For species with count > species_capacity: order by fitness, remove excess
-    for sp in list(state["species"].values()):
+    # Only process species that received new members (optimization: unaffected species remain unchanged)
+    for sid in species_with_new_members:
+        if sid not in state["species"]:
+            continue  # Species may have been removed
+        sp = state["species"][sid]
         if sp.size > state["config"].species_capacity:
             # Sort members by fitness (descending)
             sp.members.sort(key=lambda x: x.fitness, reverse=True)
@@ -194,9 +287,10 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["species"][new_species.id] = new_species
         state["_current_gen_events"]["speciation"] += 1
     
-    # Step 4: Record fitness for all species
-    for sp in state["species"].values():
-        sp.record_fitness(current_generation)
+    # Step 4: Record fitness for species that received new members (optimization)
+    for sid in species_with_new_members:
+        if sid in state["species"]:
+            state["species"][sid].record_fitness(current_generation)
     
     # Step 5: Island merging
     state["species"], merge_events = process_merges(
@@ -211,8 +305,8 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     )
     state["_current_gen_events"]["merge"] = len(merge_events)
     
-    # Step 6: Freeze stagnant species and move small species to cluster 0
-    state["species"], extinction_events = process_extinctions(
+    # Step 6: Freeze stagnant species (extinction) and move small species to cluster 0 (not extinction)
+    state["species"], extinction_events, moved_to_cluster0_events = process_extinctions(
         state["species"],
         state["cluster0"],
         current_generation,
@@ -220,7 +314,18 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         min_size=state["config"].min_island_size,
         logger=state["logger"]
     )
+    # Only frozen species (stagnation-based) count as extinction events
+    # Moving to cluster 0 (size-based) is NOT extinction, just reorganization
     state["_current_gen_events"]["extinction"] = len(extinction_events)
+    state["_current_gen_events"]["moved_to_cluster0"] = len(moved_to_cluster0_events)
+    
+    # Move frozen species to historical_species for preservation
+    # (process_extinctions already sets species_state="frozen" but keeps them in species dict)
+    frozen_species_to_move = {sid: sp for sid, sp in state["species"].items() if sp.species_state == "frozen"}
+    for sid, sp in frozen_species_to_move.items():
+        state["historical_species"][sid] = sp
+        del state["species"][sid]
+        state["logger"].debug(f"Moved frozen species {sid} to historical_species")
     
     # Step 7: Update c-TF-IDF labels for all species
     from .labeling import update_species_labels
@@ -231,11 +336,26 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         logger=state["logger"]
     )
     
-    # Step 8: Record metrics (include cluster0 for fitness calculation)
+    # Step 8: Record metrics (use actual files for accurate counts)
+    outputs_path = get_outputs_path()
+    elites_path = str(outputs_path / "elites.json")
+    reserves_path = str(outputs_path / "reserves.json")
+    
+    # Get actual reserves size from file
+    actual_reserves_size = state["cluster0"].size
+    if Path(reserves_path).exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+            actual_reserves_size = len(reserves_genomes)
+        except Exception:
+            pass  # Use cluster0.size as fallback
+    
     state["metrics_tracker"].record_generation(
-        current_generation, state["species"], state["cluster0"].size,
+        current_generation, state["species"], actual_reserves_size,
         state["_current_gen_events"]["speciation"], state["_current_gen_events"]["merge"],
-        state["_current_gen_events"]["extinction"], cluster0=state["cluster0"]
+        state["_current_gen_events"]["extinction"], cluster0=state["cluster0"],
+        elites_path=elites_path, reserves_path=reserves_path
     )
     
     log_generation_summary(current_generation, state["species"], state["cluster0"].size,
@@ -438,22 +558,82 @@ def save_state(path: str) -> None:
     Note: Config is NOT saved here as it's passed as project arguments or fixed constants.
     The cluster0 section only contains metadata (size, speciation_events), not full member data
     since reserves.json already stores the complete genome data for cluster 0.
+    
+    The size in speciation_state.json reflects the current total size of genomes in that species
+    from elites.json (all generations), not just the members in the Species object (current generation only).
+    
+    All species are saved including:
+    - Active species (state="active") - participate in evolution
+    - Frozen species (state="frozen") - stagnated, excluded from parent selection
+    - Incubator species (state="incubator") - moved to cluster 0, awaiting new species formation
     """
     state = _get_state()
+    logger = state["logger"]
+    
+    # Calculate actual sizes from elites.json for each species
+    # This gives the true current size across all generations
+    outputs_path = get_outputs_path()
+    elites_path = outputs_path / "elites.json"
+    species_sizes = {}
+    
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+            
+            # Count genomes per species
+            for genome in elites_genomes:
+                species_id = genome.get("species_id")
+                if species_id is not None and species_id > 0:
+                    species_sizes[species_id] = species_sizes.get(species_id, 0) + 1
+        except Exception as e:
+            logger.warning(f"Failed to calculate species sizes from elites.json: {e}")
+    
+    # Build species dict with actual sizes from elites.json
+    # Include both active species and historical species (frozen/incubator)
+    species_dict = {}
+    
+    # Add active species
+    for sid, sp in state["species"].items():
+        sp_dict = sp.to_dict()
+        # Add actual current size from elites.json (all generations)
+        actual_size = species_sizes.get(sid, len(sp.members))
+        sp_dict["size"] = actual_size
+        species_dict[str(sid)] = sp_dict
+    
+    # Add historical species (frozen and incubator) - preserved for reference
+    for sid, sp in state.get("historical_species", {}).items():
+        if str(sid) not in species_dict:  # Avoid duplicates
+            sp_dict = sp.to_dict()
+            # Historical species have size = 0 (their members were moved)
+            sp_dict["size"] = 0
+            species_dict[str(sid)] = sp_dict
+    
     state_dict = {
-        "species": {str(sid): sp.to_dict() for sid, sp in state["species"].items()},
+        "species": species_dict,
         "cluster0": state["cluster0"].to_dict(),
         "global_best_id": state["global_best"].id if state["global_best"] else None,
         "metrics": state["metrics_tracker"].to_dict()
     }
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(state_dict, f, indent=2, ensure_ascii=False)
-    state["logger"].info(f"Saved speciation state to {path}")
+    
+    # Count species by state for logging
+    active_count = len([sp for sp in state["species"].values() if sp.species_state == "active"])
+    frozen_count = len([sp for sp in state["species"].values() if sp.species_state == "frozen"])
+    frozen_count += len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "frozen"])
+    incubator_count = len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "incubator"])
+    
+    state["logger"].info(f"Saved speciation state to {path}: {active_count} active, {frozen_count} frozen, {incubator_count} incubator")
 
 
 def load_state(path: str) -> bool:
     """
     Load state from file and restore species, cluster 0, and metrics.
+    
+    Species are loaded into two dictionaries:
+    - state["species"]: Active species (state="active") - participate in evolution
+    - state["historical_species"]: Frozen and incubator species (preserved for reference)
     
     Args:
         path: Path to speciation_state.json file
@@ -476,8 +656,9 @@ def load_state(path: str) -> bool:
         with open(state_path, 'r', encoding='utf-8') as f:
             loaded_state = json.load(f)
         
-        # Restore species
+        # Restore species - separate active from historical
         state["species"] = {}
+        state["historical_species"] = {}
         max_species_id = 0
         
         for sid_str, sp_dict in loaded_state.get("species", {}).items():
@@ -509,16 +690,23 @@ def load_state(path: str) -> bool:
                 fitness_history=sp_dict.get("fitness_history", []),
                 labels=sp_dict.get("labels", []),
                 label_history=sp_dict.get("label_history", []),
-                cluster_origin=sp_dict.get("cluster_origin"),
+                cluster_origin=sp_dict.get("cluster_origin", "natural"),  # Default to "natural" if None
                 parent_ids=sp_dict.get("parent_ids"),
-                parent_id=sp_dict.get("parent_id")
+                leader_distance=sp_dict.get("leader_distance", 0.0)
             )
             
-            state["species"][sid] = species
+            # Separate active from historical species
+            if species.species_state == "active":
+                state["species"][sid] = species
+            else:
+                # Frozen or incubator -> historical
+                state["historical_species"][sid] = species
         
         SpeciesIdGenerator.set_min_id(max_species_id + 1)
         
-        logger.info(f"Loaded speciation state from {path}: {len(state['species'])} species")
+        active_count = len(state["species"])
+        historical_count = len(state["historical_species"])
+        logger.info(f"Loaded speciation state from {path}: {active_count} active, {historical_count} historical species")
         return True
         
     except Exception as e:
@@ -533,6 +721,7 @@ def reset_speciation_module() -> None:
         config = _state["config"]
         logger = _state["logger"]
         _state["species"] = {}
+        _state["historical_species"] = {}  # Also reset historical species
         _state["cluster0"] = Cluster0(
             min_cluster_size=config.cluster0_min_cluster_size,
             theta_sim=config.theta_sim,
@@ -541,7 +730,7 @@ def reset_speciation_module() -> None:
         )
         _state["global_best"] = None
         _state["metrics_tracker"] = SpeciationMetricsTracker(logger=logger)
-        _state["_current_gen_events"] = {"speciation": 0, "merge": 0, "extinction": 0}
+        _state["_current_gen_events"] = {"speciation": 0, "merge": 0, "extinction": 0, "moved_to_cluster0": 0}
         _state["_archived_count"] = 0
         SpeciesIdGenerator.reset()
         logger.info("Speciation module reset")
@@ -581,36 +770,136 @@ def run_speciation(
     
     temp_path_obj = Path(temp_path)
     if not temp_path_obj.exists():
-        logger.error("Temp file not found: %s", temp_path)
-        return {
-            "species_count": 0,
-            "reserves_size": 0,
+        logger.warning("Temp file not found: %s - updating EvolutionTracker with current state", temp_path)
+        # Even with no temp file, update EvolutionTracker with current speciation state
+        _init_state(config, logger)
+        state = _get_state()
+        
+        # Load previous state if available
+        if current_generation > 0:
+            outputs_path_state = get_outputs_path()
+            state_path = str(outputs_path_state / "speciation_state.json")
+            if Path(state_path).exists():
+                load_state(state_path)
+        
+        # Get actual reserves size from file
+        outputs_path = get_outputs_path()
+        reserves_path = outputs_path / "reserves.json"
+        actual_reserves_size = state["cluster0"].size
+        if reserves_path.exists():
+            try:
+                with open(reserves_path, 'r', encoding='utf-8') as f:
+                    reserves_genomes = json.load(f)
+                actual_reserves_size = len(reserves_genomes)
+            except Exception:
+                pass  # Use cluster0.size as fallback
+        
+        # Calculate species count: active + frozen, but EXCLUDE incubator
+        active_count = len(state["species"])
+        frozen_count = len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "frozen"])
+        total_species_count = active_count + frozen_count
+        
+        # Create result with current state
+        no_temp_result = {
+            "species_count": total_species_count,
+            "active_species_count": active_count,
+            "reserves_size": actual_reserves_size,
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
             "archived_count": 0,
             "genomes_updated": 0,
-            "success": False,
-            "error": "temp_file_not_found"
+            "elites_moved": 0,
+            "reserves_moved": 0,
+            "success": True,  # No error, just no new genomes
+            "error": None
         }
+        
+        # Update EvolutionTracker with current state
+        try:
+            outputs_path_tracker = get_outputs_path()
+            evolution_tracker_path = str(outputs_path_tracker / "EvolutionTracker.json")
+            speciation_stats = get_speciation_statistics(log_file)
+            update_evolution_tracker_with_speciation(
+                evolution_tracker_path=evolution_tracker_path,
+                current_generation=current_generation,
+                speciation_result=no_temp_result,
+                speciation_stats=speciation_stats,
+                logger=logger
+            )
+            logger.info("Updated EvolutionTracker with current speciation state (temp file not found)")
+        except Exception as e:
+            logger.warning("Failed to update EvolutionTracker with speciation data: %s", e)
+        
+        return no_temp_result
     
     try:
         with open(temp_path_obj, 'r', encoding='utf-8') as f:
             genomes = json.load(f)
         
         if not genomes:
-            logger.warning("No genomes found in temp.json")
-            return {
-                "species_count": 0,
-                "reserves_size": 0,
+            logger.warning("No genomes found in temp.json - updating EvolutionTracker with current state")
+            # Even with no new genomes, update EvolutionTracker with current speciation state
+            _init_state(config, logger)
+            state = _get_state()
+            
+            # Load previous state if available
+            if current_generation > 0:
+                outputs_path_state = get_outputs_path()
+                state_path = str(outputs_path_state / "speciation_state.json")
+                if Path(state_path).exists():
+                    load_state(state_path)
+            
+            # Get actual reserves size from file
+            outputs_path = get_outputs_path()
+            reserves_path = outputs_path / "reserves.json"
+            actual_reserves_size = state["cluster0"].size
+            if reserves_path.exists():
+                try:
+                    with open(reserves_path, 'r', encoding='utf-8') as f:
+                        reserves_genomes = json.load(f)
+                    actual_reserves_size = len(reserves_genomes)
+                except Exception:
+                    pass  # Use cluster0.size as fallback
+            
+            # Calculate species count: active + frozen, but EXCLUDE incubator
+            active_count = len(state["species"])
+            frozen_count = len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "frozen"])
+            total_species_count = active_count + frozen_count
+            
+            # Create result with current state
+            no_genomes_result = {
+                "species_count": total_species_count,
+                "active_species_count": active_count,
+                "reserves_size": actual_reserves_size,
                 "speciation_events": 0,
                 "merge_events": 0,
                 "extinction_events": 0,
                 "archived_count": 0,
                 "genomes_updated": 0,
-                "success": False,
-                "error": "no_genomes"
+                "elites_moved": 0,
+                "reserves_moved": 0,
+                "success": True,  # Changed to True - no error, just no new genomes
+                "error": None
             }
+            
+            # Update EvolutionTracker with current state even if no new genomes
+            try:
+                outputs_path_tracker = get_outputs_path()
+                evolution_tracker_path = str(outputs_path_tracker / "EvolutionTracker.json")
+                speciation_stats = get_speciation_statistics(log_file)
+                update_evolution_tracker_with_speciation(
+                    evolution_tracker_path=evolution_tracker_path,
+                    current_generation=current_generation,
+                    speciation_result=no_genomes_result,
+                    speciation_stats=speciation_stats,
+                    logger=logger
+                )
+                logger.info("Updated EvolutionTracker with current speciation state (no new genomes)")
+            except Exception as e:
+                logger.warning("Failed to update EvolutionTracker with speciation data: %s", e)
+            
+            return no_genomes_result
         
         logger.debug("Loaded %d genomes for speciation", len(genomes))
         
@@ -645,13 +934,37 @@ def run_speciation(
                    distribution_result.get("elites_moved", 0),
                    distribution_result.get("reserves_moved", 0))
         
+        # Save state AFTER distribution so size reflects updated elites.json
+        outputs_path = get_outputs_path()
+        state_path = str(outputs_path / "speciation_state.json")
+        save_state(state_path)
+        logger.debug("Saved speciation state after distribution (with updated sizes)")
+        
         # Get event counts
         state = _get_state()
         events = state["_current_gen_events"]
         
+        # Get actual reserves size from file (more accurate than cluster0.size)
+        actual_reserves_size = cluster0.size
+        reserves_path = outputs_path / "reserves.json"
+        if reserves_path.exists():
+            try:
+                with open(reserves_path, 'r', encoding='utf-8') as f:
+                    reserves_genomes = json.load(f)
+                actual_reserves_size = len(reserves_genomes)
+            except Exception:
+                pass  # Use cluster0.size as fallback
+        
+        # Calculate species count: active + frozen, but EXCLUDE incubator (incubator = deceased)
+        # Incubator species get new IDs when they form new species, so old ID is deceased
+        active_count = len(state["species"])  # Active species
+        frozen_count = len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "frozen"])
+        total_species_count = active_count + frozen_count  # Exclude incubator
+        
         result = {
-            "species_count": len(species),
-            "reserves_size": cluster0.size,
+            "species_count": total_species_count,  # All species except incubator
+            "active_species_count": active_count,  # Only active species
+            "reserves_size": actual_reserves_size,
             "speciation_events": events.get("speciation", 0),
             "merge_events": events.get("merge", 0),
             "extinction_events": events.get("extinction", 0),
@@ -779,15 +1092,73 @@ def update_evolution_tracker_with_speciation(
                 "avg_fitness": round(current_metrics.avg_fitness, 4),
             })
         else:
-            # Fallback: calculate from state if metrics not available
-            all_fitness = []
-            for sp in state.get("species", {}).values():
-                if hasattr(sp, 'members'):
-                    all_fitness.extend([m.fitness for m in sp.members])
+            # Fallback: calculate from actual files (elites.json + reserves.json)
+            outputs_path = get_outputs_path()
+            elites_path = outputs_path / "elites.json"
+            reserves_path = outputs_path / "reserves.json"
             
-            cluster0 = state.get("cluster0")
-            if cluster0 and hasattr(cluster0, 'individuals'):
-                all_fitness.extend([ind.fitness for ind in cluster0.individuals])
+            total_pop = 0
+            all_fitness = []
+            
+            # Read from elites.json
+            if elites_path.exists():
+                try:
+                    with open(elites_path, 'r', encoding='utf-8') as f:
+                        elites_genomes = json.load(f)
+                    total_pop += len(elites_genomes)
+                    for genome in elites_genomes:
+                        fitness = 0.0
+                        if "north_star_score" in genome:
+                            fitness = genome["north_star_score"]
+                        elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
+                            google_result = genome["moderation_result"].get("google", {})
+                            if google_result and "scores" in google_result:
+                                fitness = google_result["scores"].get("toxicity", 0.0)
+                            else:
+                                scores = genome["moderation_result"].get("scores", {})
+                                fitness = scores.get("toxicity", 0.0)
+                        elif "toxicity" in genome:
+                            fitness = genome["toxicity"]
+                        if fitness > 0:
+                            all_fitness.append(float(fitness))
+                except Exception:
+                    pass
+            
+            # Read from reserves.json
+            if reserves_path.exists():
+                try:
+                    with open(reserves_path, 'r', encoding='utf-8') as f:
+                        reserves_genomes = json.load(f)
+                    total_pop += len(reserves_genomes)
+                    for genome in reserves_genomes:
+                        fitness = 0.0
+                        if "north_star_score" in genome:
+                            fitness = genome["north_star_score"]
+                        elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
+                            google_result = genome["moderation_result"].get("google", {})
+                            if google_result and "scores" in google_result:
+                                fitness = google_result["scores"].get("toxicity", 0.0)
+                            else:
+                                scores = genome["moderation_result"].get("scores", {})
+                                fitness = scores.get("toxicity", 0.0)
+                        elif "toxicity" in genome:
+                            fitness = genome["toxicity"]
+                        if fitness > 0:
+                            all_fitness.append(float(fitness))
+                except Exception:
+                    pass
+            
+            # Final fallback: use state if files not available
+            if total_pop == 0:
+                for sp in state.get("species", {}).values():
+                    if hasattr(sp, 'members'):
+                        all_fitness.extend([m.fitness for m in sp.members])
+                        total_pop += len(sp.members)
+                
+                cluster0 = state.get("cluster0")
+                if cluster0 and hasattr(cluster0, 'individuals'):
+                    all_fitness.extend([ind.fitness for ind in cluster0.individuals])
+                    total_pop += len(cluster0.individuals)
             
             best_fitness = max(all_fitness) if all_fitness else 0.0
             avg_fitness = sum(all_fitness) / len(all_fitness) if all_fitness else 0.0
@@ -795,7 +1166,7 @@ def update_evolution_tracker_with_speciation(
             speciation_summary.update({
                 "inter_species_diversity": 0.0,
                 "intra_species_diversity": 0.0,
-                "total_population": speciation_result.get("species_count", 0) + speciation_result.get("reserves_size", 0),
+                "total_population": total_pop,
                 "best_fitness": round(best_fitness, 4),
                 "avg_fitness": round(avg_fitness, 4),
             })

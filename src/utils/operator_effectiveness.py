@@ -31,13 +31,28 @@ def calculate_table4_metrics(
     """
     Calculate Table 4 metrics for RQ1: operator effectiveness analysis.
     
-    Metrics calculated per operator:
-    - NE: Non-Elite percentage (non_elite / calculated_total * 100)
-    - EHR: Elite Hit Rate (elite / calculated_total * 100)
-    - IR: Invalid/Rejection Rate (question_removed / calculated_total * 100)
-    - cEHR: Conditional Elite Hit Rate (elite / total * 100)
-    - Δμ: Mean delta score (mean change in toxicity)
-    - Δσ: Std dev of delta score (variance in toxicity change)
+    Variable Definitions:
+    - elite_count: # variants in elites.json + reserves.json (initial_state = "elite")
+    - non_elite_count: # variants in archive.json (initial_state = "non-elite")  
+    - total_variants: elite_count + non_elite_count (successful variants)
+    - rejections: # variants rejected by question mark validation
+    - duplicates: # variants removed as duplicates
+    - calculated_total: total_variants + rejections + duplicates (all attempts)
+    
+    Metrics Formulae:
+    - NE:   non_elite_count / calculated_total × 100
+            (% of all attempts that ended up archived)
+    - EHR:  elite_count / calculated_total × 100
+            (% of all attempts that became elites)
+    - IR:   rejections / calculated_total × 100
+            (% of all attempts that were rejected)
+    - cEHR: elite_count / total_variants × 100
+            = elite_count / (elite_count + non_elite_count) × 100
+            (% of VALID variants that became elites, excluding rejections/duplicates)
+    - Δμ:   mean(current_toxicity - parent_score)
+            (average toxicity change from parent)
+    - Δσ:   std(current_toxicity - parent_score)
+            (std dev of toxicity change)
     
     Args:
         outputs_path: Path to outputs directory
@@ -121,7 +136,7 @@ def calculate_table4_metrics(
             # Check if we have operator_statistics to process
             if operator_statistics and len(operator_statistics) > 0:
                 _logger.info(f"No successful variants for generation {current_generation}, but found operator_statistics. Processing operators with rejections/duplicates only.")
-                # Continue processing - we'll create metrics from operator_statistics
+                # Continue processing - do NOT return None here
             else:
                 _logger.warning(f"No variants and no operator_statistics found for generation {current_generation}")
                 return None
@@ -223,41 +238,50 @@ def calculate_table4_metrics(
             operator_variants = unified_df[unified_df['operator'] == operator] if not unified_df.empty else pd.DataFrame()
             
             # Count elite and non-elite directly from initial_state
+            # elite_count = variants in elites.json OR reserves.json (initial_state == "elite")
+            # non_elite_count = variants in archive.json (initial_state == "non-elite")
             elite_count = len(operator_variants[operator_variants['initial_state'] == 'elite']) if not operator_variants.empty else 0
             non_elite_count = len(operator_variants[operator_variants['initial_state'] == 'non-elite']) if not operator_variants.empty else 0
-            total = len(operator_variants)  # Total variants that made it through
+            
+            # total_variants = elite_count + non_elite_count (successful variants that passed validation)
+            total_variants = len(operator_variants)
             
             # Get rejections and duplicates from operator statistics
-            question_removed = 0
-            duplicates_removed = 0
+            rejections = 0
+            duplicates = 0
             if operator in operator_stats:
                 op_stat = operator_stats[operator]
                 if isinstance(op_stat, dict):
-                    question_removed = op_stat.get("question_mark_rejections", 0)
-                    duplicates_removed = op_stat.get("duplicates_removed", 0)
+                    rejections = op_stat.get("question_mark_rejections", 0)
+                    duplicates = op_stat.get("duplicates_removed", 0)
             
-            calculated_total = total + question_removed + duplicates_removed
+            # calculated_total = all attempts by this operator
+            calculated_total = total_variants + rejections + duplicates
             
             # Include operator even if calculated_total is 0 (for completeness, though metrics will be NaN/0)
             # This ensures all operators appear in the metrics, even if they had no activity
-            if calculated_total == 0 and total == 0 and question_removed == 0 and duplicates_removed == 0:
+            if calculated_total == 0 and total_variants == 0 and rejections == 0 and duplicates == 0:
                 # Skip operators with no activity at all (not in stats and no variants)
                 continue
             
-            # Calculate metrics
-            # Handle case where calculated_total is 0 (all rejected/duplicated) - set IR to 100% if applicable
+            # Calculate metrics using the formulae:
+            # NE = non_elite_count / calculated_total × 100
+            # EHR = elite_count / calculated_total × 100
+            # IR = rejections / calculated_total × 100
             if calculated_total > 0:
                 NE = round(non_elite_count / calculated_total * 100, 2)
                 EHR = round(elite_count / calculated_total * 100, 2)
-                IR = round(question_removed / calculated_total * 100, 2)
+                IR = round(rejections / calculated_total * 100, 2)
             else:
                 # All variants were rejected or duplicated
                 NE = 0.0
                 EHR = 0.0
-                IR = 100.0 if question_removed > 0 else 0.0  # 100% rejection if all were rejected
+                IR = 100.0 if rejections > 0 else 0.0  # 100% rejection if all were rejected
             
-            # cEHR is conditional on non-refusal variants, so it's 0 if total is 0
-            cEHR = round(elite_count / total * 100, 2) if total > 0 else 0.0
+            # cEHR = elite_count / total_variants × 100
+            #      = elite_count / (elite_count + non_elite_count) × 100
+            # (Conditional: only considers variants that passed validation)
+            cEHR = round(elite_count / total_variants * 100, 2) if total_variants > 0 else 0.0
             
             # Get delta statistics for this operator
             if not operator_variants.empty:
@@ -281,11 +305,11 @@ def calculate_table4_metrics(
                 'cEHR': cEHR,
                 'Δμ': delta_mean,
                 'Δσ': delta_std,
-                'total_variants': total,
+                'total_variants': total_variants,
                 'elite_count': elite_count,
                 'non_elite_count': non_elite_count,
-                'rejections': question_removed,
-                'duplicates': duplicates_removed
+                'rejections': rejections,
+                'duplicates': duplicates
             }
         
         if not result_data:
@@ -358,6 +382,13 @@ def save_operator_effectiveness_cumulative(
             combined_df = metrics_df if not metrics_df.empty else pd.DataFrame(columns=metrics_df.columns)
         
         # Save cumulative file (even if empty, to maintain structure)
+        # Ensure we have the correct columns even if DataFrame is empty
+        if combined_df.empty:
+            # Create empty DataFrame with correct structure
+            expected_columns = ['generation', 'operator', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ', 
+                              'total_variants', 'elite_count', 'non_elite_count', 'rejections', 'duplicates']
+            combined_df = pd.DataFrame(columns=expected_columns)
+        
         combined_df.to_csv(cumulative_file, index=False)
         _logger.info(f"Updated cumulative operator effectiveness metrics: {cumulative_file.absolute()} ({len(combined_df)} total rows)")
         

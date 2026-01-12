@@ -605,8 +605,6 @@ class EvolutionEngine:
                     "variants_created": 0,
                     "mutation_variants": 0,
                     "crossover_variants": 0,
-                    "elites_threshold": 0.0001,
-                    "removal_threshold": 0.0001,
                     "elites_count": 0,
                     "operator_statistics": {},
                     "selection_mode": selection_mode  # Add selection mode for this generation

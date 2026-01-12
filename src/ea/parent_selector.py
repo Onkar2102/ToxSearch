@@ -202,8 +202,7 @@ class ParentSelector:
         active_species_ids: set
     ) -> List[Dict[str, Any]]:
         """
-        DEFAULT mode: Randomly select species 1 and species 2 from sorted list,
-        then randomly select one genome from each as parents.
+        DEFAULT mode: Randomly select one species, then randomly select 2 genomes from that species.
         
         Args:
             elites: List of elite genomes
@@ -234,18 +233,20 @@ class ParentSelector:
             self.logger.warning("No active species found, falling back to random selection")
             return random.sample(all_genomes, min(2, len(all_genomes)))
         
-        selected_parents = []
+        # Randomly select one species
+        selected_species = random.choice(sorted_species)
+        species_id, species_genomes, _ = selected_species
         
-        # Randomly select 2 species (can be same or different)
-        for _ in range(2):
-            selected_species = random.choice(sorted_species)
-            species_id, species_genomes, _ = selected_species
-            
-            # Randomly select a genome from the species
-            selected_genome = random.choice(species_genomes)
-            selected_parents.append(selected_genome)
+        # Check if species has at least 2 genomes
+        if len(species_genomes) < 2:
+            # If only one genome, select it twice (or select from all genomes as fallback)
+            self.logger.warning(f"Species {species_id} has only {len(species_genomes)} genome(s), selecting from all genomes")
+            return random.sample(all_genomes, min(2, len(all_genomes)))
         
-        self.logger.debug(f"DEFAULT mode: Selected parents from species {[p.get('species_id') for p in selected_parents]}")
+        # Randomly select 2 genomes from the selected species
+        selected_parents = random.sample(species_genomes, 2)
+        
+        self.logger.debug(f"DEFAULT mode: Selected 2 parents from species {species_id}")
         return selected_parents
 
     def _select_parents_exploitation(
@@ -321,7 +322,7 @@ class ParentSelector:
         """
         EXPLORATION mode: Select top species (highest fitness), select genome with highest fitness as parent 1.
         Then randomly select a different species, select genome with highest fitness as parent 2.
-        
+
         Args:
             elites: List of elite genomes
             reserves: List of reserve genomes (cluster 0)

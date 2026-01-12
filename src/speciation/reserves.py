@@ -189,9 +189,9 @@ class Cluster0:
                     radius=self.theta_sim,  # Constant radius
                     created_at=current_generation,
                     last_improvement=current_generation,
-                    cluster_origin="natural",  # Formed naturally from Cluster 0
+                    cluster_origin="natural",  # Formed naturally from Cluster 0, never None
                     parent_ids=None,
-                    parent_id=None
+                    leader_distance=0.0  # New species leader is reference point
                 )
                 # Remove from Cluster 0 (they're now in a species)
                 self.remove_batch(cluster)

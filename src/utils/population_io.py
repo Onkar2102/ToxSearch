@@ -75,15 +75,18 @@ def _extract_north_star_score(genome, metric="toxicity"):
     if "moderation_result" in genome:
         moderation_result = genome["moderation_result"]
         
-        if moderation_result is not None and "google" in moderation_result:
+        # Skip if moderation_result is None
+        if moderation_result is None:
+            pass  # Fall through to other priorities
+        elif "google" in moderation_result:
             google_scores = moderation_result["google"]
-            if "scores" in google_scores:
+            if google_scores is not None and "scores" in google_scores:
                 score = google_scores["scores"].get(metric, 0.0001)
                 if score is not None and score > 0:
                     return round(float(score), 4)
         
         # Priority 2: moderation_result.scores[metric] (legacy format)
-        if "scores" in moderation_result:
+        if moderation_result is not None and "scores" in moderation_result:
             score = moderation_result["scores"].get(metric, 0.0001)
             if score is not None and score > 0:
                 return round(float(score), 4)
@@ -664,6 +667,16 @@ def load_and_initialize_population(
                 with open(reserves_path, 'w', encoding='utf-8') as f:
                     json.dump(empty_reserves, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized empty reserves.json")
+            
+            # ----------------------------- Initialize empty archive.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty archive.json"):
+                # archive.json starts empty - stores genomes removed due to capacity limits
+                empty_archive = []
+                archive_path = Path(output_path) / "archive.json"
+                archive_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(archive_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_archive, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty archive.json")
 
             # ----------------------------- Initialize empty parents.json ----------------------------
             with PerformanceLogger(logger, "Initialize empty parents.json"):
@@ -705,7 +718,6 @@ def load_and_initialize_population(
                             "variants_created": None,
                             "mutation_variants": None,
                             "crossover_variants": None,
-                            "elites_threshold": 0.0,  # Will be updated with actual threshold during threshold check
                             "operator_statistics": {}
                         }
                     ]
@@ -1270,233 +1282,55 @@ def get_population_stats_steady_state(population_file_path: str = FileConstants.
         }
 
 
-def remove_worse_performing_genomes_from_all_files(
-    outputs_path: str,
-    population_max_toxicity: float,
-    removal_threshold_percentage: int = 5,
-    *,
-    north_star_metric: str = "toxicity",
-    logger=None,
+# Note: remove_worse_performing_genomes_from_all_files() has been removed.
+# After speciation integration, low-fitness genomes are handled by speciation's
+# capacity enforcement, not by removal_threshold percentage.
+
+
+def calculate_average_fitness(
+    outputs_path: str, 
+    north_star_metric: str = "toxicity", 
+    include_temp: bool = False,
+    logger=None, 
     log_file: Optional[str] = None
-) -> Dict[str, Any]:
+) -> float:
     """
-    Archive worse performing genomes from all files to archive.json.
+    Calculate the average fitness of genomes.
     
-    This function:
-    1. Calculates removal_threshold = (removal_threshold_percentage * population_max_toxicity) / 100
-    2. Archives genomes with scores below removal_threshold from temp.json, elites.json, and reserves.json to archive.json
-    3. Saves the filtered genomes back to their respective files
-    4. Returns comprehensive statistics about the archiving operation
+    Two modes controlled by include_temp:
+    - include_temp=False (default): AFTER speciation - elites.json + reserves.json only
+    - include_temp=True: BEFORE speciation - elites.json + reserves.json + temp.json
     
-    Note: We only maintain elites in our project. Active population = elites.json + reserves.json.
+    This distinction is important:
+    - avg_fitness: calculated BEFORE speciation (includes temp.json with new variants)
+    - avg_fitness_generation: calculated AFTER speciation (elites + reserves only)
+    
+    Files:
     - elites.json: Elites assigned to species (species_id > 0)
     - reserves.json: Elite outliers that don't fit existing species (species_id == 0)
-    - archive.json: Archived/removed genomes (NOT part of population)
-    
-    Args:
-        outputs_path: Path to outputs directory containing the files
-        population_max_toxicity: Maximum toxicity score in the population
-        removal_threshold_percentage: Percentage for removal threshold calculation (default: 5)
-        north_star_metric: Metric to use for scoring (default: "toxicity")
-        logger: Logger instance
-        log_file: Log file path
-        
-    Returns:
-        Dict containing archiving statistics:
-        - archived_count_total: Total number of genomes archived across all files
-        - archived_from_temp: Number archived from temp.json
-        - archived_from_elites: Number archived from elites.json
-        - archived_from_reserves: Number archived from reserves.json (Cluster 0 outliers)
-        - remaining_count_total: Total number of genomes remaining across all files
-        - removal_threshold: Calculated removal threshold value
-        - archived_genome_ids: List of IDs of all archived genomes
-    """
-    _logger = logger or get_logger("remove_worse_performing_genomes_from_all_files", log_file)
-    
-    try:
-        # Calculate removal threshold
-        removal_threshold = round((removal_threshold_percentage * population_max_toxicity) / 100, 4)
-        
-        _logger.info(f"Calculating removal threshold: {removal_threshold_percentage}% of {population_max_toxicity:.4f} = {removal_threshold:.4f}")
-        
-        outputs_dir = Path(outputs_path)
-        temp_path = outputs_dir / "temp.json"
-        elites_path = outputs_dir / "elites.json"
-        reserves_path = outputs_dir / "reserves.json"  # Cluster 0 outliers (part of active population)
-        archive_path = outputs_dir / "archive.json"  # Archived genomes (NOT part of population)
-        
-        total_archived = 0
-        total_remaining = 0
-        all_archived_ids = []
-        all_archived_genomes = []  # Collect all genomes to archive
-        
-        # Process temp.json
-        temp_archived = 0
-        temp_remaining = 0
-        if temp_path.exists():
-            temp_genomes = load_population(str(temp_path), logger=_logger, log_file=log_file)
-            if temp_genomes:
-                remaining_temp = []
-                archived_temp = []
-                
-                for genome in temp_genomes:
-                    score = _extract_north_star_score(genome, north_star_metric)
-                    
-                    if score >= removal_threshold:
-                        remaining_temp.append(genome)
-                    else:
-                        archived_temp.append(genome)
-                
-                # Save filtered genomes back to temp.json
-                save_population(remaining_temp, str(temp_path), logger=_logger, log_file=log_file)
-                temp_archived = len(archived_temp)
-                temp_remaining = len(remaining_temp)
-                all_archived_ids.extend([genome.get("id") for genome in archived_temp])
-                all_archived_genomes.extend(archived_temp)
-                
-                _logger.info(f"temp.json: {temp_archived} archived, {temp_remaining} remaining")
-        
-        # Process elites.json
-        elites_archived = 0
-        elites_remaining = 0
-        if elites_path.exists():
-            elites_genomes = load_population(str(elites_path), logger=_logger, log_file=log_file)
-            if elites_genomes:
-                remaining_elites = []
-                archived_elites = []
-                
-                for genome in elites_genomes:
-                    score = _extract_north_star_score(genome, north_star_metric)
-                    
-                    if score >= removal_threshold:
-                        remaining_elites.append(genome)
-                    else:
-                        archived_elites.append(genome)
-                
-                # Save filtered genomes back to elites.json
-                save_population(remaining_elites, str(elites_path), logger=_logger, log_file=log_file)
-                elites_archived = len(archived_elites)
-                elites_remaining = len(remaining_elites)
-                all_archived_ids.extend([genome.get("id") for genome in archived_elites])
-                all_archived_genomes.extend(archived_elites)
-                
-                _logger.info(f"elites.json: {elites_archived} archived, {elites_remaining} remaining")
-        
-        # Process reserves.json (Cluster 0 outliers - part of active population)
-        reserves_archived = 0
-        reserves_remaining = 0
-        if reserves_path.exists():
-            reserves_genomes = load_population(str(reserves_path), logger=_logger, log_file=log_file)
-            if reserves_genomes:
-                remaining_reserves = []
-                archived_reserves = []
-                
-                for genome in reserves_genomes:
-                    score = _extract_north_star_score(genome, north_star_metric)
-                    
-                    if score >= removal_threshold:
-                        remaining_reserves.append(genome)
-                    else:
-                        archived_reserves.append(genome)
-                
-                # Save filtered genomes back to reserves.json
-                save_population(remaining_reserves, str(reserves_path), logger=_logger, log_file=log_file)
-                reserves_archived = len(archived_reserves)
-                reserves_remaining = len(remaining_reserves)
-                all_archived_ids.extend([genome.get("id") for genome in archived_reserves])
-                all_archived_genomes.extend(archived_reserves)
-                
-                _logger.info(f"reserves.json: {reserves_archived} archived, {reserves_remaining} remaining")
-        
-        # Archive all archived genomes to archive.json (NOT part of active population)
-        if all_archived_genomes:
-            # Load existing archive genomes
-            archive_genomes = []
-            if archive_path.exists():
-                try:
-                    with open(archive_path, 'r', encoding='utf-8') as f:
-                        archive_genomes = json.load(f)
-                except Exception as e:
-                    _logger.warning(f"Failed to load existing archive.json: {e}")
-            
-            # Add archived genomes
-            archive_genomes.extend(all_archived_genomes)
-            
-            # Save updated archive.json
-            try:
-                with open(archive_path, 'w', encoding='utf-8') as f:
-                    json.dump(archive_genomes, f, indent=2, ensure_ascii=False)
-                _logger.info(f"Archived {len(all_archived_genomes)} genomes to archive.json")
-            except Exception as e:
-                _logger.error(f"Failed to save archive.json: {e}")
-        
-        # Calculate totals
-        total_archived = temp_archived + elites_archived + reserves_archived
-        total_remaining = temp_remaining + elites_remaining + reserves_remaining
-        
-        # Log comprehensive archiving statistics
-        _logger.info(f"Genome archiving from all files completed:")
-        _logger.info(f"  - Total archived: {total_archived} genomes (IDs: {all_archived_ids})")
-        _logger.info(f"  - Total remaining: {total_remaining} genomes")
-        _logger.info(f"  - Removal threshold: {removal_threshold:.4f}")
-        _logger.info(f"  - Breakdown: temp={temp_archived}, elites={elites_archived}, reserves={reserves_archived}")
-        
-        return {
-            "archived_count_total": total_archived,
-            "archived_from_temp": temp_archived,
-            "archived_from_elites": elites_archived,
-            "archived_from_reserves": reserves_archived,
-            "remaining_count_total": total_remaining,
-            "remaining_temp": temp_remaining,
-            "remaining_elites": elites_remaining,
-            "remaining_reserves": reserves_remaining,
-            "removal_threshold": removal_threshold,
-            "archived_genome_ids": all_archived_ids
-        }
-        
-    except Exception as e:
-        _logger.error(f"Failed to remove worse performing genomes from all files: {e}", exc_info=True)
-        raise
-
-
-def calculate_average_fitness(outputs_path: str, north_star_metric: str = "toxicity", logger=None, log_file: Optional[str] = None) -> float:
-    """
-    Calculate the average fitness of all genomes across temp.json, elites.json, and reserves.json.
-    
-    Note: We only maintain elites in our project. Active population = elites.json + reserves.json.
-    - elites.json: Elites assigned to species (species_id > 0)
-    - reserves.json: Elite outliers that don't fit existing species (species_id == 0)
-    - archive.json: Archived/removed genomes (NOT part of population, excluded from this calculation)
-    
-    This function processes temp.json (staging), elites.json, and reserves.json.
+    - temp.json: New variants before speciation (included only if include_temp=True)
+    - archive.json: Archived/removed genomes (NOT part of population, never included)
     
     Args:
         outputs_path: Path to outputs directory
         north_star_metric: Metric to use for scoring (default: "toxicity")
+        include_temp: If True, include temp.json (for BEFORE speciation calculation)
         logger: Logger instance
         log_file: Log file path
         
     Returns:
-        Average fitness score across all genomes in active population files (elites only)
+        Average fitness score across selected genomes
     """
     _logger = logger or get_logger("calculate_average_fitness", log_file)
     
     try:
         outputs_dir = Path(outputs_path)
-        temp_path = outputs_dir / "temp.json"
         elites_path = outputs_dir / "elites.json"
-        reserves_path = outputs_dir / "reserves.json"  # Cluster 0 outliers (part of active population)
+        reserves_path = outputs_dir / "reserves.json"
+        temp_path = outputs_dir / "temp.json"
         
         total_score = 0.0
         total_count = 0
-        
-        # Process temp.json (staging file)
-        if temp_path.exists():
-            temp_genomes = load_population(str(temp_path), logger=_logger, log_file=log_file)
-            for genome in temp_genomes:
-                score = _extract_north_star_score(genome, north_star_metric)
-                total_score += score
-                total_count += 1
         
         # Process elites.json (elites assigned to species, species_id > 0)
         if elites_path.exists():
@@ -1505,14 +1339,30 @@ def calculate_average_fitness(outputs_path: str, north_star_metric: str = "toxic
                 score = _extract_north_star_score(genome, north_star_metric)
                 total_score += score
                 total_count += 1
+            _logger.debug(f"Processed {len(elites_genomes)} genomes from elites.json")
         
-        # Process reserves.json (elite outliers that don't fit existing species, species_id == 0)
+        # Process reserves.json (elite outliers, species_id == 0)
         if reserves_path.exists():
             reserves_genomes = load_population(str(reserves_path), logger=_logger, log_file=log_file)
             for genome in reserves_genomes:
                 score = _extract_north_star_score(genome, north_star_metric)
                 total_score += score
                 total_count += 1
+            _logger.debug(f"Processed {len(reserves_genomes)} genomes from reserves.json")
+        
+        # Process temp.json only if include_temp=True (BEFORE speciation)
+        if include_temp and temp_path.exists():
+            try:
+                with open(temp_path, 'r', encoding='utf-8') as f:
+                    temp_genomes = json.load(f)
+                for genome in temp_genomes:
+                    if genome:
+                        score = _extract_north_star_score(genome, north_star_metric)
+                        total_score += score
+                        total_count += 1
+                _logger.debug(f"Processed {len(temp_genomes)} genomes from temp.json")
+            except Exception as e:
+                _logger.warning(f"Failed to load temp.json for avg_fitness: {e}")
         
         if total_count == 0:
             _logger.warning("No genomes found for average fitness calculation")
@@ -1520,13 +1370,85 @@ def calculate_average_fitness(outputs_path: str, north_star_metric: str = "toxic
         
         avg_fitness = total_score / total_count
         avg_fitness = round(avg_fitness, 4)
-        _logger.info(f"Calculated average fitness: {avg_fitness:.4f} from {total_count} genomes")
+        mode = "before speciation (elites+reserves+temp)" if include_temp else "after speciation (elites+reserves)"
+        _logger.info(f"Calculated average fitness: {avg_fitness:.4f} from {total_count} genomes ({mode})")
         
         return avg_fitness
         
     except Exception as e:
         _logger.error(f"Failed to calculate average fitness: {e}", exc_info=True)
         return 0.0
+
+
+def calculate_budget_metrics(
+    elites_genomes: List[Dict[str, Any]],
+    reserves_genomes: List[Dict[str, Any]],
+    temp_genomes: List[Dict[str, Any]],
+    current_generation: int,
+    logger=None
+) -> Dict[str, Any]:
+    """
+    Calculate evaluation budget metrics for a generation.
+    
+    Budget metrics track computational cost:
+    - llm_calls: Number of LLM calls (response generation) in this generation
+    - api_calls: Number of moderation API calls (Perspective API) in this generation
+    - total_response_time: Total LLM response generation time (seconds)
+    - total_evaluation_time: Total moderation API evaluation time (seconds)
+    
+    These are counted from genomes created in the current generation.
+    
+    Args:
+        elites_genomes: List of elite genomes
+        reserves_genomes: List of reserves genomes
+        temp_genomes: List of temp genomes (current generation variants)
+        current_generation: Current generation number
+        logger: Optional logger instance
+        
+    Returns:
+        Dictionary with budget metrics
+    """
+    _logger = logger or get_logger("BudgetMetrics")
+    
+    budget = {
+        "llm_calls": 0,
+        "api_calls": 0,
+        "total_response_time": 0.0,
+        "total_evaluation_time": 0.0
+    }
+    
+    try:
+        # Combine all genomes and filter by current generation
+        all_genomes = (elites_genomes or []) + (reserves_genomes or []) + (temp_genomes or [])
+        current_gen_genomes = [g for g in all_genomes if g and g.get("generation") == current_generation]
+        
+        for genome in current_gen_genomes:
+            # Count LLM calls (each genome with response_duration had an LLM call)
+            if genome.get("response_duration") is not None or genome.get("generated_output"):
+                budget["llm_calls"] += 1
+                if genome.get("response_duration"):
+                    budget["total_response_time"] += float(genome.get("response_duration", 0))
+            
+            # Count API calls (each genome with evaluation_duration had an API call)
+            if genome.get("evaluation_duration") is not None or genome.get("moderation_result"):
+                budget["api_calls"] += 1
+                if genome.get("evaluation_duration"):
+                    budget["total_evaluation_time"] += float(genome.get("evaluation_duration", 0))
+        
+        # Round times to 2 decimal places
+        budget["total_response_time"] = round(budget["total_response_time"], 2)
+        budget["total_evaluation_time"] = round(budget["total_evaluation_time"], 2)
+        
+        _logger.debug(
+            f"Gen {current_generation} budget: {budget['llm_calls']} LLM calls ({budget['total_response_time']}s), "
+            f"{budget['api_calls']} API calls ({budget['total_evaluation_time']}s)"
+        )
+        
+        return budget
+        
+    except Exception as e:
+        _logger.warning(f"Failed to calculate budget metrics: {e}")
+        return budget
 
 
 def update_generation_avg_fitness(generation_number: int, avg_fitness: float, evolution_tracker_path: str, logger=None, log_file: Optional[str] = None) -> None:
@@ -1683,8 +1605,24 @@ def update_adaptive_selection_logic(
             _logger.warning(f"Generation {current_generation} not found in EvolutionTracker for avg_fitness update")
         
         # Build avg_fitness_history from the last m generations
+        # IMPORTANT: Re-fetch generations after update to ensure we have the latest values
         generations = tracker.get("generations", [])
-        generations_with_avg_fitness = [gen for gen in generations if "avg_fitness" in gen and gen["avg_fitness"] is not None]
+        # Filter for generations with valid avg_fitness (exclude None)
+        # Only include generations where avg_fitness was actually calculated (not the initial 0.0 placeholder)
+        generations_with_avg_fitness = []
+        for gen in generations:
+            if "avg_fitness" in gen and gen["avg_fitness"] is not None:
+                # Skip initial placeholder 0.0 values that haven't been updated yet
+                # If avg_fitness is 0.0 and this is the first time we're calculating, 
+                # it means the calculation hasn't happened yet or returned 0.0 legitimately
+                # We include it only if it's not the initial placeholder (i.e., if current_avg_fitness was calculated)
+                if gen["generation_number"] == current_generation:
+                    # For the current generation, use the calculated value we just computed
+                    generations_with_avg_fitness.append(gen)
+                elif gen["avg_fitness"] > 0.0 or gen.get("elites_count", 0) > 0 or gen.get("reserves_count", 0) > 0:
+                    # For past generations, include if avg_fitness > 0 or if population exists (indicating it was calculated)
+                    generations_with_avg_fitness.append(gen)
+                # Otherwise, skip 0.0 values that are likely placeholders
         
         # Sort by generation number and take the last m generations (sliding window)
         generations_with_avg_fitness.sort(key=lambda x: x["generation_number"])
@@ -1856,11 +1794,19 @@ def calculate_generation_statistics(
             # Use temp_genomes or combined count
             stats["initial_population_size"] = len(temp_genomes) if temp_genomes else stats["total_population"]
         
+        # Calculate budget metrics (LLM calls + API calls) for current generation
+        budget_metrics = calculate_budget_metrics(
+            elites_genomes, reserves_genomes, temp_genomes,
+            current_generation, _logger
+        )
+        stats.update(budget_metrics)
+        
         _logger.debug(
-            "Gen %d stats: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), total=%d, avg_gen=%.4f",
+            "Gen %d stats: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), total=%d, avg_gen=%.4f, llm_calls=%d, api_calls=%d",
             current_generation, stats["elites_count"], stats["avg_fitness_elites"],
             stats["reserves_count"], stats["avg_fitness_reserves"],
-            stats["total_population"], stats["avg_fitness_generation"]
+            stats["total_population"], stats["avg_fitness_generation"],
+            stats.get("llm_calls", 0), stats.get("api_calls", 0)
         )
         
         return stats
@@ -1927,8 +1873,34 @@ def update_evolution_tracker_with_statistics(
             "avg_fitness": statistics.get("avg_fitness_generation", 0.0001),  # Alias for compatibility
             "avg_fitness_elites": statistics.get("avg_fitness_elites", 0.0001),
             "avg_fitness_reserves": statistics.get("avg_fitness_reserves", 0.0001),
-            "avg_fitness_reserves": statistics.get("avg_fitness_reserves", 0.0001),
         })
+        
+        # Add budget metrics if available
+        if "llm_calls" in statistics:
+            gen_entry["budget"] = {
+                "llm_calls": statistics.get("llm_calls", 0),
+                "api_calls": statistics.get("api_calls", 0),
+                "total_response_time": statistics.get("total_response_time", 0.0),
+                "total_evaluation_time": statistics.get("total_evaluation_time", 0.0)
+            }
+            
+            # Update cumulative budget at tracker level
+            if "cumulative_budget" not in tracker:
+                tracker["cumulative_budget"] = {
+                    "total_llm_calls": 0,
+                    "total_api_calls": 0,
+                    "total_response_time": 0.0,
+                    "total_evaluation_time": 0.0
+                }
+            
+            tracker["cumulative_budget"]["total_llm_calls"] += statistics.get("llm_calls", 0)
+            tracker["cumulative_budget"]["total_api_calls"] += statistics.get("api_calls", 0)
+            tracker["cumulative_budget"]["total_response_time"] = round(
+                tracker["cumulative_budget"]["total_response_time"] + statistics.get("total_response_time", 0.0), 2
+            )
+            tracker["cumulative_budget"]["total_evaluation_time"] = round(
+                tracker["cumulative_budget"]["total_evaluation_time"] + statistics.get("total_evaluation_time", 0.0), 2
+            )
         
         # Update population max toxicity at tracker level (use actual max, not default)
         new_max = statistics.get("population_max_toxicity")

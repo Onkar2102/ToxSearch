@@ -152,14 +152,17 @@ class HybridModerationEvaluator:
             self.logger.error("Failed to initialize API clients: %s", e)
             raise
     
-    def _evaluate_with_google(self, text: str, genome_id: str, max_retries: int = 2) -> Optional[Dict[str, Any]]:
+    def _evaluate_with_google(self, text: str, genome_id: str, max_retries: int = 10) -> Optional[Dict[str, Any]]:
         """
         Evaluate text using Google Perspective API with retry logic.
+        
+        Uses exponential backoff for retries (2^attempt seconds between attempts).
+        This handles Perspective API rate limits (per-minute quotas) gracefully.
         
         Args:
             text: Text to evaluate
             genome_id: ID of the genome being evaluated
-            max_retries: Maximum number of retry attempts (default: 2)
+            max_retries: Maximum number of retry attempts (default: 10, giving 11 total attempts)
             
         Returns:
             Dictionary with scores and metadata, or None if evaluation fails

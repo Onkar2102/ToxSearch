@@ -53,18 +53,97 @@ class SpeciationMetricsTracker:
     
     def record_generation(self, generation: int, species: Dict[int, Species], reserves_size: int = 0,
                           speciation_events: int = 0, merge_events: int = 0,
-                          extinction_events: int = 0, cluster0=None) -> GenerationMetrics:
-        """Record metrics for a generation."""
+                          extinction_events: int = 0, cluster0=None, 
+                          elites_path: Optional[str] = None, reserves_path: Optional[str] = None) -> GenerationMetrics:
+        """Record metrics for a generation.
+        
+        Args:
+            generation: Current generation number
+            species: Dict of species objects
+            reserves_size: Size of reserves (cluster 0) - should match reserves.json
+            speciation_events: Number of speciation events
+            merge_events: Number of merge events
+            extinction_events: Number of extinction events
+            cluster0: Optional Cluster0 object (for backward compatibility)
+            elites_path: Optional path to elites.json (for accurate population count)
+            reserves_path: Optional path to reserves.json (for accurate reserves count)
+        """
+        from pathlib import Path
+        import json
+        
         species_count = len(species)
-        total_pop = sum(sp.size for sp in species.values())
         
-        # Calculate fitness from species members
-        all_fitness = [m.fitness for sp in species.values() for m in sp.members]
+        # Calculate total_population from actual files (elites.json + reserves.json)
+        # This is more accurate than using in-memory species.members which may be stale
+        total_pop = 0
+        all_fitness = []
         
-        # Include reserves (cluster0) fitness if provided
-        if cluster0 is not None and hasattr(cluster0, 'individuals'):
-            all_fitness.extend([ind.fitness for ind in cluster0.individuals])
-            total_pop += len(cluster0.individuals)
+        # Try to read from files first (most accurate)
+        if elites_path and Path(elites_path).exists():
+            try:
+                with open(elites_path, 'r', encoding='utf-8') as f:
+                    elites_genomes = json.load(f)
+                total_pop += len(elites_genomes)
+                # Extract fitness from elites
+                for genome in elites_genomes:
+                    fitness = 0.0
+                    if "north_star_score" in genome:
+                        fitness = genome["north_star_score"]
+                    elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
+                        google_result = genome["moderation_result"].get("google", {})
+                        if google_result and "scores" in google_result:
+                            fitness = google_result["scores"].get("toxicity", 0.0)
+                        else:
+                            scores = genome["moderation_result"].get("scores", {})
+                            fitness = scores.get("toxicity", 0.0)
+                    elif "toxicity" in genome:
+                        fitness = genome["toxicity"]
+                    if fitness > 0:
+                        all_fitness.append(float(fitness))
+            except Exception:
+                # Fallback to in-memory species if file read fails
+                total_pop = sum(sp.size for sp in species.values())
+                all_fitness = [m.fitness for sp in species.values() for m in sp.members]
+        else:
+            # Fallback: use in-memory species
+            total_pop = sum(sp.size for sp in species.values())
+            all_fitness = [m.fitness for sp in species.values() for m in sp.members]
+        
+        # Add reserves from file (more accurate than cluster0.individuals)
+        actual_reserves_size = reserves_size  # Initialize with parameter
+        if reserves_path and Path(reserves_path).exists():
+            try:
+                with open(reserves_path, 'r', encoding='utf-8') as f:
+                    reserves_genomes = json.load(f)
+                actual_reserves_size = len(reserves_genomes)
+                total_pop += actual_reserves_size
+                # Extract fitness from reserves
+                for genome in reserves_genomes:
+                    fitness = 0.0
+                    if "north_star_score" in genome:
+                        fitness = genome["north_star_score"]
+                    elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
+                        google_result = genome["moderation_result"].get("google", {})
+                        if google_result and "scores" in google_result:
+                            fitness = google_result["scores"].get("toxicity", 0.0)
+                        else:
+                            scores = genome["moderation_result"].get("scores", {})
+                            fitness = scores.get("toxicity", 0.0)
+                    elif "toxicity" in genome:
+                        fitness = genome["toxicity"]
+                    if fitness > 0:
+                        all_fitness.append(float(fitness))
+            except Exception:
+                # Fallback: add reserves_size if file read fails
+                total_pop += reserves_size
+                # Include cluster0 fitness if provided (backward compatibility)
+                if cluster0 is not None and hasattr(cluster0, 'individuals'):
+                    all_fitness.extend([ind.fitness for ind in cluster0.individuals])
+        else:
+            # Fallback: add reserves_size and use cluster0 if available
+            total_pop += reserves_size
+            if cluster0 is not None and hasattr(cluster0, 'individuals'):
+                all_fitness.extend([ind.fitness for ind in cluster0.individuals])
         
         best = max(all_fitness) if all_fitness else 0.0
         avg = np.mean(all_fitness) if all_fitness else 0.0
@@ -78,7 +157,7 @@ class SpeciationMetricsTracker:
         
         metrics = GenerationMetrics(
             generation=generation, species_count=species_count, total_population=total_pop,
-            reserves_size=reserves_size, best_fitness=float(best), avg_fitness=float(avg),
+            reserves_size=actual_reserves_size, best_fitness=float(best), avg_fitness=float(avg),
             fitness_std=float(std), speciation_events=speciation_events,
             merge_events=merge_events, extinction_events=extinction_events,
             inter_species_diversity=float(inter_div), intra_species_diversity=float(intra_div)
@@ -115,6 +194,8 @@ def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0
     
     Args:
         species: Dict of all current species
+        w_genotype: Weight for genotype (embedding) distance component
+        w_phenotype: Weight for phenotype (toxicity scores) distance component
     
     Returns:
         Tuple of (inter_species_diversity, intra_species_diversity)
@@ -122,36 +203,61 @@ def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0
     if not species:
         return 0.0, 0.0
     
-    species_list = list(species.values())
+    # Filter out species without valid leaders (should not happen, but safeguard)
+    species_list = [sp for sp in species.values() if sp.leader is not None]
+    
+    if not species_list:
+        return 0.0, 0.0
     
     # Compute inter-species diversity (distance between leaders)
     inter = []
     for i, sp1 in enumerate(species_list):
         for sp2 in species_list[i + 1:]:
+            # Only compare if both leaders have embeddings
             if sp1.leader.embedding is not None and sp2.leader.embedding is not None:
-                inter.append(ensemble_distance(
-                    sp1.leader.embedding, sp2.leader.embedding,
-                    sp1.leader.phenotype, sp2.leader.phenotype,
-                    w_genotype, w_phenotype
-                ))
+                try:
+                    # Handle None phenotypes by passing them as-is (ensemble_distance handles None)
+                    dist = ensemble_distance(
+                        sp1.leader.embedding, sp2.leader.embedding,
+                        sp1.leader.phenotype, sp2.leader.phenotype,
+                        w_genotype, w_phenotype
+                    )
+                    inter.append(dist)
+                except Exception:
+                    # Skip this pair if distance calculation fails
+                    pass
+    
     inter_div = np.mean(inter) if inter else 0.0
     
     # Compute intra-species diversity (distances within each species)
     intra_divs = []
     for sp in species_list:
-        members = [m for m in sp.members if m.embedding is not None]
+        # Filter members with valid embeddings
+        members = [m for m in sp.members if m is not None and m.embedding is not None]
         if len(members) < 2:
             continue
-        dists = [ensemble_distance(
-            members[i].embedding, members[j].embedding,
-            members[i].phenotype, members[j].phenotype,
-            w_genotype, w_phenotype
-        ) for i in range(len(members)) for j in range(i + 1, len(members))]
+        
+        # Calculate pairwise distances between members
+        dists = []
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                try:
+                    dist = ensemble_distance(
+                        members[i].embedding, members[j].embedding,
+                        members[i].phenotype, members[j].phenotype,
+                        w_genotype, w_phenotype
+                    )
+                    dists.append(dist)
+                except Exception:
+                    # Skip this pair if distance calculation fails
+                    pass
+        
         if dists:
             intra_divs.append(np.mean(dists))
+    
     intra_div = np.mean(intra_divs) if intra_divs else 0.0
     
-    return inter_div, intra_div
+    return float(inter_div), float(intra_div)
 
 
 def get_species_statistics(species: Dict[int, Species]) -> Dict:

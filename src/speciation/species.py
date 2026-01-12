@@ -145,8 +145,15 @@ class Individual:
             This is used to update genomes after speciation processing.
         """
         # Start with original genome data or create minimal dict
-        genome = self.genome_data.copy() if self.genome_data else {"id": self.id, "prompt": self.prompt}
-        # Add speciation metadata
+        if self.genome_data:
+            genome = self.genome_data.copy()
+        else:
+            # Create minimal dict with required fields
+            genome = {"id": self.id}
+            if hasattr(self, 'prompt') and self.prompt:
+                genome["prompt"] = self.prompt
+        
+        # Add speciation metadata (overwrite if present)
         genome["species_id"] = self.species_id
         genome["fitness"] = self.fitness
         return genome
@@ -171,31 +178,34 @@ class Species:
     - A leader (highest fitness individual, defines species center)
     - Members (all individuals assigned to this species, max species_capacity)
     - A radius (constant, equal to theta_sim for all species)
-    - A mode field (kept for backward compatibility, always DEFAULT)
     - Fitness tracking for stagnation detection
     - Origin tracking (how the species was created: merge/split/natural)
     
-    Species evolve independently, can merge with similar species, can go extinct.
+    Species evolve independently, can merge with similar species, can go frozen (extinct).
     
     Note: Species IDs start from 1. ID 0 is reserved for Cluster 0 (reserves).
+    
+    Species States:
+    - "active": Normal operating state, participates in evolution
+    - "frozen": Species frozen due to stagnation (max_stagnation exceeded), excluded from parent selection
+    - "incubator": Species moved to cluster 0 (reserves), awaiting potential new species formation
     
     Attributes:
         id: Unique species identifier (1+, 0 reserved for cluster 0)
         leader: Leader individual (highest fitness, defines species center)
         members: List of all individuals in this species (includes leader, max species_capacity)
-        mode: Operating mode (always DEFAULT, kept for backward compatibility)
         radius: Semantic distance threshold for species membership (constant = theta_sim)
         stagnation: Number of generations without max_fitness improvement
         max_fitness: Current maximum fitness score in this species
-        species_state: "active", "stagnant", or "frozen" (frozen/stagnant species not used for parent selection)
+        species_state: "active", "frozen", or "incubator" (only active species used for parent selection)
         created_at: Generation when this species was created
         last_improvement: Generation when fitness last improved
         fitness_history: List of best fitness values over time (for trend analysis)
         labels: Current c-TF-IDF labels (top 10 representative words)
         label_history: History of labels over generations (for tracking topic evolution)
-        cluster_origin: How this species was created ("merge", "split", "natural", or None)
-        parent_ids: List of parent species IDs if created via merge [id1, id2]
-        parent_id: ID of parent species if this was created via split (single parent)
+        cluster_origin: How this species was created ("merge", "split", or "natural") - never None
+        parent_ids: List of parent species IDs (None or [] for natural, [id1, id2] for merge, [id1] for split)
+        leader_distance: Ensemble distance score of leader (0-1 normalized, for reference)
     """
     id: int
     leader: Individual
@@ -203,15 +213,15 @@ class Species:
     radius: float = 0.4  # Constant radius (theta_sim), no dynamic adjustment
     stagnation: int = 0  # Generations without max_fitness improvement
     max_fitness: float = 0.0  # Current maximum fitness in this species
-    species_state: str = "active"  # "active", "stagnant", or "frozen"
+    species_state: str = "active"  # "active", "frozen", or "incubator"
     created_at: int = 0
     last_improvement: int = 0
     fitness_history: List[float] = field(default_factory=list)
     labels: List[str] = field(default_factory=list)  # Current c-TF-IDF labels (10 words)
     label_history: List[Dict[str, Any]] = field(default_factory=list)  # Label history per generation
-    cluster_origin: Optional[str] = None  # "merge", "split", "natural", or None
-    parent_ids: Optional[List[int]] = None  # For merged species: [parent1_id, parent2_id]
-    parent_id: Optional[int] = None  # For split species: single parent ID
+    cluster_origin: str = "natural"  # "merge", "split", or "natural" - never None
+    parent_ids: Optional[List[int]] = None  # Parent species IDs: None/[] for natural, [id1,id2] for merge, [id1] for split
+    leader_distance: float = 0.0  # Ensemble distance score of leader (0-1 normalized)
     
     def __post_init__(self):
         """
@@ -225,11 +235,11 @@ class Species:
         # Leader must be in members list (at position 0)
         if self.leader not in self.members:
             self.members.insert(0, self.leader)
-        # Initialize fitness history and max_fitness if empty
-        if not self.fitness_history and self.leader:
-            self.fitness_history.append(self.leader.fitness)
+        # Initialize max_fitness if empty (but don't add to fitness_history here - record_fitness will do it)
         if self.max_fitness == 0.0 and self.leader:
             self.max_fitness = self.leader.fitness
+        # Note: fitness_history is NOT initialized here to avoid duplicate entries
+        # It will be populated by record_fitness() when called for each generation
         # Assign species_id to all members
         for member in self.members:
             member.species_id = self.id
@@ -293,7 +303,10 @@ class Species:
         if self.fitness_history and current_best > max(self.fitness_history):
             self.last_improvement = generation
         # Append to history for trend analysis
-        self.fitness_history.append(current_best)
+        # Only append if this generation hasn't been recorded yet (avoid duplicates)
+        # For generation 0, __post_init__ already added the initial fitness, so we check if we need to add again
+        if not self.fitness_history or self.fitness_history[-1] != current_best or len(self.fitness_history) < generation + 1:
+            self.fitness_history.append(current_best)
     
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -312,6 +325,7 @@ class Species:
             "leader_prompt": self.leader.prompt,
             "leader_embedding": self.leader.embedding.tolist() if self.leader.embedding is not None else None,
             "leader_fitness": self.leader.fitness,
+            "leader_distance": self.leader_distance,  # Ensemble distance score (0-1)
             "member_ids": [m.id for m in self.members],
             "radius": self.radius,
             "stagnation": self.stagnation,
@@ -324,7 +338,6 @@ class Species:
             "label_history": self.label_history[-20:],  # Keep last 20 generations
             "cluster_origin": self.cluster_origin,
             "parent_ids": self.parent_ids,
-            "parent_id": self.parent_id,
         }
     
     def __repr__(self):

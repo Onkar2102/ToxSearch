@@ -194,8 +194,6 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "variants_created": None,
                     "mutation_variants": None,
                     "crossover_variants": None,
-                    "elites_threshold": 0.0001,
-                    "removal_threshold": 0.0001,
                     "elites_count": 0,
                     "selection_mode": selection_mode,
                 }]
@@ -326,8 +324,6 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "variants_created": variants_created,
                 "mutation_variants": mutation_variants,
                 "crossover_variants": crossover_variants,
-                "elites_threshold": 0.0001,
-                "removal_threshold": 0.0001,
                 "elites_count": 0,
                 "reserves_count": 0,
                 "selection_mode": selection_mode,
@@ -555,7 +551,6 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
             "genome_id": None,
             "max_score_variants": 0.0,
             "parents": [],
-            "elites_threshold": threshold,
             "operator_statistics": operator_stats_dict
         }
 

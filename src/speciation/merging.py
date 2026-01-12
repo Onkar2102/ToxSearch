@@ -79,8 +79,7 @@ def merge_islands(
         created_at=current_generation,
         last_improvement=current_generation,
         cluster_origin="merge",  # Created via merge
-        parent_ids=[sp1.id, sp2.id],  # Both parent IDs
-        parent_id=None  # Not a split (single parent)
+        parent_ids=[sp1.id, sp2.id]  # Both parent IDs
     )
     
     # Update species assignments

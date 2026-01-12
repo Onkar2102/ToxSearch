@@ -219,6 +219,21 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.error("Evaluation failed: %s", e, exc_info=True)
         return
 
+    # Apply refusal penalties after evaluation
+    try:
+        from utils.refusal_penalty import apply_refusal_penalties
+        refusal_stats = apply_refusal_penalties(
+            pop_path=temp_path,
+            north_star_metric=north_star_metric,
+            logger=logger,
+            log_file=log_file
+        )
+        logger.info("Gen 0: Refusal analysis - %d refusals detected, %d penalties applied",
+                   refusal_stats.get("refusals_detected", 0),
+                   refusal_stats.get("penalties_applied", 0))
+    except Exception as e:
+        logger.error("Gen 0: Refusal penalty application failed: %s", e, exc_info=True)
+
     # Create speciation config from parameters
     speciation_config = SpeciationConfig(
         theta_sim=theta_sim,
@@ -439,6 +454,23 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 moderation_methods=moderation_methods
             )
             
+            # Apply refusal penalties after evaluation (before statistics calculation)
+            try:
+                from utils.refusal_penalty import apply_refusal_penalties
+                refusal_stats = apply_refusal_penalties(
+                    pop_path=temp_path,
+                    north_star_metric=north_star_metric,
+                    logger=logger,
+                    log_file=log_file
+                )
+                logger.info("Gen %d: Refusal analysis - %d refusals detected, %d penalties applied",
+                           generation_count,
+                           refusal_stats.get("refusals_detected", 0),
+                           refusal_stats.get("penalties_applied", 0))
+            except Exception as e:
+                logger.error("Gen %d: Refusal penalty application failed: %s", 
+                            generation_count, e, exc_info=True)
+            
             # Calculate variant counts and statistics BEFORE speciation (temp.json gets cleared during speciation)
             variant_counts = {"variants_created": 0, "mutation_variants": 0, "crossover_variants": 0}
             max_score_variants = 0.0001
@@ -521,12 +553,15 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 
                 if operator_metrics_df is not None:
                     # Save metrics (even if empty for generation 0)
-                    save_operator_effectiveness_cumulative(
+                    csv_path = save_operator_effectiveness_cumulative(
                         metrics_df=operator_metrics_df,
                         outputs_path=str(get_outputs_path()),
                         current_generation=generation_count,
                         logger=logger
                     )
+                    
+                    if csv_path:
+                        logger.info("Gen %d: Operator effectiveness CSV saved to: %s", generation_count, csv_path)
                     
                     if not operator_metrics_df.empty:
                         # Generate visualizations (only if we have data)
@@ -537,13 +572,33 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         )
                         
                         logger.info("Gen %d: Operator effectiveness metrics calculated and saved (%d operators, %d visualizations)", 
-                                   generation_count, len(operator_metrics_df), len(viz_paths))
+                                   generation_count, len(operator_metrics_df), len(viz_paths) if viz_paths else 0)
                     else:
                         logger.info("Gen %d: No operator-created variants. Metrics file structure maintained.", generation_count)
                 else:
-                    logger.warning("Gen %d: Failed to calculate operator effectiveness metrics (returned None)", generation_count)
+                    logger.warning("Gen %d: Failed to calculate operator effectiveness metrics (returned None). Creating empty CSV structure.", generation_count)
+                    # Create empty DataFrame and save to ensure file exists
+                    import pandas as pd
+                    empty_df = pd.DataFrame(columns=['generation', 'operator', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ', 
+                                                    'total_variants', 'elite_count', 'non_elite_count', 'rejections', 'duplicates'])
+                    save_operator_effectiveness_cumulative(
+                        metrics_df=empty_df,
+                        outputs_path=str(get_outputs_path()),
+                        current_generation=generation_count,
+                        logger=logger
+                    )
             except Exception as e:
                 logger.error("Gen %d: Failed to calculate operator effectiveness metrics: %s", generation_count, e, exc_info=True)
+            
+            # Generate all visualizations after each generation
+            try:
+                from utils.live_analysis import run_live_analysis
+                viz_results = run_live_analysis(outputs_path=str(get_outputs_path()), logger=logger)
+                if viz_results:
+                    successful_viz = sum(1 for v in viz_results.values() if v is not None)
+                    logger.info("Gen %d: Generated %d/%d visualizations", generation_count, successful_viz, len(viz_results))
+            except Exception as e:
+                logger.warning("Gen %d: Failed to generate visualizations: %s", generation_count, e)
             
             try:
                 from ea import get_update_evolution_tracker_with_generation_global

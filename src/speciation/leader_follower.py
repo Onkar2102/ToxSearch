@@ -8,7 +8,7 @@ and updates both files directly.
 
 import json
 import numpy as np
-from typing import List, Dict, Tuple, Optional, TYPE_CHECKING
+from typing import List, Dict, Tuple, Optional, Set, TYPE_CHECKING
 from pathlib import Path
 
 from .species import Individual, Species, generate_species_id, SpeciesIdGenerator
@@ -32,7 +32,7 @@ def leader_follower_clustering(
     current_generation: int = 0,
     w_genotype: float = 0.7,
     w_phenotype: float = 0.3,
-    logger=None) -> Dict[int, Species]:
+    logger=None) -> Tuple[Dict[int, Species], Set[int]]:
     """
     Leader-Follower clustering algorithm that reads and writes files directly.
     
@@ -62,10 +62,13 @@ def leader_follower_clustering(
         logger: Optional logger instance
     
     Returns:
-        Dict mapping species_id -> Species
+        Tuple of (Dict mapping species_id -> Species, Set of species_ids that received new members)
     """
     if logger is None:
         logger = get_logger("LeaderFollowerClustering")
+    
+    # Track which species received new members (for optimization)
+    species_with_new_members = set()
     
     # Determine file paths
     if temp_path is None:
@@ -148,9 +151,9 @@ def leader_follower_clustering(
                     fitness_history=sp_dict.get("fitness_history", []),
                     labels=sp_dict.get("labels", []),
                     label_history=sp_dict.get("label_history", []),
-                    cluster_origin=sp_dict.get("cluster_origin"),
+                    cluster_origin=sp_dict.get("cluster_origin", "natural"),  # Default to "natural" if None
                     parent_ids=sp_dict.get("parent_ids"),
-                    parent_id=sp_dict.get("parent_id")
+                    leader_distance=sp_dict.get("leader_distance", 0.0)
                 )
                 existing_species[sid] = species
             
@@ -195,9 +198,9 @@ def leader_follower_clustering(
             radius=theta_sim,
             created_at=current_generation,
             last_improvement=current_generation,
-            cluster_origin="natural",
+            cluster_origin="natural",  # Always "natural" for new species, never None
             parent_ids=None,
-            parent_id=None
+            leader_distance=0.0  # First leader has distance 0 (reference point)
         )
         species[first_species_id] = first_species
         leaders.append((first_species_id, first.embedding, first.phenotype))
@@ -237,46 +240,52 @@ def leader_follower_clustering(
                 )
                 nearest_leader_id = leaders[0][0]
         
-        # Note: Checking against reserves genomes is not implemented here since:
-        # 1. Reserves genomes are stored in reserves.json with full data
-        # 2. Loading reserves.json for every genome check would be slow
-        # 3. Reserves are outliers and creating new species for them happens via check_speciation()
-        # For future: could load reserves.json once per generation if this check is needed
-        
-        # Decision: assign to species or create new species
+        # Decision: assign to species, add to cluster 0, or create new species
         if nearest_leader_id is not None and min_dist < theta_sim:
             # Within threshold -> assign as follower
             sp = species[nearest_leader_id]
             sp.add_member(ind)
             ind.species_id = nearest_leader_id
+            species_with_new_members.add(nearest_leader_id)  # Track this species received a new member
             # Immediately update leader if this new member has higher fitness
             if ind.fitness > sp.leader.fitness:
                 if ind.fitness > sp.max_fitness:
                     sp.max_fitness = ind.fitness
                     sp.stagnation = 0  # Reset stagnation when max_fitness improves
                 sp.leader = ind
+                sp.leader_distance = min_dist  # Store distance at which new leader was assigned
                 # Update leader embedding in leaders list
                 for i, (sid, _, _) in enumerate(leaders):
                     if sid == nearest_leader_id:
                         leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
                         break
         else:
-            # Outside threshold -> create new species
-            new_species_id = generate_species_id()
-            new_species = Species(
-                id=new_species_id,
-                leader=ind,
-                members=[ind],
-                radius=theta_sim,
-                created_at=current_generation,
-                last_improvement=current_generation,
-                cluster_origin="natural",
-                parent_ids=None,
-                parent_id=None
-            )
-            species[new_species_id] = new_species
-            ind.species_id = new_species_id
-            leaders.append((new_species_id, ind.embedding, ind.phenotype))
+            # Outside all species thresholds
+            # For Generation 0: Create new species (will be cleaned up later if single-member)
+            # For Generation N: Add to cluster 0, let check_speciation() form new species if possible
+            if is_generation_0:
+                # Generation 0: Create new species directly
+                new_species_id = generate_species_id()
+                new_species = Species(
+                    id=new_species_id,
+                    leader=ind,
+                    members=[ind],
+                    radius=theta_sim,
+                    created_at=current_generation,
+                    last_improvement=current_generation,
+                    cluster_origin="natural",  # Always "natural" for new species, never None
+                    parent_ids=None,
+                    leader_distance=0.0  # New leader is reference point for new species
+                )
+                species[new_species_id] = new_species
+                ind.species_id = new_species_id
+                species_with_new_members.add(new_species_id)  # Track new species creation
+                leaders.append((new_species_id, ind.embedding, ind.phenotype))
+            else:
+                # Generation N: Add to cluster 0 (reserves)
+                # check_speciation() will be called later to form new species from cluster 0 if possible
+                ind.species_id = CLUSTER_0_ID
+                logger.debug(f"Individual {ind.id} outside all species -> added to cluster 0 (species_id=0)")
     
     # For Generation 0: Move single-member species to species 0 (reserves)
     # Minimum species size is 2 (leader + at least one follower)
@@ -334,4 +343,5 @@ def leader_follower_clustering(
         json.dump(state_dict, f, indent=2, ensure_ascii=False)
     
     logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals -> {len(species)} species")
-    return species
+    logger.debug(f"Species with new members: {sorted(species_with_new_members)}")
+    return species, species_with_new_members

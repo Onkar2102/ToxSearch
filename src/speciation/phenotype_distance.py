@@ -65,10 +65,10 @@ def phenotype_distance(p1: np.ndarray, p2: np.ndarray) -> float:
     
     Normalized to range [0, 1] by dividing by maximum possible distance.
     Maximum distance occurs when one vector is all zeros and the other is all ones:
-    max_distance = sqrt(8 * 1²) = 2√2 ≈ 2.828
+    max_distance = sqrt(8 * 1²) = √8 ≈ 2.828
     
     Formula:
-        D_pheno = ||p1 - p2||_2 / max_distance
+        D_pheno = ||p1 - p2||_2 / √8
     
     Args:
         p1: First phenotype vector (8D, shape: (8,))
@@ -89,8 +89,9 @@ def phenotype_distance(p1: np.ndarray, p2: np.ndarray) -> float:
     euclidean_dist = np.linalg.norm(diff)
     
     # Normalize to [0, 1] range
-    # Maximum possible distance: sqrt(8 * 1²) = 2√2 ≈ 2.828
-    max_distance = 2.0 * np.sqrt(len(p1))
+    # Maximum possible distance: sqrt(8 * 1²) = √8 ≈ 2.828
+    # For vectors in [0,1]^D, max Euclidean distance = √D
+    max_distance = np.sqrt(len(p1))
     normalized_dist = min(euclidean_dist / max_distance, 1.0)
     
     return float(normalized_dist)
@@ -127,7 +128,9 @@ def phenotype_distances_batch(
     euclidean_dists = np.linalg.norm(diff, axis=1)
     
     # Normalize to [0, 1]
-    max_distance = 2.0 * np.sqrt(query_phenotype.shape[0])
+    # Maximum possible distance: sqrt(D * 1²) = √D
+    # For vectors in [0,1]^D, max Euclidean distance = √D
+    max_distance = np.sqrt(query_phenotype.shape[0])
     normalized_dists = np.clip(euclidean_dists / max_distance, 0.0, 1.0)
     
     return normalized_dists
