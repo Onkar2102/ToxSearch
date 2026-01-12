@@ -12,7 +12,7 @@ from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
 from scipy.cluster.hierarchy import linkage, fcluster
 
 from .species import Individual, Species, generate_species_id
-from .distance import semantic_distance
+from .distance import ensemble_distance
 
 if TYPE_CHECKING:
     from .config import SpeciationConfig
@@ -226,7 +226,16 @@ class Cluster0:
         n = len(individuals)
         embeddings = np.array([ind.embedding for ind in individuals])
         # Compute pairwise distances (condensed distance matrix)
-        distances = [semantic_distance(embeddings[i], embeddings[j]) for i in range(n) for j in range(i + 1, n)]
+        # Use ensemble distance with default weights
+        distances = [
+            ensemble_distance(
+                embeddings[i], embeddings[j],
+                individuals[i].phenotype if individuals[i].phenotype is not None else None,
+                individuals[j].phenotype if individuals[j].phenotype is not None else None,
+                0.7, 0.3
+            )
+            for i in range(n) for j in range(i + 1, n)
+        ]
         
         if not distances:
             return [individuals]
@@ -267,7 +276,12 @@ class Cluster0:
             for ind2 in cluster[i + 1:]:
                 if ind1.embedding is None or ind2.embedding is None:
                     continue
-                if semantic_distance(ind1.embedding, ind2.embedding) > threshold:
+                dist = ensemble_distance(
+                    ind1.embedding, ind2.embedding,
+                    ind1.phenotype, ind2.phenotype,
+                    0.7, 0.3
+                )
+                if dist > threshold:
                     return False  # Found pair that's too far apart
         return True  # All pairs are within threshold
     
@@ -288,20 +302,16 @@ class Cluster0:
         self.members = []
     
     def to_dict(self) -> Dict:
-        """Serialize Cluster 0 (reserves) to dictionary for JSON storage."""
+        """Serialize Cluster 0 (reserves) metadata to dictionary for JSON storage.
+        
+        Note: Full member data (genomes) is NOT stored here since reserves.json 
+        already contains the complete genome data for cluster 0 members.
+        This only stores metadata: size, capacity, and speciation events.
+        """
         return {
             "cluster_id": CLUSTER_0_ID,
             "size": self.size,
             "max_capacity": self.max_capacity,
-            "members": [
-                {
-                    "id": lm.individual.id,
-                    "prompt": lm.individual.prompt,
-                    "fitness": lm.individual.fitness,
-                    "entered_at": lm.entered_at
-                }
-                for lm in self.members
-            ],
             "speciation_events": self.speciation_events[-10:]
         }
 

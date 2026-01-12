@@ -131,7 +131,7 @@ def update_model_configs(rg_model, pg_model, logger):
 
 def main(max_generations=None, north_star_threshold=0.99, moderation_methods=None, rg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", pg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", operators="all", max_variants=1, stagnation_limit=5, seed_file="data/prompt.csv", 
          # Speciation parameters
-         theta_sim=0.4, theta_merge=0.2, species_capacity=100, cluster0_max_capacity=1000, 
+         theta_sim=0.2, theta_merge=0.1, species_capacity=100, cluster0_max_capacity=1000, 
          cluster0_min_cluster_size=2, min_island_size=2, max_stagnation=20,
          embedding_model="all-MiniLM-L6-v2", embedding_dim=384, embedding_batch_size=64):
     """
@@ -282,6 +282,47 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     except Exception as e:
         logger.error("Speciation failed: %s", e, exc_info=True)
         return
+    
+    # Phase 4.5: Calculate operator effectiveness metrics for Generation 0 (RQ1)
+    try:
+        from utils.operator_effectiveness import (
+            calculate_table4_metrics, 
+            save_operator_effectiveness_cumulative,
+            generate_operator_effectiveness_visualizations
+        )
+        
+        operator_metrics_df = calculate_table4_metrics(
+            outputs_path=str(get_outputs_path()),
+            current_generation=0,
+            north_star_metric=north_star_metric,
+            logger=logger
+        )
+        
+        if operator_metrics_df is not None:
+            # For generation 0, DataFrame will be empty (no operator-created variants)
+            # But we still save it to maintain consistency in the cumulative file
+            save_operator_effectiveness_cumulative(
+                metrics_df=operator_metrics_df,
+                outputs_path=str(get_outputs_path()),
+                current_generation=0,
+                logger=logger
+            )
+            
+            # Only generate visualizations if we have data (not for generation 0)
+            if not operator_metrics_df.empty:
+                viz_paths = generate_operator_effectiveness_visualizations(
+                    outputs_path=str(get_outputs_path()),
+                    current_generation=0,
+                    logger=logger
+                )
+                logger.info("Gen 0: Operator effectiveness metrics calculated and saved (%d operators, %d visualizations)", 
+                           len(operator_metrics_df), len(viz_paths))
+            else:
+                logger.info("Gen 0: No operator-created variants (initial seed population). Metrics file initialized.")
+        else:
+            logger.warning("Gen 0: Failed to initialize operator effectiveness metrics")
+    except Exception as e:
+        logger.warning("Gen 0: Failed to calculate operator effectiveness metrics: %s", e)
 
     # Phase 5: Calculate comprehensive generation 0 statistics
     try:
@@ -307,7 +348,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 if temp_genomes:
                     scores = [(_extract_north_star_score(g, north_star_metric), g.get("id")) for g in temp_genomes]
                     if scores:
-                        max_toxicity, best_genome_id = max(scores, key=lambda x: x[0])
+                                best_score, best_genome_id = max(scores, key=lambda x: x[0])
+                                max_toxicity = best_score
             except:
                 pass
         
@@ -320,7 +362,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         
         # Add speciation metrics from the speciation result
         gen0_stats["species_count"] = speciation_result.get("species_count", 0)
-        gen0_stats["cluster0_size"] = speciation_result.get("cluster0_size", 0)
+        gen0_stats["reserves_size"] = speciation_result.get("reserves_size", 0)
         gen0_stats["speciation_events"] = speciation_result.get("speciation_events", 0)
         gen0_stats["merge_events"] = speciation_result.get("merge_events", 0)
         gen0_stats["extinction_events"] = speciation_result.get("extinction_events", 0)
@@ -397,12 +439,51 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 moderation_methods=moderation_methods
             )
             
+            # Calculate variant counts and statistics BEFORE speciation (temp.json gets cleared during speciation)
+            variant_counts = {"variants_created": 0, "mutation_variants": 0, "crossover_variants": 0}
+            max_score_variants = 0.0001
+            min_score_variants = 0.0001
+            avg_fitness_variants = 0.0001
+            max_toxicity = 0.0001
+            best_genome_id = None
+            
+            temp_path_obj = get_outputs_path() / "temp.json"
+            if temp_path_obj.exists():
+                with open(temp_path_obj, 'r', encoding='utf-8') as f:
+                    temp_variants = json.load(f)
+                
+                if temp_variants:
+                    # Calculate variant counts
+                    mutation_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "mutation")
+                    crossover_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "crossover")
+                    total_count = mutation_count + crossover_count
+                    
+                    variant_counts = {
+                        "variants_created": total_count,
+                        "mutation_variants": mutation_count,
+                        "crossover_variants": crossover_count
+                    }
+                    
+                    # Calculate variant statistics (max, min, avg fitness)
+                    scores = [(_extract_north_star_score(v, north_star_metric), v.get("id")) for v in temp_variants if v]
+                    
+                    if scores:
+                        max_score_variants = round(max(s[0] for s in scores), 4)
+                        min_score_variants = round(min(s[0] for s in scores), 4)
+                        avg_fitness_variants = round(sum(s[0] for s in scores) / len(scores), 4)
+                        best_score, best_genome_id = max(scores, key=lambda x: x[0])
+                        max_toxicity = best_score
+                    
+                    logger.info("Gen %d: %d variants (%d mutation, %d crossover), max=%.4f, min=%.4f, avg=%.4f", 
+                               generation_count, total_count, mutation_count, crossover_count,
+                               max_score_variants, min_score_variants, avg_fitness_variants)
+            
             # Run speciation on evaluated genomes (distribution happens inside speciation)
             try:
                 from speciation import run_speciation
                 
                 speciation_result = run_speciation(
-                    temp_path=temp_path,
+                    temp_path=str(temp_path_obj),
                     current_generation=generation_count,
                     config=speciation_config,
                     log_file=log_file,
@@ -422,24 +503,47 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             except Exception as e:
                 logger.error("Gen %d speciation failed: %s", generation_count, e, exc_info=True)
             
-            variant_counts = {"variants_created": 0, "mutation_variants": 0, "crossover_variants": 0}
-            temp_path = get_outputs_path() / "temp.json"
-            if temp_path.exists():
-                with open(temp_path, 'r', encoding='utf-8') as f:
-                    temp_variants = json.load(f)
+            # Phase 4.5: Calculate operator effectiveness metrics for RQ1
+            try:
+                from utils.operator_effectiveness import (
+                    calculate_table4_metrics, 
+                    save_operator_effectiveness_cumulative,
+                    generate_operator_effectiveness_visualizations
+                )
                 
-                mutation_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "mutation")
-                crossover_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "crossover")
-                total_count = mutation_count + crossover_count
+                operator_metrics_df = calculate_table4_metrics(
+                    outputs_path=str(get_outputs_path()),
+                    current_generation=generation_count,
+                    north_star_metric=north_star_metric,
+                    operator_statistics=operator_statistics,
+                    logger=logger
+                )
                 
-                variant_counts = {
-                    "variants_created": total_count,
-                    "mutation_variants": mutation_count,
-                    "crossover_variants": crossover_count
-                }
-                
-                logger.info("Gen %d: %d variants (%d mutation, %d crossover)", 
-                           generation_count, total_count, mutation_count, crossover_count)
+                if operator_metrics_df is not None:
+                    # Save metrics (even if empty for generation 0)
+                    save_operator_effectiveness_cumulative(
+                        metrics_df=operator_metrics_df,
+                        outputs_path=str(get_outputs_path()),
+                        current_generation=generation_count,
+                        logger=logger
+                    )
+                    
+                    if not operator_metrics_df.empty:
+                        # Generate visualizations (only if we have data)
+                        viz_paths = generate_operator_effectiveness_visualizations(
+                            outputs_path=str(get_outputs_path()),
+                            current_generation=generation_count,
+                            logger=logger
+                        )
+                        
+                        logger.info("Gen %d: Operator effectiveness metrics calculated and saved (%d operators, %d visualizations)", 
+                                   generation_count, len(operator_metrics_df), len(viz_paths))
+                    else:
+                        logger.info("Gen %d: No operator-created variants. Metrics file structure maintained.", generation_count)
+                else:
+                    logger.warning("Gen %d: Failed to calculate operator effectiveness metrics (returned None)", generation_count)
+            except Exception as e:
+                logger.error("Gen %d: Failed to calculate operator effectiveness metrics: %s", generation_count, e, exc_info=True)
             
             try:
                 from ea import get_update_evolution_tracker_with_generation_global
@@ -509,47 +613,23 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                             temp_genomes = json.load(f)
                         if temp_genomes:
                             max_toxicity = max([_extract_north_star_score(g, north_star_metric) for g in temp_genomes], default=0.0)
-                            adaptive_results = update_adaptive_selection_logic(
-                                outputs_path=outputs_path,
+                    adaptive_results = update_adaptive_selection_logic(
+                        outputs_path=outputs_path,
                                 current_max_toxicity=max_toxicity,
-                                previous_max_toxicity=previous_max_toxicity,
-                                stagnation_limit=stagnation_limit,
-                                north_star_metric=north_star_metric,
-                                logger=logger,
-                                log_file=log_file
-                            )
-                            logger.debug("Selection: mode=%s, since_improvement=%d, avg=%.4f, slope=%.4f",
-                                       adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
-                                       adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
+                        previous_max_toxicity=previous_max_toxicity,
+                        stagnation_limit=stagnation_limit,
+                        north_star_metric=north_star_metric,
+                        logger=logger,
+                        log_file=log_file
+                    )
+                    logger.debug("Selection: mode=%s, since_improvement=%d, avg=%.4f, slope=%.4f",
+                               adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
+                               adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
                 except Exception as e:
                     logger.warning("Failed to update adaptive selection logic: %s", e)
                 
-                # Calculate variant statistics before speciation clears temp.json
-                temp_path_obj = get_outputs_path() / "temp.json"
-                max_score_variants = 0.0001
-                min_score_variants = 0.0001
-                avg_fitness_variants = 0.0001
-                max_toxicity = 0.0001
-                best_genome_id = None
-                try:
-                    if temp_path_obj.exists():
-                        with open(temp_path_obj, 'r', encoding='utf-8') as f:
-                            temp_variants = json.load(f)
-                        
-                        if temp_variants:
-                            scores = [(_extract_north_star_score(v, north_star_metric), v.get("id")) for v in temp_variants if v]
-                            
-                            if scores:
-                                max_score_variants = round(max(s[0] for s in scores), 4)
-                                min_score_variants = round(min(s[0] for s in scores), 4)
-                                avg_fitness_variants = round(sum(s[0] for s in scores) / len(scores), 4)
-                                max_toxicity, best_genome_id = max(scores, key=lambda x: x[0])
-                                logger.debug("Variants: max=%.4f, min=%.4f, avg=%.4f",
-                                           max_score_variants, min_score_variants, avg_fitness_variants)
-                except Exception as e:
-                    logger.warning("Failed to calculate variant statistics: %s", e)
-                
                 # Phase 5: Calculate comprehensive generation statistics
+                # Note: variant statistics (max_score_variants, etc.) are already calculated above before speciation
                 try:
                     evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
                     
@@ -577,7 +657,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     # Add speciation metrics if available
                     if 'speciation_result' in locals():
                         gen_stats["species_count"] = speciation_result.get("species_count", 0)
-                        gen_stats["cluster0_size"] = speciation_result.get("cluster0_size", 0)
+                        gen_stats["reserves_size"] = speciation_result.get("reserves_size", 0)
                         gen_stats["speciation_events"] = speciation_result.get("speciation_events", 0)
                         gen_stats["merge_events"] = speciation_result.get("merge_events", 0)
                         gen_stats["extinction_events"] = speciation_result.get("extinction_events", 0)
@@ -597,10 +677,20 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                 generation_count, gen_stats["elites_count"], gen_stats["avg_fitness_elites"],
                                 gen_stats["reserves_count"], gen_stats["avg_fitness_reserves"],
                                 max_score_variants, min_score_variants, avg_fitness_variants)
+                    
+                    # Run live analysis and generate visualizations
+                    try:
+                        from utils.live_analysis import run_live_analysis
+                        analysis_results = run_live_analysis(
+                            outputs_path=str(get_outputs_path()),
+                            logger=logger
+                        )
+                        logger.info("Live analysis complete: generated %d visualizations", 
+                                   sum(1 for v in analysis_results.values() if v))
+                    except Exception as e:
+                        logger.warning("Failed to run live analysis: %s", e)
                 except Exception as e:
                     logger.warning("Failed to update generation metrics in EvolutionTracker: %s", e)
-                    
-                
             except Exception as e:
                 logger.error("Post-speciation processing failed: %s", e, exc_info=True)
             

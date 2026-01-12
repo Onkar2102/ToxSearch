@@ -25,7 +25,14 @@ from .embeddings import (
 
 # Distance functions
 from .distance import (
-    semantic_distance, semantic_distances_batch
+    semantic_distance, semantic_distances_batch,
+    ensemble_distance, ensemble_distances_batch
+)
+from .phenotype_distance import (
+    extract_phenotype_vector,
+    phenotype_distance,
+    phenotype_distances_batch,
+    PHENOTYPE_SCORE_ORDER
 )
 
 # Clustering
@@ -56,6 +63,11 @@ from .metrics import (
     get_species_statistics, log_generation_summary
 )
 
+# Labeling (c-TF-IDF based species characterization)
+from .labeling import (
+    extract_species_labels, update_species_labels, get_species_label_summary
+)
+
 # Main entry point (similar to run_evolution)
 from .run_speciation import (
     run_speciation,
@@ -76,6 +88,8 @@ __all__ = [
     
     # Distance
     "semantic_distance", "semantic_distances_batch",
+    "ensemble_distance", "ensemble_distances_batch",
+    "extract_phenotype_vector", "phenotype_distance", "phenotype_distances_batch", "PHENOTYPE_SCORE_ORDER",
     
     # Clustering
     "leader_follower_clustering",
@@ -92,6 +106,9 @@ __all__ = [
     # Metrics
     "GenerationMetrics", "SpeciationMetricsTracker", "compute_diversity_metrics",
     "get_species_statistics", "log_generation_summary",
+    
+    # Labeling
+    "extract_species_labels", "update_species_labels", "get_species_label_summary",
     
     # Main entry point
     "run_speciation",

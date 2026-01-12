@@ -157,6 +157,8 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         speciation_state_path=speciation_state_path,
         theta_sim=state["config"].theta_sim,
         current_generation=current_generation,
+        w_genotype=state["config"].w_genotype,
+        w_phenotype=state["config"].w_phenotype,
         logger=state["logger"]
     )
     
@@ -203,6 +205,8 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         theta_sim=state["config"].theta_sim,
         current_gen=current_generation,
         max_capacity=state["config"].species_capacity,
+        w_genotype=state["config"].w_genotype,
+        w_phenotype=state["config"].w_phenotype,
         logger=state["logger"]
     )
     state["_current_gen_events"]["merge"] = len(merge_events)
@@ -218,11 +222,20 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     )
     state["_current_gen_events"]["extinction"] = len(extinction_events)
     
-    # Step 7: Record metrics
+    # Step 7: Update c-TF-IDF labels for all species
+    from .labeling import update_species_labels
+    update_species_labels(
+        state["species"],
+        current_generation=current_generation,
+        n_words=10,
+        logger=state["logger"]
+    )
+    
+    # Step 8: Record metrics (include cluster0 for fitness calculation)
     state["metrics_tracker"].record_generation(
         current_generation, state["species"], state["cluster0"].size,
         state["_current_gen_events"]["speciation"], state["_current_gen_events"]["merge"],
-        state["_current_gen_events"]["extinction"]
+        state["_current_gen_events"]["extinction"], cluster0=state["cluster0"]
     )
     
     log_generation_summary(current_generation, state["species"], state["cluster0"].size,
@@ -241,22 +254,30 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
 
 def distribute_genomes(
     temp_path: Optional[str] = None,
-    north_star_metric: str = "toxicity") -> Dict[str, int]:
+    north_star_metric: str = "toxicity",
+    current_generation: Optional[int] = None) -> Dict[str, int]:
     """
     Distribute genomes from temp.json to elites.json and reserves.json.
     
     Distribution is based on species_id:
     - Genomes with species_id > 0 → elites.json (all species members)
     - Genomes with species_id == 0 → reserves.json (cluster 0 / reserves)
+    - Genomes exceeding capacity → archive.json (non-elites)
+    
+    Sets initial_state for Table 4 metrics:
+    - "elite": Genomes going to elites.json or reserves.json (reserves are elites)
+    - "non-elite": Genomes archived due to capacity limits
     
     Args:
         temp_path: Path to temp.json file (defaults to outputs_path / "temp.json")
         north_star_metric: The metric to use for scoring (default: "toxicity")
+        current_generation: Current generation number (for tracking archived variants)
         
     Returns:
-        dict: Distribution statistics with elites_moved, reserves_moved, total_processed
+        dict: Distribution statistics with elites_moved, reserves_moved, total_processed, archived_count
     """
     from utils.population_io import _extract_north_star_score
+    from utils.constants import FileConstants
     
     state = _get_state()
     config = state["config"]
@@ -269,11 +290,12 @@ def distribute_genomes(
     temp_path_obj = Path(temp_path)
     if not temp_path_obj.exists():
         logger.warning("temp.json not found for distribution")
-        return {"elites_moved": 0, "reserves_moved": 0, "total_processed": 0}
+        return {"elites_moved": 0, "reserves_moved": 0, "total_processed": 0, "archived_count": 0}
     
     outputs_path = get_outputs_path()
     elites_path = outputs_path / "elites.json"
     reserves_path = outputs_path / "reserves.json"
+    archive_path = outputs_path / "archive.json"
     
     # Load genomes from temp.json
     with open(temp_path_obj, 'r', encoding='utf-8') as f:
@@ -281,10 +303,16 @@ def distribute_genomes(
     
     if not temp_genomes:
         logger.debug("No genomes in temp.json to distribute")
-        return {"elites_moved": 0, "reserves_moved": 0, "total_processed": 0}
+        return {"elites_moved": 0, "reserves_moved": 0, "total_processed": 0, "archived_count": 0}
     
     elites_to_move = []
     reserves_to_move = []
+    archived_genomes = []
+    
+    # Get current generation from state if not provided
+    if current_generation is None:
+        # Try to get from state or default to 0
+        current_generation = state.get("_current_generation", 0)
     
     # Distribute genomes based on species_id
     for genome in temp_genomes:
@@ -293,14 +321,17 @@ def distribute_genomes(
         
         genome_id = genome.get("id")
         species_id = genome.get("species_id", CLUSTER_0_ID)
+        genome_generation = genome.get("generation", current_generation)
         
         # Distribute based on species_id
         if species_id is not None and species_id > 0:
+            # Goes to elites.json - all species members are elites
             genome["initial_state"] = "elite"
             elites_to_move.append(genome)
             logger.debug(f"Genome {genome_id} from species {species_id} → elites.json")
         else:
-            genome["initial_state"] = "reserves"
+            # Goes to reserves.json initially (reserves are also elites)
+            genome["initial_state"] = "elite"  # Reserves are elites
             genome["species_id"] = CLUSTER_0_ID
             reserves_to_move.append(genome)
             logger.debug(f"Genome {genome_id} from cluster 0 → reserves.json")
@@ -329,15 +360,40 @@ def distribute_genomes(
         reserves_to_save.extend(reserves_to_move)
         reserves_to_save.sort(key=lambda g: _extract_north_star_score(g, north_star_metric), reverse=True)
         
-        # Enforce capacity limit
+        # Enforce capacity limit - archive excess genomes
         if len(reserves_to_save) > config.cluster0_max_capacity:
+            excess_count = len(reserves_to_save) - config.cluster0_max_capacity
+            excess_genomes = reserves_to_save[config.cluster0_max_capacity:]
             reserves_to_save = reserves_to_save[:config.cluster0_max_capacity]
-            logger.debug(f"Reserves capacity exceeded, keeping top {config.cluster0_max_capacity} genomes")
+            
+            # Mark excess genomes as non-elite and archive them
+            for excess_genome in excess_genomes:
+                # Only track variants from current generation
+                if excess_genome.get("generation") == current_generation:
+                    excess_genome["initial_state"] = "non-elite"
+                    archived_genomes.append(excess_genome)
+                    logger.debug(f"Genome {excess_genome.get('id')} archived due to capacity (non-elite)")
+            
+            logger.debug(f"Reserves capacity exceeded, keeping top {config.cluster0_max_capacity} genomes, archiving {excess_count}")
         
         with open(reserves_path, 'w', encoding='utf-8') as f:
             json.dump(reserves_to_save, f, indent=2, ensure_ascii=False)
         
         logger.debug(f"Moved {len(reserves_to_move)} genomes to reserves.json (capacity: {len(reserves_to_save)})")
+    
+    # Archive genomes that were removed due to capacity
+    if archived_genomes:
+        archive_to_save = []
+        if archive_path.exists():
+            with open(archive_path, 'r', encoding='utf-8') as f:
+                archive_to_save = json.load(f)
+        
+        archive_to_save.extend(archived_genomes)
+        
+        with open(archive_path, 'w', encoding='utf-8') as f:
+            json.dump(archive_to_save, f, indent=2, ensure_ascii=False)
+        
+        logger.debug(f"Archived {len(archived_genomes)} genomes from current generation to archive.json")
     
     # Clear temp.json
     with open(temp_path_obj, 'w', encoding='utf-8') as f:
@@ -346,12 +402,14 @@ def distribute_genomes(
     distribution_stats = {
         "elites_moved": len(elites_to_move),
         "reserves_moved": len(reserves_to_move),
-        "total_processed": len(temp_genomes)
+        "total_processed": len(temp_genomes),
+        "archived_count": len(archived_genomes)
     }
     
     logger.info(f"Distribution complete: {distribution_stats['total_processed']} genomes → "
                 f"{distribution_stats['elites_moved']} elites, "
-                f"{distribution_stats['reserves_moved']} reserves")
+                f"{distribution_stats['reserves_moved']} reserves, "
+                f"{distribution_stats['archived_count']} archived")
     
     return distribution_stats
 
@@ -375,10 +433,14 @@ def _update_genomes_with_species(genomes: List[Dict[str, Any]]) -> List[Dict[str
 
 
 def save_state(path: str) -> None:
-    """Save state to file."""
+    """Save state to file.
+    
+    Note: Config is NOT saved here as it's passed as project arguments or fixed constants.
+    The cluster0 section only contains metadata (size, speciation_events), not full member data
+    since reserves.json already stores the complete genome data for cluster 0.
+    """
     state = _get_state()
     state_dict = {
-        "config": state["config"].to_dict(),
         "species": {str(sid): sp.to_dict() for sid, sp in state["species"].items()},
         "cluster0": state["cluster0"].to_dict(),
         "global_best_id": state["global_best"].id if state["global_best"] else None,
@@ -445,6 +507,8 @@ def load_state(path: str) -> bool:
                 created_at=sp_dict.get("created_at", 0),
                 last_improvement=sp_dict.get("last_improvement", 0),
                 fitness_history=sp_dict.get("fitness_history", []),
+                labels=sp_dict.get("labels", []),
+                label_history=sp_dict.get("label_history", []),
                 cluster_origin=sp_dict.get("cluster_origin"),
                 parent_ids=sp_dict.get("parent_ids"),
                 parent_id=sp_dict.get("parent_id")
@@ -520,7 +584,7 @@ def run_speciation(
         logger.error("Temp file not found: %s", temp_path)
         return {
             "species_count": 0,
-            "cluster0_size": 0,
+            "reserves_size": 0,
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
@@ -538,7 +602,7 @@ def run_speciation(
             logger.warning("No genomes found in temp.json")
             return {
                 "species_count": 0,
-                "cluster0_size": 0,
+                "reserves_size": 0,
                 "speciation_events": 0,
                 "merge_events": 0,
                 "extinction_events": 0,
@@ -571,10 +635,11 @@ def run_speciation(
         with open(temp_path_obj, 'w', encoding='utf-8') as f:
             json.dump(updated_genomes, f, indent=2, ensure_ascii=False)
         
-        # Distribute genomes
+        # Distribute genomes (pass current_generation for tracking)
         distribution_result = distribute_genomes(
             temp_path=temp_path,
-            north_star_metric=north_star_metric
+            north_star_metric=north_star_metric,
+            current_generation=current_generation
         )
         logger.info("Distribution complete: %d elites, %d reserves",
                    distribution_result.get("elites_moved", 0),
@@ -586,7 +651,6 @@ def run_speciation(
         
         result = {
             "species_count": len(species),
-            "cluster0_size": cluster0.size,
             "reserves_size": cluster0.size,
             "speciation_events": events.get("speciation", 0),
             "merge_events": events.get("merge", 0),
@@ -603,9 +667,9 @@ def run_speciation(
             })
         
         logger.info(
-            "Speciation completed: %d species, %d in cluster 0, "
+            "Speciation completed: %d species, %d in reserves, "
             "events: speciation=%d, merge=%d, extinction=%d, archived=%d",
-            result["species_count"], result["cluster0_size"],
+            result["species_count"], result["reserves_size"],
             result["speciation_events"], result["merge_events"],
             result["extinction_events"], result["archived_count"]
         )
@@ -631,7 +695,6 @@ def run_speciation(
         logger.error("Speciation failed: %s", e, exc_info=True)
         return {
             "species_count": 0,
-            "cluster0_size": 0,
             "reserves_size": 0,
             "speciation_events": 0,
             "merge_events": 0,
@@ -652,7 +715,6 @@ def get_speciation_statistics(log_file: Optional[str] = None) -> Dict[str, Any]:
         return {
             "initialized": False,
             "species_count": 0,
-            "cluster0_size": 0,
             "reserves_size": 0
         }
     
@@ -661,7 +723,6 @@ def get_speciation_statistics(log_file: Optional[str] = None) -> Dict[str, Any]:
     return {
         "initialized": True,
         "species_count": len(state["species"]),
-        "cluster0_size": state["cluster0"].size,
         "reserves_size": state["cluster0"].size,
         "global_best_fitness": state["global_best"].fitness if state["global_best"] else None,
         "metrics_summary": metrics_summary
@@ -699,8 +760,7 @@ def update_evolution_tracker_with_speciation(
         
         speciation_summary = {
             "species_count": speciation_result.get("species_count", 0),
-            "cluster0_size": speciation_result.get("cluster0_size", 0),
-            "reserves_size": speciation_result.get("reserves_size", speciation_result.get("cluster0_size", 0)),
+            "reserves_size": speciation_result.get("reserves_size", 0),
             "speciation_events": speciation_result.get("speciation_events", 0),
             "merge_events": speciation_result.get("merge_events", 0),
             "extinction_events": speciation_result.get("extinction_events", 0),
@@ -717,6 +777,27 @@ def update_evolution_tracker_with_speciation(
                 "total_population": current_metrics.total_population,
                 "best_fitness": round(current_metrics.best_fitness, 4),
                 "avg_fitness": round(current_metrics.avg_fitness, 4),
+            })
+        else:
+            # Fallback: calculate from state if metrics not available
+            all_fitness = []
+            for sp in state.get("species", {}).values():
+                if hasattr(sp, 'members'):
+                    all_fitness.extend([m.fitness for m in sp.members])
+            
+            cluster0 = state.get("cluster0")
+            if cluster0 and hasattr(cluster0, 'individuals'):
+                all_fitness.extend([ind.fitness for ind in cluster0.individuals])
+            
+            best_fitness = max(all_fitness) if all_fitness else 0.0
+            avg_fitness = sum(all_fitness) / len(all_fitness) if all_fitness else 0.0
+            
+            speciation_summary.update({
+                "inter_species_diversity": 0.0,
+                "intra_species_diversity": 0.0,
+                "total_population": speciation_result.get("species_count", 0) + speciation_result.get("reserves_size", 0),
+                "best_fitness": round(best_fitness, 4),
+                "avg_fitness": round(avg_fitness, 4),
             })
         
         generations = evolution_tracker.get("generations", [])
@@ -741,7 +822,7 @@ def update_evolution_tracker_with_speciation(
         
         evolution_tracker["speciation_summary"].update({
             "current_species_count": speciation_result.get("species_count", 0),
-            "current_cluster0_size": speciation_result.get("cluster0_size", 0),
+            "current_reserves_size": speciation_result.get("reserves_size", 0),
             "total_speciation_events": metrics_summary.get("total_speciation_events", 0),
             "total_merge_events": metrics_summary.get("total_merge_events", 0),
             "total_extinction_events": metrics_summary.get("total_extinction_events", 0),

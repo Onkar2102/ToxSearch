@@ -11,7 +11,7 @@ fi
 # Define your experiments here (one per line)
 EXPERIMENTS=(
     "python src/main.py \
-        --generations 3 \
+        --generations 11 \
         --threshold 0.99 \
         --moderation-methods google \
         --stagnation-limit 5 \

@@ -58,13 +58,20 @@ def get_outputs_path():
     return outputs_dir
 
 def _extract_north_star_score(genome, metric="toxicity"):
-    """Extract the north star metric score from a genome using only moderation_result.google.scores.
+    """Extract the north star metric score from a genome.
+    
+    Priority order:
+    1. moderation_result.google.scores[metric] (standard format)
+    2. moderation_result.scores[metric] (legacy format)
+    3. Direct field: metric (e.g., "toxicity" for top_10.json slimmed format)
+    4. scores[metric] (nested field)
     
     Returns minimum 0.0001 for consistency across the project.
     """
     if not genome:
         return 0.0001
     
+    # Priority 1: moderation_result.google.scores[metric] (standard format)
     if "moderation_result" in genome:
         moderation_result = genome["moderation_result"]
         
@@ -74,6 +81,24 @@ def _extract_north_star_score(genome, metric="toxicity"):
                 score = google_scores["scores"].get(metric, 0.0001)
                 if score is not None and score > 0:
                     return round(float(score), 4)
+        
+        # Priority 2: moderation_result.scores[metric] (legacy format)
+        if "scores" in moderation_result:
+            score = moderation_result["scores"].get(metric, 0.0001)
+            if score is not None and score > 0:
+                return round(float(score), 4)
+    
+    # Priority 3: Direct field (e.g., "toxicity" for top_10.json slimmed format)
+    if metric in genome:
+        score = genome.get(metric)
+        if score is not None and score > 0:
+            return round(float(score), 4)
+    
+    # Priority 4: scores[metric] (nested field)
+    if "scores" in genome and isinstance(genome["scores"], dict):
+        score = genome["scores"].get(metric, 0.0001)
+        if score is not None and score > 0:
+            return round(float(score), 4)
     
     return 0.0001
 
@@ -1201,8 +1226,8 @@ def save_elites(elites: List[Dict[str, Any]], elites_file_path: str = "data/outp
 
 
 def get_population_stats_steady_state(population_file_path: str = FileConstants.DEFAULT_RESERVES_FILE,
-                                      elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
-                                      *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
+                                     elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
+                                     *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
     """
     Get population statistics for steady state mode.
     
@@ -1905,11 +1930,24 @@ def update_evolution_tracker_with_statistics(
             "avg_fitness_reserves": statistics.get("avg_fitness_reserves", 0.0001),
         })
         
-        # Update population max toxicity at tracker level
-        tracker["population_max_toxicity"] = max(
-            tracker.get("population_max_toxicity", 0.0001),
-            statistics.get("population_max_toxicity", 0.0001)
-        )
+        # Update population max toxicity at tracker level (use actual max, not default)
+        new_max = statistics.get("population_max_toxicity")
+        if new_max and new_max > 0.0001:
+            tracker["population_max_toxicity"] = max(
+                tracker.get("population_max_toxicity", 0.0001),
+                new_max
+            )
+        
+        # Also update genome_id and variant counts if provided
+        if statistics.get("best_genome_id"):
+            gen_entry["genome_id"] = statistics.get("best_genome_id")
+        
+        if statistics.get("variants_created") is not None:
+            gen_entry["variants_created"] = statistics.get("variants_created", 0)
+        if statistics.get("mutation_variants") is not None:
+            gen_entry["mutation_variants"] = statistics.get("mutation_variants", 0)
+        if statistics.get("crossover_variants") is not None:
+            gen_entry["crossover_variants"] = statistics.get("crossover_variants", 0)
         
         # Add operator statistics if provided
         if operator_statistics:
@@ -1918,9 +1956,9 @@ def update_evolution_tracker_with_statistics(
         # Sort generations by number
         tracker["generations"] = sorted(generations, key=lambda x: x.get("generation_number", 0))
         
-        # Save updated tracker
+        # Save updated tracker (use indent=2 to match other JSON files)
         with open(tracker_path, 'w', encoding='utf-8') as f:
-            json.dump(tracker, f, indent=4, ensure_ascii=False)
+            json.dump(tracker, f, indent=2, ensure_ascii=False)
         
         _logger.info(
             "Updated EvolutionTracker gen %d: elites=%d, reserves=%d, avg_fitness=%.4f",

@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, field
 
 from .species import Individual, Species
-from .distance import semantic_distance
+from .distance import ensemble_distance
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -53,17 +53,24 @@ class SpeciationMetricsTracker:
     
     def record_generation(self, generation: int, species: Dict[int, Species], reserves_size: int = 0,
                           speciation_events: int = 0, merge_events: int = 0,
-                          extinction_events: int = 0) -> GenerationMetrics:
+                          extinction_events: int = 0, cluster0=None) -> GenerationMetrics:
         """Record metrics for a generation."""
         species_count = len(species)
         total_pop = sum(sp.size for sp in species.values())
         
+        # Calculate fitness from species members
         all_fitness = [m.fitness for sp in species.values() for m in sp.members]
+        
+        # Include reserves (cluster0) fitness if provided
+        if cluster0 is not None and hasattr(cluster0, 'individuals'):
+            all_fitness.extend([ind.fitness for ind in cluster0.individuals])
+            total_pop += len(cluster0.individuals)
+        
         best = max(all_fitness) if all_fitness else 0.0
         avg = np.mean(all_fitness) if all_fitness else 0.0
         std = np.std(all_fitness) if all_fitness else 0.0
         
-        inter_div, intra_div = compute_diversity_metrics(species)
+        inter_div, intra_div = compute_diversity_metrics(species, w_genotype=0.7, w_phenotype=0.3)
         
         self.total_speciation += speciation_events
         self.total_merges += merge_events
@@ -96,7 +103,7 @@ class SpeciationMetricsTracker:
         return {"history": [m.to_dict() for m in self.history], "summary": self.get_summary()}
 
 
-def compute_diversity_metrics(species: Dict[int, Species]) -> tuple:
+def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0.7, w_phenotype: float = 0.3) -> tuple:
     """
     Compute inter-species and intra-species diversity metrics.
     
@@ -122,7 +129,11 @@ def compute_diversity_metrics(species: Dict[int, Species]) -> tuple:
     for i, sp1 in enumerate(species_list):
         for sp2 in species_list[i + 1:]:
             if sp1.leader.embedding is not None and sp2.leader.embedding is not None:
-                inter.append(semantic_distance(sp1.leader.embedding, sp2.leader.embedding))
+                inter.append(ensemble_distance(
+                    sp1.leader.embedding, sp2.leader.embedding,
+                    sp1.leader.phenotype, sp2.leader.phenotype,
+                    w_genotype, w_phenotype
+                ))
     inter_div = np.mean(inter) if inter else 0.0
     
     # Compute intra-species diversity (distances within each species)
@@ -131,8 +142,11 @@ def compute_diversity_metrics(species: Dict[int, Species]) -> tuple:
         members = [m for m in sp.members if m.embedding is not None]
         if len(members) < 2:
             continue
-        dists = [semantic_distance(members[i].embedding, members[j].embedding)
-                 for i in range(len(members)) for j in range(i + 1, len(members))]
+        dists = [ensemble_distance(
+            members[i].embedding, members[j].embedding,
+            members[i].phenotype, members[j].phenotype,
+            w_genotype, w_phenotype
+        ) for i in range(len(members)) for j in range(i + 1, len(members))]
         if dists:
             intra_divs.append(np.mean(dists))
     intra_div = np.mean(intra_divs) if intra_divs else 0.0

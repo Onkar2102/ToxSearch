@@ -19,7 +19,8 @@ class Individual:
     Represents an individual genome in the evolutionary population.
     
     An Individual is a wrapper around a genome (prompt) that includes:
-    - Semantic embedding for clustering
+    - Genotype: Semantic embedding for clustering (prompt embedding)
+    - Phenotype: Response scores (8D toxicity scores)
     - Fitness score for selection
     - Species assignment for speciation
     
@@ -31,7 +32,8 @@ class Individual:
         prompt: The text prompt (genome content)
         fitness: Fitness score (typically toxicity score, range [0, 1])
         embedding: L2-normalized semantic embedding vector (384-dim for all-MiniLM-L6-v2)
-                   Used for semantic distance computation in clustering
+                   Used for genotype distance computation in clustering
+        phenotype: Phenotype vector (8D response scores) for phenotype distance computation
         species_id: ID of the species this individual belongs to (None if unassigned, 0 for cluster 0)
         generation: Generation number when this individual was created
         genome_data: Original genome dictionary (for preserving metadata)
@@ -40,30 +42,35 @@ class Individual:
     prompt: str
     fitness: float = 0.0
     embedding: Optional[np.ndarray] = None
+    phenotype: Optional[np.ndarray] = None
     species_id: Optional[int] = None
     generation: int = 0
     genome_data: Optional[Dict[str, Any]] = None
     
     def __post_init__(self):
         """
-        Post-initialization: ensure embedding is numpy array.
+        Post-initialization: ensure embedding and phenotype are numpy arrays.
         
-        Converts embedding to numpy array if it's not already,
+        Converts embedding and phenotype to numpy arrays if they're not already,
         which is required for distance computations.
         """
         if self.embedding is not None and not isinstance(self.embedding, np.ndarray):
             self.embedding = np.array(self.embedding)
+        
+        if self.phenotype is not None and not isinstance(self.phenotype, np.ndarray):
+            self.phenotype = np.array(self.phenotype)
     
     @classmethod
     def from_genome(cls, genome: Dict[str, Any], embedding: Optional[np.ndarray] = None) -> "Individual":
         """
         Create Individual instance from genome dictionary.
         
-        Extracts fitness from various possible locations in the genome dict:
-        - "north_star_score" (primary)
+        Extracts fitness from various possible locations in the genome dict (priority order):
+        - "north_star_score" (primary - pre-computed metric)
+        - "moderation_result"["google"]["scores"]["toxicity"] (standard format)
+        - "moderation_result"["scores"]["toxicity"] (legacy format)
         - "toxicity" (direct)
         - "scores"["toxicity"] (nested)
-        - "moderation_result"["scores"]["toxicity"] (deeply nested)
         
         Extracts embedding from "prompt_embedding" field if present (preferred),
         otherwise uses provided embedding parameter.
@@ -80,16 +87,23 @@ class Individual:
             >>> ind = Individual.from_genome(genome)
         """
         # Try multiple locations for fitness score (handles different genome formats)
+        # Priority: north_star_score > moderation_result.google.scores > toxicity > scores.toxicity
         fitness = 0.0
         if "north_star_score" in genome:
             fitness = genome["north_star_score"]
+        elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
+            # Check moderation_result.google.scores.toxicity (standard format)
+            google_result = genome["moderation_result"].get("google", {})
+            if google_result and "scores" in google_result:
+                fitness = google_result["scores"].get("toxicity", 0.0)
+            else:
+                # Fallback to moderation_result.scores.toxicity (legacy format)
+                scores = genome["moderation_result"].get("scores", {})
+                fitness = scores.get("toxicity", 0.0)
         elif "toxicity" in genome:
             fitness = genome["toxicity"]
         elif "scores" in genome and isinstance(genome["scores"], dict):
             fitness = genome["scores"].get("toxicity", 0.0)
-        elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
-            scores = genome["moderation_result"].get("scores", {})
-            fitness = scores.get("toxicity", 0.0)
         
         # Extract embedding from genome if present (preferred over parameter)
         final_embedding = embedding
@@ -103,11 +117,16 @@ class Individual:
         elif embedding is not None:
             final_embedding = embedding
         
+        # Extract phenotype vector (response scores)
+        from .phenotype_distance import extract_phenotype_vector
+        phenotype = extract_phenotype_vector(genome)
+        
         return cls(
             id=genome.get("id", 0),
             prompt=genome.get("prompt", ""),
             fitness=float(fitness) if fitness else 0.0,
             embedding=final_embedding,
+            phenotype=phenotype,
             species_id=genome.get("species_id"),
             generation=genome.get("generation", 0),
             genome_data=genome
@@ -172,6 +191,8 @@ class Species:
         created_at: Generation when this species was created
         last_improvement: Generation when fitness last improved
         fitness_history: List of best fitness values over time (for trend analysis)
+        labels: Current c-TF-IDF labels (top 10 representative words)
+        label_history: History of labels over generations (for tracking topic evolution)
         cluster_origin: How this species was created ("merge", "split", "natural", or None)
         parent_ids: List of parent species IDs if created via merge [id1, id2]
         parent_id: ID of parent species if this was created via split (single parent)
@@ -186,6 +207,8 @@ class Species:
     created_at: int = 0
     last_improvement: int = 0
     fitness_history: List[float] = field(default_factory=list)
+    labels: List[str] = field(default_factory=list)  # Current c-TF-IDF labels (10 words)
+    label_history: List[Dict[str, Any]] = field(default_factory=list)  # Label history per generation
     cluster_origin: Optional[str] = None  # "merge", "split", "natural", or None
     parent_ids: Optional[List[int]] = None  # For merged species: [parent1_id, parent2_id]
     parent_id: Optional[int] = None  # For split species: single parent ID
@@ -278,6 +301,10 @@ class Species:
         
         Includes leader embedding for state restoration across generations.
         Includes cluster_origin and parent_ids for origin tracking.
+        Includes labels and label_history for semantic characterization.
+        
+        Note: Computed fields (size, best_fitness, avg_fitness) are not included
+        as they can be derived from members and are not used by load_state().
         """
         return {
             "id": self.id,
@@ -293,12 +320,11 @@ class Species:
             "created_at": self.created_at,
             "last_improvement": self.last_improvement,
             "fitness_history": self.fitness_history[-20:],
+            "labels": self.labels,
+            "label_history": self.label_history[-20:],  # Keep last 20 generations
             "cluster_origin": self.cluster_origin,
             "parent_ids": self.parent_ids,
             "parent_id": self.parent_id,
-            "size": self.size,
-            "best_fitness": self.best_fitness,
-            "avg_fitness": self.avg_fitness,
         }
     
     def __repr__(self):

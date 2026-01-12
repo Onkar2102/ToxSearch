@@ -7,7 +7,7 @@ Island merging logic for speciation.
 from typing import Dict, List, Tuple, Optional
 
 from .species import Individual, Species, generate_species_id
-from .distance import semantic_distance
+from .distance import ensemble_distance
 
 from utils import get_custom_logging
 get_logger, _, _, _ = get_custom_logging()
@@ -93,12 +93,14 @@ def merge_islands(
 
 def process_merges(
     species: Dict[int, Species],
-    theta_merge: float = 0.2,
-    theta_sim: float = 0.4,
+    theta_merge: float = 0.1,
+    theta_sim: float = 0.2,
     min_stability_gens: int = 3,
     current_gen: int = 0,
     max_capacity: int = 100,
     max_merges_per_gen: int = 3,
+    w_genotype: float = 0.7,
+    w_phenotype: float = 0.3,
     logger=None
 ) -> Tuple[Dict[int, Species], List[Dict]]:
     """
@@ -146,7 +148,11 @@ def process_merges(
             for j, (id2, sp2) in enumerate(species_list[i + 1:], start=i + 1):
                 if sp1.leader.embedding is None or sp2.leader.embedding is None:
                     continue
-                dist = semantic_distance(sp1.leader.embedding, sp2.leader.embedding)
+                dist = ensemble_distance(
+                    sp1.leader.embedding, sp2.leader.embedding,
+                    sp1.leader.phenotype, sp2.leader.phenotype,
+                    w_genotype, w_phenotype
+                )
                 if dist <= theta_merge:
                     sp1_stable = (current_gen - sp1.created_at) >= min_stability_gens
                     sp2_stable = (current_gen - sp2.created_at) >= min_stability_gens

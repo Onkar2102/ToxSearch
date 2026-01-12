@@ -12,7 +12,7 @@ from typing import List, Dict, Tuple, Optional, TYPE_CHECKING
 from pathlib import Path
 
 from .species import Individual, Species, generate_species_id, SpeciesIdGenerator
-from .distance import semantic_distance, semantic_distances_batch
+from .distance import ensemble_distance, ensemble_distances_batch
 from .reserves import CLUSTER_0_ID
 
 if TYPE_CHECKING:
@@ -28,8 +28,10 @@ _, _, _, get_outputs_path, _, _ = get_system_utils()
 def leader_follower_clustering(
     temp_path: Optional[str] = None,
     speciation_state_path: Optional[str] = None,
-    theta_sim: float = 0.4,
+    theta_sim: float = 0.2,
     current_generation: int = 0,
+    w_genotype: float = 0.7,
+    w_phenotype: float = 0.3,
     logger=None) -> Dict[int, Species]:
     """
     Leader-Follower clustering algorithm that reads and writes files directly.
@@ -100,7 +102,6 @@ def leader_follower_clustering(
     
     # Read existing species from speciation_state.json (if exists)
     existing_species: Dict[int, Species] = {}
-    cluster0_individuals: List[Individual] = []
     
     if speciation_state_path_obj.exists():
         try:
@@ -118,11 +119,18 @@ def leader_follower_clustering(
                 if sp_dict.get("leader_embedding"):
                     leader_embedding = np.array(sp_dict["leader_embedding"])
                 
+                # Extract phenotype if available in genome_data
+                leader_phenotype = None
+                if sp_dict.get("leader_genome_data"):
+                    from .phenotype_distance import extract_phenotype_vector
+                    leader_phenotype = extract_phenotype_vector(sp_dict["leader_genome_data"])
+                
                 leader = Individual(
                     id=sp_dict["leader_id"],
                     prompt=sp_dict.get("leader_prompt", ""),
                     fitness=sp_dict.get("leader_fitness", 0.0),
                     embedding=leader_embedding,
+                    phenotype=leader_phenotype,
                     species_id=sid
                 )
                 
@@ -138,29 +146,18 @@ def leader_follower_clustering(
                     created_at=sp_dict.get("created_at", 0),
                     last_improvement=sp_dict.get("last_improvement", 0),
                     fitness_history=sp_dict.get("fitness_history", []),
+                    labels=sp_dict.get("labels", []),
+                    label_history=sp_dict.get("label_history", []),
                     cluster_origin=sp_dict.get("cluster_origin"),
                     parent_ids=sp_dict.get("parent_ids"),
                     parent_id=sp_dict.get("parent_id")
                 )
                 existing_species[sid] = species
             
-            # Restore cluster0 individuals (for Generation N checking)
-            cluster0_dict = state.get("cluster0", {})
-            cluster0_members = cluster0_dict.get("members", [])
-            for member_dict in cluster0_members:
-                ind_dict = member_dict.get("individual", {})
-                embedding = None
-                if ind_dict.get("embedding"):
-                    embedding = np.array(ind_dict["embedding"])
-                
-                cluster0_ind = Individual(
-                    id=ind_dict.get("id"),
-                    prompt=ind_dict.get("prompt", ""),
-                    fitness=ind_dict.get("fitness", 0.0),
-                    embedding=embedding,
-                    species_id=CLUSTER_0_ID
-                )
-                cluster0_individuals.append(cluster0_ind)
+            # Note: cluster0 members are not restored here since:
+            # 1. Full genome data is stored in reserves.json, not speciation_state.json
+            # 2. speciation_state.json only stores cluster0 metadata (size, speciation_events)
+            # For Generation N, checking against reserves is optional and not implemented here.
             
             # Update SpeciesIdGenerator to avoid ID conflicts
             if existing_species:
@@ -181,8 +178,8 @@ def leader_follower_clustering(
     
     # Initialize species dict
     species: Dict[int, Species] = existing_species.copy() if existing_species else {}
-    leaders: List[Tuple[int, np.ndarray]] = [
-        (sid, sp.leader.embedding) 
+    leaders: List[Tuple[int, np.ndarray, Optional[np.ndarray]]] = [
+        (sid, sp.leader.embedding, sp.leader.phenotype) 
         for sid, sp in species.items() 
         if sp.leader.embedding is not None
     ]
@@ -203,7 +200,7 @@ def leader_follower_clustering(
             parent_id=None
         )
         species[first_species_id] = first_species
-        leaders.append((first_species_id, first.embedding))
+        leaders.append((first_species_id, first.embedding, first.phenotype))
         remaining_pop = sorted_pop[1:]
     else:
         # Generation N: process all individuals
@@ -214,27 +211,37 @@ def leader_follower_clustering(
         min_dist = float('inf')
         nearest_leader_id = None
         
-        # Find nearest leader from existing species
+        # Find nearest leader from existing species using ensemble distance
         if leaders:
             if len(leaders) > 1:
-                leader_embeddings = np.array([emb for _, emb in leaders])
-                distances = semantic_distances_batch(ind.embedding, leader_embeddings)
+                leader_embeddings = np.array([emb for _, emb, _ in leaders])
+                leader_phenotypes = [
+                    pheno for _, _, pheno in leaders
+                ]  # Keep as list to handle None values
+                # ensemble_distances_batch handles None phenotypes by falling back to genotype-only
+                distances = ensemble_distances_batch(
+                    ind.embedding, leader_embeddings,
+                    ind.phenotype, leader_phenotypes,
+                    w_genotype, w_phenotype
+                )
                 min_idx = np.argmin(distances)
                 min_dist = distances[min_idx]
                 nearest_leader_id = leaders[min_idx][0]
             elif len(leaders) == 1:
-                min_dist = semantic_distance(ind.embedding, leaders[0][1])
+                leader_emb = leaders[0][1]
+                leader_pheno = leaders[0][2]
+                min_dist = ensemble_distance(
+                    ind.embedding, leader_emb,
+                    ind.phenotype, leader_pheno,
+                    w_genotype, w_phenotype
+                )
                 nearest_leader_id = leaders[0][0]
         
-        # For Generation N: also check against reserves genomes
-        if not is_generation_0 and cluster0_individuals:
-            reserves_embeddings = np.array([rind.embedding for rind in cluster0_individuals if rind.embedding is not None])
-            if len(reserves_embeddings) > 0:
-                reserves_distances = semantic_distances_batch(ind.embedding, reserves_embeddings)
-                min_reserves_dist = np.min(reserves_distances)
-                # If closer to a reserve genome, still create new species (reserves are potential new species)
-                if min_reserves_dist < min_dist:
-                    min_dist = min_reserves_dist  # Update for logging
+        # Note: Checking against reserves genomes is not implemented here since:
+        # 1. Reserves genomes are stored in reserves.json with full data
+        # 2. Loading reserves.json for every genome check would be slow
+        # 3. Reserves are outliers and creating new species for them happens via check_speciation()
+        # For future: could load reserves.json once per generation if this check is needed
         
         # Decision: assign to species or create new species
         if nearest_leader_id is not None and min_dist < theta_sim:
@@ -249,9 +256,9 @@ def leader_follower_clustering(
                     sp.stagnation = 0  # Reset stagnation when max_fitness improves
                 sp.leader = ind
                 # Update leader embedding in leaders list
-                for i, (sid, _) in enumerate(leaders):
+                for i, (sid, _, _) in enumerate(leaders):
                     if sid == nearest_leader_id:
-                        leaders[i] = (sid, sp.leader.embedding)
+                        leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
                         break
         else:
             # Outside threshold -> create new species
@@ -269,7 +276,7 @@ def leader_follower_clustering(
             )
             species[new_species_id] = new_species
             ind.species_id = new_species_id
-            leaders.append((new_species_id, ind.embedding))
+            leaders.append((new_species_id, ind.embedding, ind.phenotype))
     
     # For Generation 0: Move single-member species to species 0 (reserves)
     # Minimum species size is 2 (leader + at least one follower)
@@ -284,7 +291,7 @@ def leader_follower_clustering(
         # Remove single-member species
         for sid in single_member_species:
             del species[sid]
-            leaders = [(lid, emb) for lid, emb in leaders if lid != sid]
+            leaders = [(lid, emb, pheno) for lid, emb, pheno in leaders if lid != sid]
         
         if single_member_species:
             logger.info(f"Moved {len(single_member_species)} single-member species to reserves (minimum species size is 2)")
@@ -310,14 +317,13 @@ def leader_follower_clustering(
         "generation": current_generation
     }
     
-    # If speciation_state.json exists, preserve cluster0 and other fields
+    # If speciation_state.json exists, preserve cluster0 and other fields (but NOT config)
     if speciation_state_path_obj.exists():
         try:
             with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
                 existing_state = json.load(f)
-            # Preserve cluster0 and other fields
+            # Preserve cluster0, global_best_id, metrics (config is not saved - it's passed as project args)
             state_dict["cluster0"] = existing_state.get("cluster0", {})
-            state_dict["config"] = existing_state.get("config", {})
             state_dict["global_best_id"] = existing_state.get("global_best_id")
             state_dict["metrics"] = existing_state.get("metrics", {})
         except Exception:
