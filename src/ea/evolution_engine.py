@@ -776,14 +776,13 @@ class EvolutionEngine:
                 prompt = v.get("prompt")
                 vid = v.get("id")
 
-                norm = prompt.strip().lower() if isinstance(prompt, str) else None
-
-                if (norm is not None and norm in seen_prompts) or (vid is not None and vid in seen_ids):
+                # Exact match, no normalization
+                if (prompt is not None and prompt in seen_prompts) or (vid is not None and vid in seen_ids):
                     duplicates_removed += 1
                     continue
 
-                if norm is not None:
-                    seen_prompts.add(norm)
+                if prompt is not None:
+                    seen_prompts.add(prompt)
                 if vid is not None:
                     seen_ids.add(vid)
                 unique_variants.append(v)

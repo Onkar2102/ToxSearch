@@ -4,9 +4,104 @@
 
 This system implements a genetic algorithm framework with **semantic speciation** (Leader-Follower clustering) for evolving text prompts to elicit toxic responses from large language models, enabling comprehensive AI safety evaluation through adversarial prompt generation.
 
+```mermaid
+graph TB
+    subgraph "Input Layer"
+        CSV[Seed Prompts<br/>prompt.csv]
+    end
+    
+    subgraph "Evolution Engine"
+        PS[Parent Selector<br/>Adaptive Tournament]
+        VO[Variation Operators<br/>12 Operators]
+    end
+    
+    subgraph "LLM Layer"
+        RG[Response Generator<br/>GGUF Models]
+        PG[Prompt Generator<br/>GGUF Models]
+    end
+    
+    subgraph "Evaluation Layer"
+        API[Perspective API<br/>Toxicity Scoring<br/>8 Dimensions]
+    end
+    
+    subgraph "Speciation Layer"
+        EMB[Embedding Model<br/>all-MiniLM-L6-v2<br/>384D]
+        LF[Leader-Follower<br/>Clustering]
+        SM[Species Management<br/>Merge/Extinction]
+    end
+    
+    subgraph "Storage Layer"
+        EL[Elites<br/>species_id > 0]
+        RS[Reserves<br/>species_id = 0]
+        AR[Archive<br/>Overflow]
+    end
+    
+    subgraph "Output Layer"
+        TRACK[Evolution Tracker<br/>Metrics & History]
+        FIGS[Visualizations<br/>Charts & Graphs]
+    end
+    
+    CSV --> PS
+    PS --> VO
+    VO --> RG
+    VO --> PG
+    RG --> API
+    API --> EMB
+    EMB --> LF
+    LF --> SM
+    SM --> EL
+    SM --> RS
+    SM --> AR
+    EL --> PS
+    RS --> PS
+    SM --> TRACK
+    TRACK --> FIGS
+    
+    style CSV fill:#90EE90
+    style RG fill:#FFA07A
+    style API fill:#FFD700
+    style LF fill:#87CEEB
+    style EL fill:#4ECDC4
+    style RS fill:#FFD700
+    style TRACK fill:#98D8C8
+```
+
+![Speciation Dashboard](experiments/speciation_dashboard.png)
+*Figure 1: Speciation dashboard showing species evolution, diversity metrics, and fitness progression over generations.*
+
 ## Core Algorithm
 
 ### Evolutionary Process
+
+```mermaid
+graph TB
+    Start([Start]) --> Init[Population Initialization<br/>Load seed prompts from CSV]
+    Init --> Gen0[Generation 0]
+    Gen0 --> Eval0[Fitness Evaluation<br/>Perspective API]
+    Eval0 --> Spec0[Speciation<br/>Leader-Follower Clustering]
+    Spec0 --> Dist0[Distribution<br/>elites.json + reserves.json]
+    Dist0 --> Loop{Generation N}
+    
+    Loop -->|Continue| Select[Parent Selection<br/>Adaptive Tournament]
+    Select --> Variate[Variation<br/>12 Operators]
+    Variate --> Response[Response Generation<br/>LLM]
+    Response --> Eval[Fitness Evaluation<br/>Perspective API]
+    Eval --> Spec[Speciation<br/>Leader-Follower]
+    Spec --> Dist[Distribution]
+    Dist --> Track[Tracking & Metrics]
+    Track --> Check{Termination?}
+    
+    Check -->|No| Loop
+    Check -->|Yes| End([End])
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Spec fill:#87CEEB
+    style Spec0 fill:#87CEEB
+    style Eval fill:#FFD700
+    style Eval0 fill:#FFD700
+```
+
 The system uses a steady-state genetic algorithm with **semantic speciation** (Leader-Follower clustering) with the following components:
 
 1. **Population Initialization**: Load initial prompts from CSV
@@ -22,20 +117,79 @@ The system uses a steady-state genetic algorithm with **semantic speciation** (L
 
 **Fitness Function**:
 ```
-f(x) = toxicity_score(response to prompt x) in [0, 1]
+f(x) = toxicity_score(LLM(x)) ∈ [0, 1]
 ```
-
-The fitness function evaluates toxicity in the LLM's response, not the prompt itself.
+where `x` is a prompt and `LLM(x)` is the model's response. The fitness function evaluates toxicity in the LLM's response, not the prompt itself.
 
 **Population Structure**:
 ```
-Active Population = elites.json + reserves.json
-- elites.json: Genomes with species_id > 0 (assigned to species)
-- reserves.json: Cluster 0 outliers (species_id == 0, don't fit existing species)
-- archive.json: Archived genomes (NOT part of population)
+P = E ∪ R
+|P| = |E| + |R|
+```
+where:
+- `P` = Active population
+- `E` = Elites (genomes with `species_id > 0`)
+- `R` = Reserves (Cluster 0, `species_id = 0`)
+- `A` = Archive (NOT part of population, capacity overflow)
+
+**Population Constraints**:
+```
+|E| = Σᵢ |Sᵢ|  where Sᵢ are species
+|R| ≤ C_reserves
+|Sᵢ| ≤ C_species  ∀i
 ```
 
 ## Component Architecture
+
+```mermaid
+graph LR
+    subgraph "Evolution Engine"
+        EE[Evolution Engine<br/>Core GA Logic]
+    end
+    
+    subgraph "Selection & Variation"
+        PS[Parent Selector<br/>Adaptive Tournament]
+        VO[Variation Operators<br/>12 Operators]
+    end
+    
+    subgraph "Generation & Evaluation"
+        RG[Response Generator<br/>LLM]
+        ME[Moderation Evaluator<br/>Perspective API]
+    end
+    
+    subgraph "Speciation"
+        EC[Embedding Computation<br/>384D Vectors]
+        LF[Leader-Follower<br/>Clustering]
+        SM[Species Management<br/>Merge/Extinction]
+    end
+    
+    subgraph "Population Management"
+        PM[Population Manager<br/>I/O & Statistics]
+        EL[Elites<br/>species_id > 0]
+        RS[Reserves<br/>species_id = 0]
+        AR[Archive<br/>Capacity Overflow]
+    end
+    
+    EE --> PS
+    PS --> VO
+    VO --> RG
+    RG --> ME
+    ME --> EC
+    EC --> LF
+    LF --> SM
+    SM --> PM
+    PM --> EL
+    PM --> RS
+    PM --> AR
+    
+    style EE fill:#FF6B6B
+    style PS fill:#4ECDC4
+    style VO fill:#45B7D1
+    style RG fill:#FFA07A
+    style ME fill:#FFD700
+    style LF fill:#98D8C8
+    style PM fill:#F7DC6F
+```
 
 ### Evolution Engine
 Core evolution logic implementing the genetic algorithm. Manages the evolutionary cycle, coordinates operator application, and maintains population state throughout the evolution process.
@@ -43,19 +197,111 @@ Core evolution logic implementing the genetic algorithm. Manages the evolutionar
 ### Parent Selector
 Adaptive parent selection mechanism that adjusts selection strategy based on evolution progress and fitness landscape. Species are sorted by best_fitness in descending order.
 
+```mermaid
+flowchart TD
+    Start([Parent Selection]) --> Load[Load Population<br/>elites.json + reserves.json]
+    Load --> Sort[Sort Species by best_fitness]
+    Sort --> Exclude[Exclude Frozen/Deceased Species]
+    Exclude --> Check{Check Evolution State}
+    
+    Check -->|First m generations| Default[Default Mode]
+    Check -->|Stagnation > m| Explore[Explore Mode]
+    Check -->|Fitness slope < 0| Exploit[Exploit Mode]
+    
+    Default --> P1D[Parent 1: Random from<br/>Random Species]
+    Default --> P2D[Parent 2: Random from<br/>Same Species]
+    
+    Explore --> P1E[Parent 1: Best from<br/>Top Species]
+    Explore --> P2E[Parent 2: Best from<br/>Different Species]
+    
+    Exploit --> P1X[Parent 1: Best from<br/>Top Species]
+    Exploit --> P2X[Parent 2: Random from<br/>Same Species]
+    
+    P1D --> Return[Return Parents]
+    P2D --> Return
+    P1E --> Return
+    P2E --> Return
+    P1X --> Return
+    P2X --> Return
+    
+    style Default fill:#90EE90
+    style Explore fill:#FFD700
+    style Exploit fill:#FF6B6B
+```
+
 **Selection Modes**:
+
 | Mode | Parent 1 | Parent 2 | Trigger |
 |------|----------|----------|---------|
-| **DEFAULT** | Random genome from random species | Random genome from same species | First m generations |
-| **EXPLORE** | Highest-fitness genome from top species | Highest-fitness genome from different random species | Stagnation > m generations |
-| **EXPLOIT** | Highest-fitness genome from top species | Random genome from same species | Fitness slope < 0 (declining) |
+| **DEFAULT** | `p₁ ~ U(S_random)` | `p₂ ~ U(S_p₁)` | `g ≤ m` |
+| **EXPLORE** | `p₁ = argmax_{x∈S_top} f(x)` | `p₂ = argmax_{x∈S_j, j≠top} f(x)` | `stagnation > m` |
+| **EXPLOIT** | `p₁ = argmax_{x∈S_top} f(x)` | `p₂ ~ U(S_p₁)` | `Δf/Δg < 0` |
+
+where:
+- `U(S)` = uniform random selection from species `S`
+- `S_top` = species with highest `best_fitness`
+- `g` = current generation
+- `m` = mode switch threshold
+- `f(x)` = fitness of genome `x`
+- `Δf/Δg` = fitness slope
 
 **Notes**:
-- Frozen/deceased species are excluded from selection
+- Frozen/deceased species are excluded from selection: `S_active = {Sᵢ : state(Sᵢ) = "active"}`
 - Cluster 0 (reserves) is included in the selection pool
-- Species are sorted by best_fitness before selection
+- Species are sorted by `best_fitness` before selection: `S_sorted = sort(S_active, key=best_fitness, reverse=True)`
 
 ### Variation Operators (12 Total)
+
+```mermaid
+graph TB
+    subgraph "Mutation Operators (10)"
+        IE[Informed Evolution<br/>LLM-guided]
+        MLM[Masked Language Model<br/>Contextual substitution]
+        PARA[Paraphrasing<br/>Semantic-preserving]
+        BT[Back Translation<br/>Hindi roundtrip]
+        SYN[Synonym Replacement<br/>POS-aware]
+        ANT[Antonym Replacement<br/>POS-aware]
+        NEG[Negation<br/>Logical insertion]
+        CON[Concept Addition<br/>Semantic injection]
+        TYP[Typographical Errors<br/>Character noise]
+        STY[Stylistic Mutation<br/>Style transformation]
+    end
+    
+    subgraph "Crossover Operators (2)"
+        SSC[Semantic Similarity<br/>Distance-based]
+        SFC[Semantic Fusion<br/>Hybrid generation]
+    end
+    
+    Parents[Parent Prompts] --> IE
+    Parents --> MLM
+    Parents --> PARA
+    Parents --> BT
+    Parents --> SYN
+    Parents --> ANT
+    Parents --> NEG
+    Parents --> CON
+    Parents --> TYP
+    Parents --> STY
+    Parents --> SSC
+    Parents --> SFC
+    
+    IE --> Variants[Generated Variants]
+    MLM --> Variants
+    PARA --> Variants
+    BT --> Variants
+    SYN --> Variants
+    ANT --> Variants
+    NEG --> Variants
+    CON --> Variants
+    TYP --> Variants
+    STY --> Variants
+    SSC --> Variants
+    SFC --> Variants
+    
+    style IE fill:#FF6B6B
+    style SSC fill:#4ECDC4
+    style SFC fill:#4ECDC4
+```
 
 #### Mutation Operators (10)
 1. **Informed Evolution**: LLM-guided evolution using top performers
@@ -92,6 +338,50 @@ Manages population state, handles I/O operations, and maintains population stati
 ### Speciation Module
 Implements Leader-Follower clustering with semantic embeddings to maintain diverse species that evolve independently.
 
+```mermaid
+flowchart TD
+    Start([Speciation Phase]) --> Embed[Compute Embeddings<br/>L2-normalized 384D]
+    Embed --> Sort[Sort Genomes by Fitness]
+    Sort --> LF[Leader-Follower Clustering]
+    
+    LF --> Check{Genome matches<br/>existing species?}
+    Check -->|Yes: d < theta_sim| Assign[Assign to Species]
+    Check -->|No| Check2{Create new species?}
+    
+    Check2 -->|Yes| NewSpecies[Create New Species]
+    Check2 -->|No| Cluster0[Assign to Cluster 0<br/>Reserves]
+    
+    Assign --> Update[Update Species Leader<br/>if better fitness]
+    NewSpecies --> Update
+    Cluster0 --> Capacity
+    
+    Update --> Capacity{Check Capacity}
+    Capacity -->|Exceeded| Archive[Archive Excess<br/>to archive.json]
+    Capacity -->|OK| Merge
+    
+    Archive --> Merge[Species Merging<br/>theta_merge threshold]
+    Merge --> Extinct[Extinction Check<br/>stagnation > max]
+    Extinct --> Label[c-TF-IDF Labeling<br/>10 keywords per species]
+    Label --> Metrics[Record Metrics<br/>diversity, counts]
+    Metrics --> End([End])
+    
+    style Embed fill:#87CEEB
+    style LF fill:#98D8C8
+    style Cluster0 fill:#FFD700
+    style Archive fill:#FF6B6B
+    style Merge fill:#4ECDC4
+    style Extinct fill:#FFA07A
+```
+
+![Semantic Space Visualization](experiments/lf_semantic_space.png)
+*Figure 2: Semantic space visualization showing the distribution of prompts in the embedding space and species clusters.*
+
+![Species Analysis](experiments/lf_species_analysis.png)
+*Figure 3: Species analysis showing the characteristics and evolution of different species over time.*
+
+![Incremental Evolution](experiments/lf_incremental_evolution.png)
+*Figure 4: Incremental evolution showing how species adapt and evolve across generations.*
+
 **Key Components**:
 
 1. **Embedding Computation**: L2-normalized 384-dim embeddings using all-MiniLM-L6-v2
@@ -103,9 +393,9 @@ Implements Leader-Follower clustering with semantic embeddings to maintain diver
    - Fixed capacity (cluster0_max_capacity), excess archived
    - New species can be created from reserves via agglomerative clustering
 4. **Species Operations**:
-   - **Merging**: Combine similar species when leaders are close (theta_merge threshold)
-   - **Extinction**: Freeze stagnant species (stagnation > max_stagnation)
-   - **Capacity Enforcement**: Remove excess genomes from species/reserves when capacity exceeded
+   - **Merging**: Combine similar species when `d_ensemble(leader(Sᵢ), leader(Sⱼ)) < θ_merge`
+   - **Extinction**: Freeze species when `stagnation(Sᵢ) > max_stagnation`, where `stagnation(Sᵢ) = g - g_last_improvement(Sᵢ)`
+   - **Capacity Enforcement**: Remove excess genomes when `|Sᵢ| > C_species` or `|Cluster_0| > C_reserves`
 5. **c-TF-IDF Labeling**: Each species gets 10 keyword labels based on member prompts
 6. **Metrics Tracking**: Species count, diversity, merge/extinction events, budget
 
@@ -115,54 +405,131 @@ Implements Leader-Follower clustering with semantic embeddings to maintain diver
 
 **Genotype Distance (Semantic)**:
 ```
-d_genotype(u, v) = 1 - (e_u . e_v) in [0, 2]
+d_genotype(u, v) = 1 - (e_u · e_v) ∈ [0, 2]
 ```
-where e_u, e_v are L2-normalized embeddings.
+where `e_u, e_v ∈ ℝ³⁸⁴` are L2-normalized embeddings: `||e_u||₂ = ||e_v||₂ = 1`.
 
 Normalized to [0, 1]:
 ```
-d_genotype_norm(u, v) = (1 - (e_u . e_v)) / 2 in [0, 1]
+d_genotype_norm(u, v) = (1 - (e_u · e_v)) / 2 ∈ [0, 1]
 ```
 
 **Phenotype Distance (Toxicity)**:
 ```
-d_phenotype(u, v) = ||p_u - p_v||_2 / sqrt(8) in [0, 1]
+d_phenotype(u, v) = ||p_u - p_v||₂ / √8 ∈ [0, 1]
 ```
-where p_u, p_v are 8-dimensional toxicity score vectors (all 8 Perspective API attributes).
+where `p_u, p_v ∈ [0,1]⁸` are 8-dimensional toxicity score vectors (all 8 Perspective API attributes: TOXICITY, SEVERE_TOXICITY, IDENTITY_ATTACK, INSULT, PROFANITY, THREAT, SEXUALLY_EXPLICIT, FLIRTATION).
 
 **Ensemble Distance**:
 ```
-d_ensemble(u, v) = 0.7 x d_genotype_norm(u, v) + 0.3 x d_phenotype(u, v) in [0, 1]
+d_ensemble(u, v) = α · d_genotype_norm(u, v) + β · d_phenotype(u, v) ∈ [0, 1]
+```
+where `α = 0.7` and `β = 0.3` (α + β = 1).
+
+```mermaid
+graph TB
+    subgraph "Distance Calculation"
+        G1[Genotype Distance<br/>d_genotype = 1 - cos_sim]
+        G2[Normalize to 0,1<br/>d_genotype_norm]
+        P1[Phenotype Distance<br/>8D toxicity vector]
+        P2[Normalize by sqrt 8<br/>d_phenotype]
+        E[Ensemble Distance<br/>0.7 x genotype + 0.3 x phenotype]
+    end
+    
+    G1 --> G2
+    P1 --> P2
+    G2 --> E
+    P2 --> E
+    
+    E --> Decision{Compare with<br/>theta_sim}
+    Decision -->|d < theta_sim| Match[Assign to Species]
+    Decision -->|d >= theta_sim| NoMatch[Create New/Cluster 0]
+    
+    style E fill:#FFD700
+    style Decision fill:#4ECDC4
+    style Match fill:#90EE90
+    style NoMatch fill:#FF6B6B
 ```
 
 **Geometry Note**:
-- All embeddings live on the 384D unit hypersphere (L2-normalized). Cosine distance creates **cone-shaped** clusters, not Euclidean spheres.
-- Thresholds correspond to angles: e.g., theta_sim = 0.2 means ensemble distance threshold for assignment
+- All embeddings live on the 384D unit hypersphere: `{e ∈ ℝ³⁸⁴ : ||e||₂ = 1}`. Cosine distance creates **cone-shaped** clusters, not Euclidean spheres.
+- Thresholds correspond to angles: `θ_sim = 0.2` means ensemble distance threshold for assignment.
 
 **Clustering Thresholds**:
-- theta_sim: Ensemble distance threshold for species assignment (default: 0.2)
-- theta_merge: Merge threshold, tighter than theta_sim (default: 0.1)
+- Species assignment: `d_ensemble(u, leader(Sᵢ)) < θ_sim` → assign to species `Sᵢ` (default: `θ_sim = 0.2`)
+- Species merging: `d_ensemble(leader(Sᵢ), leader(Sⱼ)) < θ_merge` → merge `Sᵢ` and `Sⱼ` (default: `θ_merge = 0.1`, where `θ_merge < θ_sim`)
+- No match: `d_ensemble(u, leader(Sᵢ)) ≥ θ_sim ∀i` → assign to Cluster 0 (reserves)
 
 **Capacity Limits**:
-- species_capacity: Maximum genomes per species (default: 100)
-- cluster0_max_capacity: Maximum genomes in reserves (default: 1000)
-- Excess genomes are archived to archive.json (NOT part of population)
+```
+|Sᵢ| ≤ C_species  ∀i  (default: C_species = 100)
+|Cluster_0| ≤ C_reserves  (default: C_reserves = 1000)
+```
+Excess genomes are archived to `archive.json` (NOT part of population).
 
-**Complexity**: O(N x K x d) per generation where N = population size, K = number of species, d = embedding dimension (384)
+**Leader Definition**:
+```
+leader(Sᵢ) = argmax_{x ∈ Sᵢ} f(x)
+```
+The leader is the genome with highest fitness in each species.
+
+**Complexity**: `O(N × K × d)` per generation where:
+- `N` = population size
+- `K` = number of species
+- `d` = embedding dimension (384)
 
 ## Generation-by-Generation Flow
 
+![Cluster Evolution](experiments/cluster_evolution_grid.png)
+*Figure 5: Cluster evolution grid showing how species clusters form, merge, and evolve over generations.*
+
+![Species Evolution](experiments/species_evolution.png)
+*Figure 6: Species evolution timeline showing the birth, growth, merging, and extinction of species throughout the evolutionary process.*
+
 ### Generation 0 (Initialization)
-1. Load seed prompts from prompt.csv
-2. Generate responses using Response Generator (LLM)
-3. Evaluate fitness using Moderation Oracle (Perspective API)
-4. **Run Speciation**: Leader-Follower clustering creates initial species
-5. Distribute into elites.json and reserves.json (with species_id fields)
-6. Calculate elite thresholds and population statistics
-7. Track budget metrics (LLM calls, API calls)
+
+```mermaid
+flowchart TD
+    Start([Generation 0]) --> Load[Load Seed Prompts<br/>prompt.csv]
+    Load --> Gen[Generate Responses<br/>Response Generator LLM]
+    Gen --> Eval[Evaluate Fitness<br/>Perspective API]
+    Eval --> Spec[Run Speciation<br/>Leader-Follower Clustering]
+    Spec --> Dist[Distribute Genomes<br/>elites.json + reserves.json]
+    Dist --> Stats[Calculate Statistics<br/>Elite thresholds, metrics]
+    Stats --> Budget[Track Budget<br/>LLM calls, API calls]
+    Budget --> End([End Gen 0])
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Spec fill:#87CEEB
+    style Eval fill:#FFD700
+```
 
 ### Generation N (Evolution Loop)
-For each generation:
+
+```mermaid
+flowchart TD
+    Start([Generation N]) --> Load[Load Population<br/>elites.json + reserves.json]
+    Load --> Select[Parent Selection<br/>Adaptive Tournament]
+    Select --> Variate[Apply Variation Operators<br/>12 operators]
+    Variate --> Save[Save to temp.json]
+    Save --> Response[Response Generation<br/>LLM]
+    Response --> Eval[Fitness Evaluation<br/>Perspective API<br/>10 retries]
+    Eval --> Spec[Speciation Phase<br/>Embedding + Clustering]
+    Spec --> Dist[Distribution<br/>species_id based]
+    Dist --> Track[Tracking & Metrics<br/>EvolutionTracker.json]
+    Track --> Check{Termination?}
+    Check -->|No| Start
+    Check -->|Yes| End([End])
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Spec fill:#87CEEB
+    style Eval fill:#FFD700
+    style Variate fill:#4ECDC4
+```
+
+**Detailed Steps**:
 
 1. **Evolution Phase**:
    - Load population from elites.json and reserves.json
@@ -211,29 +578,71 @@ For each generation:
    - Generate visualization figures
 
 7. **Termination Check**:
-   - Check if max generations reached or threshold achieved
-   - If not, loop back to step 1
+   - Terminate if `g ≥ g_max` or `max_{x∈P} f(x) ≥ f_threshold`
+   - Otherwise, continue to next generation
+   where:
+   - `g` = current generation
+   - `g_max` = maximum generations (if set)
+   - `f_threshold` = fitness threshold (default: 0.99)
 
 ### Data Flow
 
+```mermaid
+flowchart LR
+    subgraph "Input"
+        CSV[prompt.csv<br/>Seed Prompts]
+    end
+    
+    subgraph "Generation 0"
+        G0[Response Gen] --> M0[Moderation<br/>10 retries]
+        M0 --> S0[Speciation]
+        S0 --> D0[Distribution]
+    end
+    
+    subgraph "Storage"
+        EL[elites.json<br/>species_id > 0]
+        RS[reserves.json<br/>species_id = 0]
+        AR[archive.json<br/>Capacity overflow]
+        TEMP[temp.json<br/>Staging]
+    end
+    
+    subgraph "Generation N"
+        EV[Evolution<br/>Selection + Variation]
+        GN[Response Gen]
+        MN[Moderation<br/>10 retries]
+        SN[Speciation]
+        DN[Distribution]
+        TR[Tracking<br/>Metrics & Figures]
+    end
+    
+    CSV --> G0
+    D0 --> EL
+    D0 --> RS
+    
+    EL --> EV
+    RS --> EV
+    EV --> TEMP
+    TEMP --> GN
+    GN --> MN
+    MN --> SN
+    SN --> DN
+    DN --> EL
+    DN --> RS
+    DN --> AR
+    DN --> TR
+    
+    TR -.->|Loop| EV
+    
+    style CSV fill:#90EE90
+    style EL fill:#4ECDC4
+    style RS fill:#FFD700
+    style AR fill:#FF6B6B
+    style TEMP fill:#FFA07A
+    style SN fill:#87CEEB
 ```
-prompt.csv (seed)
-    |
-    v
-Generation 0: [Response Gen] -> [Moderation (10 retries)] -> [Speciation] -> [Distribution]
-    |
-    v
-elites.json + reserves.json (with species_id)
-    |
-    v
-Generation N: [Evolution] -> [Response Gen] -> [Moderation (10 retries)] -> [Speciation] -> [Distribution]
-    |
-    v
-elites.json + reserves.json (updated with species_id)
-    |
-    v
-[Repeat until termination]
-```
+
+![UMAP/MDS Final State](experiments/lf_umap_mds_final_state.png)
+*Figure 7: UMAP and MDS visualizations of the final state of the semantic space, showing the final distribution of species and their relationships.*
 
 ### Key Data Structures
 
@@ -282,49 +691,97 @@ Species(
 
 ### Per-Generation Metrics (Live)
 
-Tracked in EvolutionTracker.json:
+Tracked in `EvolutionTracker.json`:
 
-| Metric | Description |
-|--------|-------------|
-| best_fitness | Maximum fitness in generation |
-| avg_fitness_generation | Mean fitness of new variants |
-| avg_fitness_history | Running average across population |
-| elites_count | Number of genomes in species |
-| reserves_count | Number of genomes in Cluster 0 |
-| species_count | Number of active species |
-| inter_species_diversity | Distance between species leaders |
-| intra_species_diversity | Average distance within species |
-| llm_calls | Number of LLM response generations |
-| api_calls | Number of Perspective API evaluations |
-| total_response_time | Cumulative LLM response time |
-| total_evaluation_time | Cumulative API evaluation time |
+| Metric | Formula | Description |
+|--------|---------|-------------|
+| **best_fitness** | `f_max = max_{x∈P_g} f(x)` | Maximum fitness in generation `g` |
+| **avg_fitness_generation** | `f̄_new = (1/|V_g|) Σ_{v∈V_g} f(v)` | Mean fitness of new variants in generation `g` |
+| **avg_fitness_history** | `f̄_hist = (1/|P|) Σ_{x∈P} f(x)` | Running average across active population `P` |
+| **elites_count** | `|E| = Σᵢ |Sᵢ|` | Number of genomes in species |
+| **reserves_count** | `|R| = |Cluster_0|` | Number of genomes in Cluster 0 |
+| **species_count** | `K = |{Sᵢ : state(Sᵢ) = "active"}|` | Number of active species |
+| **inter_species_diversity** | `D_inter = (1/(K(K-1)/2)) Σ_{i<j} d_ensemble(leader(Sᵢ), leader(Sⱼ))` | Average distance between species leaders |
+| **intra_species_diversity** | `D_intra = (1/K) Σᵢ (1/(|Sᵢ|(|Sᵢ|-1)/2)) Σ_{u,v∈Sᵢ, u≠v} d_ensemble(u,v)` | Average distance within species |
+| **llm_calls** | `N_LLM = |{x : x has response_duration}|` | Number of LLM response generations |
+| **api_calls** | `N_API = |{x : x has evaluation_duration}|` | Number of Perspective API evaluations |
+
+where:
+- `P_g` = population at generation `g`
+- `V_g` = new variants generated in generation `g`
+- `P` = active population (elites + reserves)
 
 ### Operator Effectiveness Metrics
 
-Tracked in operator_effectiveness_cumulative.csv:
+Tracked in `operator_effectiveness_cumulative.csv`:
 
-| Metric | Description |
-|--------|-------------|
-| NE | Non-Elite Percentage - fraction not reaching elite status |
-| EHR | Elite Hit Rate - fraction becoming elites |
-| IR | Invalid/Rejection Rate - fraction rejected or invalid |
-| cEHR | Conditional Elite Hit Rate - EHR excluding invalids |
-| delta_mu | Mean Delta Score - average fitness improvement |
-| delta_sigma | Std Dev Delta Score - variance in improvement |
+| Metric | Formula | Description |
+|--------|---------|-------------|
+| **NE** | `NE = 1 - (|V_elite| / |V_total|)` | Non-Elite Percentage |
+| **EHR** | `EHR = |V_elite| / |V_total|` | Elite Hit Rate |
+| **IR** | `IR = (|V_rejected| + |V_duplicate|) / |V_attempted|` | Invalid/Rejection Rate |
+| **cEHR** | `cEHR = |V_elite| / (|V_total| - |V_invalid|)` | Conditional Elite Hit Rate |
+| **Δμ** | `Δμ = (1/|V_valid|) Σ_{v∈V_valid} (f(v) - f(parent(v)))` | Mean Delta Score |
+| **Δσ** | `Δσ = √(Var({f(v) - f(parent(v)) : v ∈ V_valid}))` | Std Dev Delta Score |
+
+where:
+- `V_total` = total variants generated by operator
+- `V_elite` = variants that became elites
+- `V_rejected` = variants rejected by operator
+- `V_duplicate` = duplicate variants
+- `V_invalid` = `V_rejected ∪ V_duplicate`
+- `V_valid` = `V_total \ V_invalid`
+- `f(x)` = fitness of genome `x`
+- `parent(v)` = parent genome of variant `v`
 
 ### Cluster Quality Metrics (Post-hoc)
 
-Available via utils/cluster_quality.py:
+Available via `utils/cluster_quality.py`:
 
-| Metric | Description |
-|--------|-------------|
-| Silhouette Score | Measures cluster separation and cohesion [-1, 1] |
-| Davies-Bouldin Index | Lower values indicate better clustering |
-| Calinski-Harabasz Index | Higher values indicate better defined clusters |
+| Metric | Formula | Description |
+|--------|---------|-------------|
+| **Silhouette Score** | `s = (1/N) Σᵢ (b(i) - a(i)) / max(a(i), b(i))` | Measures cluster separation and cohesion ∈ [-1, 1] |
+| **Davies-Bouldin Index** | `DB = (1/K) Σᵢ max_{j≠i} ((σᵢ + σⱼ) / d(μᵢ, μⱼ))` | Lower values indicate better clustering |
+| **Calinski-Harabasz Index** | `CH = (tr(B) / (K-1)) / (tr(W) / (N-K))` | Higher values indicate better defined clusters |
+
+where:
+- `a(i)` = average distance from point `i` to other points in same cluster
+- `b(i)` = minimum average distance from point `i` to points in other clusters
+- `σᵢ` = average distance within cluster `i`
+- `μᵢ` = centroid of cluster `i`
+- `d(μᵢ, μⱼ)` = distance between cluster centroids
+- `B` = between-cluster scatter matrix
+- `W` = within-cluster scatter matrix
+- `tr()` = trace of matrix
 
 ## Error Handling
 
 ### Perspective API Rate Limits
+
+```mermaid
+flowchart TD
+    Start([API Call]) --> Call[Call Perspective API]
+    Call --> Success{Success?}
+    Success -->|Yes| Return[Return Result]
+    Success -->|No| Check{Retriable Error?}
+    
+    Check -->|No| Error[Mark as Error]
+    Check -->|Yes| Retry{Retry Count<br/>< 10?}
+    
+    Retry -->|Yes| Wait[Wait: 2^attempt seconds<br/>1s, 2s, 4s, 8s...512s]
+    Wait --> Call
+    
+    Retry -->|No| MaxRetries[Max Retries Reached<br/>Mark as Error]
+    
+    Error --> Continue[Continue Evolution]
+    MaxRetries --> Continue
+    Return --> Continue
+    
+    style Success fill:#90EE90
+    style Error fill:#FF6B6B
+    style Wait fill:#FFD700
+    style Return fill:#4ECDC4
+```
 
 The system handles rate limits gracefully:
 - **10 retries** (11 total attempts) with exponential backoff
@@ -403,18 +860,38 @@ See src/speciation/config.py for full configuration options.
 
 ## File Structure
 
+```mermaid
+graph TD
+    ROOT[data/outputs/YYYYMMDD_HHMM/] --> EL[elites.json<br/>species_id > 0]
+    ROOT --> RS[reserves.json<br/>species_id = 0]
+    ROOT --> AR[archive.json<br/>Capacity overflow]
+    ROOT --> TEMP[temp.json<br/>Staging]
+    ROOT --> TOP[top_10.json<br/>Best genomes]
+    ROOT --> TRACK[EvolutionTracker.json<br/>History & Metrics]
+    ROOT --> SPEC[speciation_state.json<br/>Species state]
+    ROOT --> CSV[operator_effectiveness_cumulative.csv<br/>Operator metrics]
+    ROOT --> FIGS[figures/]
+    
+    FIGS --> F1[fitness_progress.png]
+    FIGS --> F2[diversity_metrics.png]
+    FIGS --> F3[species_evolution.png]
+    FIGS --> F4[cluster_visualization.png]
+    
+    style EL fill:#4ECDC4
+    style RS fill:#FFD700
+    style AR fill:#FF6B6B
+    style TEMP fill:#FFA07A
+    style TRACK fill:#87CEEB
+    style SPEC fill:#98D8C8
 ```
-data/outputs/YYYYMMDD_HHMM/
-  elites.json                      # Genomes in species (species_id > 0)
-  reserves.json                    # Cluster 0 outliers (species_id = 0)
-  archive.json                     # Archived genomes (capacity overflow)
-  temp.json                        # Current generation staging
-  top_10.json                      # Top 10 highest-fitness genomes
-  EvolutionTracker.json            # Complete evolution history
-  speciation_state.json            # Species state with labels
-  operator_effectiveness_cumulative.csv  # Per-generation operator metrics
-  figures/                         # Visualization charts
-    fitness_progress.png
-    diversity_metrics.png
-    ...
-```
+
+**File Descriptions**:
+- `elites.json`: Genomes in species (species_id > 0)
+- `reserves.json`: Cluster 0 outliers (species_id = 0)
+- `archive.json`: Archived genomes (capacity overflow)
+- `temp.json`: Current generation staging
+- `top_10.json`: Top 10 highest-fitness genomes
+- `EvolutionTracker.json`: Complete evolution history
+- `speciation_state.json`: Species state with labels
+- `operator_effectiveness_cumulative.csv`: Per-generation operator metrics
+- `figures/`: Visualization charts (fitness_progress.png, diversity_metrics.png, etc.)

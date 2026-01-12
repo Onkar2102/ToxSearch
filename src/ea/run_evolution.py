@@ -68,7 +68,7 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
                 elites = json.load(f)
                 for genome in elites:
                     if genome and genome.get("prompt"):
-                        existing_prompts.add(genome["prompt"].strip().lower())
+                        existing_prompts.add(genome["prompt"])  # Exact match, no normalization
                         existing_ids.add(genome.get("id"))
 
         if reserves_path.exists():
@@ -76,7 +76,7 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
                 cluster0_genomes = json.load(f)
                 for genome in cluster0_genomes:
                     if genome and genome.get("prompt"):
-                        existing_prompts.add(genome["prompt"].strip().lower())
+                        existing_prompts.add(genome["prompt"])  # Exact match, no normalization
                         existing_ids.add(genome.get("id"))
 
         unique_variants = []
@@ -87,10 +87,10 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
                 duplicates_removed += 1
                 continue
 
-            norm_prompt = variant["prompt"].strip().lower()
+            prompt = variant["prompt"]  # Exact match, no normalization
             genome_id = variant.get("id")
 
-            if norm_prompt in existing_prompts or genome_id in existing_ids:
+            if prompt in existing_prompts or genome_id in existing_ids:
                 duplicates_removed += 1
                 if operator_stats:
                     operator_name = variant.get("creation_info", {}).get("operator", "unknown")
