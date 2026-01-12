@@ -14,14 +14,14 @@ EXPERIMENTS=(
         --generations 110 \
         --threshold 0.99 \
         --moderation-methods google \
-        --stagnation-limit 5 \
+        --stagnation-limit 4 \
         --theta-sim 0.3 \
         --theta-merge 0.2 \
         --species-capacity 15 \
-        --cluster0-max-capacity 100 \
+        --cluster0-max-capacity 50 \
         --cluster0-min-cluster-size 1 \
         --min-island-size 2 \
-        --max-stagnation 5 \
+        --max-stagnation 4 \
         --embedding-model all-MiniLM-L6-v2 \
         --embedding-dim 384 \
         --embedding-batch-size 64 \

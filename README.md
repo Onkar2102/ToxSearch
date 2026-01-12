@@ -15,11 +15,7 @@ The evolutionary loop, parent selection, variation operators, and speciation mec
 - **EA Type**: Steady-state (μ + λ) evolutionary algorithm
 - **Population Structure**: μ genomes maintained across generations (elites + reserves)
 - **Offspring Generation**: λ variants generated per cycle (configurable via `--max-variants`)
-- **Fitness Function**: 
-  ```
-  f(x) = toxicity_score(LLM(x)) ∈ [0, 1]
-  ```
-  where `x` is a prompt and `LLM(x)` is the model's response. The fitness evaluates toxicity in the response, not the prompt itself.
+- **Fitness Function**: `f(x) = toxicity_score(LLM(x)) ∈ [0, 1]` where `x` is a prompt and `LLM(x)` is the model's response. The fitness evaluates toxicity in the response, not the prompt itself.
 - **Speciation**: Semantic + behavioral clustering using Leader-Follower algorithm
 
 ## Speciation
@@ -28,16 +24,16 @@ The system uses semantic speciation to partition the population into dynamically
 
 **Distance Metrics**:
 - **Genotype Distance**: `d_genotype(u,v) = 1 - (e_u · e_v)` where `e_u, e_v` are L2-normalized 384D embeddings
-- **Phenotype Distance**: `d_phenotype(u,v) = ||p_u - p_v||₂ / √8` where `p_u, p_v` are 8D toxicity vectors
-- **Ensemble Distance**: `d_ensemble(u,v) = 0.7 · d_genotype_norm(u,v) + 0.3 · d_phenotype(u,v)`
+- **Phenotype Distance**: `d_phenotype(u,v) = ||p_u - p_v||_2 / sqrt(8)` where `p_u, p_v` are 8D toxicity vectors
+- **Ensemble Distance**: `d_ensemble(u,v) = 0.7 * d_genotype_norm(u,v) + 0.3 * d_phenotype(u,v)`
 
 **Speciation Thresholds**:
-- Species assignment: `d_ensemble(u, leader) < θ_sim` (default: `θ_sim = 0.2`)
-- Species merging: `d_ensemble(leader_i, leader_j) < θ_merge` (default: `θ_merge = 0.1`)
+- Species assignment: `d_ensemble(u, leader) < theta_sim` (default: `theta_sim = 0.2`)
+- Species merging: `d_ensemble(leader_i, leader_j) < theta_merge` (default: `theta_merge = 0.1`)
 
 A reserve population (cluster 0) stores outliers and enables the emergence of new species. Species merge when similar, freeze when stagnant, and maintain capacity limits:
-- Species capacity: `|S_i| ≤ C_species` (default: `C_species = 100`)
-- Reserves capacity: `|Cluster_0| ≤ C_reserves` (default: `C_reserves = 1000`)
+- Species capacity: `|S_i| <= C_species` (default: `C_species = 100`)
+- Reserves capacity: `|Cluster_0| <= C_reserves` (default: `C_reserves = 1000`)
 
 ## Installation
 

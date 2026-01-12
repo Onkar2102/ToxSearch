@@ -115,29 +115,18 @@ The system uses a steady-state genetic algorithm with **semantic speciation** (L
 
 ### Mathematical Framework
 
-**Fitness Function**:
-```
-f(x) = toxicity_score(LLM(x)) ∈ [0, 1]
-```
-where `x` is a prompt and `LLM(x)` is the model's response. The fitness function evaluates toxicity in the LLM's response, not the prompt itself.
+**Fitness Function**: `f(x) = toxicity_score(LLM(x)) ∈ [0, 1]` where `x` is a prompt and `LLM(x)` is the model's response. The fitness function evaluates toxicity in the LLM's response, not the prompt itself.
 
-**Population Structure**:
-```
-P = E ∪ R
-|P| = |E| + |R|
-```
-where:
+**Population Structure**: `P = E ∪ R`, `|P| = |E| + |R|` where:
 - `P` = Active population
 - `E` = Elites (genomes with `species_id > 0`)
 - `R` = Reserves (Cluster 0, `species_id = 0`)
 - `A` = Archive (NOT part of population, capacity overflow)
 
 **Population Constraints**:
-```
-|E| = Σᵢ |Sᵢ|  where Sᵢ are species
-|R| ≤ C_reserves
-|Sᵢ| ≤ C_species  ∀i
-```
+- `|E| = Σᵢ |Sᵢ|` where `Sᵢ` are species
+- `|R| <= C_reserves`
+- `|Sᵢ| <= C_species` for all `i`
 
 ## Component Architecture
 
@@ -393,7 +382,7 @@ flowchart TD
    - Fixed capacity (cluster0_max_capacity), excess archived
    - New species can be created from reserves via agglomerative clustering
 4. **Species Operations**:
-   - **Merging**: Combine similar species when `d_ensemble(leader(Sᵢ), leader(Sⱼ)) < θ_merge`
+   - **Merging**: Combine similar species when `d_ensemble(leader(Sᵢ), leader(Sⱼ)) < theta_merge`
    - **Extinction**: Freeze species when `stagnation(Sᵢ) > max_stagnation`, where `stagnation(Sᵢ) = g - g_last_improvement(Sᵢ)`
    - **Capacity Enforcement**: Remove excess genomes when `|Sᵢ| > C_species` or `|Cluster_0| > C_reserves`
 5. **c-TF-IDF Labeling**: Each species gets 10 keyword labels based on member prompts
@@ -403,28 +392,13 @@ flowchart TD
 
 **Mathematical Framework**:
 
-**Genotype Distance (Semantic)**:
-```
-d_genotype(u, v) = 1 - (e_u · e_v) ∈ [0, 2]
-```
-where `e_u, e_v ∈ ℝ³⁸⁴` are L2-normalized embeddings: `||e_u||₂ = ||e_v||₂ = 1`.
+**Genotype Distance (Semantic)**: `d_genotype(u, v) = 1 - (e_u · e_v) ∈ [0, 2]` where `e_u, e_v ∈ ℝ³⁸⁴` are L2-normalized embeddings: `||e_u||_2 = ||e_v||_2 = 1`.
 
-Normalized to [0, 1]:
-```
-d_genotype_norm(u, v) = (1 - (e_u · e_v)) / 2 ∈ [0, 1]
-```
+Normalized to [0, 1]: `d_genotype_norm(u, v) = (1 - (e_u · e_v)) / 2 ∈ [0, 1]`
 
-**Phenotype Distance (Toxicity)**:
-```
-d_phenotype(u, v) = ||p_u - p_v||₂ / √8 ∈ [0, 1]
-```
-where `p_u, p_v ∈ [0,1]⁸` are 8-dimensional toxicity score vectors (all 8 Perspective API attributes: TOXICITY, SEVERE_TOXICITY, IDENTITY_ATTACK, INSULT, PROFANITY, THREAT, SEXUALLY_EXPLICIT, FLIRTATION).
+**Phenotype Distance (Toxicity)**: `d_phenotype(u, v) = ||p_u - p_v||_2 / sqrt(8) ∈ [0, 1]` where `p_u, p_v ∈ [0,1]⁸` are 8-dimensional toxicity score vectors (all 8 Perspective API attributes: TOXICITY, SEVERE_TOXICITY, IDENTITY_ATTACK, INSULT, PROFANITY, THREAT, SEXUALLY_EXPLICIT, FLIRTATION).
 
-**Ensemble Distance**:
-```
-d_ensemble(u, v) = α · d_genotype_norm(u, v) + β · d_phenotype(u, v) ∈ [0, 1]
-```
-where `α = 0.7` and `β = 0.3` (α + β = 1).
+**Ensemble Distance**: `d_ensemble(u, v) = α * d_genotype_norm(u, v) + β * d_phenotype(u, v) ∈ [0, 1]` where `α = 0.7` and `β = 0.3` (`α + β = 1`).
 
 ```mermaid
 graph TB
@@ -456,22 +430,17 @@ graph TB
 - Thresholds correspond to angles: `θ_sim = 0.2` means ensemble distance threshold for assignment.
 
 **Clustering Thresholds**:
-- Species assignment: `d_ensemble(u, leader(Sᵢ)) < θ_sim` → assign to species `Sᵢ` (default: `θ_sim = 0.2`)
-- Species merging: `d_ensemble(leader(Sᵢ), leader(Sⱼ)) < θ_merge` → merge `Sᵢ` and `Sⱼ` (default: `θ_merge = 0.1`, where `θ_merge < θ_sim`)
-- No match: `d_ensemble(u, leader(Sᵢ)) ≥ θ_sim ∀i` → assign to Cluster 0 (reserves)
+- Species assignment: `d_ensemble(u, leader(Sᵢ)) < theta_sim` → assign to species `Sᵢ` (default: `theta_sim = 0.2`)
+- Species merging: `d_ensemble(leader(Sᵢ), leader(Sⱼ)) < theta_merge` → merge `Sᵢ` and `Sⱼ` (default: `theta_merge = 0.1`, where `theta_merge < theta_sim`)
+- No match: `d_ensemble(u, leader(Sᵢ)) >= theta_sim` for all `i` → assign to Cluster 0 (reserves)
 
 **Capacity Limits**:
-```
-|Sᵢ| ≤ C_species  ∀i  (default: C_species = 100)
-|Cluster_0| ≤ C_reserves  (default: C_reserves = 1000)
-```
+- `|Sᵢ| <= C_species` for all `i` (default: `C_species = 100`)
+- `|Cluster_0| <= C_reserves` (default: `C_reserves = 1000`)
+
 Excess genomes are archived to `archive.json` (NOT part of population).
 
-**Leader Definition**:
-```
-leader(Sᵢ) = argmax_{x ∈ Sᵢ} f(x)
-```
-The leader is the genome with highest fitness in each species.
+**Leader Definition**: `leader(Sᵢ) = argmax_{x ∈ Sᵢ} f(x)`. The leader is the genome with highest fitness in each species.
 
 **Complexity**: `O(N × K × d)` per generation where:
 - `N` = population size
@@ -577,13 +546,7 @@ flowchart TD
    - Generate operator_effectiveness_cumulative.csv
    - Generate visualization figures
 
-7. **Termination Check**:
-   - Terminate if `g ≥ g_max` or `max_{x∈P} f(x) ≥ f_threshold`
-   - Otherwise, continue to next generation
-   where:
-   - `g` = current generation
-   - `g_max` = maximum generations (if set)
-   - `f_threshold` = fitness threshold (default: 0.99)
+7. **Termination Check**: Terminate if `g >= g_max` or `max_{x∈P} f(x) >= f_threshold`, otherwise continue to next generation, where `g` = current generation, `g_max` = maximum generations (if set), `f_threshold` = fitness threshold (default: 0.99).
 
 ### Data Flow
 
@@ -696,8 +659,8 @@ Tracked in `EvolutionTracker.json`:
 | Metric | Formula | Description |
 |--------|---------|-------------|
 | **best_fitness** | `f_max = max_{x∈P_g} f(x)` | Maximum fitness in generation `g` |
-| **avg_fitness_generation** | `f̄_new = (1/|V_g|) Σ_{v∈V_g} f(v)` | Mean fitness of new variants in generation `g` |
-| **avg_fitness_history** | `f̄_hist = (1/|P|) Σ_{x∈P} f(x)` | Running average across active population `P` |
+| **avg_fitness_generation** | `f_bar_new = (1/|V_g|) Σ_{v∈V_g} f(v)` | Mean fitness of new variants in generation `g` |
+| **avg_fitness_history** | `f_bar_hist = (1/|P|) Σ_{x∈P} f(x)` | Running average across active population `P` |
 | **elites_count** | `|E| = Σᵢ |Sᵢ|` | Number of genomes in species |
 | **reserves_count** | `|R| = |Cluster_0|` | Number of genomes in Cluster 0 |
 | **species_count** | `K = |{Sᵢ : state(Sᵢ) = "active"}|` | Number of active species |
@@ -721,8 +684,8 @@ Tracked in `operator_effectiveness_cumulative.csv`:
 | **EHR** | `EHR = |V_elite| / |V_total|` | Elite Hit Rate |
 | **IR** | `IR = (|V_rejected| + |V_duplicate|) / |V_attempted|` | Invalid/Rejection Rate |
 | **cEHR** | `cEHR = |V_elite| / (|V_total| - |V_invalid|)` | Conditional Elite Hit Rate |
-| **Δμ** | `Δμ = (1/|V_valid|) Σ_{v∈V_valid} (f(v) - f(parent(v)))` | Mean Delta Score |
-| **Δσ** | `Δσ = √(Var({f(v) - f(parent(v)) : v ∈ V_valid}))` | Std Dev Delta Score |
+| **Delta_mu** | `Delta_mu = (1/|V_valid|) Σ_{v∈V_valid} (f(v) - f(parent(v)))` | Mean Delta Score |
+| **Delta_sigma** | `Delta_sigma = sqrt(Var({f(v) - f(parent(v)) : v ∈ V_valid}))` | Std Dev Delta Score |
 
 where:
 - `V_total` = total variants generated by operator
@@ -741,7 +704,7 @@ Available via `utils/cluster_quality.py`:
 | Metric | Formula | Description |
 |--------|---------|-------------|
 | **Silhouette Score** | `s = (1/N) Σᵢ (b(i) - a(i)) / max(a(i), b(i))` | Measures cluster separation and cohesion ∈ [-1, 1] |
-| **Davies-Bouldin Index** | `DB = (1/K) Σᵢ max_{j≠i} ((σᵢ + σⱼ) / d(μᵢ, μⱼ))` | Lower values indicate better clustering |
+| **Davies-Bouldin Index** | `DB = (1/K) Σᵢ max_{j≠i} ((sigma_i + sigma_j) / d(mu_i, mu_j))` | Lower values indicate better clustering |
 | **Calinski-Harabasz Index** | `CH = (tr(B) / (K-1)) / (tr(W) / (N-K))` | Higher values indicate better defined clusters |
 
 where:
