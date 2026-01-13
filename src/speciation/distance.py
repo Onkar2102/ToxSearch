@@ -39,6 +39,12 @@ def semantic_distance(e1: np.ndarray, e2: np.ndarray) -> float:
     Returns:
         Cosine distance as float in range [0, 2]
     """
+    # Verify L2-normalization
+    norm_e1 = np.linalg.norm(e1)
+    norm_e2 = np.linalg.norm(e2)
+    if not (np.isclose(norm_e1, 1.0) and np.isclose(norm_e2, 1.0)):
+        raise ValueError(f"Embeddings must be L2-normalized. Got norms: {norm_e1}, {norm_e2}")
+    
     # For normalized vectors: cosine_similarity = dot product
     cosine_similarity = np.dot(e1, e2)
     # Clip to [-1, 1] to handle floating-point errors
@@ -128,9 +134,7 @@ def ensemble_distance(
     if p1 is not None and p2 is not None:
         d_phenotype = phenotype_distance(p1, p2)
     else:
-        # If phenotype unavailable, fall back to genotype-only distance
-        # Return only genotype component (already normalized to [0, 1])
-        return d_genotype_norm
+        d_phenotype = 0.0
     
     # Ensemble distance
     d_ensemble = w_genotype * d_genotype_norm + w_phenotype * d_phenotype

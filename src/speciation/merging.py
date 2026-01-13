@@ -19,8 +19,10 @@ def merge_islands(
     current_generation: int,
     theta_sim: float = 0.4,
     max_capacity: int = 100,
+    w_genotype: float = 0.7,
+    w_phenotype: float = 0.3,
     logger=None
-) -> Species:
+) -> Tuple[Species, List[Individual]]:
     """
     Merge two islands into a single species.
     
@@ -45,7 +47,9 @@ def merge_islands(
         logger: Optional logger instance
     
     Returns:
-        New merged Species with cluster_origin="merge" and parent_ids=[sp1.id, sp2.id]
+        Tuple of (merged Species, list of outliers outside radius)
+        - merged: New merged Species with cluster_origin="merge" and parent_ids=[sp1.id, sp2.id]
+        - outliers: List of Individual objects outside radius (to be moved to cluster 0 by caller)
     """
     if logger is None:
         logger = get_logger("IslandMerging")
@@ -60,21 +64,43 @@ def merge_islands(
     
     # Sort by fitness and trim to capacity
     combined = sorted(combined, key=lambda x: x.fitness, reverse=True)[:max_capacity]
-    # Ensure leader is in the combined list
-    new_leader = max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
+    # Select new leader as highest fitness from ALL combined members (not just old leaders)
+    new_leader = combined[0] if combined else max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
     
-    if new_leader not in combined:
-        combined.insert(0, new_leader)
-        combined = combined[:max_capacity]
+    # Verify all members are within radius of new leader (post-merge radius verification)
+    members_within_radius = []
+    members_outside_radius = []
     
-    # Create merged species with NEW ID (not reusing old IDs)
+    for member in combined:
+        if member.id == new_leader.id:
+            # Leader always stays
+            members_within_radius.append(member)
+            continue
+        
+        if member.embedding is None or new_leader.embedding is None:
+            # Members without embeddings go to cluster 0 (handled by caller)
+            members_outside_radius.append(member)
+            continue
+        
+        dist = ensemble_distance(
+            member.embedding, new_leader.embedding,
+            member.phenotype, new_leader.phenotype,
+            w_genotype, w_phenotype
+        )
+        
+        if dist < theta_sim:
+            members_within_radius.append(member)
+        else:
+            members_outside_radius.append(member)
+    
+    # Create merged species with only members within radius
     merged = Species(
         id=generate_species_id(),  # New ID for clarity
         leader=new_leader,
-        members=combined,
+        members=members_within_radius,
         radius=theta_sim,  # Constant radius for all species
         stagnation=0,
-        max_fitness=max(sp1.leader.fitness, sp2.leader.fitness),
+        max_fitness=new_leader.fitness,
         species_state="active",
         created_at=current_generation,
         last_improvement=current_generation,
@@ -82,12 +108,15 @@ def merge_islands(
         parent_ids=[sp1.id, sp2.id]  # Both parent IDs
     )
     
-    # Update species assignments
-    for m in combined:
+    # Update species assignments for members within radius
+    for m in members_within_radius:
         m.species_id = merged.id
     
-    logger.info(f"Merged species {sp1.id} + {sp2.id} -> {merged.id} ({merged.size} members)")
-    return merged
+    if members_outside_radius:
+        logger.warning(f"Merge {sp1.id}+{sp2.id}->{merged.id}: {len(members_outside_radius)} members outside radius of new leader (will be moved to cluster 0 by caller)")
+    
+    logger.info(f"Merged species {sp1.id} + {sp2.id} -> {merged.id} ({merged.size} members within radius, {len(members_outside_radius)} outside)")
+    return merged, members_outside_radius  # Return outliers for caller to handle
 
 
 def process_merges(
@@ -101,7 +130,7 @@ def process_merges(
     w_genotype: float = 0.7,
     w_phenotype: float = 0.3,
     logger=None
-) -> Tuple[Dict[int, Species], List[Dict]]:
+) -> Tuple[Dict[int, Species], List[Dict], List[Individual]]:
     """
     Process all species merges for a generation.
     
@@ -131,13 +160,17 @@ def process_merges(
         logger: Optional logger instance
     
     Returns:
-        Tuple of (updated_species, merge_events)
+        Tuple of (updated_species, merge_events, outliers)
+        - updated_species: Dict of species after merging
+        - merge_events: List of merge event dictionaries
+        - outliers: List of Individual objects outside radius after merge (to be moved to cluster 0 by caller)
     """
     if logger is None:
         logger = get_logger("IslandMerging")
     
     events = []
     merges_done = 0
+    all_outliers = []  # Collect all outliers from merges
     
     while merges_done < max_merges_per_gen:
         # Find merge candidates: pairs with leader distance <= theta_merge and both stable
@@ -166,12 +199,17 @@ def process_merges(
             continue
         
         sp1, sp2 = species[id1], species[id2]
-        merged = merge_islands(sp1, sp2, current_gen, theta_sim, max_capacity, logger)
+        merged, outliers = merge_islands(sp1, sp2, current_gen, theta_sim, max_capacity, w_genotype, w_phenotype, logger)
         
         # Remove old species and add merged
         species.pop(id1, None)
         species.pop(id2, None)
         species[merged.id] = merged
+        
+        # Collect outliers for caller to handle
+        if outliers:
+            all_outliers.extend(outliers)
+            logger.debug(f"Merge {id1}+{id2}->{merged.id}: {len(outliers)} outliers need to be moved to cluster 0")
         
         events.append({
             "generation": current_gen,
@@ -182,4 +220,4 @@ def process_merges(
         })
         merges_done += 1
     
-    return species, events
+    return species, events, all_outliers

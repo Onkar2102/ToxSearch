@@ -1629,15 +1629,16 @@ def update_adaptive_selection_logic(
         # Take the last stagnation_limit generations (or all if fewer than stagnation_limit exist)
         recent_generations = generations_with_avg_fitness[-stagnation_limit:]
         
-        # Extract avg_fitness values for the sliding window
-        avg_fitness_history = [gen["avg_fitness"] for gen in recent_generations]
+        # Extract avg_fitness values for the sliding window (round to 4 decimal places)
+        avg_fitness_history = [round(gen["avg_fitness"], 4) for gen in recent_generations]
         
         _logger.info(f"Built avg_fitness_history with {len(avg_fitness_history)} entries from {len(generations_with_avg_fitness)} total generations (window size: {stagnation_limit})")
         
         tracker["avg_fitness_history"] = avg_fitness_history
         
-        # Calculate slope of avg_fitness_history
+        # Calculate slope of avg_fitness_history (already rounded in calculate_slope, but ensure it's 4 decimals)
         slope_of_avg_fitness = calculate_slope(avg_fitness_history)
+        slope_of_avg_fitness = round(slope_of_avg_fitness, 4)
         tracker["slope_of_avg_fitness"] = slope_of_avg_fitness
         
         # Determine selection mode
@@ -1672,7 +1673,7 @@ def update_adaptive_selection_logic(
         return {
             "selection_mode": selection_mode,
             "generations_since_improvement": generations_since_improvement,
-            "current_avg_fitness": current_avg_fitness,
+            "current_avg_fitness": round(current_avg_fitness, 4),
             "slope_of_avg_fitness": slope_of_avg_fitness
         }
         
@@ -1861,18 +1862,18 @@ def update_evolution_tracker_with_statistics(
             gen_entry = {"generation_number": current_generation}
             generations.append(gen_entry)
         
-        # Update with statistics
+        # Update with statistics (round all float values to 4 decimal places)
         gen_entry.update({
             "elites_count": statistics.get("elites_count", 0),
             "reserves_count": statistics.get("reserves_count", 0),
             "total_population": statistics.get("total_population", 0),
-            "max_score_variants": statistics.get("max_score_variants", 0.0001),
-            "min_score_variants": statistics.get("min_score_variants", 0.0001),
-            "avg_fitness_variants": statistics.get("avg_fitness_variants", 0.0001),
-            "avg_fitness_generation": statistics.get("avg_fitness_generation", 0.0001),
-            "avg_fitness": statistics.get("avg_fitness_generation", 0.0001),  # Alias for compatibility
-            "avg_fitness_elites": statistics.get("avg_fitness_elites", 0.0001),
-            "avg_fitness_reserves": statistics.get("avg_fitness_reserves", 0.0001),
+            "max_score_variants": round(statistics.get("max_score_variants", 0.0001), 4),
+            "min_score_variants": round(statistics.get("min_score_variants", 0.0001), 4),
+            "avg_fitness_variants": round(statistics.get("avg_fitness_variants", 0.0001), 4),
+            "avg_fitness_generation": round(statistics.get("avg_fitness_generation", 0.0001), 4),
+            "avg_fitness": round(statistics.get("avg_fitness_generation", 0.0001), 4),  # Alias for compatibility
+            "avg_fitness_elites": round(statistics.get("avg_fitness_elites", 0.0001), 4),
+            "avg_fitness_reserves": round(statistics.get("avg_fitness_reserves", 0.0001), 4),
         })
         
         # Add budget metrics if available

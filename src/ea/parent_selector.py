@@ -256,8 +256,12 @@ class ParentSelector:
         active_species_ids: set
     ) -> List[Dict[str, Any]]:
         """
-        EXPLOITATION mode: Select species with highest fitness, select genome with 
-        highest fitness as parent 1, then randomly select parent 2 from same species.
+        EXPLOITATION mode: Select species with highest fitness, select 3 parents from same species.
+        - Parent 1: Highest fitness genome from top species
+        - Parent 2: Random genome from same top species (excluding parent 1)
+        - Parent 3: Random genome from same top species (excluding parent 1 and 2)
+        
+        This ensures intensive local search around the best region.
         
         Args:
             elites: List of elite genomes
@@ -265,11 +269,11 @@ class ParentSelector:
             active_species_ids: Set of active (non-frozen) species IDs
             
         Returns:
-            List of 2 selected parent genomes from the same species
+            List of 3 selected parent genomes from the same species
         """
         all_genomes = elites + reserves
-        if len(all_genomes) < 2:
-            self.logger.warning("Not enough genomes for 2 parents, using available genomes")
+        if len(all_genomes) < 3:
+            self.logger.warning(f"Not enough genomes for 3 parents (have {len(all_genomes)}), using available genomes")
             return all_genomes if all_genomes else []
         
         # Group by species
@@ -278,7 +282,7 @@ class ParentSelector:
         if not species_groups:
             # No species information, just select randomly
             self.logger.warning("No species information, falling back to random selection")
-            return random.sample(all_genomes, min(2, len(all_genomes)))
+            return random.sample(all_genomes, min(3, len(all_genomes)))
         
         # Get sorted active species
         sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
@@ -286,15 +290,18 @@ class ParentSelector:
         if not sorted_species:
             # No active species, fall back to random
             self.logger.warning("No active species found, falling back to random selection")
-            return random.sample(all_genomes, min(2, len(all_genomes)))
+            return random.sample(all_genomes, min(3, len(all_genomes)))
         
-        # Filter species with at least 2 genomes
-        valid_species = [(sid, genomes, fit) for sid, genomes, fit in sorted_species if len(genomes) >= 2]
+        # Filter species with at least 3 genomes
+        valid_species = [(sid, genomes, fit) for sid, genomes, fit in sorted_species if len(genomes) >= 3]
         
         if not valid_species:
-            # No species with 2+ genomes, fall back to default
-            self.logger.warning("No species with 2+ genomes for exploitation, falling back to default selection")
-            return self._select_parents_default(elites, reserves, active_species_ids)
+            # No species with 3+ genomes, try with 2+ genomes and reuse if needed
+            valid_species = [(sid, genomes, fit) for sid, genomes, fit in sorted_species if len(genomes) >= 2]
+            if not valid_species:
+                # No species with 2+ genomes, fall back to default
+                self.logger.warning("No species with 2+ genomes for exploitation, falling back to default selection")
+                return self._select_parents_default(elites, reserves, active_species_ids)
         
         # Select species with highest fitness (first in sorted list)
         top_species_id, top_species_genomes, top_fitness = valid_species[0]
@@ -306,12 +313,20 @@ class ParentSelector:
         remaining_genomes = [g for g in top_species_genomes if g.get("id") != parent1.get("id")]
         if remaining_genomes:
             parent2 = random.choice(remaining_genomes)
+            # Parent 3: random genome from same species (excluding parent 1 and 2)
+            remaining_genomes_2 = [g for g in remaining_genomes if g.get("id") != parent2.get("id")]
+            if remaining_genomes_2:
+                parent3 = random.choice(remaining_genomes_2)
+            else:
+                # Only 2 unique genomes, reuse parent1 for parent3
+                parent3 = parent1
         else:
-            # Only one unique genome, use it again
+            # Only one unique genome, reuse for parent2 and parent3
             parent2 = parent1
+            parent3 = parent1
         
-        self.logger.debug(f"EXPLOITATION mode: Selected parents from species {top_species_id} (fitness={top_fitness:.4f})")
-        return [parent1, parent2]
+        self.logger.debug(f"EXPLOITATION mode: Selected 3 parents from species {top_species_id} (fitness={top_fitness:.4f})")
+        return [parent1, parent2, parent3]
 
     def _select_parents_exploration(
         self, 
@@ -320,8 +335,12 @@ class ParentSelector:
         active_species_ids: set
     ) -> List[Dict[str, Any]]:
         """
-        EXPLORATION mode: Select top species (highest fitness), select genome with highest fitness as parent 1.
-        Then randomly select a different species, select genome with highest fitness as parent 2.
+        EXPLORATION mode: Select 3 parents from 3 different species.
+        - Parent 1: Highest fitness genome from top species
+        - Parent 2: Highest fitness genome from random species 2 (different from top)
+        - Parent 3: Highest fitness genome from random species 3 (different from top and species 2)
+        
+        This ensures maximum diversity and better coverage of the fitness landscape.
 
         Args:
             elites: List of elite genomes
@@ -329,11 +348,11 @@ class ParentSelector:
             active_species_ids: Set of active (non-frozen) species IDs
 
         Returns:
-            List of 2 selected parent genomes from different species
+            List of 3 selected parent genomes from 3 different species
         """
         all_genomes = elites + reserves
-        if len(all_genomes) < 2:
-            self.logger.warning("Not enough genomes for 2 parents, using available genomes")
+        if len(all_genomes) < 3:
+            self.logger.warning(f"Not enough genomes for 3 parents (have {len(all_genomes)}), using available genomes")
             return all_genomes if all_genomes else []
         
         # Group by species
@@ -342,7 +361,7 @@ class ParentSelector:
         if not species_groups:
             # No species information, just select randomly
             self.logger.warning("No species information, falling back to random selection")
-            return random.sample(all_genomes, min(2, len(all_genomes)))
+            return random.sample(all_genomes, min(3, len(all_genomes)))
         
         # Get sorted active species
         sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
@@ -350,13 +369,29 @@ class ParentSelector:
         if not sorted_species:
             # No active species, fall back to random
             self.logger.warning("No active species found, falling back to random selection")
-            return random.sample(all_genomes, min(2, len(all_genomes)))
+            return random.sample(all_genomes, min(3, len(all_genomes)))
         
-        # Need at least 2 different species
-        if len(sorted_species) < 2:
-            # Only one species, fall back to default
-            self.logger.warning("Only one species available for exploration, falling back to default selection")
-            return self._select_parents_default(elites, reserves, active_species_ids)
+        # Need at least 3 different species
+        if len(sorted_species) < 3:
+            if len(sorted_species) < 2:
+                # Only one species, fall back to default
+                self.logger.warning("Only one species available for exploration, falling back to default selection")
+                return self._select_parents_default(elites, reserves, active_species_ids)
+            else:
+                # Only 2 species, use both and reuse one
+                self.logger.warning("Only 2 species available for exploration, using both and reusing one")
+                first_species_id, first_species_genomes, first_fitness = sorted_species[0]
+                second_species_id, second_species_genomes, second_fitness = sorted_species[1]
+                
+                parent1 = self._get_genome_with_highest_fitness(first_species_genomes)
+                parent2 = self._get_genome_with_highest_fitness(second_species_genomes)
+                # Reuse parent1 for parent3
+                parent3 = parent1
+                
+                self.logger.debug(f"EXPLORATION mode: Parent 1 from species {first_species_id} (fitness={first_fitness:.4f}), "
+                                 f"Parent 2 from species {second_species_id} (fitness={second_fitness:.4f}), "
+                                 f"Parent 3 reused from species {first_species_id}")
+                return [parent1, parent2, parent3]
         
         # Select top species (first in sorted list - highest fitness)
         first_species_id, first_species_genomes, first_fitness = sorted_species[0]
@@ -371,9 +406,20 @@ class ParentSelector:
         # Parent 2: genome with highest fitness from second species
         parent2 = self._get_genome_with_highest_fitness(second_species_genomes)
         
+        # Select third species (different from first and second, randomly chosen)
+        remaining_species_2 = [sp for sp in remaining_species if sp[0] != second_species_id]
+        if remaining_species_2:
+            third_species_id, third_species_genomes, third_fitness = random.choice(remaining_species_2)
+            # Parent 3: genome with highest fitness from third species
+            parent3 = self._get_genome_with_highest_fitness(third_species_genomes)
+        else:
+            # Should not happen if we have 3+ species, but fallback
+            parent3 = parent1
+        
         self.logger.debug(f"EXPLORATION mode: Parent 1 from top species {first_species_id} (fitness={first_fitness:.4f}), "
-                         f"Parent 2 from randomly selected species {second_species_id} (fitness={second_fitness:.4f})")
-        return [parent1, parent2]
+                         f"Parent 2 from species {second_species_id} (fitness={second_fitness:.4f}), "
+                         f"Parent 3 from species {third_species_id} (fitness={third_fitness:.4f})")
+        return [parent1, parent2, parent3]
 
     def adaptive_tournament_selection(self, evolution_tracker: Dict[str, Any] = None, outputs_path: str = None, current_generation: int = None) -> None:
         """
@@ -438,8 +484,10 @@ class ParentSelector:
             else:
                 selected_parents = self._select_parents_default(elites, reserves, active_species_ids)
 
-            if len(selected_parents) < 2:
-                self.logger.warning(f"Only {len(selected_parents)} parents selected, expected 2")
+            # Expected parent counts: 2 for DEFAULT, 3 for EXPLORATION/EXPLOITATION
+            expected_count = 3 if selection_mode in ["exploit", "exploitation", "explore", "exploration"] else 2
+            if len(selected_parents) < expected_count:
+                self.logger.warning(f"Only {len(selected_parents)} parents selected, expected {expected_count}")
 
             self.logger.debug(f"Selected {len(selected_parents)} parents: {[p.get('id') for p in selected_parents]}")
 

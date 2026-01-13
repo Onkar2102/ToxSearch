@@ -138,7 +138,7 @@ def leader_follower_clustering(
                 leader_phenotype = None
                 if sp_dict.get("leader_genome_data"):
                     from .phenotype_distance import extract_phenotype_vector
-                    leader_phenotype = extract_phenotype_vector(sp_dict["leader_genome_data"])
+                    leader_phenotype = extract_phenotype_vector(sp_dict["leader_genome_data"], logger=logger)
                 
                 leader = Individual(
                     id=sp_dict["leader_id"],
@@ -199,7 +199,7 @@ def leader_follower_clustering(
                         outlier_pheno = None
                         if genome.get("moderation_result"):
                             from .phenotype_distance import extract_phenotype_vector
-                            outlier_pheno = extract_phenotype_vector(genome.get("moderation_result"))
+                            outlier_pheno = extract_phenotype_vector(genome.get("moderation_result"), logger=logger)
                         outlier_ind = Individual.from_genome(genome)
                         if outlier_ind.embedding is not None:
                             cluster0_outliers.append((outlier_emb, outlier_pheno, outlier_ind))

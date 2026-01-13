@@ -119,7 +119,8 @@ class Individual:
         
         # Extract phenotype vector (response scores)
         from .phenotype_distance import extract_phenotype_vector
-        phenotype = extract_phenotype_vector(genome)
+        # extract_phenotype_vector can handle None logger, so we pass None to avoid circular imports
+        phenotype = extract_phenotype_vector(genome, logger=None)
         
         return cls(
             id=genome.get("id", 0),

@@ -14,9 +14,15 @@ The evolutionary loop, parent selection, variation operators, and speciation mec
 
 - **EA Type**: Steady-state (μ + λ) evolutionary algorithm
 - **Population Structure**: μ genomes maintained across generations (elites + reserves)
-- **Offspring Generation**: λ variants generated per cycle (configurable via `--max-variants`)
+- **Offspring Generation**: λ variants generated per cycle
+  - **DEFAULT mode**: 22 variants (2 parents: 10 mutation ops × 2 + 2 crossover ops × 1 pair)
+  - **EXPLORATION/EXPLOITATION mode**: 36 variants (3 parents: 10 mutation ops × 3 + 2 crossover ops × 3 pairs)
 - **Fitness Function**: `f(x) = toxicity_score(LLM(x)) ∈ [0, 1]` where `x` is a prompt and `LLM(x)` is the model's response. The fitness evaluates toxicity in the response, not the prompt itself.
 - **Speciation**: Semantic + behavioral clustering using Leader-Follower algorithm
+- **Parent Selection**: Adaptive tournament selection with 3-parent strategy for exploration/exploitation
+  - **DEFAULT**: 2 parents from same species (random selection)
+  - **EXPLOITATION**: 3 parents from same top species (intensive local search)
+  - **EXPLORATION**: 3 parents from 3 different species (maximum diversity)
 
 ## Speciation
 

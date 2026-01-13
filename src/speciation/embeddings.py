@@ -227,16 +227,47 @@ def compute_and_save_embeddings(
     
     # Compute embeddings in batch
     logger.info(f"Computing embeddings for {len(prompts)} prompts...")
-    embeddings = model.encode(
-        prompts,
-        batch_size=batch_size,
-        show_progress=show_progress
-    )
+    
+    success_count = 0
+    failure_count = 0
+    embeddings = None
+    
+    try:
+        embeddings = model.encode(
+            prompts,
+            batch_size=batch_size,
+            show_progress=show_progress
+        )
+    except Exception as e:
+        logger.error(f"Failed to compute embeddings batch: {e}", exc_info=True)
+        raise
     
     # Add embeddings to genomes (convert numpy array to list for JSON)
     for i, genome in enumerate(genomes):
-        # Convert numpy array to list (JSON-compatible)
-        genome["prompt_embedding"] = embeddings[i].tolist()
+        try:
+            if embeddings is not None and i < len(embeddings):
+                embedding = embeddings[i]
+                if embedding is not None and len(embedding) > 0:
+                    # Convert numpy array to list (JSON-compatible)
+                    genome["prompt_embedding"] = embedding.tolist()
+                    success_count += 1
+                else:
+                    failure_count += 1
+                    genome_id = genome.get("id", "unknown")
+                    logger.warning(f"Embedding computation returned None/empty for genome {genome_id}")
+            else:
+                failure_count += 1
+                genome_id = genome.get("id", "unknown")
+                logger.warning(f"Embedding missing for genome {genome_id} (index {i} out of range)")
+        except Exception as e:
+            failure_count += 1
+            genome_id = genome.get("id", "unknown")
+            logger.warning(f"Failed to add embedding for genome {genome_id}: {e}")
+    
+    # Log summary
+    logger.info(f"Embedding computation: {success_count} success, {failure_count} failures")
+    if failure_count > 0:
+        logger.warning(f"Population reduced by {failure_count} genomes due to embedding failures")
     
     # Save updated genomes back to temp.json
     with open(temp_path_obj, 'w', encoding='utf-8') as f:

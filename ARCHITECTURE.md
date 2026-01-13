@@ -193,32 +193,79 @@ flowchart TD
     Sort --> Exclude[Exclude Frozen/Deceased Species]
     Exclude --> Check{Check Evolution State}
     
-    Check -->|First m generations| Default[Default Mode]
-    Check -->|Stagnation > m| Explore[Explore Mode]
-    Check -->|Fitness slope < 0| Exploit[Exploit Mode]
+    Check -->|First m generations| Default[Default Mode<br/>2 Parents]
+    Check -->|Stagnation > m| Explore[Explore Mode<br/>3 Parents]
+    Check -->|Fitness slope < 0| Exploit[Exploit Mode<br/>3 Parents]
     
     Default --> P1D[Parent 1: Random from<br/>Random Species]
     Default --> P2D[Parent 2: Random from<br/>Same Species]
+    P1D --> ReturnD[Return 2 Parents<br/>Expected: 22 variants]
+    P2D --> ReturnD
     
     Explore --> P1E[Parent 1: Best from<br/>Top Species]
-    Explore --> P2E[Parent 2: Best from<br/>Different Species]
+    Explore --> P2E[Parent 2: Best from<br/>Species 2]
+    Explore --> P3E[Parent 3: Best from<br/>Species 3]
+    P1E --> ReturnE[Return 3 Parents<br/>Expected: 36 variants]
+    P2E --> ReturnE
+    P3E --> ReturnE
     
     Exploit --> P1X[Parent 1: Best from<br/>Top Species]
     Exploit --> P2X[Parent 2: Random from<br/>Same Species]
-    
-    P1D --> Return[Return Parents]
-    P2D --> Return
-    P1E --> Return
-    P2E --> Return
-    P1X --> Return
-    P2X --> Return
+    Exploit --> P3X[Parent 3: Random from<br/>Same Species]
+    P1X --> ReturnX[Return 3 Parents<br/>Expected: 36 variants]
+    P2X --> ReturnX
+    P3X --> ReturnX
     
     style Default fill:#90EE90
     style Explore fill:#FFD700
     style Exploit fill:#FF6B6B
 ```
 
-**Selection Modes**:
+**Selection Modes** (matching ToxSearch variant generation rates):
+
+1. **DEFAULT Mode** (2 parents):
+   - Randomly select 1 species, then randomly select 2 genomes from that species
+   - Expected variants: `V = (10 × 2 × 1) + (2 × 1 × 1) = 22`
+
+2. **EXPLOITATION Mode** (3 parents from same species):
+   - Select top species (highest fitness)
+   - Parent 1: Highest fitness genome from top species
+   - Parent 2: Random genome from same top species (excluding parent 1)
+   - Parent 3: Random genome from same top species (excluding parent 1 and 2)
+   - Expected variants: `V = (10 × 3 × 1) + (2 × 3 × 1) = 36`
+   - **Purpose**: Intensive local search around best region
+
+3. **EXPLORATION Mode** (3 parents from 3 different species):
+   - Parent 1: Highest fitness genome from top species
+   - Parent 2: Highest fitness genome from random species 2 (different from top)
+   - Parent 3: Highest fitness genome from random species 3 (different from top and species 2)
+   - Expected variants: `V = (10 × 3 × 1) + (2 × 3 × 1) = 36`
+   - **Purpose**: Maximum diversity, better coverage of fitness landscape
+
+**Variant Count Formula**:
+```
+V = Σ_{op∈mutations} (|parents| × max_variants) + Σ_{op∈crossovers} (C(|parents|,2) × max_variants)
+```
+
+Where:
+- `N_mutation = 10` (mutation operators)
+- `N_crossover = 2` (crossover operators)
+- `max_variants = 1` (variants per operator per parent/pair)
+- `C(n,2) = n × (n-1) / 2` (number of parent pairs)
+
+**Mathematical Validation**:
+
+For **DEFAULT mode** (2 parents):
+- Mutation variants: `10 × 2 × 1 = 20`
+- Crossover variants: `2 × C(2,2) × 1 = 2 × 1 × 1 = 2`
+- **Total: 22 variants** ✓
+
+For **EXPLORATION/EXPLOITATION mode** (3 parents):
+- Mutation variants: `10 × 3 × 1 = 30`
+- Crossover variants: `2 × C(3,2) × 1 = 2 × 3 × 1 = 6`
+- **Total: 36 variants** ✓
+
+**Previous Selection Modes** (deprecated):
 
 | Mode | Parent 1 | Parent 2 | Trigger |
 |------|----------|----------|---------|

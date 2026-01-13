@@ -35,9 +35,12 @@ class GenerationMetrics:
         return {
             "generation": self.generation, "species_count": self.species_count,
             "total_population": self.total_population, "reserves_size": self.reserves_size,
-            "best_fitness": self.best_fitness, "avg_fitness": self.avg_fitness,
+            "best_fitness": round(self.best_fitness, 4), "avg_fitness": round(self.avg_fitness, 4),
+            "fitness_std": round(self.fitness_std, 4),
             "speciation_events": self.speciation_events,
-            "merge_events": self.merge_events, "extinction_events": self.extinction_events
+            "merge_events": self.merge_events, "extinction_events": self.extinction_events,
+            "inter_species_diversity": round(self.inter_species_diversity, 4),
+            "intra_species_diversity": round(self.intra_species_diversity, 4)
         }
 
 
@@ -157,10 +160,14 @@ class SpeciationMetricsTracker:
         
         metrics = GenerationMetrics(
             generation=generation, species_count=species_count, total_population=total_pop,
-            reserves_size=actual_reserves_size, best_fitness=float(best), avg_fitness=float(avg),
-            fitness_std=float(std), speciation_events=speciation_events,
+            reserves_size=actual_reserves_size, 
+            best_fitness=round(float(best), 4), 
+            avg_fitness=round(float(avg), 4),
+            fitness_std=round(float(std), 4), 
+            speciation_events=speciation_events,
             merge_events=merge_events, extinction_events=extinction_events,
-            inter_species_diversity=float(inter_div), intra_species_diversity=float(intra_div)
+            inter_species_diversity=round(float(inter_div), 4), 
+            intra_species_diversity=round(float(intra_div), 4)
         )
         
         self.history.append(metrics)
@@ -257,7 +264,8 @@ def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0
     
     intra_div = np.mean(intra_divs) if intra_divs else 0.0
     
-    return float(inter_div), float(intra_div)
+    # Round to 4 decimal places before returning
+    return round(float(inter_div), 4), round(float(intra_div), 4)
 
 
 def get_species_statistics(species: Dict[int, Species]) -> Dict:

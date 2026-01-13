@@ -374,17 +374,35 @@ class EvolutionEngine:
         elites_path = Path(self.outputs_path) / "elites.json"
         reserves_path = Path(self.outputs_path) / "reserves.json"
         
-        has_elites = elites_path.exists() and json.loads(elites_path.read_text()) if elites_path.exists() else False
-        has_reserves = reserves_path.exists() and json.loads(reserves_path.read_text()) if reserves_path.exists() else False
+        # Check if files exist and have content (non-empty lists)
+        has_elites = False
+        has_reserves = False
         
+        if elites_path.exists():
+            try:
+                elites_data = json.loads(elites_path.read_text())
+                has_elites = isinstance(elites_data, list) and len(elites_data) > 0
+            except (json.JSONDecodeError, Exception) as e:
+                self.logger.warning(f"Failed to read elites.json: {e}")
+                has_elites = False
+        
+        if reserves_path.exists():
+            try:
+                reserves_data = json.loads(reserves_path.read_text())
+                has_reserves = isinstance(reserves_data, list) and len(reserves_data) > 0
+            except (json.JSONDecodeError, Exception) as e:
+                self.logger.warning(f"Failed to read reserves.json: {e}")
+                has_reserves = False
+        
+        # Only raise error if both files are missing or both are empty
         if not has_elites and not has_reserves:
-            self.logger.error("CRITICAL ERROR: No population files found (elites.json or reserves.json)")
+            self.logger.error("CRITICAL ERROR: No population files found with content (elites.json or reserves.json)")
             self.logger.error("Evolution cannot continue without any genomes. Stopping immediately.")
             raise RuntimeError("No population files found - evolution cannot continue. This indicates a critical system failure.")
         
         if not has_elites:
             # Fallback: use reserves for parent selection
-            self.logger.warning("elites.json is empty, using reserves.json for parent selection")
+            self.logger.warning("elites.json is empty or missing, using reserves.json for parent selection")
 
         self.parent_selector.adaptive_tournament_selection(evolution_tracker, outputs_path=str(self.outputs_path))
 
@@ -395,6 +413,11 @@ class EvolutionEngine:
 
         single_parent_operators = self._get_single_parent_operators()
         multi_parent_operators = self._get_multi_parent_operators()
+
+        # Calculate and store expected variant count for operator effectiveness metrics
+        expected_variant_count = self._calculate_expected_variant_count(len(parents))
+        self._store_expected_variant_count(expected_variant_count, evolution_tracker)
+        self.logger.debug(f"Expected variant count for {len(parents)} parents: {expected_variant_count}")
 
         if len(parents) >= 2:
             self.logger.debug(f"Running crossover globally with {len(parents)} parents and {len(multi_parent_operators)} operators.")
@@ -733,6 +756,97 @@ class EvolutionEngine:
             self.logger.warning("Invalid operator mode '%s', defaulting to 'all' for crossover (%d operators)", self.operators, len(filtered_operators))
         
         return filtered_operators
+
+    def _calculate_expected_variant_count(self, num_parents: int) -> int:
+        """
+        Calculate expected variant count based on number of parents.
+        
+        Formula: V = (N_mutation × |parents| × max_variants) + (N_crossover × C(|parents|,2) × max_variants)
+        
+        Where:
+        - N_mutation = number of mutation operators (10 in "all" mode)
+        - N_crossover = number of crossover operators (2)
+        - C(|parents|,2) = number of parent pairs = |parents| × (|parents| - 1) / 2
+        
+        Expected counts:
+        - 2 parents: V = (10 × 2 × 1) + (2 × 1 × 1) = 22 variants
+        - 3 parents: V = (10 × 3 × 1) + (2 × 3 × 1) = 36 variants
+        
+        Args:
+            num_parents: Number of parents selected
+            
+        Returns:
+            Expected total variant count
+        """
+        mutation_ops = len(self._get_single_parent_operators())
+        crossover_ops = len(self._get_multi_parent_operators())
+        
+        # Calculate number of parent pairs: C(n,2) = n × (n-1) / 2
+        parent_pairs = (num_parents * (num_parents - 1)) // 2 if num_parents >= 2 else 0
+        
+        expected_count = (mutation_ops * num_parents * self.max_variants) + \
+                        (crossover_ops * parent_pairs * self.max_variants)
+        
+        self.logger.debug(f"Expected variant count: {mutation_ops} mutation ops × {num_parents} parents × {self.max_variants} + "
+                         f"{crossover_ops} crossover ops × {parent_pairs} pairs × {self.max_variants} = {expected_count}")
+        
+        return expected_count
+
+    def _store_expected_variant_count(self, expected_count: int, evolution_tracker: Dict[str, Any] = None) -> None:
+        """
+        Store expected variant count in EvolutionTracker.json for operator effectiveness calculation.
+        
+        Args:
+            expected_count: Expected variant count for current generation
+            evolution_tracker: Evolution tracker dictionary (optional, will load if not provided)
+        """
+        try:
+            from utils import get_system_utils
+            _, _, _, get_outputs_path, _, _ = get_system_utils()
+            
+            evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
+            if not evolution_tracker_path.exists():
+                self.logger.warning("EvolutionTracker.json not found, cannot store expected variant count")
+                return
+            
+            # Load EvolutionTracker
+            if evolution_tracker is None:
+                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                    evolution_tracker = json.load(f)
+            
+            current_generation = self.current_cycle
+            if current_generation is None:
+                self.logger.warning("Current generation is None, cannot store expected variant count")
+                return
+            
+            # Find or create generation entry
+            generations = evolution_tracker.get("generations", [])
+            gen_entry = None
+            for gen in generations:
+                if gen.get("generation_number") == current_generation:
+                    gen_entry = gen
+                    break
+            
+            if gen_entry is None:
+                # Create new generation entry
+                gen_entry = {
+                    "generation_number": current_generation,
+                    "expected_variant_count": expected_count
+                }
+                generations.append(gen_entry)
+                evolution_tracker["generations"] = generations
+            else:
+                # Update existing entry
+                gen_entry["expected_variant_count"] = expected_count
+            
+            # Save updated EvolutionTracker
+            with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
+                json.dump(evolution_tracker, f, indent=2, ensure_ascii=False)
+            
+            self.logger.debug(f"Stored expected variant count {expected_count} for generation {current_generation}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to store expected variant count: {e}", exc_info=True)
 
     def get_last_generation_data(self) -> Dict[str, Any]:
         """Get the generation data from the last run for tracking purposes."""

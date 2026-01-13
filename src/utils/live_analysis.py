@@ -55,10 +55,18 @@ def generate_fitness_evolution_plot(outputs_path: Optional[str] = None, logger=N
         avg_scores = [g.get("avg_fitness_generation", 0.0) for g in generations]
         min_scores = [g.get("min_score_variants", 0.0) for g in generations]
         
+        # Calculate cumulative max score (running maximum across all generations)
+        cumulative_max_scores = []
+        current_max = 0.0
+        for score in max_scores:
+            current_max = max(current_max, score)
+            cumulative_max_scores.append(current_max)
+        
         plt.figure(figsize=(10, 6))
         plt.plot(gen_nums, max_scores, 'o-', label='Max Score', linewidth=2, markersize=6)
         plt.plot(gen_nums, avg_scores, 's-', label='Avg Fitness', linewidth=2, markersize=6)
         plt.plot(gen_nums, min_scores, '^-', label='Min Score', linewidth=2, markersize=6)
+        plt.plot(gen_nums, cumulative_max_scores, '--', label='Cumulative Max Score', linewidth=2, color='red', alpha=0.7)
         
         plt.xlabel('Generation', fontsize=12)
         plt.ylabel('Fitness Score', fontsize=12)

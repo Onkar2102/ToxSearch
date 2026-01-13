@@ -15,10 +15,10 @@ EXPERIMENTS=(
         --threshold 0.99 \
         --moderation-methods google \
         --stagnation-limit 4 \
-        --theta-sim 0.3 \
-        --theta-merge 0.2 \
-        --species-capacity 15 \
-        --cluster0-max-capacity 50 \
+        --theta-sim 0.4 \
+        --theta-merge 0.5 \
+        --species-capacity 50 \
+        --cluster0-max-capacity 100 \
         --cluster0-min-cluster-size 1 \
         --min-island-size 2 \
         --max-stagnation 4 \

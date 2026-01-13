@@ -8,6 +8,10 @@ Computes distance between phenotype vectors (response scores).
 import numpy as np
 from typing import Optional
 
+from utils import get_custom_logging
+
+get_logger, _, _, _ = get_custom_logging()
+
 
 # Standard order of phenotype scores (8 dimensions)
 PHENOTYPE_SCORE_ORDER = [
@@ -22,7 +26,8 @@ PHENOTYPE_SCORE_ORDER = [
 ]
 
 
-def extract_phenotype_vector(genome: dict) -> Optional[np.ndarray]:
+
+def extract_phenotype_vector(genome: dict, logger=None) -> Optional[np.ndarray]:
     """
     Extract phenotype vector (8D response scores) from genome.
     
@@ -35,6 +40,10 @@ def extract_phenotype_vector(genome: dict) -> Optional[np.ndarray]:
     Returns:
         8D numpy array of phenotype scores, or None if scores not available
     """
+
+    if logger is None:
+        logger = get_logger("PhenotypeDistance")
+
     if not genome or "moderation_result" not in genome:
         return None
     
@@ -55,6 +64,13 @@ def extract_phenotype_vector(genome: dict) -> Optional[np.ndarray]:
         float(scores.get(score_name, 0.0))
         for score_name in PHENOTYPE_SCORE_ORDER
     ], dtype=np.float32)
+    
+    # Validate range
+    if not np.all((phenotype >= 0.0) & (phenotype <= 1.0)):
+        invalid_indices = np.where((phenotype < 0.0) | (phenotype > 1.0))[0]
+        logger.warning(f"Phenotype scores out of [0,1] range: indices {invalid_indices}")
+        # Clip to valid range
+        phenotype = np.clip(phenotype, 0.0, 1.0)
     
     return phenotype
 

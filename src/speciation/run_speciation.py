@@ -17,6 +17,8 @@ from .reserves import Cluster0, CLUSTER_0_ID
 from .merging import process_merges
 from .extinction import process_extinctions
 from .metrics import SpeciationMetricsTracker, log_generation_summary
+from .genome_tracker import GenomeTracker
+from .validation import validate_speciation_consistency, analyze_distance_distribution
 
 from utils import get_custom_logging
 from utils import get_system_utils
@@ -155,6 +157,10 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state["logger"].info(f"=== Speciation Generation {current_generation} ===")
     state["_current_gen_events"] = {"speciation": 0, "merge": 0, "extinction": 0, "moved_to_cluster0": 0}
     state["_archived_count"] = 0
+    
+    # Initialize genome tracker for audit trail
+    genome_tracker = GenomeTracker(current_generation, logger=state["logger"])
+    state["_genome_tracker"] = genome_tracker
     
     # Auto-load previous state if not first generation
     if current_generation > 0:
@@ -314,6 +320,13 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             sp.members = sp.members[:state["config"].species_capacity]
             # Archive removed genomes
             _archive_individuals(excess, current_generation, "species_capacity_exceeded")
+            # Track archival events
+            if "_genome_tracker" in state:
+                for ind in excess:
+                    state["_genome_tracker"].log(
+                        ind.id, "capacity_archived",
+                        {"species_id": sid, "reason": "species_capacity", "capacity": state["config"].species_capacity}
+                    )
             # Ensure leader is still in members (should be, but verify)
             if sp.leader not in sp.members and sp.members:
                 sp.leader = max(sp.members, key=lambda x: x.fitness)
@@ -328,6 +341,13 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         # Archive removed genomes
         excess_individuals = [m.individual for m in excess_members]
         _archive_individuals(excess_individuals, current_generation, "cluster0_capacity_exceeded")
+        # Track archival events
+        if "_genome_tracker" in state:
+            for ind in excess_individuals:
+                state["_genome_tracker"].log(
+                    ind.id, "capacity_archived",
+                    {"reason": "cluster0_capacity", "capacity": state["config"].cluster0_max_capacity}
+                )
     
     # Check for speciation events in cluster 0
     # Loop until no more species can form (handles multiple clusters in cluster 0)
@@ -337,6 +357,13 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             state["species"][new_species.id] = new_species
             state["_current_gen_events"]["speciation"] += 1
             state["logger"].info(f"Species {new_species.id} formed from cluster 0 ({new_species.size} members)")
+            # Track speciation events
+            if "_genome_tracker" in state:
+                for member in new_species.members:
+                    state["_genome_tracker"].log(
+                        member.id, "species_formed_from_cluster0",
+                        {"species_id": new_species.id, "size": new_species.size}
+                    )
         else:
             break
     
@@ -346,7 +373,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             state["species"][sid].record_fitness(current_generation)
     
     # Step 5: Island merging
-    state["species"], merge_events = process_merges(
+    state["species"], merge_events, merge_outliers = process_merges(
         state["species"], 
         theta_merge=state["config"].theta_merge,
         theta_sim=state["config"].theta_sim,
@@ -357,6 +384,33 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         logger=state["logger"]
     )
     state["_current_gen_events"]["merge"] = len(merge_events)
+    
+    # Move merge outliers to cluster 0 (post-merge radius verification)
+    if merge_outliers:
+        state["logger"].info(f"Moving {len(merge_outliers)} outliers from merges to cluster 0")
+        for outlier in merge_outliers:
+            if state["cluster0"].size < state["config"].cluster0_max_capacity:
+                state["cluster0"].add(outlier, current_generation)
+                outlier.species_id = CLUSTER_0_ID
+                if "_genome_tracker" in state:
+                    state["_genome_tracker"].log(
+                        outlier.id, "merge_outlier_to_cluster0",
+                        {"reason": "outside_radius_after_merge"}
+                    )
+            else:
+                state["logger"].warning(f"Cluster 0 at capacity, cannot add merge outlier {outlier.id}")
+    
+    # Track merge events
+    if "_genome_tracker" in state:
+        for merge_event in merge_events:
+            merged_ids = merge_event.get("merged", [])
+            result_id = merge_event.get("result_id")
+            if result_id and result_id in state["species"]:
+                for member in state["species"][result_id].members:
+                    state["_genome_tracker"].log(
+                        member.id, "species_merged",
+                        {"from_species": merged_ids, "to_species": result_id}
+                    )
     
     # Step 6: Freeze stagnant species (extinction) and move small species to cluster 0 (not extinction)
     state["species"], extinction_events, moved_to_cluster0_events, incubator_species = process_extinctions(
@@ -380,11 +434,12 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         del state["species"][sid]
         state["logger"].debug(f"Moved frozen species {sid} to historical_species")
     
-    # Move incubator species to historical_species for preservation
+    # Move incubator species to historical_species for tracking (just IDs, not full data)
     # (incubator species are returned separately by process_extinctions)
+    # We keep them in historical_species but they won't be saved with full data - just tracked by ID
     for sid, sp in incubator_species.items():
-        state["historical_species"][sid] = sp
-        state["logger"].debug(f"Moved incubator species {sid} to historical_species")
+        state["historical_species"][sid] = sp  # Keep for in-memory tracking
+        state["logger"].debug(f"Moved incubator species {sid} to historical_species (will be tracked by ID only in save_state)")
     
     # Step 7: Update c-TF-IDF labels for all species
     from .labeling import update_species_labels
@@ -427,6 +482,29 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     
     # Remove embeddings from temp.json after speciation is complete
     remove_embeddings_from_temp(temp_path=temp_path, logger=state["logger"])
+    
+    # Step 9: Validation and analysis
+    outputs_path = get_outputs_path()
+    
+    # Validate consistency
+    is_valid, errors = validate_speciation_consistency(
+        outputs_path, current_generation, logger=state["logger"]
+    )
+    if not is_valid:
+        state["logger"].warning(f"Consistency validation found {len(errors)} errors")
+        for error in errors[:5]:  # Log first 5 errors
+            state["logger"].warning(f"  - {error}")
+    
+    # Analyze distance distributions
+    distance_analysis = analyze_distance_distribution(
+        state["species"], state["cluster0"], state["config"], logger=state["logger"]
+    )
+    
+    # Save genome tracker
+    if "_genome_tracker" in state:
+        state["_genome_tracker"].save()
+        tracker_summary = state["_genome_tracker"].get_summary()
+        state["logger"].debug(f"Genome tracker: {tracker_summary['total_events']} events for {tracker_summary['unique_genomes']} genomes")
     
     return state["species"], state["cluster0"]
 
@@ -621,10 +699,10 @@ def save_state(path: str) -> None:
     The size in speciation_state.json reflects the current total size of genomes in that species
     from elites.json (all generations), not just the members in the Species object (current generation only).
     
-    All species are saved including:
-    - Active species (state="active") - participate in evolution
-    - Frozen species (state="frozen") - stagnated, excluded from parent selection
-    - Incubator species (state="incubator") - moved to cluster 0, awaiting new species formation
+    Species storage strategy:
+    - Active species (state="active") - full data saved (participate in evolution)
+    - Frozen species (state="frozen") - full data saved (stagnated, excluded from parent selection)
+    - Incubator species (state="incubator") - only species ID tracked (moved to cluster 0, just for tracking)
     """
     state = _get_state()
     logger = state["logger"]
@@ -648,28 +726,54 @@ def save_state(path: str) -> None:
         except Exception as e:
             logger.warning(f"Failed to calculate species sizes from elites.json: {e}")
     
-    # Build species dict with actual sizes from elites.json
-    # Include both active species and historical species (frozen/incubator)
+    # Build species dict - only save full data for active and frozen species
     species_dict = {}
+    incubator_ids = []  # Just track IDs for incubator species
     
-    # Add active species
+    # Add active species (full data)
     for sid, sp in state["species"].items():
-        sp_dict = sp.to_dict()
-        # Add actual current size from elites.json (all generations)
-        actual_size = species_sizes.get(sid, len(sp.members))
-        sp_dict["size"] = actual_size
-        species_dict[str(sid)] = sp_dict
+        if sp.species_state == "active":
+            sp_dict = sp.to_dict()
+            # Add actual current size from elites.json (all generations)
+            actual_size = species_sizes.get(sid, len(sp.members))
+            sp_dict["size"] = actual_size
+            species_dict[str(sid)] = sp_dict
+        elif sp.species_state == "frozen":
+            # Frozen species also get full data
+            sp_dict = sp.to_dict()
+            actual_size = species_sizes.get(sid, len(sp.members))
+            sp_dict["size"] = actual_size
+            species_dict[str(sid)] = sp_dict
     
-    # Add historical species (frozen and incubator) - preserved for reference
+    # Add historical species - only frozen get full data, incubator just IDs
     for sid, sp in state.get("historical_species", {}).items():
         if str(sid) not in species_dict:  # Avoid duplicates
-            sp_dict = sp.to_dict()
-            # Historical species have size = 0 (their members were moved)
-            sp_dict["size"] = 0
-            species_dict[str(sid)] = sp_dict
+            if sp.species_state == "frozen":
+                # Frozen species get full data
+                sp_dict = sp.to_dict()
+                actual_size = species_sizes.get(sid, 0)  # Historical frozen species may have members
+                sp_dict["size"] = actual_size
+                species_dict[str(sid)] = sp_dict
+            elif sp.species_state == "incubator":
+                # Incubator species - just track ID
+                incubator_ids.append(sid)
+    
+    # Validate no duplicate leader IDs in active/frozen species
+    leader_ids = []
+    for sid_str, sp_dict in species_dict.items():
+        leader_id = sp_dict.get("leader_id")
+        if leader_id is not None:
+            leader_ids.append(leader_id)
+    
+    from collections import Counter
+    leader_id_counts = Counter(leader_ids)
+    duplicates = {lid: count for lid, count in leader_id_counts.items() if count > 1}
+    if duplicates:
+        logger.warning(f"Duplicate leader IDs detected in active/frozen species: {duplicates}")
     
     state_dict = {
         "species": species_dict,
+        "incubators": sorted(incubator_ids),  # Just list of species IDs
         "cluster0": state["cluster0"].to_dict(),
         "global_best_id": state["global_best"].id if state["global_best"] else None,
         "metrics": state["metrics_tracker"].to_dict()
@@ -681,9 +785,9 @@ def save_state(path: str) -> None:
     active_count = len([sp for sp in state["species"].values() if sp.species_state == "active"])
     frozen_count = len([sp for sp in state["species"].values() if sp.species_state == "frozen"])
     frozen_count += len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "frozen"])
-    incubator_count = len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "incubator"])
+    incubator_count = len(incubator_ids)
     
-    state["logger"].info(f"Saved speciation state to {path}: {active_count} active, {frozen_count} frozen, {incubator_count} incubator")
+    state["logger"].info(f"Saved speciation state to {path}: {active_count} active, {frozen_count} frozen, {incubator_count} incubator (IDs only)")
 
 
 def load_state(path: str) -> bool:
@@ -720,6 +824,7 @@ def load_state(path: str) -> bool:
         state["historical_species"] = {}
         max_species_id = 0
         
+        # Load active and frozen species (full data)
         for sid_str, sp_dict in loaded_state.get("species", {}).items():
             sid = int(sid_str)
             max_species_id = max(max_species_id, sid)
@@ -758,8 +863,17 @@ def load_state(path: str) -> bool:
             if species.species_state == "active":
                 state["species"][sid] = species
             else:
-                # Frozen or incubator -> historical
+                # Frozen -> historical (full data preserved)
                 state["historical_species"][sid] = species
+        
+        # Load incubator species IDs (just for tracking, no full data)
+        incubator_ids = loaded_state.get("incubators", [])
+        if incubator_ids:
+            # Track incubator IDs but don't create Species objects
+            # They're just for tracking purposes
+            for sid in incubator_ids:
+                max_species_id = max(max_species_id, sid)
+            logger.debug(f"Loaded {len(incubator_ids)} incubator species IDs for tracking: {incubator_ids}")
         
         SpeciesIdGenerator.set_min_id(max_species_id + 1)
         

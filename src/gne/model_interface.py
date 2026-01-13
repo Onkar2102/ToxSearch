@@ -9,6 +9,7 @@ import os
 import time
 import psutil
 import re
+import random
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from llama_cpp import Llama
@@ -476,6 +477,7 @@ class LlamaCppChatInterface(ModelInterface):
                 top_k=generation_kwargs.get("top_k", 40),
                 repeat_penalty=generation_kwargs.get("repetition_penalty", 1.1),
                 stop=["</s>", "<|endoftext|>", "User:", "System:"],
+                seed=random.randint(0, 2**31 - 1),
                 echo=False,
             )
             
