@@ -190,9 +190,57 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         logger=state["logger"]
     )
     
+    # Step 2a: Sync cluster 0 with reserves.json
+    # After leader_follower_clustering, outliers that formed species are updated in reserves.json
+    # but may still be in the in-memory Cluster0.members. We need to sync them.
+    outputs_path = get_outputs_path()
+    reserves_path = outputs_path / "reserves.json"
+    if reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+            
+            # Get IDs of individuals that are now in species (species_id > 0)
+            species_member_ids = set()
+            for sp in state["species"].values():
+                for member in sp.members:
+                    species_member_ids.add(member.id)
+            
+            # Remove from cluster0.members any that are now in species
+            removed_count = 0
+            cluster0_members_to_keep = []
+            for cm in state["cluster0"].members:
+                if cm.individual.id not in species_member_ids:
+                    cluster0_members_to_keep.append(cm)
+                else:
+                    removed_count += 1
+            
+            state["cluster0"].members = cluster0_members_to_keep
+            
+            # Add new individuals from reserves.json that aren't tracked yet
+            existing_cluster0_ids = {cm.individual.id for cm in state["cluster0"].members}
+            added_count = 0
+            for genome in reserves_genomes:
+                if genome.get("species_id", CLUSTER_0_ID) == CLUSTER_0_ID:
+                    genome_id = genome.get("id")
+                    if genome_id and genome_id not in existing_cluster0_ids:
+                        # Create Individual from genome and add to cluster0
+                        outlier_ind = Individual.from_genome(genome)
+                        if outlier_ind.embedding is not None:
+                            state["cluster0"].add(outlier_ind, current_generation)
+                            added_count += 1
+            
+            if removed_count > 0 or added_count > 0:
+                state["logger"].info(f"Synced cluster 0: removed {removed_count} (now in species), added {added_count} (from reserves.json)")
+        except Exception as e:
+            state["logger"].warning(f"Failed to sync cluster 0 with reserves.json: {e}")
+    
     # Step 2b: Post-processing - remove genomes outside radius after all variants processed
-    # When leader was updated, remaining genomes were assigned using updated leader
-    # Now we need to verify all members are still within radius of the (possibly updated) leader
+    # This applies to BOTH Generation 0 and Generation N:
+    # - When leader was updated during clustering, remaining genomes were assigned using updated leader
+    # - For Generation N: Species formed from outliers may have new leaders (highest fitness)
+    # - For both generations: We need to verify all members are still within radius of the (possibly updated) leader
+    # - This ensures species cohesion: all members must be within theta_sim of the current leader
     from .distance import ensemble_distance
     
     for sid in list(species_with_new_members):
