@@ -374,6 +374,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         gen0_stats["variants_created"] = 0  # No variants in generation 0
         gen0_stats["mutation_variants"] = 0
         gen0_stats["crossover_variants"] = 0
+        # For generation 0, max_score_variants should be the population max (initial population, not variants)
+        # This represents the best score in the initial seed population
+        gen0_stats["max_score_variants"] = max_toxicity if max_toxicity > 0.0001 else 0.0001
+        gen0_stats["min_score_variants"] = 0.0001  # Default for generation 0
+        gen0_stats["avg_fitness_variants"] = 0.0001  # Default for generation 0
         
         # Add speciation metrics from the speciation result
         gen0_stats["species_count"] = speciation_result.get("species_count", 0)
@@ -782,10 +787,10 @@ if __name__ == "__main__":
     parser.add_argument("--stagnation-limit", type=int, default=5,
                        help="Number of generations without improvement before switching to explore mode (default: 5)")
     # Speciation parameters
-    parser.add_argument("--theta-sim", type=float, default=0.4,
-                       help="Similarity threshold for species assignment (default: 0.4)")
-    parser.add_argument("--theta-merge", type=float, default=0.2,
-                       help="Merge threshold for combining similar species (default: 0.2)")
+    parser.add_argument("--theta-sim", type=float, default=0.2,
+                       help="Similarity threshold for species assignment (ensemble distance, default: 0.2)")
+    parser.add_argument("--theta-merge", type=float, default=0.1,
+                       help="Merge threshold for combining similar species (ensemble distance, default: 0.1)")
     parser.add_argument("--species-capacity", type=int, default=100,
                        help="Maximum individuals per species (default: 100)")
     parser.add_argument("--cluster0-max-capacity", type=int, default=1000,

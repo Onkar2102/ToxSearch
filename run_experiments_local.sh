@@ -11,11 +11,11 @@ fi
 # Define your experiments here (one per line)
 EXPERIMENTS=(
     "python src/main.py \
-        --generations 110 \
+        --generations 5 \
         --threshold 0.99 \
         --moderation-methods google \
         --stagnation-limit 4 \
-        --theta-sim 0.4 \
+        --theta-sim 0.5 \
         --theta-merge 0.5 \
         --species-capacity 50 \
         --cluster0-max-capacity 100 \

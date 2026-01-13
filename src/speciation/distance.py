@@ -26,11 +26,9 @@ def semantic_distance(e1: np.ndarray, e2: np.ndarray) -> float:
     - 0 = same meaning, 1 = orthogonal, 2 = opposite meaning
     - Used as the primary distance metric for clustering
     
-    This is the core distance function used throughout speciation:
-    - Leader-Follower clustering (theta_sim threshold)
-    - Island merging (theta_merge threshold)
-    - Migration topology (k-nearest neighbors)
-    - Silhouette computation (intra/inter-species distances)
+    This function computes the base cosine distance used in ensemble_distance.
+    Note: The actual thresholds (theta_sim, theta_merge) are applied to ensemble_distance,
+    not semantic_distance directly. This function is used internally by ensemble_distance.
     
     Args:
         e1: First embedding vector (L2-normalized, shape: (embedding_dim,))
@@ -157,7 +155,10 @@ def ensemble_distances_batch(
         query_embedding: Query prompt embedding (L2-normalized, shape: (embedding_dim,))
         embeddings: Target embeddings (L2-normalized, shape: (num_targets, embedding_dim))
         query_phenotype: Query phenotype vector (8D, shape: (8,)) or None
-        phenotypes: Target phenotypes (shape: (num_targets, 8)) or None
+        phenotypes: Target phenotypes - either:
+                   - numpy array (shape: (num_targets, 8)) - all valid, no None values
+                   - list of Optional[np.ndarray] (length: num_targets) - may contain None values
+                   - None if no phenotype data available
         w_genotype: Weight for genotype distance (default: 0.7)
         w_phenotype: Weight for phenotype distance (default: 0.3)
     
@@ -168,43 +169,59 @@ def ensemble_distances_batch(
     if abs(w_genotype + w_phenotype - 1.0) > 1e-6:
         raise ValueError(f"Weights must sum to 1.0, got w_genotype={w_genotype}, w_phenotype={w_phenotype}")
     
+    # Ensure embeddings is 2D for consistent length calculation
+    # semantic_distances_batch handles this, but we need num_targets for phenotype array
+    if embeddings.ndim == 1:
+        num_targets = 1
+        embeddings_2d = embeddings.reshape(1, -1)
+    else:
+        num_targets = len(embeddings)
+        embeddings_2d = embeddings
+    
     # Compute genotype distances (range [0, 2])
-    d_genotype = semantic_distances_batch(query_embedding, embeddings)
+    d_genotype = semantic_distances_batch(query_embedding, embeddings_2d)
     
     # Normalize to [0, 1]
     d_genotype_norm = d_genotype / 2.0
     
     # Compute phenotype distances if available
+    # If phenotype unavailable or None, treat as 0 (do not measure distance)
     if query_phenotype is not None and phenotypes is not None:
-        # Check if we have valid phenotypes (not all None)
-        valid_phenotypes = []
-        valid_indices = []
-        for i, p in enumerate(phenotypes):
-            if p is not None:
-                valid_phenotypes.append(p)
-                valid_indices.append(i)
-        
-        if valid_phenotypes and len(valid_phenotypes) == len(phenotypes):
-            # All phenotypes are valid, use batch computation
-            from .phenotype_distance import phenotype_distances_batch
-            phenotypes_array = np.array(valid_phenotypes)
-            d_phenotype = phenotype_distances_batch(query_phenotype, phenotypes_array)
-            # Ensemble distances
-            d_ensemble = w_genotype * d_genotype_norm + w_phenotype * d_phenotype
-            return d_ensemble
-        elif valid_phenotypes:
-            # Some phenotypes are valid, compute mixed
-            from .phenotype_distance import phenotype_distances_batch
-            phenotypes_array = np.array(valid_phenotypes)
-            d_phenotype_valid = phenotype_distances_batch(query_phenotype, phenotypes_array)
-            # Build full array
-            d_phenotype = np.full(len(phenotypes), 0.0)
-            for idx, orig_idx in enumerate(valid_indices):
-                d_phenotype[orig_idx] = d_phenotype_valid[idx]
-            # For invalid indices, phenotype distance is 0 (fallback to genotype-only)
-            # Ensemble distances
-            d_ensemble = w_genotype * d_genotype_norm + w_phenotype * d_phenotype
-            return d_ensemble
+        # Handle both numpy array and list of Optional[np.ndarray]
+        if isinstance(phenotypes, np.ndarray):
+            # Numpy array: can't contain None, all are valid
+            if phenotypes.ndim == 1:
+                # Single phenotype, reshape to 2D
+                phenotypes_array = phenotypes.reshape(1, -1)
+                d_phenotype = phenotype_distances_batch(query_phenotype, phenotypes_array)
+            else:
+                # Multiple phenotypes (num_targets, 8)
+                d_phenotype = phenotype_distances_batch(query_phenotype, phenotypes)
+        else:
+            # List of Optional[np.ndarray]: may contain None values
+            valid_phenotypes = []
+            valid_indices = []
+            for i, p in enumerate(phenotypes):
+                if p is not None:
+                    valid_phenotypes.append(p)
+                    valid_indices.append(i)
+            
+            if valid_phenotypes:
+                # Some phenotypes are valid, compute distances for them
+                from .phenotype_distance import phenotype_distances_batch
+                phenotypes_array = np.array(valid_phenotypes)
+                d_phenotype_valid = phenotype_distances_batch(query_phenotype, phenotypes_array)
+                # Build full array with 0.0 for missing phenotypes
+                d_phenotype = np.full(num_targets, 0.0)
+                for idx, orig_idx in enumerate(valid_indices):
+                    d_phenotype[orig_idx] = d_phenotype_valid[idx]
+            else:
+                # No valid phenotypes, all are None
+                d_phenotype = np.full(num_targets, 0.0)
+    else:
+        # If phenotype unavailable, treat as 0 (fallback to genotype-only distances)
+        d_phenotype = np.full(num_targets, 0.0)
     
-    # If phenotypes unavailable, fall back to genotype-only distances
-    return d_genotype_norm
+    # Ensemble distances
+    d_ensemble = w_genotype * d_genotype_norm + w_phenotype * d_phenotype
+    return d_ensemble

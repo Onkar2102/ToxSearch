@@ -352,7 +352,13 @@ def calculate_table4_metrics(
                 operator_delta_scores = operator_variants['delta_score'].dropna()
                 if len(operator_delta_scores) > 0:
                     delta_mean = round(operator_delta_scores.mean(), 4)
-                    delta_std = round(operator_delta_scores.std(), 4) if len(operator_delta_scores) > 1 else np.nan
+                    # Standard deviation requires at least 2 data points
+                    # For 1 data point, std = 0 (no variance)
+                    if len(operator_delta_scores) > 1:
+                        delta_std = round(operator_delta_scores.std(), 4)
+                    else:
+                        # Single variant: std = 0 (no variance with one data point)
+                        delta_std = 0.0
                 else:
                     delta_mean = np.nan
                     delta_std = np.nan
@@ -469,7 +475,9 @@ def save_operator_effectiveness_cumulative(
                               'total_variants', 'elite_count', 'non_elite_count', 'rejections', 'duplicates']
             combined_df = pd.DataFrame(columns=expected_columns)
         
-        combined_df.to_csv(cumulative_file, index=False)
+        # Replace NaN with empty string for CSV (pandas default behavior)
+        # But keep 0.0 values as-is (for delta_std with single variant)
+        combined_df.to_csv(cumulative_file, index=False, na_rep='')
         _logger.info(f"Updated cumulative operator effectiveness metrics: {cumulative_file.absolute()} ({len(combined_df)} total rows)")
         
         return str(cumulative_file.absolute())

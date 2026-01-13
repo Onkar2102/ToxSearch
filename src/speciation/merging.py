@@ -17,7 +17,7 @@ def merge_islands(
     sp1: Species,
     sp2: Species,
     current_generation: int,
-    theta_sim: float = 0.4,
+    theta_sim: float = 0.2,
     max_capacity: int = 100,
     w_genotype: float = 0.7,
     w_phenotype: float = 0.3,
@@ -42,7 +42,7 @@ def merge_islands(
         sp1: First species to merge
         sp2: Second species to merge
         current_generation: Current generation number
-        theta_sim: Constant radius for the merged species (default: 0.4)
+        theta_sim: Constant radius for the merged species (default: 0.2, matches config.py)
         max_capacity: Maximum members after merge (default: 100)
         logger: Optional logger instance
     

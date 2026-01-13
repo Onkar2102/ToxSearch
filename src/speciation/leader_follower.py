@@ -96,7 +96,7 @@ def leader_follower_clustering(
     
     if not temp_path_obj.exists():
         logger.error(f"Temp file not found: {temp_path}")
-        return {}
+        return {}, set()
     
     # Read genomes from temp.json
     with open(temp_path_obj, 'r', encoding='utf-8') as f:
@@ -104,7 +104,7 @@ def leader_follower_clustering(
     
     if not genomes:
         logger.warning("No genomes found in temp.json")
-        return {}
+        return {}, set()
     
     # Convert genomes to Individual objects
     population = [Individual.from_genome(genome) for genome in genomes]
@@ -113,7 +113,7 @@ def leader_follower_clustering(
     valid_population = [ind for ind in population if ind.embedding is not None]
     if not valid_population:
         logger.error("No individuals with embeddings")
-        return {}
+        return {}, set()
     
     # Read existing species from speciation_state.json (if exists)
     existing_species: Dict[int, Species] = {}

@@ -60,31 +60,86 @@ class GenomeTracker:
     
     def save(self, path: Optional[str] = None) -> None:
         """
-        Save genome tracker events to JSON file.
+        Save genome tracker events to consolidated JSON file.
+        
+        Always saves to a single consolidated file (genome_tracker.json) that contains
+        all generations' events. This prevents file proliferation and makes analysis easier.
         
         Args:
-            path: Optional path to save file. If None, uses default outputs_path / "genome_tracker_gen_{generation}.json"
+            path: Optional path to save file. If None, uses default outputs_path / "genome_tracker.json" (consolidated)
         """
         from utils import get_system_utils
         _, _, _, get_outputs_path, _, _ = get_system_utils()
         
         if path is None:
             outputs_path = get_outputs_path()
-            path = str(outputs_path / f"genome_tracker_gen_{self.generation}.json")
+            path = str(outputs_path / "genome_tracker.json")  # Always use consolidated file
         
         path_obj = Path(path)
         path_obj.parent.mkdir(parents=True, exist_ok=True)
         
         try:
-            with open(path_obj, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "generation": self.generation,
-                    "total_events": len(self.events),
-                    "events": self.events
-                }, f, indent=2, ensure_ascii=False)
-            self.logger.info(f"Saved genome tracker with {len(self.events)} events to {path}")
+            # Always use consolidated format
+            if path_obj.exists():
+                # Load existing consolidated data
+                with open(path_obj, 'r', encoding='utf-8') as f:
+                    consolidated_data = json.load(f)
+                
+                # Ensure "generations" key exists
+                if "generations" not in consolidated_data:
+                    consolidated_data["generations"] = []
+                
+                # Check if this generation already exists (update it)
+                gen_entry = None
+                for gen in consolidated_data["generations"]:
+                    if gen.get("generation") == self.generation:
+                        gen_entry = gen
+                        break
+                
+                if gen_entry:
+                    # Update existing generation entry
+                    gen_entry["total_events"] = len(self.events)
+                    gen_entry["events"] = self.events
+                else:
+                    # Add new generation entry
+                    consolidated_data["generations"].append({
+                        "generation": self.generation,
+                        "total_events": len(self.events),
+                        "events": self.events
+                    })
+                
+                # Update summary statistics
+                total_events = sum(gen["total_events"] for gen in consolidated_data["generations"])
+                consolidated_data["summary"] = {
+                    "total_generations": len(consolidated_data["generations"]),
+                    "total_events": total_events,
+                    "last_updated": datetime.now().isoformat()
+                }
+                
+                # Save consolidated data
+                with open(path_obj, 'w', encoding='utf-8') as f:
+                    json.dump(consolidated_data, f, indent=2, ensure_ascii=False)
+                
+                self.logger.info(f"Consolidated genome tracker: added {len(self.events)} events for generation {self.generation} to {path}")
+            else:
+                # Create new consolidated file
+                consolidated_data = {
+                    "generations": [{
+                        "generation": self.generation,
+                        "total_events": len(self.events),
+                        "events": self.events
+                    }],
+                    "summary": {
+                        "total_generations": 1,
+                        "total_events": len(self.events),
+                        "last_updated": datetime.now().isoformat()
+                    }
+                }
+                with open(path_obj, 'w', encoding='utf-8') as f:
+                    json.dump(consolidated_data, f, indent=2, ensure_ascii=False)
+                self.logger.info(f"Created consolidated genome tracker with {len(self.events)} events for generation {self.generation} at {path}")
         except Exception as e:
-            self.logger.error(f"Failed to save genome tracker to {path}: {e}")
+            self.logger.error(f"Failed to save genome tracker to {path}: {e}", exc_info=True)
     
     def get_summary(self) -> Dict[str, Any]:
         """

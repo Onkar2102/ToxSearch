@@ -70,7 +70,7 @@ class Cluster0:
     def __init__(
         self,
         min_cluster_size: int = 2,
-        theta_sim: float = 0.4,
+        theta_sim: float = 0.2,
         max_capacity: int = 1000,
         logger=None
     ):

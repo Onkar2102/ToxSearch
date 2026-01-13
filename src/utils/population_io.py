@@ -1365,7 +1365,15 @@ def calculate_average_fitness(
                 _logger.warning(f"Failed to load temp.json for avg_fitness: {e}")
         
         if total_count == 0:
-            _logger.warning("No genomes found for average fitness calculation")
+            # This is expected before distribution (generation 0) or if files are empty
+            # Only warn if we're not in generation 0 or if files should exist
+            if not include_temp:
+                # After distribution, elites.json and reserves.json should have genomes
+                # If they're empty, this might indicate an issue
+                _logger.debug("No genomes found for average fitness calculation (after speciation)")
+            else:
+                # Before distribution, temp.json might be empty if already processed
+                _logger.debug("No genomes found for average fitness calculation (before speciation)")
             return 0.0
         
         avg_fitness = total_score / total_count
@@ -1649,8 +1657,9 @@ def update_adaptive_selection_logic(
         if total_generations <= stagnation_limit:
             selection_mode = "default"
             _logger.info(f"Using DEFAULT mode for initial {stagnation_limit} generations (generation {total_generations})")
-        elif slope_of_avg_fitness < 0:
+        elif slope_of_avg_fitness < -0.0001:  # Use small threshold to handle -0.0 case
             # Check EXPLOIT condition first (negative fitness slope)
+            # Note: -0.0 == 0.0 in Python, so we use a small threshold
             selection_mode = "exploit"
             _logger.info(f"Switching to EXPLOIT mode (negative fitness slope: {slope_of_avg_fitness:.4f})")
         elif generations_since_improvement >= stagnation_limit:
@@ -1903,13 +1912,19 @@ def update_evolution_tracker_with_statistics(
                 tracker["cumulative_budget"]["total_evaluation_time"] + statistics.get("total_evaluation_time", 0.0), 2
             )
         
-        # Update population max toxicity at tracker level (use actual max, not default)
+        # Update population max toxicity at tracker level (cumulative max across all generations)
+        # This tracks the maximum toxicity score achieved across all generations
         new_max = statistics.get("population_max_toxicity")
         if new_max and new_max > 0.0001:
+            # Initialize if not present
+            if "population_max_toxicity" not in tracker:
+                tracker["population_max_toxicity"] = 0.0001
+            # Update to cumulative max (always keep the highest value seen)
             tracker["population_max_toxicity"] = max(
                 tracker.get("population_max_toxicity", 0.0001),
                 new_max
             )
+            _logger.debug(f"Updated cumulative population_max_toxicity to {tracker['population_max_toxicity']:.4f}")
         
         # Also update genome_id and variant counts if provided
         if statistics.get("best_genome_id"):

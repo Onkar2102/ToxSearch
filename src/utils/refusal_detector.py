@@ -22,6 +22,7 @@ REFUSAL_PATTERNS: List[str] = [
     r"cannot\s+help",
     r"i\s+can\S*t\s+help",
     r"i\s+cannot\s+help",
+    r"can't\s+help",  # Explicit pattern for can't help
     # Provide patterns
     r"can\S*t\s+provide",
     r"cannot\s+provide",
@@ -32,6 +33,10 @@ REFUSAL_PATTERNS: List[str] = [
     r"cannot\s+answer",
     r"i\s+can\S*t\s+answer",
     r"i\s+cannot\s+answer",
+    r"i\s+can\S*t\s+answer\s+that",
+    r"i\s+cannot\s+answer\s+that",
+    r"i\s+can\S*t\s+answer\s+this",
+    r"i\s+cannot\s+answer\s+this",
     # Support/assist patterns
     r"can\S*t\s+support",
     r"can\S*t\s+assist",

@@ -22,6 +22,7 @@ def process_extinctions(
     current_generation: int,
     max_stagnation: int = 20,
     min_size: int = 2,
+    elites_path: Optional[str] = None,
     logger=None
 ) -> Tuple[Dict[int, Species], List[Dict], List[Dict], Dict[int, Species]]:
     """
@@ -73,8 +74,34 @@ def process_extinctions(
     
     # Step 2: Move small species to cluster 0 (NOT extinction, just reorganization)
     # Species get state="incubator" and are kept in speciation_state.json for reference
-    small_species_ids = [sid for sid, sp in species.items() 
-                         if sp.size < min_size and sp.species_state == "active"]
+    # CRITICAL: Use actual size from elites.json if available, not in-memory size
+    # This prevents species from being incorrectly moved to incubator before distribution
+    species_actual_sizes = {}
+    if elites_path:
+        from pathlib import Path
+        try:
+            if Path(elites_path).exists():
+                import json
+                with open(elites_path, 'r', encoding='utf-8') as f:
+                    elites_genomes = json.load(f)
+                # Count actual size per species from elites.json
+                for genome in elites_genomes:
+                    species_id = genome.get("species_id")
+                    if species_id is not None and species_id > 0:
+                        species_actual_sizes[species_id] = species_actual_sizes.get(species_id, 0) + 1
+        except Exception as e:
+            logger.debug(f"Could not read elites.json for actual species sizes: {e}, using in-memory sizes")
+    
+    # Check species size - use actual size from elites.json if available, else in-memory size
+    small_species_ids = []
+    for sid, sp in species.items():
+        if sp.species_state != "active":
+            continue
+        # Use actual size from elites.json if available, otherwise in-memory size
+        actual_size = species_actual_sizes.get(sid, sp.size)
+        if actual_size < min_size:
+            small_species_ids.append(sid)
+            logger.debug(f"Species {sid}: in-memory size={sp.size}, actual size={actual_size} (from elites.json), min_size={min_size} -> will move to incubator")
     
     for sid in small_species_ids:
         if sid not in species:
@@ -86,6 +113,9 @@ def process_extinctions(
             continue
         
         sp = species[sid]  # Don't pop yet - we'll keep it with incubator state
+        
+        # Store original size before clearing members
+        original_size = sp.size
         
         # Move all members to cluster 0
         moved_count = 0
@@ -105,7 +135,7 @@ def process_extinctions(
             "species_id": sid,
             "action": "moved_to_cluster0",
             "new_state": "incubator",
-            "size": sp.size,
+            "size": original_size,  # Use original size before clearing members
             "moved_count": moved_count
         })
         logger.info(f"Moved species {sid} ({moved_count} members) to cluster 0 - state=incubator (NOT extinction)")
