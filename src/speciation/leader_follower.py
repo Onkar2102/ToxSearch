@@ -36,23 +36,35 @@ def leader_follower_clustering(
     """
     Leader-Follower clustering algorithm that reads and writes files directly.
     
-    This function:
+    This function uses DEFERRED SPECIES ID ASSIGNMENT:
+    - Species IDs are only assigned when a leader gains at least one follower
+    - Individuals that don't fit existing species become "potential leaders"
+    - Potential leaders become actual species only when another individual joins them
+    - Potential leaders without followers stay in cluster 0 (reserves)
+    
+    This ensures:
+    - No wasted species IDs
+    - No single-member species to clean up
+    - Species inherently have minimum size of 2
+    
+    Pipeline:
     1. Reads genomes from temp.json (must have prompt_embedding field)
     2. Reads existing species from speciation_state.json (if exists)
-    3. Checks if any species exist (excluding species 0)
-    4. If no species exist, treats as Generation 0:
-       - Sorts genomes by fitness (descending)
-       - Assigns highest fitness genome as leader of species 1
-       - For each remaining genome, checks distance to all leaders
-       - If within theta_sim, assigns to that species and updates leader if needed
-       - If not, creates new species
-       - After processing all, moves single-member species to species 0 (reserves)
-    5. If species exist (Generation N):
-       - Checks each genome against all existing species leaders
-       - Also checks against reserves genomes (if speciation_state.json has cluster0)
-       - Assigns to nearest species if within theta_sim, else creates new species
-    6. Updates temp.json with species_id for each genome
-    7. Updates speciation_state.json with new species structure
+    3. For Generation 0 (no species exist):
+       - First individual becomes first potential leader
+       - Subsequent individuals check against potential leaders
+       - If within theta_sim of a potential leader, species forms (ID assigned)
+       - If not, individual becomes a new potential leader
+       - Potential leaders without followers go to cluster 0
+    4. For Generation N:
+       - Checks each genome against existing species leaders
+       - If within theta_sim, assigns to that species
+       - If not, checks against cluster 0 outliers (from reserves.json) as potential leaders
+       - If within theta_sim of an outlier, forms a new species (outlier + new individual)
+       - If not within radius of any leader or outlier, adds to cluster 0
+       - check_speciation() handles additional species formation from remaining cluster 0 individuals
+    5. Updates temp.json with species_id for each genome
+    6. Updates speciation_state.json with new species structure
     
     Args:
         temp_path: Path to temp.json (defaults to outputs_path / "temp.json")
@@ -157,11 +169,6 @@ def leader_follower_clustering(
                 )
                 existing_species[sid] = species
             
-            # Note: cluster0 members are not restored here since:
-            # 1. Full genome data is stored in reserves.json, not speciation_state.json
-            # 2. speciation_state.json only stores cluster0 metadata (size, speciation_events)
-            # For Generation N, checking against reserves is optional and not implemented here.
-            
             # Update SpeciesIdGenerator to avoid ID conflicts
             if existing_species:
                 max_species_id = max(existing_species.keys())
@@ -176,6 +183,30 @@ def leader_follower_clustering(
     # Determine if this is Generation 0 (no species exist, or only species 0)
     is_generation_0 = len(existing_species) == 0
     
+    # Load cluster 0 outliers for Generation N (if not already loaded above)
+    cluster0_outliers: List[Tuple[np.ndarray, Optional[np.ndarray], Individual]] = []
+    if not is_generation_0:
+        outputs_path = get_outputs_path()
+        reserves_path = outputs_path / "reserves.json"
+        if reserves_path.exists():
+            try:
+                with open(reserves_path, 'r', encoding='utf-8') as f:
+                    reserves_genomes = json.load(f)
+                for genome in reserves_genomes:
+                    if genome.get("prompt_embedding"):
+                        outlier_emb = np.array(genome["prompt_embedding"])
+                        # Extract phenotype if available
+                        outlier_pheno = None
+                        if genome.get("moderation_result"):
+                            from .phenotype_distance import extract_phenotype_vector
+                            outlier_pheno = extract_phenotype_vector(genome.get("moderation_result"))
+                        outlier_ind = Individual.from_genome(genome)
+                        if outlier_ind.embedding is not None:
+                            cluster0_outliers.append((outlier_emb, outlier_pheno, outlier_ind))
+                logger.debug(f"Loaded {len(cluster0_outliers)} cluster 0 outliers from reserves.json")
+            except Exception as e:
+                logger.warning(f"Failed to load cluster 0 outliers from reserves.json: {e}")
+    
     # Sort population by fitness (descending) - highest fitness processed first
     sorted_pop = sorted(valid_population, key=lambda x: x.fitness, reverse=True)
     
@@ -187,34 +218,41 @@ def leader_follower_clustering(
         if sp.leader.embedding is not None
     ]
     
-    # For Generation 0: First individual (highest fitness) becomes leader of species 1
+    # DEFERRED SPECIES ID ASSIGNMENT
+    # For Generation 0: Use potential leaders - species only form when a follower appears
+    # For Generation N: Use existing species leaders
+    
+    # Potential leaders: List of (species_id_or_None, embedding, phenotype, Individual)
+    # species_id is None until a follower is found, then it's assigned
+    potential_leaders: List[Tuple[Optional[int], np.ndarray, Optional[np.ndarray], Individual]] = []
+    
+    # For Generation N: Track cluster 0 outliers as potential leaders
+    # Format: (None, embedding, phenotype, Individual) - None means no species yet
+    cluster0_potential_leaders: List[Tuple[Optional[int], np.ndarray, Optional[np.ndarray], Individual]] = []
+    if not is_generation_0 and cluster0_outliers:
+        # Convert cluster 0 outliers to potential leaders
+        for outlier_emb, outlier_pheno, outlier_ind in cluster0_outliers:
+            cluster0_potential_leaders.append((None, outlier_emb, outlier_pheno, outlier_ind))
+        logger.debug(f"Generation N: Loaded {len(cluster0_potential_leaders)} cluster 0 outliers as potential leaders")
+    
     if is_generation_0:
+        # First individual becomes first potential leader (no species yet)
         first = sorted_pop[0]
-        first_species_id = 1  # Species IDs start from 1
-        first_species = Species(
-            id=first_species_id,
-            leader=first,
-            members=[first],
-            radius=theta_sim,
-            created_at=current_generation,
-            last_improvement=current_generation,
-            cluster_origin="natural",  # Always "natural" for new species, never None
-            parent_ids=None,
-            leader_distance=0.0  # First leader has distance 0 (reference point)
-        )
-        species[first_species_id] = first_species
-        leaders.append((first_species_id, first.embedding, first.phenotype))
+        first.species_id = CLUSTER_0_ID  # Stays in cluster 0 until follower found
+        potential_leaders.append((None, first.embedding, first.phenotype, first))
         remaining_pop = sorted_pop[1:]
+        logger.debug(f"Generation 0: First individual {first.id} becomes potential leader (cluster 0)")
     else:
-        # Generation N: process all individuals
+        # Generation N: process all individuals against existing species and cluster 0 outliers
         remaining_pop = sorted_pop
     
     # Process remaining individuals
     for ind in remaining_pop:
+        assigned = False
         min_dist = float('inf')
         nearest_leader_id = None
         
-        # Find nearest leader from existing species using ensemble distance
+        # 1. First check against existing species leaders (Gen N, or Gen 0 after species form)
         if leaders:
             if len(leaders) > 1:
                 leader_embeddings = np.array([emb for _, emb, _ in leaders])
@@ -240,70 +278,159 @@ def leader_follower_clustering(
                 )
                 nearest_leader_id = leaders[0][0]
         
-        # Decision: assign to species, add to cluster 0, or create new species
-        if nearest_leader_id is not None and min_dist < theta_sim:
-            # Within threshold -> assign as follower
-            sp = species[nearest_leader_id]
-            sp.add_member(ind)
-            ind.species_id = nearest_leader_id
-            species_with_new_members.add(nearest_leader_id)  # Track this species received a new member
-            # Immediately update leader if this new member has higher fitness
-            if ind.fitness > sp.leader.fitness:
-                if ind.fitness > sp.max_fitness:
-                    sp.max_fitness = ind.fitness
-                    sp.stagnation = 0  # Reset stagnation when max_fitness improves
-                sp.leader = ind
-                sp.leader_distance = min_dist  # Store distance at which new leader was assigned
-                # Update leader embedding in leaders list
-                for i, (sid, _, _) in enumerate(leaders):
-                    if sid == nearest_leader_id:
-                        leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
-                        break
-        else:
-            # Outside all species thresholds
-            # For Generation 0: Create new species (will be cleaned up later if single-member)
-            # For Generation N: Add to cluster 0, let check_speciation() form new species if possible
-            if is_generation_0:
-                # Generation 0: Create new species directly
-                new_species_id = generate_species_id()
-                new_species = Species(
-                    id=new_species_id,
-                    leader=ind,
-                    members=[ind],
-                    radius=theta_sim,
-                    created_at=current_generation,
-                    last_improvement=current_generation,
-                    cluster_origin="natural",  # Always "natural" for new species, never None
-                    parent_ids=None,
-                    leader_distance=0.0  # New leader is reference point for new species
+            # Assign to existing species if within threshold
+            if nearest_leader_id is not None and min_dist < theta_sim:
+                sp = species[nearest_leader_id]
+                sp.add_member(ind)
+                ind.species_id = nearest_leader_id
+                species_with_new_members.add(nearest_leader_id)
+                assigned = True
+                # Update leader if this new member has higher fitness
+                if ind.fitness > sp.leader.fitness:
+                    if ind.fitness > sp.max_fitness:
+                        sp.max_fitness = ind.fitness
+                        sp.stagnation = 0
+                    sp.leader = ind
+                    sp.leader_distance = min_dist
+                    for i, (sid, _, _) in enumerate(leaders):
+                        if sid == nearest_leader_id:
+                            leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
+                            break
+        
+        # 2. For Generation 0: Check against potential leaders
+        if not assigned and is_generation_0 and potential_leaders:
+            for idx, (pl_species_id, pl_emb, pl_pheno, pl_ind) in enumerate(potential_leaders):
+                dist = ensemble_distance(
+                    ind.embedding, pl_emb,
+                    ind.phenotype, pl_pheno,
+                    w_genotype, w_phenotype
                 )
-                species[new_species_id] = new_species
-                ind.species_id = new_species_id
-                species_with_new_members.add(new_species_id)  # Track new species creation
-                leaders.append((new_species_id, ind.embedding, ind.phenotype))
-            else:
-                # Generation N: Add to cluster 0 (reserves)
-                # check_speciation() will be called later to form new species from cluster 0 if possible
+                if dist < theta_sim:
+                    if pl_species_id is None:
+                        # First follower found! Create the species now
+                        new_species_id = generate_species_id()
+                        new_species = Species(
+                            id=new_species_id,
+                            leader=pl_ind,
+                            members=[pl_ind, ind],
+                            radius=theta_sim,
+                            created_at=current_generation,
+                            last_improvement=current_generation,
+                            cluster_origin="natural",
+                            parent_ids=None,
+                            leader_distance=0.0
+                        )
+                        species[new_species_id] = new_species
+                        pl_ind.species_id = new_species_id
+                        ind.species_id = new_species_id
+                        species_with_new_members.add(new_species_id)
+                        # Update potential_leaders entry with new species ID
+                        potential_leaders[idx] = (new_species_id, pl_emb, pl_pheno, pl_ind)
+                        # Add to leaders list for future distance checks
+                        leaders.append((new_species_id, pl_emb, pl_pheno))
+                        logger.info(f"Species {new_species_id} formed: leader {pl_ind.id} + follower {ind.id}")
+                    else:
+                        # Species already exists (formed earlier), just add as member
+                        sp = species[pl_species_id]
+                        sp.add_member(ind)
+                        ind.species_id = pl_species_id
+                        species_with_new_members.add(pl_species_id)
+                        # Update leader if higher fitness
+                        if ind.fitness > sp.leader.fitness:
+                            if ind.fitness > sp.max_fitness:
+                                sp.max_fitness = ind.fitness
+                                sp.stagnation = 0
+                            sp.leader = ind
+                            sp.leader_distance = dist
+                    assigned = True
+                    break
+        
+        # 3. For Generation N: Check against cluster 0 outliers (potential leaders)
+        if not assigned and not is_generation_0 and cluster0_potential_leaders:
+            for idx, (pl_species_id, pl_emb, pl_pheno, pl_ind) in enumerate(cluster0_potential_leaders):
+                dist = ensemble_distance(
+                    ind.embedding, pl_emb,
+                    ind.phenotype, pl_pheno,
+                    w_genotype, w_phenotype
+                )
+                if dist < theta_sim:
+                    if pl_species_id is None:
+                        # First follower found! Create the species now with both outlier and new individual
+                        new_species_id = generate_species_id()
+                        # Determine leader (highest fitness)
+                        if ind.fitness > pl_ind.fitness:
+                            leader = ind
+                            follower = pl_ind
+                        else:
+                            leader = pl_ind
+                            follower = ind
+                        
+                        new_species = Species(
+                            id=new_species_id,
+                            leader=leader,
+                            members=[leader, follower],
+                            radius=theta_sim,
+                            created_at=current_generation,
+                            last_improvement=current_generation,
+                            cluster_origin="natural",
+                            parent_ids=None,
+                            leader_distance=0.0
+                        )
+                        species[new_species_id] = new_species
+                        pl_ind.species_id = new_species_id
+                        ind.species_id = new_species_id
+                        species_with_new_members.add(new_species_id)
+                        # Update cluster0_potential_leaders entry with new species ID
+                        cluster0_potential_leaders[idx] = (new_species_id, pl_emb, pl_pheno, pl_ind)
+                        # Add to leaders list for future distance checks
+                        leaders.append((new_species_id, leader.embedding, leader.phenotype))
+                        logger.info(f"Species {new_species_id} formed from cluster 0: leader {leader.id} + follower {follower.id}")
+                    else:
+                        # Species already exists (formed earlier), just add as member
+                        sp = species[pl_species_id]
+                        sp.add_member(ind)
+                        ind.species_id = pl_species_id
+                        species_with_new_members.add(pl_species_id)
+                        # Update leader if higher fitness
+                        if ind.fitness > sp.leader.fitness:
+                            if ind.fitness > sp.max_fitness:
+                                sp.max_fitness = ind.fitness
+                                sp.stagnation = 0
+                            sp.leader = ind
+                            sp.leader_distance = dist
+                            # Update leaders list
+                            for i, (sid, _, _) in enumerate(leaders):
+                                if sid == pl_species_id:
+                                    leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
+                                    break
+                    assigned = True
+                    break
+        
+        # 4. If not assigned to any species, potential leader, or cluster 0 outlier
+        if not assigned:
+            if is_generation_0:
+                # Become a new potential leader
                 ind.species_id = CLUSTER_0_ID
-                logger.debug(f"Individual {ind.id} outside all species -> added to cluster 0 (species_id=0)")
+                potential_leaders.append((None, ind.embedding, ind.phenotype, ind))
+                logger.debug(f"Individual {ind.id} becomes potential leader (cluster 0)")
+            else:
+                # Generation N: Not similar to species leaders or cluster 0 outliers -> add to cluster 0
+                ind.species_id = CLUSTER_0_ID
+                logger.debug(f"Individual {ind.id} outside all species and outliers -> added to cluster 0 (species_id=0)")
     
-    # For Generation 0: Move single-member species to species 0 (reserves)
-    # Minimum species size is 2 (leader + at least one follower)
+    # Log summary: potential leaders without followers stay in cluster 0
     if is_generation_0:
-        single_member_species = []
-        for sid, sp in list(species.items()):
-            if len(sp.members) == 1:
-                # Only leader, no followers -> move to species 0
-                single_member_species.append(sid)
-                sp.members[0].species_id = CLUSTER_0_ID
-        
-        # Remove single-member species
-        for sid in single_member_species:
-            del species[sid]
-            leaders = [(lid, emb, pheno) for lid, emb, pheno in leaders if lid != sid]
-        
-        if single_member_species:
-            logger.info(f"Moved {len(single_member_species)} single-member species to reserves (minimum species size is 2)")
+        unassigned_potential_leaders = sum(1 for pl_sid, _, _, _ in potential_leaders if pl_sid is None)
+        if unassigned_potential_leaders > 0:
+            logger.info(f"{unassigned_potential_leaders} potential leaders without followers -> stay in cluster 0")
+    else:
+        # Generation N: Log how many outliers formed species
+        outliers_formed_species = sum(1 for pl_sid, _, _, _ in cluster0_potential_leaders if pl_sid is not None)
+        outliers_still_in_cluster0 = sum(1 for pl_sid, _, _, _ in cluster0_potential_leaders if pl_sid is None)
+        if outliers_formed_species > 0:
+            logger.info(f"Generation N: {outliers_formed_species} cluster 0 outliers formed species")
+        if outliers_still_in_cluster0 > 0:
+            logger.debug(f"Generation N: {outliers_still_in_cluster0} cluster 0 outliers remain (no followers found)")
     
     # Update temp.json with species_id for each genome
     genome_id_to_species = {ind.id: ind.species_id for ind in valid_population}
@@ -318,6 +445,34 @@ def leader_follower_clustering(
     # Save updated temp.json
     with open(temp_path_obj, 'w', encoding='utf-8') as f:
         json.dump(genomes, f, indent=2, ensure_ascii=False)
+    
+    # For Generation N: Update reserves.json for outliers that formed species
+    if not is_generation_0 and cluster0_potential_leaders:
+        outputs_path = get_outputs_path()
+        reserves_path = outputs_path / "reserves.json"
+        if reserves_path.exists():
+            try:
+                with open(reserves_path, 'r', encoding='utf-8') as f:
+                    reserves_genomes = json.load(f)
+                
+                # Update species_id for outliers that formed species
+                updated_count = 0
+                for pl_species_id, _, _, pl_ind in cluster0_potential_leaders:
+                    if pl_species_id is not None:  # This outlier formed a species
+                        for genome in reserves_genomes:
+                            if genome.get("id") == pl_ind.id:
+                                genome["species_id"] = pl_species_id
+                                updated_count += 1
+                                logger.debug(f"Updated outlier {pl_ind.id} in reserves.json: species_id={pl_species_id}")
+                                break
+                
+                if updated_count > 0:
+                    # Save updated reserves.json
+                    with open(reserves_path, 'w', encoding='utf-8') as f:
+                        json.dump(reserves_genomes, f, indent=2, ensure_ascii=False)
+                    logger.info(f"Updated {updated_count} outliers in reserves.json that formed species")
+            except Exception as e:
+                logger.warning(f"Failed to update reserves.json for outliers: {e}")
     
     # Update speciation_state.json with new species structure
     # Note: This only updates species, cluster0 is managed separately by SpeciationModule

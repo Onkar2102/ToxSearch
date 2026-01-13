@@ -198,7 +198,7 @@ def calculate_table4_metrics(
                     _logger.info(f"Sample variant initial_state: {repr(sample.get('initial_state')) if sample else 'None'}")
                 # Only return None if we also don't have operator_statistics
                 if not operator_statistics or len(operator_statistics) == 0:
-            return None
+                    return None
         
         # Use passed operator_statistics if provided, otherwise try to load from EvolutionTracker
         # Note: operator_statistics should be passed directly from the caller to avoid race condition
@@ -365,12 +365,12 @@ def save_operator_effectiveness_cumulative(
         if cumulative_file.exists():
             # Load existing data
             try:
-            existing_df = pd.read_csv(cumulative_file)
+                existing_df = pd.read_csv(cumulative_file)
                 # Check if this generation already exists, remove it if so
                 existing_df = existing_df[existing_df['generation'] != current_generation]
                 # Append new data (only if metrics_df is not empty)
                 if not metrics_df.empty:
-            combined_df = pd.concat([existing_df, metrics_df], ignore_index=True)
+                    combined_df = pd.concat([existing_df, metrics_df], ignore_index=True)
                 else:
                     # If metrics_df is empty, keep existing data
                     combined_df = existing_df

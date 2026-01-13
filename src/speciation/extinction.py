@@ -23,7 +23,7 @@ def process_extinctions(
     max_stagnation: int = 20,
     min_size: int = 2,
     logger=None
-) -> Tuple[Dict[int, Species], List[Dict], List[Dict]]:
+) -> Tuple[Dict[int, Species], List[Dict], List[Dict], Dict[int, Species]]:
     """
     Process species freezing and move small species to cluster 0.
     
@@ -44,9 +44,10 @@ def process_extinctions(
         logger: Optional logger instance
     
     Returns:
-        Tuple of (updated_species, extinction_events, moved_to_cluster0_events)
+        Tuple of (updated_species, extinction_events, moved_to_cluster0_events, incubator_species)
         - extinction_events: Only frozen species (stagnation-based)
         - moved_to_cluster0_events: Species moved to cluster 0 (size-based, NOT extinction)
+        - incubator_species: Dict of species moved to incubator state (for preservation in historical_species)
     """
     if logger is None:
         logger = get_logger("Extinction")
@@ -109,8 +110,8 @@ def process_extinctions(
         })
         logger.info(f"Moved species {sid} ({moved_count} members) to cluster 0 - state=incubator (NOT extinction)")
     
-    # Remove incubator species from active species dict (they're preserved in speciation_state.json separately)
+    # Remove incubator species from active species dict (they're preserved in historical_species)
     for sid in incubator_species:
         species.pop(sid, None)
     
-    return species, extinction_events, moved_to_cluster0_events
+    return species, extinction_events, moved_to_cluster0_events, incubator_species

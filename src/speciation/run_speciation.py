@@ -282,10 +282,15 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         _archive_individuals(excess_individuals, current_generation, "cluster0_capacity_exceeded")
     
     # Check for speciation events in cluster 0
-    new_species = state["cluster0"].check_speciation(current_generation)
-    if new_species:
-        state["species"][new_species.id] = new_species
-        state["_current_gen_events"]["speciation"] += 1
+    # Loop until no more species can form (handles multiple clusters in cluster 0)
+    while True:
+        new_species = state["cluster0"].check_speciation(current_generation)
+        if new_species:
+            state["species"][new_species.id] = new_species
+            state["_current_gen_events"]["speciation"] += 1
+            state["logger"].info(f"Species {new_species.id} formed from cluster 0 ({new_species.size} members)")
+        else:
+            break
     
     # Step 4: Record fitness for species that received new members (optimization)
     for sid in species_with_new_members:
@@ -306,7 +311,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state["_current_gen_events"]["merge"] = len(merge_events)
     
     # Step 6: Freeze stagnant species (extinction) and move small species to cluster 0 (not extinction)
-    state["species"], extinction_events, moved_to_cluster0_events = process_extinctions(
+    state["species"], extinction_events, moved_to_cluster0_events, incubator_species = process_extinctions(
         state["species"],
         state["cluster0"],
         current_generation,
@@ -326,6 +331,12 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["historical_species"][sid] = sp
         del state["species"][sid]
         state["logger"].debug(f"Moved frozen species {sid} to historical_species")
+    
+    # Move incubator species to historical_species for preservation
+    # (incubator species are returned separately by process_extinctions)
+    for sid, sp in incubator_species.items():
+        state["historical_species"][sid] = sp
+        state["logger"].debug(f"Moved incubator species {sid} to historical_species")
     
     # Step 7: Update c-TF-IDF labels for all species
     from .labeling import update_species_labels

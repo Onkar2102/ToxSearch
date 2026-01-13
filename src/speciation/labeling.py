@@ -131,6 +131,27 @@ def extract_species_labels(
         return {sid: [] for sid in species_ids}
     
     try:
+        # Adjust max_df and min_df based on number of documents to avoid ValueError
+        n_docs = len(documents)
+        
+        # If max_df as ratio results in fewer documents than min_df, adjust
+        if isinstance(max_df, float):
+            max_df_abs = int(max_df * n_docs)
+        else:
+            max_df_abs = max_df
+        
+        # Ensure max_df_abs >= min_df and is at least 1
+        if max_df_abs < min_df:
+            # Adjust max_df to be at least min_df + 1, or n_docs if that's smaller
+            max_df_abs = min(min_df + 1, n_docs)
+            max_df = max_df_abs / n_docs if n_docs > 0 else 1.0
+            logger.debug(f"Adjusted max_df to {max_df:.3f} (absolute: {max_df_abs}) for {n_docs} documents")
+        
+        # If we have very few documents, adjust min_df to be at most n_docs - 1
+        if min_df >= n_docs:
+            min_df = max(1, n_docs - 1) if n_docs > 1 else 1
+            logger.debug(f"Adjusted min_df to {min_df} for {n_docs} documents")
+        
         # Build vocabulary with CountVectorizer
         vectorizer = CountVectorizer(
             min_df=min_df,
