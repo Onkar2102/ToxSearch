@@ -833,6 +833,7 @@ def save_state(path: str) -> None:
         "species": species_dict,
         "incubators": sorted(incubator_ids),  # Just list of species IDs
         "cluster0": cluster0_dict,
+        "cluster0_size_from_reserves": actual_cluster0_size,  # Store actual size from reserves.json
         "global_best_id": state["global_best"].id if state["global_best"] else None,
         "metrics": state["metrics_tracker"].to_dict()
     }

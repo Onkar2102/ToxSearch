@@ -273,6 +273,22 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     except Exception as e:
         logger.warning("Failed to update adaptive selection logic: %s", e)
 
+    # Calculate max_score_variants from temp.json BEFORE speciation (temp.json gets cleared during speciation)
+    # max_score_variants should reflect the highest fitness from variants created in this generation
+    temp_path_obj = get_outputs_path() / "temp.json"
+    gen0_max_score = 0.0001
+    if temp_path_obj.exists():
+        try:
+            with open(temp_path_obj, 'r', encoding='utf-8') as f:
+                temp_genomes = json.load(f)
+            if temp_genomes:
+                scores = [_extract_north_star_score(g, north_star_metric) for g in temp_genomes if g]
+                scores = [s for s in scores if s > 0]  # Filter out zero scores
+                if scores:
+                    gen0_max_score = round(max(scores), 4)
+        except:
+            pass
+    
     # Assign species/reserves for generation 0 (this also distributes genomes)
     try:
         logger.info("Running speciation on evaluated genomes...")
@@ -352,31 +368,15 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             log_file=log_file
         )
         
-        # Get max toxicity and best genome from temp.json (before it was cleared by speciation)
-        temp_path = get_outputs_path() / "temp.json"
-        max_toxicity = 0.0
-        best_genome_id = None
-        if temp_path.exists():
-            try:
-                with open(temp_path, 'r', encoding='utf-8') as f:
-                    temp_genomes = json.load(f)
-                if temp_genomes:
-                    scores = [(_extract_north_star_score(g, north_star_metric), g.get("id")) for g in temp_genomes]
-                    if scores:
-                                best_score, best_genome_id = max(scores, key=lambda x: x[0])
-                                max_toxicity = best_score
-            except:
-                pass
-        
         # Add additional metrics to stats
-        gen0_stats["population_max_toxicity"] = max_toxicity
-        gen0_stats["best_genome_id"] = best_genome_id
+        # max_score_variants should reflect the highest fitness from temp.json (variants created in this generation)
+        gen0_stats["population_max_toxicity"] = gen0_max_score
+        gen0_stats["best_genome_id"] = None  # Can be calculated if needed
         gen0_stats["variants_created"] = 0  # No variants in generation 0
         gen0_stats["mutation_variants"] = 0
         gen0_stats["crossover_variants"] = 0
-        # For generation 0, max_score_variants should be the population max (initial population, not variants)
-        # This represents the best score in the initial seed population
-        gen0_stats["max_score_variants"] = max_toxicity if max_toxicity > 0.0001 else 0.0001
+        # For generation 0, max_score_variants is the max from temp.json (initial population before speciation)
+        gen0_stats["max_score_variants"] = gen0_max_score
         gen0_stats["min_score_variants"] = 0.0001  # Default for generation 0
         gen0_stats["avg_fitness_variants"] = 0.0001  # Default for generation 0
         
@@ -485,35 +485,53 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             best_genome_id = None
             
             temp_path_obj = get_outputs_path() / "temp.json"
+            remaining_variants = []
             if temp_path_obj.exists():
                 with open(temp_path_obj, 'r', encoding='utf-8') as f:
-                    temp_variants = json.load(f)
+                    remaining_variants = json.load(f)
+            
+            # Calculate variants remaining in temp.json (after deduplication/rejection)
+            mutation_count = sum(1 for v in remaining_variants if v and v.get("variant_type") == "mutation")
+            crossover_count = sum(1 for v in remaining_variants if v and v.get("variant_type") == "crossover")
+            remaining_count = mutation_count + crossover_count
+            
+            # Calculate total variants generated (before deduplication/rejection)
+            # Total = remaining + duplicates + rejections from operator statistics
+            total_duplicates = 0
+            total_rejections = 0
+            if operator_statistics:
+                for op_name, op_stats in operator_statistics.items():
+                    if isinstance(op_stats, dict):
+                        total_duplicates += op_stats.get("duplicates_removed", 0)
+                        total_rejections += op_stats.get("question_mark_rejections", 0)
+            
+            total_generated = remaining_count + total_duplicates + total_rejections
+            
+            variant_counts = {
+                "variants_created": total_generated,  # Total generated (before deduplication/rejection)
+                "mutation_variants": mutation_count,  # Remaining mutation variants
+                "crossover_variants": crossover_count  # Remaining crossover variants
+            }
+            
+            if remaining_variants:
+                # Calculate variant statistics (max, min, avg fitness) from remaining variants
+                scores = [(_extract_north_star_score(v, north_star_metric), v.get("id")) for v in remaining_variants if v]
                 
-                if temp_variants:
-                    # Calculate variant counts
-                    mutation_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "mutation")
-                    crossover_count = sum(1 for v in temp_variants if v and v.get("variant_type") == "crossover")
-                    total_count = mutation_count + crossover_count
-                    
-                    variant_counts = {
-                        "variants_created": total_count,
-                        "mutation_variants": mutation_count,
-                        "crossover_variants": crossover_count
-                    }
-                    
-                    # Calculate variant statistics (max, min, avg fitness)
-                    scores = [(_extract_north_star_score(v, north_star_metric), v.get("id")) for v in temp_variants if v]
-                    
-                    if scores:
-                        max_score_variants = round(max(s[0] for s in scores), 4)
-                        min_score_variants = round(min(s[0] for s in scores), 4)
-                        avg_fitness_variants = round(sum(s[0] for s in scores) / len(scores), 4)
-                        best_score, best_genome_id = max(scores, key=lambda x: x[0])
-                        max_toxicity = best_score
-                    
-                    logger.info("Gen %d: %d variants (%d mutation, %d crossover), max=%.4f, min=%.4f, avg=%.4f", 
-                               generation_count, total_count, mutation_count, crossover_count,
-                               max_score_variants, min_score_variants, avg_fitness_variants)
+                if scores:
+                    max_score_variants = round(max(s[0] for s in scores), 4)
+                    min_score_variants = round(min(s[0] for s in scores), 4)
+                    avg_fitness_variants = round(sum(s[0] for s in scores) / len(scores), 4)
+                    best_score, best_genome_id = max(scores, key=lambda x: x[0])
+                    max_toxicity = best_score
+                
+                logger.info("Gen %d: %d variants generated (%d remaining, %d duplicates, %d rejections), max=%.4f, min=%.4f, avg=%.4f", 
+                           generation_count, total_generated, remaining_count, total_duplicates, total_rejections,
+                           max_score_variants, min_score_variants, avg_fitness_variants)
+            else:
+                # If all variants were removed from temp.json (duplicates/rejections), max_score_variants stays at 0.0001
+                # This is correct: max_score_variants should reflect variants from temp.json, not the distributed population
+                logger.info("Gen %d: %d variants generated (%d duplicates, %d rejections), all removed from temp.json", 
+                           generation_count, total_generated, total_duplicates, total_rejections)
             
             # Run speciation on evaluated genomes (distribution happens inside speciation)
             try:

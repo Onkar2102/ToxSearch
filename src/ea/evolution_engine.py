@@ -904,6 +904,9 @@ class EvolutionEngine:
             if duplicates_removed > 0:
                 with open(temp_path, 'w', encoding='utf-8') as f:
                     json.dump(unique_variants, f, indent=2, ensure_ascii=False)
+                self.logger.debug(f"Intra-temp deduplication: {len(variants)} → {len(unique_variants)} ({duplicates_removed} duplicates removed)")
+            else:
+                self.logger.debug(f"Intra-temp deduplication: {len(variants)} variants, no duplicates found")
 
             return duplicates_removed
         except Exception as e:
