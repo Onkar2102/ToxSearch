@@ -1,0 +1,128 @@
+{
+  "analysis_metadata": {
+    "total_json_files_analyzed": 448,
+    "total_responses_analyzed": 46855,
+    "refusal_responses_found": 6083,
+    "coverage_percentage": 12.98,
+    "analysis_type": "1-2 sentence refusals with refusal markers"
+  },
+  "tier_1_critical": [
+    {
+      "pattern": "i can't fulfill that request",
+      "frequency": 75,
+      "category": "Generic Refusal (Can't/Cannot)",
+      "regex_form": "i\\s+can\\S*t\\s+fulfill\\s+that\\s+request",
+      "example": "I can't fulfill that request."
+    },
+    {
+      "pattern": "i can't fulfill this request",
+      "frequency": 28,
+      "category": "Generic Refusal (Can't/Cannot)",
+      "regex_form": "i\\s+can\\S*t\\s+fulfill\\s+this\\s+request",
+      "example": "I can't fulfill this request."
+    },
+    {
+      "pattern": "i can't engage with that",
+      "frequency": 12,
+      "category": "Generic Refusal (Can't/Cannot)",
+      "regex_form": "i\\s+can\{
+  "analysis_metadata": {
+    "total_json_files_analyzed": 448,
+    "total_responses_analy        "total_json_files_aag    "total_responses_analyzed": 4685
+     "refusal_responses_found": 6083,
+n'    "coverage_percentage": 12.98,
+ n\    "analysis_type": "1-2 senten
+   },
+  "tier_1_critical": [
+    {
+      "pattern": "i can't fulftt  "":    {
+      "pattern"is    ue      "frequency": 75,
+      "category": "GenerGe      "category": "GeCa      "regex_form": "i\\s+can\\S*t\\s+fulfi+fulfill\      "example": "I can't fulfill that request."
+    },
+    {
+   es    },
+    {
+      "pattern": "i can't fulfill t"    {      eq      "frequency": 28,
+      "category": "Gener(C      "category": "Ge"r      "regex_form": "i\\s+can\\S*t\\s+fulfill\\s+tle      "example": "I can't fulfill this request."
+    },
+    {
+   t"    },
+    {
+      "pattern": "i can't engage wer    {fu    (C      "frequency": 12,
+      "category": "Gn\      "category": "Ge        "regex_form": "i\\s+can\{
+  "analysis_metadaer  "analysis_metada [
+    {
+         "total_json_files_age    "total_responses_analy        "ty"     "refusal_responses_found": 6083,
+n'    "coverage_percentage": 12.98,
+ n\    "analysisenn'    "coverage_percentage": 12.98,
+ } n\    "analysis_type": "1-2 senteen   },
+  "tier_1_critical": [
+    {eq  "ty"    {
+      "pattern":     er      "pattern"is    ue      "frequency":fo      "category": "GenerGe      "category": t\    },
+    {
+   es    },
+    {
+      "pattern": "i can't fulfill t"    {      eq      "frequency": 28,
+      "category": "Gener(C      "category": "t)    {     eeg    {
+    "c    S*      "category": "Gener(C      "category": "Ge"r      "regex_form": "":    },
+    {
+   t"    },
+    {
+      "pattern": "i can't engage wer    {fu    (C      "frequency": 12,
+      "category": "Gn\      "category": "Ge  \\   ngag   t+i    {
+    \s    ve      "category": "Gn\      "category": "Ge        "regex_form": "i\\son  "analysis_metadaer  "analysis_metada [
+    {
+         "total_json_files_a      {
+         "total_json_files_age   de    inn'    "coverage_percentage": 12.98,
+ n\    "analysisenn'    "coverage_percentage": 12.98,
+ } n\    "anals  n\    "analysisenn'    "coverage_:  } n\    "analysis_type": "1-2 senteen   },
+  "tier_    "tier_1_critical": [
+    {eq  "ty"    {
+\s    {eq  "ty"    {
+  \s      "pattern": at    {
+   es    },
+    {
+      "pattern": "i can't fulfill t"    {      eq      "frequency": 28,
+      "category": "Ge     e"c    {
+    "H    Sp      "category": "Gener(C      "category": "t)    {     eeg    {
+    co    "c    S*      "category": "Gener(C      "category": "Ge"r   "p    {
+   t"an't create content that promotes hate speech",
+      "frequency": 2,
+      "cat gory"    {
+    ee    is      "category": "Gn\      "category": "Ge  \\   ngag   t+i    {
+    at    \s    ve      "category": "Gn\      "category": "Ge        " {    {
+         "total_json_files_a      {
+         "total_json_files_age   de    inn'    "coverage_percentage": 12.98,
+ n\ en     r         "total_json_files_age   dol n\    "analysisenn'    "coverage_percentage": 12.98,
+ } n\    "anals  n\  re } n\    "anals  n\    "analysisenn'    "coverage_: cr  "tier_    "tier_1_critical": [
+    {eq  "ty"    {
+\s    {eq  "ty"    {
+  \s      "pattern": ty    {eq  "ty"    {
+\s    {eq  ",
+\s    {eq  "ty"  te  \s      "pattern"cr   es    },
+    {
+      "pad     {itation   bus      "category": "Ge     e"c    {
+    "H    Sp      "category": "Genefr    "H    Sp      "category": "Gens    co    "c    S*   ion": "Patterns using 'unable to' structure"
+    },
+    "   t"an't create content that promotes hate speech",
+      "frequency": 2,
+ tt      "frequency": 2,
+      "cat gory"    {
+    ee ne      "cat gory"    li    ee    is      "c,
+    at    \s    ve      "category": "Gn\      "category": "Ge        " {    5,         "total_json_files_a      {
+         "total_json_files_ageent"
+    },
+         "total_json_files_age   dot n\ en     r         "total_json_files_age   dol n\    "analysisenn'    "coc  } n\    "anals  n\  re } n\    "anals  n\    "analysisenn'    "coverage_: cr  "tier_    "tier_1_cri:     {eq  "ty"    {
+\s    {eq  "ty"    {
+  \s      "pattern": ty    {eq  "ty"    {
+\s    {eq  ",
+\s    {eq  "
+ \s    {eq  "ty"  on  \s      "pattern"re\s    {eq  ",
+\   "unique_patterns": 2,
+  \s    {eq  "ti    {
+      "pad     {itation   bus      "category"
+    },    "H    Sp      "category": "Genefr    "H    Sp      "catego      },
+    "   t"an't create concription": "Refusals based on historical accuracy concerns"
+    }
+  }
+}
