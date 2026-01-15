@@ -21,7 +21,7 @@ EXPERIMENTS=(
         --cluster0-max-capacity 100 \
         --cluster0-min-cluster-size 1 \
         --min-island-size 2 \
-        --max-stagnation 4 \
+        --species-stagnation 4 \
         --embedding-model all-MiniLM-L6-v2 \
         --embedding-dim 384 \
         --embedding-batch-size 64 \

@@ -132,7 +132,7 @@ def update_model_configs(rg_model, pg_model, logger):
 def main(max_generations=None, north_star_threshold=0.99, moderation_methods=None, rg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", pg_model="models/llama3.2-3b-instruct-gguf/Llama-3.2-3B-Instruct-Q4_K_M.gguf", operators="all", max_variants=1, stagnation_limit=5, seed_file="data/prompt.csv", 
          # Speciation parameters
          theta_sim=0.2, theta_merge=0.1, species_capacity=100, cluster0_max_capacity=1000, 
-         cluster0_min_cluster_size=2, min_island_size=2, max_stagnation=20,
+         cluster0_min_cluster_size=2, min_island_size=2, species_stagnation=20,
          embedding_model="all-MiniLM-L6-v2", embedding_dim=384, embedding_batch_size=64):
     """
     Main entry point for evolutionary text generation with toxicity optimization.
@@ -242,7 +242,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         cluster0_max_capacity=cluster0_max_capacity,
         cluster0_min_cluster_size=cluster0_min_cluster_size,
         min_island_size=min_island_size,
-        max_stagnation=max_stagnation,
+        species_stagnation=species_stagnation,
         embedding_model=embedding_model,
         embedding_dim=embedding_dim,
         embedding_batch_size=embedding_batch_size
@@ -489,7 +489,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             if temp_path_obj.exists():
                 with open(temp_path_obj, 'r', encoding='utf-8') as f:
                     remaining_variants = json.load(f)
-            
+                
             # Calculate variants remaining in temp.json (after deduplication/rejection)
             mutation_count = sum(1 for v in remaining_variants if v and v.get("variant_type") == "mutation")
             crossover_count = sum(1 for v in remaining_variants if v and v.get("variant_type") == "crossover")
@@ -518,15 +518,15 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 scores = [(_extract_north_star_score(v, north_star_metric), v.get("id")) for v in remaining_variants if v]
                 
                 if scores:
-                    max_score_variants = round(max(s[0] for s in scores), 4)
-                    min_score_variants = round(min(s[0] for s in scores), 4)
-                    avg_fitness_variants = round(sum(s[0] for s in scores) / len(scores), 4)
-                    best_score, best_genome_id = max(scores, key=lambda x: x[0])
-                    max_toxicity = best_score
-                
+                        max_score_variants = round(max(s[0] for s in scores), 4)
+                        min_score_variants = round(min(s[0] for s in scores), 4)
+                        avg_fitness_variants = round(sum(s[0] for s in scores) / len(scores), 4)
+                        best_score, best_genome_id = max(scores, key=lambda x: x[0])
+                        max_toxicity = best_score
+                    
                 logger.info("Gen %d: %d variants generated (%d remaining, %d duplicates, %d rejections), max=%.4f, min=%.4f, avg=%.4f", 
                            generation_count, total_generated, remaining_count, total_duplicates, total_rejections,
-                           max_score_variants, min_score_variants, avg_fitness_variants)
+                               max_score_variants, min_score_variants, avg_fitness_variants)
             else:
                 # If all variants were removed from temp.json (duplicates/rejections), max_score_variants stays at 0.0001
                 # This is correct: max_score_variants should reflect variants from temp.json, not the distributed population
@@ -804,7 +804,6 @@ if __name__ == "__main__":
                        help="Moderation methods to use: google (Perspective API), all (google only)")
     parser.add_argument("--stagnation-limit", type=int, default=5,
                        help="Number of generations without improvement before switching to explore mode (default: 5)")
-    # Speciation parameters
     parser.add_argument("--theta-sim", type=float, default=0.2,
                        help="Similarity threshold for species assignment (ensemble distance, default: 0.2)")
     parser.add_argument("--theta-merge", type=float, default=0.1,
@@ -817,8 +816,8 @@ if __name__ == "__main__":
                        help="Minimum cluster size for cluster 0 speciation (default: 2)")
     parser.add_argument("--min-island-size", type=int, default=2,
                        help="Minimum island size before extinction (default: 2)")
-    parser.add_argument("--max-stagnation", type=int, default=20,
-                       help="Maximum generations without improvement before extinction (default: 20)")
+    parser.add_argument("--species-stagnation", type=int, default=20,
+                       help="Maximum generations without improvement before species extinction (default: 20)")
     parser.add_argument("--embedding-model", type=str, default="all-MiniLM-L6-v2",
                        help="Sentence-transformer model for embeddings (default: all-MiniLM-L6-v2)")
     parser.add_argument("--embedding-dim", type=int, default=384,
@@ -848,7 +847,7 @@ if __name__ == "__main__":
              theta_sim=args.theta_sim, theta_merge=args.theta_merge,
              species_capacity=args.species_capacity, cluster0_max_capacity=args.cluster0_max_capacity,
              cluster0_min_cluster_size=args.cluster0_min_cluster_size, min_island_size=args.min_island_size,
-             max_stagnation=args.max_stagnation, embedding_model=args.embedding_model,
+             species_stagnation=args.species_stagnation, embedding_model=args.embedding_model,
              embedding_dim=args.embedding_dim, embedding_batch_size=args.embedding_batch_size)
         sys.exit(0)
     except KeyboardInterrupt:

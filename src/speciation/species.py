@@ -188,7 +188,7 @@ class Species:
     
     Species States:
     - "active": Normal operating state, participates in evolution
-    - "frozen": Species frozen due to stagnation (max_stagnation exceeded), excluded from parent selection
+    - "frozen": Species frozen due to stagnation (species_stagnation exceeded), excluded from parent selection
     - "incubator": Species moved to cluster 0 (reserves), awaiting potential new species formation
     
     Attributes:

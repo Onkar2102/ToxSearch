@@ -44,9 +44,9 @@ class SpeciationConfig:
                          Islands smaller than this are considered extinct.
                          Default: 2 (minimum viable population)
         
-        max_stagnation: Maximum generations without improvement before extinction.
-                        Islands that stagnate beyond this threshold are extinguished.
-                        Default: 20 generations
+        species_stagnation: Maximum generations without improvement before species extinction.
+                            Species that stagnate beyond this threshold are extinguished.
+                            Default: 20 generations
         
         # Embedding Parameters
         embedding_model: Sentence-transformer model name for prompt embeddings.
@@ -73,7 +73,7 @@ class SpeciationConfig:
     # Species Management
     species_capacity: int = 100
     min_island_size: int = 2
-    max_stagnation: int = 20
+    species_stagnation: int = 20
     
     # Embedding
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -110,7 +110,7 @@ class SpeciationConfig:
             "cluster0_max_capacity": self.cluster0_max_capacity,
             "species_capacity": self.species_capacity,
             "min_island_size": self.min_island_size,
-            "max_stagnation": self.max_stagnation,
+            "species_stagnation": self.species_stagnation,
             "embedding_model": self.embedding_model,
             "embedding_dim": self.embedding_dim,
             "embedding_batch_size": self.embedding_batch_size,

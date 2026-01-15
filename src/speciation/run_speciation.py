@@ -422,7 +422,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["species"],
         state["cluster0"],
         current_generation,
-        max_stagnation=state["config"].max_stagnation,
+        species_stagnation=state["config"].species_stagnation,
         min_size=state["config"].min_island_size,
         elites_path=elites_path_for_extinction,  # Pass elites_path to use actual sizes
         logger=state["logger"]

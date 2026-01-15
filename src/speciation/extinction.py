@@ -20,7 +20,7 @@ def process_extinctions(
     species: Dict[int, Species],
     cluster0: "Cluster0",
     current_generation: int,
-    max_stagnation: int = 20,
+    species_stagnation: int = 20,
     min_size: int = 2,
     elites_path: Optional[str] = None,
     logger=None
@@ -29,7 +29,7 @@ def process_extinctions(
     Process species freezing and move small species to cluster 0.
     
     Actions:
-    1. Freeze species with stagnation >= max_stagnation (EXTINCTION - tracked separately)
+    1. Freeze species with stagnation >= species_stagnation (EXTINCTION - tracked separately)
     2. Move species with count < min_size to cluster 0 (NOT extinction - tracked separately)
        - Species moved to cluster 0 get state="incubator" and are preserved in speciation_state.json
        - The species ID is considered deceased (new species from cluster 0 get new IDs)
@@ -40,7 +40,7 @@ def process_extinctions(
         species: Dict of species (modified in-place)
         cluster0: Cluster 0 (reserves) for small species
         current_generation: Current generation number
-        max_stagnation: Maximum stagnation before freezing
+        species_stagnation: Maximum stagnation before freezing
         min_size: Minimum species size (below this, move to cluster 0)
         logger: Optional logger instance
     
@@ -57,10 +57,10 @@ def process_extinctions(
     moved_to_cluster0_events = []  # Species moved to cluster 0 (size-based, NOT extinction)
     incubator_species = {}  # Species to be marked as incubator (keep in speciation_state.json)
     
-    # Step 1: Freeze species with stagnation >= max_stagnation (EXTINCTION)
+    # Step 1: Freeze species with stagnation >= species_stagnation (EXTINCTION)
     frozen_ids = []
     for sid, sp in species.items():
-        if sp.stagnation >= max_stagnation and sp.species_state != "frozen":
+        if sp.stagnation >= species_stagnation and sp.species_state != "frozen":
             sp.species_state = "frozen"
             frozen_ids.append(sid)
             extinction_events.append({
@@ -70,7 +70,7 @@ def process_extinctions(
                 "stagnation": sp.stagnation,
                 "max_fitness": sp.max_fitness
             })
-            logger.info(f"Frozen species {sid} (stagnation={sp.stagnation} >= {max_stagnation}) - EXTINCTION")
+            logger.info(f"Frozen species {sid} (stagnation={sp.stagnation} >= {species_stagnation}) - EXTINCTION")
     
     # Step 2: Move small species to cluster 0 (NOT extinction, just reorganization)
     # Species get state="incubator" and are kept in speciation_state.json for reference
