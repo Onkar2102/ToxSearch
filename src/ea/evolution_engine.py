@@ -195,10 +195,16 @@ class EvolutionEngine:
                 "score": round(parent_toxicity, 4)
             })
 
+        # Get prompt generator name if available
+        prompt_generator_name = None
+        if self.prompt_generator and hasattr(self.prompt_generator, 'model_cfg'):
+            prompt_generator_name = self.prompt_generator.model_cfg.get("name", "")
+
         child = {
             "id": self.next_id,
             "prompt": prompt,
             "model_name": None,
+            "prompt_generator_name": prompt_generator_name,
             "moderation_result": None,
             "operator": operator.name,
             "parents": parents_info,

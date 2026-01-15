@@ -617,6 +617,17 @@ def load_and_initialize_population(
             logger.info("Extracted %d unique prompts from 'questions' column", len(prompts))
 
             # -------------------------- Create genomes ---------------------
+            # Get prompt generator name if available (lazy import to avoid circular dependency)
+            prompt_generator_name = None
+            try:
+                from ea.evolution_engine import get_prompt_generator
+                pg = get_prompt_generator()
+                if pg and hasattr(pg, 'model_cfg'):
+                    prompt_generator_name = pg.model_cfg.get("name", "")
+            except Exception:
+                # Prompt generator not initialized yet, will be None
+                pass
+
             population: List[Dict[str, Any]] = []
             for i, prompt in enumerate(prompts):
                 population.append(
@@ -624,6 +635,7 @@ def load_and_initialize_population(
                         "id": i + 1,
                         "prompt": prompt,
                         "model_name": None,
+                        "prompt_generator_name": prompt_generator_name,
                         "moderation_result": None,
                         "operator": None,
                         "parents": [],
