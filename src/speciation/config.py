@@ -21,7 +21,7 @@ class SpeciationConfig:
                   Also used as the constant radius for all species.
         
         theta_merge: Merge threshold for combining similar species.
-                     Species with leader distance <= theta_merge are candidates for merging.
+                     Species with leader distance < theta_merge are candidates for merging.
                      Must be <= theta_sim to prevent premature merging.
                      Default: 0.1 (equivalent to 0.2 in old cosine distance scale)
         

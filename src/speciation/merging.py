@@ -147,7 +147,8 @@ def process_merges(
     - Has cluster_origin="merge" and parent_ids=[id1, id2]
     - Truncates to max_capacity if needed
     
-    Process iteratively (up to max_merges_per_gen) until no more merges found.
+    Process iteratively until no more merge candidates are found.
+    All eligible merges happen in a single generation.
     
     Args:
         species: Dict of species (modified in-place)
@@ -156,7 +157,7 @@ def process_merges(
         min_stability_gens: Minimum age for species to be mergeable
         current_gen: Current generation number
         max_capacity: Maximum members after merge (default: 100)
-        max_merges_per_gen: Maximum merges per generation (prevents excessive merging)
+        max_merges_per_gen: Deprecated parameter (kept for backward compatibility, not used)
         logger: Optional logger instance
     
     Returns:
@@ -169,11 +170,11 @@ def process_merges(
         logger = get_logger("IslandMerging")
     
     events = []
-    merges_done = 0
     all_outliers = []  # Collect all outliers from merges
     
-    while merges_done < max_merges_per_gen:
-        # Find merge candidates: pairs with leader distance <= theta_merge and both stable
+    # Continue merging until no more candidates are found
+    while True:
+        # Find merge candidates: pairs with leader distance < theta_merge and both stable
         merge_pairs = []
         species_list = list(species.items())
         for i, (id1, sp1) in enumerate(species_list):
@@ -185,7 +186,7 @@ def process_merges(
                     sp1.leader.phenotype, sp2.leader.phenotype,
                     w_genotype, w_phenotype
                 )
-                if dist <= theta_merge:
+                if dist < theta_merge:
                     sp1_stable = (current_gen - sp1.created_at) >= min_stability_gens
                     sp2_stable = (current_gen - sp2.created_at) >= min_stability_gens
                     if sp1_stable and sp2_stable:
@@ -218,6 +219,7 @@ def process_merges(
             "cluster_origin": "merge",
             "parent_ids": [id1, id2]
         })
-        merges_done += 1
+        logger.info(f"Completed merge {len(events)}: {id1}+{id2}->{merged.id} (total merges so far: {len(events)})")
     
+    logger.info(f"Merge process complete: {len(events)} merges performed in generation {current_gen}")
     return species, events, all_outliers
