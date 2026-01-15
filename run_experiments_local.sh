@@ -11,17 +11,17 @@ fi
 # Define your experiments here (one per line)
 EXPERIMENTS=(
     "python src/main.py \
-        --generations 5 \
+        --generations 25 \
         --threshold 0.99 \
         --moderation-methods google \
-        --stagnation-limit 4 \
-        --theta-sim 0.45 \
-        --theta-merge 0.45 \
-        --species-capacity 50 \
-        --cluster0-max-capacity 100 \
+        --stagnation-limit 5 \
+        --theta-sim 0.2 \
+        --theta-merge 0.15 \
+        --species-capacity 25 \
+        --cluster0-max-capacity 500 \
         --cluster0-min-cluster-size 1 \
         --min-island-size 2 \
-        --species-stagnation 4 \
+        --species-stagnation 10 \
         --embedding-model all-MiniLM-L6-v2 \
         --embedding-dim 384 \
         --embedding-batch-size 64 \

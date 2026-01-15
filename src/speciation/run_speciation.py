@@ -186,6 +186,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     outputs_path = get_outputs_path()
     speciation_state_path = str(outputs_path / "speciation_state.json")
     
+    # Track species count BEFORE clustering to count new species formed during clustering
+    species_count_before_clustering = len(state["species"])
+    
     state["species"], species_with_new_members = leader_follower_clustering(
         temp_path=temp_path,
         speciation_state_path=speciation_state_path,
@@ -193,8 +196,16 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         current_generation=current_generation,
         w_genotype=state["config"].w_genotype,
         w_phenotype=state["config"].w_phenotype,
+        min_island_size=state["config"].min_island_size,
         logger=state["logger"]
     )
+    
+    # Count new species formed during leader_follower_clustering
+    species_count_after_clustering = len(state["species"])
+    new_species_from_clustering = species_count_after_clustering - species_count_before_clustering
+    if new_species_from_clustering > 0:
+        state["_current_gen_events"]["speciation"] += new_species_from_clustering
+        state["logger"].info(f"Counted {new_species_from_clustering} new species formed during leader-follower clustering (before: {species_count_before_clustering}, after: {species_count_after_clustering})")
     
     # Step 2a: Sync cluster 0 with reserves.json
     # After leader_follower_clustering, outliers that formed species are updated in reserves.json
@@ -358,6 +369,15 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             species_with_new_members.add(new_species.id)  # Add to set so fitness is recorded and radius is checked
             state["_current_gen_events"]["speciation"] += 1
             state["logger"].info(f"Species {new_species.id} formed from cluster 0 ({new_species.size} members)")
+            
+            # Verify parent_ids for cluster 0 speciation (should be None for natural formation)
+            if new_species.parent_ids is not None:
+                state["logger"].warning(f"Cluster 0 speciation: species {new_species.id} has unexpected parent_ids={new_species.parent_ids} (expected None)")
+            if new_species.cluster_origin != "natural":
+                state["logger"].warning(f"Cluster 0 speciation: species {new_species.id} has unexpected cluster_origin='{new_species.cluster_origin}' (expected 'natural')")
+            else:
+                state["logger"].debug(f"Cluster 0 speciation verification passed: species {new_species.id}, origin={new_species.cluster_origin}, parent_ids={new_species.parent_ids}")
+            
             # Track speciation events
             if "_genome_tracker" in state:
                 for member in new_species.members:
@@ -374,6 +394,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             state["species"][sid].record_fitness(current_generation)
     
     # Step 5: Island merging
+    species_count_before_merge = len(state["species"])
     state["species"], merge_events, merge_outliers = process_merges(
         state["species"], 
         theta_merge=state["config"].theta_merge,
@@ -384,7 +405,28 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         w_phenotype=state["config"].w_phenotype,
         logger=state["logger"]
     )
+    species_count_after_merge = len(state["species"])
     state["_current_gen_events"]["merge"] = len(merge_events)
+    
+    # Verify merge logic: species count should decrease by number of merges
+    expected_species_after_merge = species_count_before_merge - len(merge_events)
+    if species_count_after_merge != expected_species_after_merge:
+        state["logger"].warning(f"Merge count mismatch: before={species_count_before_merge}, after={species_count_after_merge}, merges={len(merge_events)}, expected_after={expected_species_after_merge}")
+    
+    # Verify parent_ids are set correctly for merged species
+    for merge_event in merge_events:
+        merged_ids = merge_event.get("merged", [])
+        result_id = merge_event.get("result_id")
+        if result_id and result_id in state["species"]:
+            merged_sp = state["species"][result_id]
+            expected_parents = sorted(merged_ids)
+            actual_parents = sorted(merged_sp.parent_ids) if merged_sp.parent_ids else []
+            if actual_parents != expected_parents:
+                state["logger"].error(f"Merge parent_ids mismatch for species {result_id}: expected {expected_parents}, got {actual_parents}")
+            elif merged_sp.cluster_origin != "merge":
+                state["logger"].error(f"Merge species {result_id} has incorrect cluster_origin: expected 'merge', got '{merged_sp.cluster_origin}'")
+            else:
+                state["logger"].debug(f"Merge verification passed: species {result_id} from {merged_ids}, parent_ids={actual_parents}, origin={merged_sp.cluster_origin}")
     
     # Move merge outliers to cluster 0 (post-merge radius verification)
     if merge_outliers:
@@ -418,6 +460,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     # This prevents species from being incorrectly moved to incubator based on stale in-memory sizes
     outputs_path = get_outputs_path()
     elites_path_for_extinction = str(outputs_path / "elites.json")
+    species_count_before_extinction = len(state["species"])
     state["species"], extinction_events, moved_to_cluster0_events, incubator_species = process_extinctions(
         state["species"],
         state["cluster0"],
@@ -427,10 +470,26 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         elites_path=elites_path_for_extinction,  # Pass elites_path to use actual sizes
         logger=state["logger"]
     )
+    species_count_after_extinction = len(state["species"])
     # Only frozen species (stagnation-based) count as extinction events
     # Moving to cluster 0 (size-based) is NOT extinction, just reorganization
     state["_current_gen_events"]["extinction"] = len(extinction_events)
     state["_current_gen_events"]["moved_to_cluster0"] = len(moved_to_cluster0_events)
+    
+    # Verify extinction logic
+    expected_removed = len(moved_to_cluster0_events)  # Only moved_to_cluster0 removes from active species
+    expected_species_after = species_count_before_extinction - expected_removed
+    if species_count_after_extinction != expected_species_after:
+        state["logger"].warning(f"Extinction count mismatch: before={species_count_before_extinction}, after={species_count_after_extinction}, moved_to_cluster0={len(moved_to_cluster0_events)}, expected_after={expected_species_after}")
+    
+    # Verify extinction events have correct structure
+    for ext_event in extinction_events:
+        if "species_id" not in ext_event or "action" not in ext_event:
+            state["logger"].error(f"Invalid extinction event structure: {ext_event}")
+        elif ext_event["action"] != "frozen":
+            state["logger"].error(f"Extinction event has incorrect action: expected 'frozen', got '{ext_event.get('action')}'")
+        else:
+            state["logger"].debug(f"Extinction verification passed: species {ext_event['species_id']} frozen (stagnation={ext_event.get('stagnation', 'unknown')})")
     
     # Move frozen species to historical_species for preservation
     # (process_extinctions already sets species_state="frozen" but keeps them in species dict)
