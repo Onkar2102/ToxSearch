@@ -296,6 +296,8 @@ class Species:
         """
         Record current best fitness and update fitness history.
         
+        Updates stagnation: increments if no improvement, resets to 0 if improved.
+        
         Args:
             generation: Current generation number
         """
@@ -303,6 +305,10 @@ class Species:
         # Check if we've improved
         if self.fitness_history and current_best > max(self.fitness_history):
             self.last_improvement = generation
+            self.stagnation = 0  # Reset stagnation when fitness improves
+        else:
+            # No improvement: increment stagnation
+            self.stagnation += 1
         # Append to history for trend analysis
         # Only append if this generation hasn't been recorded yet (avoid duplicates)
         # For generation 0, __post_init__ already added the initial fitness, so we check if we need to add again

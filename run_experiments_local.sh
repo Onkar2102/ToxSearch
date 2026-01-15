@@ -15,12 +15,12 @@ EXPERIMENTS=(
         --threshold 0.99 \
         --moderation-methods google \
         --stagnation-limit 5 \
-        --theta-sim 0.2 \
-        --theta-merge 0.15 \
+        --theta-sim 0.25 \
+        --theta-merge 0.25 \
         --species-capacity 25 \
         --cluster0-max-capacity 500 \
         --cluster0-min-cluster-size 1 \
-        --min-island-size 2 \
+        --min-island-size 3 \
         --species-stagnation 10 \
         --embedding-model all-MiniLM-L6-v2 \
         --embedding-dim 384 \
