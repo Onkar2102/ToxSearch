@@ -927,7 +927,7 @@ Mode switching is triggered by the following logic:
 \label{eq:mode_switching}
 \text{mode} = \begin{cases}
 \text{DEFAULT} & \text{if } g \leq 5 \text{ (early generations)} \\
-\text{EXPLOITATION} & \text{if } \frac{\Delta f}{\Delta g} < -0.0001 \text{ (fitness declining)} \\
+\text{EXPLOITATION} & \text{if } \frac{\Delta f}{\Delta g} \leq 0.00 \text{ (no improvement or declining)} \\
 \text{EXPLORATION} & \text{if } \text{stagnation} \geq 5 \text{ (stagnation detected)} \\
 \text{DEFAULT} & \text{otherwise}
 \end{cases}

@@ -16,7 +16,7 @@ Genetic algorithm with semantic speciation (Leader-Follower clustering) for evol
 
 **EXPLORATION** (3 parents): `p₁ = argmax_{x∈S_top} f(x)`, `p₂ = argmax_{x∈S_j, j≠top} f(x)`, `p₃ = argmax_{x∈S_k, k≠{top,j}} f(x)` → `V = 36`
 
-**Mode Switching**: `mode = DEFAULT if g ≤ 5 else EXPLOIT if Δf/Δg < -0.0001 else EXPLORE if stagnation ≥ 5`
+**Mode Switching**: `mode = DEFAULT if g ≤ 5 else EXPLOIT if Δf/Δg ≤ 0.00 else EXPLORE if stagnation ≥ 5`
 
 ## Variation Operators
 

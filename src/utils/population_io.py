@@ -1669,11 +1669,11 @@ def update_adaptive_selection_logic(
         if total_generations <= stagnation_limit:
             selection_mode = "default"
             _logger.info(f"Using DEFAULT mode for initial {stagnation_limit} generations (generation {total_generations})")
-        elif slope_of_avg_fitness < -0.0001:  # Use small threshold to handle -0.0 case
-            # Check EXPLOIT condition first (negative fitness slope)
-            # Note: -0.0 == 0.0 in Python, so we use a small threshold
+        elif slope_of_avg_fitness <= 0.00:
+            # Check EXPLOIT condition first (zero or negative fitness slope)
+            # When slope <= 0.00, there's no improvement (same or declining fitness)
             selection_mode = "exploit"
-            _logger.info(f"Switching to EXPLOIT mode (negative fitness slope: {slope_of_avg_fitness:.4f})")
+            _logger.info(f"Switching to EXPLOIT mode (fitness slope: {slope_of_avg_fitness:.4f} <= 0.00)")
         elif generations_since_improvement >= stagnation_limit:
             # Then check EXPLORE condition (stagnation)
             selection_mode = "explore"

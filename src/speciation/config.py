@@ -46,7 +46,7 @@ class SpeciationConfig:
         
         species_stagnation: Maximum generations without improvement before species extinction.
                             Species that stagnate beyond this threshold are extinguished.
-                            Default: 20 generations
+                        Default: 20 generations
         
         # Embedding Parameters
         embedding_model: Sentence-transformer model name for prompt embeddings.
