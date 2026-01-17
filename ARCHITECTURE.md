@@ -37,9 +37,16 @@ Genetic algorithm with semantic speciation (Leader-Follower clustering) for evol
 - Leader: `leader(S_i) = argmax_{x∈S_i} f(x)`
 
 **Operations**:
-- Merge: `d_ensemble(leader_i, leader_j) < θ_merge`
-- Freeze: `stagnation(S_i) > 20`
+- Merge: `d_ensemble(leader_i, leader_j) < θ_merge` (only active species merge)
+- Freeze: `stagnation(S_i) ≥ 20` → species moved to "frozen" state
 - Capacity: Archive excess when `|S_i| > 100` or `|R| > 1000`
+
+**Species States**:
+- **active**: Participates in evolution and parent selection
+- **frozen**: Stagnated (≥20 generations without improvement), excluded from parent selection but preserved with full data (leader embeddings, distances) for potential merging
+- **incubator**: Moved to cluster 0 when `size < min_island_size` (default: < 2), tracked by ID only
+  - **Note**: Uses `min_island_size` (min 2), NOT `species_capacity` (max 100)
+  - Condition: `actual_size < min_island_size` (strictly less than)
 
 ## Process Flow
 
@@ -54,13 +61,39 @@ Genetic algorithm with semantic speciation (Leader-Follower clustering) for evol
 
 **Diversity**: `D_inter = (1/(K(K-1)/2)) Σ_{i<j} d_ensemble(leader_i, leader_j)`, `D_intra = (1/K) Σᵢ (1/(|Sᵢ|(|Sᵢ|-1)/2)) Σ_{u,v∈Sᵢ} d_ensemble(u,v)`
 
-**Operator Effectiveness**: `NE = 1 - |V_elite|/|V_total|`, `EHR = |V_elite|/|V_total|`, `IR = |V_invalid|/|V_total|`, `Δμ = (1/|V_valid|) Σ_v (f(v) - f(parent(v)))`, `Δσ = √Var({f(v) - f(parent(v))})`
+**Operator Effectiveness** (RQ1):
+- `NE = (non_elite_count / calculated_total) × 100` - % variants archived
+- `EHR = (elite_count / calculated_total) × 100` - % variants became elites
+- `IR = (rejections / calculated_total) × 100` - % variants rejected
+- `cEHR = (elite_count / total_variants) × 100` - % valid variants that became elites
+- `Δμ = mean(f(v) - f(parent(v)))` - Average fitness change
+- `Δσ = std(f(v) - f(parent(v)))` - Std dev of fitness change
+- Where `calculated_total = total_variants + rejections + duplicates`
 
 ## Files
 
-- `elites.json`: `species_id > 0`
-- `reserves.json`: `species_id = 0`
-- `archive.json`: Capacity overflow
-- `temp.json`: Staging
-- `EvolutionTracker.json`: History
-- `speciation_state.json`: Species state
+- `elites.json`: `species_id > 0` (all species members across all generations)
+- `reserves.json`: `species_id = 0` (cluster 0, max 1000)
+- `archive.json`: Capacity overflow (removed due to limits)
+- `temp.json`: Staging (new variants before speciation)
+- `EvolutionTracker.json`: Complete evolution history with metrics
+- `speciation_state.json`: Species state (active, frozen, incubator) with leader embeddings preserved
+
+## Species Management
+
+**Frozen Species**:
+- Preserved with full data: leader embeddings, leader distance, labels, history, and all members
+- Members are preserved from when species was active (saved in `member_ids` in speciation_state.json)
+- Not included in parent selection (evolution focuses on active species)
+- Can merge with active or other frozen species (both are "alive", only difference is parent selection preference)
+
+**Merging**:
+- Active and frozen species can merge (frozen species included)
+- Requires leader embeddings for distance calculation
+- Merged species get new ID, reset stagnation, combine members
+- Frozen species that merge are reactivated (moved back to active species)
+
+**Evolution Continuation**:
+- If all species freeze, evolution continues using cluster 0 (reserves)
+- Cluster 0 is always active and can form new species
+- Fallback mechanism selects from all genomes if no active species found

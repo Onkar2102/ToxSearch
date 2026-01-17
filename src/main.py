@@ -398,10 +398,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             log_file=log_file
         )
         
-        logger.info("Gen0 metrics: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), total=%d, avg_gen=%.4f",
+        logger.info("Gen0 metrics: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), archived=%d, total=%d, avg_gen=%.4f",
                     gen0_stats["elites_count"], gen0_stats["avg_fitness_elites"],
                     gen0_stats["reserves_count"], gen0_stats["avg_fitness_reserves"],
-                    gen0_stats["total_population"], gen0_stats["avg_fitness_generation"])
+                    gen0_stats.get("archived_count", 0), gen0_stats["total_population"], gen0_stats["avg_fitness_generation"])
     except Exception as e:
         logger.warning("Failed to update generation 0 metrics in EvolutionTracker: %s", e)
 
@@ -751,10 +751,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         log_file=log_file
                     )
                     
-                    logger.info("Gen%d metrics: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), variants: max=%.4f, min=%.4f, avg=%.4f",
+                    logger.info("Gen%d metrics: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), archived=%d, variants: max=%.4f, min=%.4f, avg=%.4f",
                                 generation_count, gen_stats["elites_count"], gen_stats["avg_fitness_elites"],
                                 gen_stats["reserves_count"], gen_stats["avg_fitness_reserves"],
-                                max_score_variants, min_score_variants, avg_fitness_variants)
+                                gen_stats.get("archived_count", 0), max_score_variants, min_score_variants, avg_fitness_variants)
                     
                     # Run live analysis and generate visualizations
                     try:

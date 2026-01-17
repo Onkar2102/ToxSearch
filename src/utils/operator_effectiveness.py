@@ -21,56 +21,8 @@ get_logger, _, _, _ = get_custom_logging()
 _, _, _, get_outputs_path, _, _ = get_system_utils()
 
 
-def get_expected_variant_count(outputs_path: str, current_generation: int, logger=None) -> Optional[int]:
-    """
-    Get expected variant count for generation based on parent selection mode from EvolutionTracker.json.
-    
-    Expected counts:
-    - DEFAULT mode (2 parents): 22 variants
-    - EXPLORATION/EXPLOITATION mode (3 parents): 36 variants
-    
-    Formula: V = (N_mutation × |parents| × max_variants) + (N_crossover × C(|parents|,2) × max_variants)
-    Where max_variants = 1, N_mutation = 10, N_crossover = 2
-    
-    Args:
-        outputs_path: Path to outputs directory
-        current_generation: Current generation number
-        logger: Optional logger instance
-        
-    Returns:
-        Expected variant count, or None if not found
-    """
-    _logger = logger or get_logger("OperatorEffectiveness")
-    
-    try:
-        outputs_dir = Path(outputs_path)
-        tracker_path = outputs_dir / "EvolutionTracker.json"
-        
-        if not tracker_path.exists():
-            _logger.debug(f"EvolutionTracker.json not found at {tracker_path}")
-            return None
-        
-        with open(tracker_path, 'r', encoding='utf-8') as f:
-            tracker = json.load(f)
-        
-        # Find generation entry
-        for gen_entry in tracker.get("generations", []):
-            if gen_entry.get("generation_number") == current_generation:
-                expected_count = gen_entry.get("expected_variant_count")
-                if expected_count is not None:
-                    _logger.debug(f"Found expected variant count {expected_count} for generation {current_generation}")
-                    return int(expected_count)
-                else:
-                    _logger.debug(f"No expected_variant_count in generation {current_generation} entry")
-                    return None
-        
-        _logger.debug(f"Generation {current_generation} not found in EvolutionTracker")
-        return None
-        
-    except Exception as e:
-        _logger.warning(f"Failed to get expected variant count: {e}")
-        return None
-
+# Note: get_expected_variant_count() removed - expected_variant_count is not used for metric calculations
+# Metrics use calculated_total from operator statistics instead
 
 def calculate_table4_metrics(
     outputs_path: str,
@@ -315,17 +267,8 @@ def calculate_table4_metrics(
                 # Skip operators with no activity at all (not in stats and no variants)
                 continue
             
-            # Get expected variant count for this generation (if available)
-            # This is used for validation and as fallback denominator
-            expected_total = get_expected_variant_count(outputs_path, current_generation, _logger)
-            
-            # Validate calculated_total against expected_total (with tolerance for rejections/duplicates)
-            # Expected total is per-operator, so we validate at operator level
-            # Note: expected_total is the total for ALL operators, so we can't directly compare per-operator
-            # But we can validate the sum of all calculated_totals ≈ expected_total at the end
-            
             # Use calculated_total for metrics (per-operator basis)
-            # Expected total validation happens at the end for all operators combined
+            # Note: expected_variant_count removed - metrics use calculated_total from operator statistics
             metrics_denominator = calculated_total
             
             # Calculate metrics using the formulae:
@@ -394,21 +337,8 @@ def calculate_table4_metrics(
                        'total_variants', 'elite_count', 'non_elite_count', 'rejections', 'duplicates']
         result_df = result_df[[col for col in column_order if col in result_df.columns]]
         
-        # Validate total calculated_total against expected_total (all operators combined)
-        expected_total = get_expected_variant_count(outputs_path, current_generation, _logger)
-        if expected_total is not None:
-            total_calculated = result_df['total_variants'].sum() + result_df['rejections'].sum() + result_df['duplicates'].sum()
-            tolerance = max(5, expected_total * 0.1)  # 10% tolerance or at least 5 variants
-            if abs(total_calculated - expected_total) > tolerance:
-                _logger.warning(
-                    f"Total calculated variants ({total_calculated}) differs significantly from expected ({expected_total}) "
-                    f"for generation {current_generation}. Difference: {abs(total_calculated - expected_total)}"
-                )
-            else:
-                _logger.debug(
-                    f"Total calculated variants ({total_calculated}) matches expected ({expected_total}) "
-                    f"for generation {current_generation}"
-                )
+        # Note: expected_variant_count validation removed - not needed for metric calculations
+        # Metrics use calculated_total from operator statistics, which is more accurate
         
         _logger.info(f"Calculated operator effectiveness metrics for generation {current_generation}: {len(result_df)} operators")
         return result_df

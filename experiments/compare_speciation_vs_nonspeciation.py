@@ -55,9 +55,14 @@ def load_execution_data(output_dir: Path):
         'reserves': [],
         'archive': [],
         'operator_effectiveness': None,
+        'run_metadata': {},  # Added for run metadata
     }
     
     try:
+        # Extract run metadata
+        run_id = output_dir.name  # Directory name is the run ID (timestamp)
+        data['run_metadata']['run_id'] = run_id
+        
         # Load EvolutionTracker
         et_path = output_dir / "EvolutionTracker.json"
         if et_path.exists():
@@ -69,6 +74,16 @@ def load_execution_data(output_dir: Path):
         if ss_path.exists():
             with open(ss_path, 'r') as f:
                 data['speciation_state'] = json.load(f)
+                data['run_metadata']['speciation_enabled'] = True
+                # Extract config from speciation_state if available
+                if 'config' in data['speciation_state']:
+                    config = data['speciation_state']['config']
+                    data['run_metadata']['theta_sim'] = config.get('theta_sim')
+                    data['run_metadata']['theta_merge'] = config.get('theta_merge')
+                    data['run_metadata']['species_capacity'] = config.get('species_capacity')
+                    data['run_metadata']['cluster0_max_capacity'] = config.get('cluster0_max_capacity')
+        else:
+            data['run_metadata']['speciation_enabled'] = False
         
         # Load elites
         elites_path = output_dir / "elites.json"
@@ -76,6 +91,15 @@ def load_execution_data(output_dir: Path):
             with open(elites_path, 'r') as f:
                 elites_data = json.load(f)
                 data['elites'] = elites_data if isinstance(elites_data, list) else []
+                
+                # Extract PG and RG models from genomes (use first genome with these fields)
+                for genome in data['elites']:
+                    if 'prompt_generator_name' in genome and genome.get('prompt_generator_name'):
+                        data['run_metadata']['pg_model'] = genome['prompt_generator_name']
+                    if 'model_name' in genome and genome.get('model_name'):
+                        data['run_metadata']['rg_model'] = genome['model_name']
+                    if 'pg_model' in data['run_metadata'] and 'rg_model' in data['run_metadata']:
+                        break
         
         # Load reserves
         reserves_path = output_dir / "reserves.json"
@@ -152,6 +176,7 @@ def extract_rq2_metrics(data):
     metrics = {
         'generations': [],
         'species_count': [],
+        'frozen_species_count': [],  # Added
         'reserves_size': [],
         'best_fitness': [],
         'avg_fitness': [],
@@ -160,6 +185,7 @@ def extract_rq2_metrics(data):
         'merge_events': [],
         'extinction_events': [],
         'speciation_events': [],
+        'cluster_quality': [],  # Added - list of cluster quality dicts per generation
     }
     
     et = data.get('evolution_tracker')
@@ -178,6 +204,7 @@ def extract_rq2_metrics(data):
         spec = gen.get('speciation', {})
         if spec:
             metrics['species_count'].append(spec.get('species_count', 0))
+            metrics['frozen_species_count'].append(spec.get('frozen_species_count', 0))  # Added
             metrics['reserves_size'].append(spec.get('reserves_size', 0))
             metrics['best_fitness'].append(spec.get('best_fitness', 0))
             metrics['avg_fitness'].append(spec.get('avg_fitness', 0))
@@ -186,9 +213,16 @@ def extract_rq2_metrics(data):
             metrics['merge_events'].append(spec.get('merge_events', 0))
             metrics['extinction_events'].append(spec.get('extinction_events', 0))
             metrics['speciation_events'].append(spec.get('speciation_events', 0))
+            # Extract cluster quality metrics if available
+            cluster_quality = spec.get('cluster_quality', {})
+            if cluster_quality:
+                metrics['cluster_quality'].append(cluster_quality)
+            else:
+                metrics['cluster_quality'].append(None)
         else:
             # Non-speciation run - fill with zeros or N/A
             metrics['species_count'].append(0)
+            metrics['frozen_species_count'].append(0)  # Added
             metrics['reserves_size'].append(0)
             metrics['best_fitness'].append(gen.get('max_score_variants', 0))
             metrics['avg_fitness'].append(gen.get('avg_fitness', 0))
@@ -197,6 +231,7 @@ def extract_rq2_metrics(data):
             metrics['merge_events'].append(0)
             metrics['extinction_events'].append(0)
             metrics['speciation_events'].append(0)
+            metrics['cluster_quality'].append(None)  # Added
     
     return metrics
 
@@ -205,6 +240,7 @@ def aggregate_runs(run_dirs, run_type="speciation"):
     """Aggregate metrics across multiple runs."""
     all_rq1 = defaultdict(lambda: defaultdict(list))
     all_rq2 = defaultdict(list)
+    run_metadata_list = []  # Store metadata for each run
     
     for run_dir in run_dirs:
         output_path = BASE_OUTPUT_DIR / run_dir
@@ -213,6 +249,9 @@ def aggregate_runs(run_dirs, run_type="speciation"):
             continue
         
         data = load_execution_data(output_path)
+        
+        # Store run metadata
+        run_metadata_list.append(data.get('run_metadata', {}))
         
         # RQ1 metrics
         rq1 = extract_rq1_metrics(data)
@@ -223,14 +262,30 @@ def aggregate_runs(run_dirs, run_type="speciation"):
         # RQ2 metrics
         rq2 = extract_rq2_metrics(data)
         for key, values in rq2.items():
-            if key != 'generations':
+            if key == 'generations':
+                continue
+            elif key == 'cluster_quality':
+                # Handle cluster quality separately - extract metrics
+                cluster_metrics = {'silhouette_score': [], 'davies_bouldin_index': [], 'calinski_harabasz_index': []}
+                for cq_dict in values:
+                    if cq_dict:
+                        cluster_metrics['silhouette_score'].append(cq_dict.get('silhouette_score', np.nan))
+                        cluster_metrics['davies_bouldin_index'].append(cq_dict.get('davies_bouldin_index', np.nan))
+                        cluster_metrics['calinski_harabasz_index'].append(cq_dict.get('calinski_harabasz_index', np.nan))
+                # Aggregate cluster quality metrics
+                for cq_key, cq_values in cluster_metrics.items():
+                    if cq_values:
+                        all_rq2[f'cluster_quality_{cq_key}_mean'].append(np.nanmean(cq_values))
+                        all_rq2[f'cluster_quality_{cq_key}_max'].append(np.nanmax(cq_values) if not all(np.isnan(cq_values)) else np.nan)
+                        all_rq2[f'cluster_quality_{cq_key}_final'].append(cq_values[-1] if cq_values else np.nan)
+            else:
                 # Aggregate across generations (mean, max, final)
                 if values:
                     all_rq2[f'{key}_mean'].append(np.nanmean(values))
                     all_rq2[f'{key}_max'].append(np.nanmax(values) if not all(np.isnan(values)) else np.nan)
                     all_rq2[f'{key}_final'].append(values[-1] if values else np.nan)
     
-    return all_rq1, all_rq2
+    return all_rq1, all_rq2, run_metadata_list
 
 
 def create_rq1_visualizations(spec_rq1, nonspec_rq1):
@@ -411,8 +466,12 @@ def create_rq2_visualizations(spec_rq2, nonspec_rq2):
         ('best_fitness', 'Best Fitness'),
         ('avg_fitness', 'Average Fitness'),
         ('species_count', 'Species Count'),
+        ('frozen_species_count', 'Frozen Species Count'),  # Added
         ('inter_species_diversity', 'Inter-Species Diversity'),
         ('intra_species_diversity', 'Intra-Species Diversity'),
+        ('cluster_quality_silhouette_score', 'Silhouette Score'),  # Added
+        ('cluster_quality_davies_bouldin_index', 'Davies-Bouldin Index'),  # Added
+        ('cluster_quality_calinski_harabasz_index', 'Calinski-Harabasz Index'),  # Added
     ]
     
     for metric_key, metric_label in metrics_to_compare:
@@ -450,13 +509,28 @@ def main():
     
     # Aggregate metrics
     print("\n[1/3] Aggregating speciation run metrics...")
-    spec_rq1, spec_rq2 = aggregate_runs(SPEciation_RUNS, "speciation")
+    spec_rq1, spec_rq2, spec_metadata = aggregate_runs(SPEciation_RUNS, "speciation")
     
     print("[2/3] Aggregating non-speciation run metrics...")
-    nonspec_rq1, nonspec_rq2 = aggregate_runs(NON_SPECIATION_RUNS, "non-speciation")
+    nonspec_rq1, nonspec_rq2, nonspec_metadata = aggregate_runs(NON_SPECIATION_RUNS, "non-speciation")
+    
+    # Print run metadata summary
+    print("\n[Metadata Summary]")
+    print(f"Speciation runs: {len(spec_metadata)}")
+    if spec_metadata:
+        pg_models = [m.get('pg_model', 'Unknown') for m in spec_metadata]
+        rg_models = [m.get('rg_model', 'Unknown') for m in spec_metadata]
+        print(f"  PG models: {set(pg_models)}")
+        print(f"  RG models: {set(rg_models)}")
+    print(f"Non-speciation runs: {len(nonspec_metadata)}")
+    if nonspec_metadata:
+        pg_models = [m.get('pg_model', 'Unknown') for m in nonspec_metadata]
+        rg_models = [m.get('rg_model', 'Unknown') for m in nonspec_metadata]
+        print(f"  PG models: {set(pg_models)}")
+        print(f"  RG models: {set(rg_models)}")
     
     # Create visualizations
-    print("[3/3] Creating visualizations...")
+    print("\n[3/3] Creating visualizations...")
     create_rq1_visualizations(spec_rq1, nonspec_rq1)
     create_rq2_visualizations(spec_rq2, nonspec_rq2)
     

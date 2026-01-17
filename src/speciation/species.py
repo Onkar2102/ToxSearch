@@ -256,6 +256,11 @@ class Species:
         return max((m.fitness for m in self.members), default=0.0)
     
     @property
+    def min_fitness(self) -> float:
+        """Lowest fitness value in this species."""
+        return min((m.fitness for m in self.members), default=0.0)
+    
+    @property
     def avg_fitness(self) -> float:
         """Average fitness across all members."""
         return sum(m.fitness for m in self.members) / len(self.members) if self.members else 0.0
@@ -337,6 +342,7 @@ class Species:
             "radius": self.radius,
             "stagnation": self.stagnation,
             "max_fitness": self.max_fitness,
+            "min_fitness": round(self.min_fitness, 4),  # Lowest fitness in species
             "species_state": self.species_state,
             "created_at": self.created_at,
             "last_improvement": self.last_improvement,

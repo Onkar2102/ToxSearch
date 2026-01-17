@@ -52,31 +52,41 @@ This guide explains how to analyze data for **RQ1** (Operator Effectiveness) and
 1. **Species Count**: Number of active species per generation
    - Higher = more diversity (more distinct clusters)
 
-2. **Reserves Size**: Number of genomes in cluster 0 (reserves)
+2. **Frozen Species Count**: Number of frozen species per generation (NEW)
+   - Tracks species that have stagnated (≥20 generations without improvement)
+   - Helps analyze species lifecycle and stagnation patterns
+
+3. **Reserves Size**: Number of genomes in cluster 0 (reserves)
    - Indicates genomes that don't fit existing species
 
-3. **Best Fitness**: Maximum fitness score per generation
+4. **Best Fitness**: Maximum fitness score per generation
    - Higher is better (best variant found)
 
-4. **Average Fitness**: Mean fitness score per generation
+5. **Average Fitness**: Mean fitness score per generation
    - Higher is better (overall population quality)
 
-5. **Inter-Species Diversity**: Diversity between different species
+6. **Inter-Species Diversity**: Diversity between different species
    - Formula: Average distance between species leaders
    - Higher = more distinct species
 
-6. **Intra-Species Diversity**: Diversity within species
+7. **Intra-Species Diversity**: Diversity within species
    - Formula: Average distance within species members
    - Moderate values indicate good clustering
 
-7. **Speciation Events**: Number of new species formed
+8. **Speciation Events**: Number of new species formed
    - Indicates exploration of new niches
 
-8. **Merge Events**: Number of species merged
+9. **Merge Events**: Number of species merged
    - Indicates convergence of similar species
 
-9. **Extinction Events**: Number of species frozen due to stagnation
-   - Indicates pruning of unproductive species
+10. **Extinction Events**: Number of species frozen due to stagnation
+    - Indicates pruning of unproductive species
+
+11. **Cluster Quality Metrics** (NEW):
+    - **Silhouette Score**: [-1, 1], higher is better (measures how well-separated clusters are)
+    - **Davies-Bouldin Index**: ≥ 0, lower is better (measures cluster separation)
+    - **Calinski-Harabasz Index**: ≥ 0, higher is better (measures cluster compactness)
+    - These metrics evaluate the quality of the clustering/speciation
 
 **Data Sources**:
 - `EvolutionTracker.json` → `generations[].speciation`
@@ -121,7 +131,15 @@ Results will be saved in `experiments/comparison_results/`:
 - `rq1_operator_comparison.png` - Operator effectiveness comparison charts
 - `rq1_summary_table.csv` - Detailed operator metrics
 - `rq2_evolution_comparison.png` - Fitness and diversity evolution
-- `rq2_summary_table.csv` - Summary statistics
+- `rq2_summary_table.csv` - Summary statistics (includes frozen species count and cluster quality metrics)
+
+**Run Metadata**:
+The script now extracts and displays run metadata:
+- Run ID (directory name/timestamp)
+- PG model (prompt generator) used
+- RG model (response generator) used
+- Speciation enabled (yes/no)
+- Configuration parameters (theta_sim, theta_merge, etc.)
 
 ---
 
@@ -238,6 +256,7 @@ plt.ylabel('Best Fitness')
       "generation_number": 0,
       "speciation": {
         "species_count": 22,
+        "frozen_species_count": 0,  // NEW: Number of frozen species
         "reserves_size": 47,
         "best_fitness": 0.2367,
         "avg_fitness": 0.0339,
@@ -245,7 +264,14 @@ plt.ylabel('Best Fitness')
         "intra_species_diversity": 0.1688,
         "speciation_events": 22,
         "merge_events": 0,
-        "extinction_events": 0
+        "extinction_events": 0,
+        "cluster_quality": {  // NEW: Cluster quality metrics
+          "silhouette_score": 0.4523,
+          "davies_bouldin_index": 1.234,
+          "calinski_harabasz_index": 45.67,
+          "num_samples": 69,
+          "num_clusters": 22
+        }
       },
       "operator_statistics": {
         "InformedEvolutionOperator": {
@@ -314,12 +340,50 @@ generation,operator,NE,EHR,IR,cEHR,Δμ,Δσ,total_variants,elite_count,non_elit
 
 ---
 
+## Post-Run Aggregation Features
+
+### Run Metadata Extraction
+
+The aggregation script now automatically extracts:
+- **Run ID**: Directory name (timestamp format: `YYYYMMDD_HHMM`)
+- **PG Model**: Prompt generator model name (from `prompt_generator_name` in genomes)
+- **RG Model**: Response generator model name (from `model_name` in genomes)
+- **Speciation Enabled**: Detected by presence of `speciation_state.json`
+- **Configuration Parameters**: Extracted from `speciation_state.json` (theta_sim, theta_merge, etc.)
+
+### New Metrics in Aggregation
+
+**RQ2 Metrics Added**:
+- `frozen_species_count`: Tracks frozen species per generation
+- `cluster_quality_silhouette_score`: Silhouette score (mean, max, final)
+- `cluster_quality_davies_bouldin_index`: Davies-Bouldin index (mean, max, final)
+- `cluster_quality_calinski_harabasz_index`: Calinski-Harabasz index (mean, max, final)
+
+### Species Size/Age Distribution Analysis
+
+For detailed species dynamics analysis, you can extract from `speciation_state.json`:
+- **Species Size Distribution**: Min, max, mean, std per generation
+- **Species Age Distribution**: Generations since creation per species
+- **Species Survival Analysis**: How long species survive before freezing/merging
+
+Example code:
+```python
+# Extract species size distribution from speciation_state.json
+species_sizes = []
+for sid, sp_data in speciation_state['species'].items():
+    species_sizes.append(sp_data.get('size', 0))
+
+size_mean = np.mean(species_sizes)
+size_std = np.std(species_sizes)
+```
+
 ## Next Steps
 
 1. **Run the analysis** with your execution directories
 2. **Review the visualizations** to identify patterns
-3. **Perform statistical tests** to validate findings
+3. **Perform statistical tests** to validate findings (can be added to aggregation script)
 4. **Create publication-ready figures** with proper labels and legends
 5. **Document findings** in your methodology/results section
+6. **Analyze species dynamics** using speciation_state.json for size/age distributions
 
 For questions or issues, check the code comments in `compare_speciation_vs_nonspeciation.py`.

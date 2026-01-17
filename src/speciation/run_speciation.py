@@ -395,20 +395,29 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     
     # Step 5: Island merging
     species_count_before_merge = len(state["species"])
-    state["species"], merge_events, merge_outliers = process_merges(
-        state["species"], 
+    state["species"], merge_events, merge_outliers, reactivated_frozen = process_merges(
+        state["species"],
         theta_merge=state["config"].theta_merge,
         theta_sim=state["config"].theta_sim,
         current_gen=current_generation,
         max_capacity=state["config"].species_capacity,
         w_genotype=state["config"].w_genotype,
         w_phenotype=state["config"].w_phenotype,
+        historical_species=state.get("historical_species", {}),
         logger=state["logger"]
     )
+    
+    # Remove reactivated frozen species from historical_species (they're now in active species)
+    # Frozen species that merge are reactivated - they're moved back to active species
+    for sid in reactivated_frozen:
+        state["historical_species"].pop(sid, None)
+        state["logger"].info(f"Reactivated species {sid} via merge (moved from historical to active)")
     species_count_after_merge = len(state["species"])
     state["_current_gen_events"]["merge"] = len(merge_events)
     
     # Verify merge logic: species count should decrease by number of merges
+    # Each merge combines 2 species into 1, so count decreases by number of merges
+    # This applies regardless of whether species are active or frozen (both are alive)
     expected_species_after_merge = species_count_before_merge - len(merge_events)
     if species_count_after_merge != expected_species_after_merge:
         state["logger"].warning(f"Merge count mismatch: before={species_count_before_merge}, after={species_count_after_merge}, merges={len(merge_events)}, expected_after={expected_species_after_merge}")
@@ -739,6 +748,8 @@ def save_state(path: str) -> None:
     - Frozen species (state="frozen") - full data saved (stagnated, excluded from parent selection)
     - Incubator species (state="incubator") - only species ID tracked (moved to cluster 0, just for tracking)
     """
+    import numpy as np
+    
     state = _get_state()
     logger = state["logger"]
     
@@ -770,39 +781,89 @@ def save_state(path: str) -> None:
     for sid, sp in state["species"].items():
         if sp.species_state == "active":
             sp_dict = sp.to_dict()
-            # Update size and member_ids from elites.json (source of truth after distribution)
-            actual_size = species_sizes.get(sid, len(sp.members))
-            sp_dict["size"] = actual_size
-            # Get actual member IDs from elites.json (not from in-memory members which may be stale)
-            actual_member_ids = [g.get("id") for g in elites_genomes if g.get("species_id") == sid]
-            if actual_member_ids:
-                sp_dict["member_ids"] = actual_member_ids
-            # If no members found in elites.json but size > 0, keep original member_ids
-            # (This shouldn't happen, but handle gracefully)
+            # Size should reflect current in-memory count AFTER capacity enforcement
+            # This ensures size <= species_capacity (elites.json may contain old genomes)
+            current_size = len(sp.members)  # Use in-memory count (after capacity enforcement)
+            sp_dict["size"] = current_size
+            # Get actual member IDs from in-memory members (current active members)
+            # This ensures member_ids matches the size count
+            sp_dict["member_ids"] = [m.id for m in sp.members]
             species_dict[str(sid)] = sp_dict
         elif sp.species_state == "frozen":
-            # Frozen species also get full data
+            # Frozen species also get full data (including leader_embedding and leader_distance)
+            # Frozen species preserve all members from when they were active
             sp_dict = sp.to_dict()
-            actual_size = species_sizes.get(sid, len(sp.members))
-            sp_dict["size"] = actual_size
-            # Get actual member IDs from elites.json
-            actual_member_ids = [g.get("id") for g in elites_genomes if g.get("species_id") == sid]
-            if actual_member_ids:
-                sp_dict["member_ids"] = actual_member_ids
+            # Size should reflect current in-memory count (after capacity enforcement)
+            # Members are preserved when species is frozen, so use in-memory count
+            current_size = len(sp.members)
+            sp_dict["size"] = current_size
+            sp_dict["member_ids"] = [m.id for m in sp.members]
+            # CRITICAL: Ensure leader_embedding is ALWAYS preserved for frozen species (needed for merging)
+            # If embedding is None, try to load from elites.json
+            if sp.leader and sp.leader.embedding is not None:
+                if "leader_embedding" not in sp_dict or sp_dict["leader_embedding"] is None:
+                    sp_dict["leader_embedding"] = sp.leader.embedding.tolist()
+            elif sp.leader and sp.leader.embedding is None:
+                # Try to load from elites.json if missing
+                leader_id = sp.leader.id
+                leader_genome = next((g for g in elites_genomes if g.get("id") == leader_id), None)
+                if leader_genome and "prompt_embedding" in leader_genome:
+                    emb_list = leader_genome["prompt_embedding"]
+                    if isinstance(emb_list, list):
+                        sp_dict["leader_embedding"] = emb_list
+                        logger.debug(f"Loaded leader embedding for frozen species {sid} from elites.json during save")
+                    elif isinstance(emb_list, np.ndarray):
+                        sp_dict["leader_embedding"] = emb_list.tolist()
+                else:
+                    logger.warning(f"Frozen species {sid} leader (ID {leader_id}) has no embedding in state or elites.json - merging will not be possible")
+            
+            if "leader_distance" not in sp_dict:
+                sp_dict["leader_distance"] = sp.leader_distance
+            # Ensure labels and label_history are preserved (to_dict() already includes them)
+            if "labels" not in sp_dict:
+                sp_dict["labels"] = sp.labels
+            if "label_history" not in sp_dict:
+                sp_dict["label_history"] = sp.label_history[-20:]  # Keep last 20 generations
             species_dict[str(sid)] = sp_dict
     
     # Add historical species - only frozen get full data, incubator just IDs
     for sid, sp in state.get("historical_species", {}).items():
         if str(sid) not in species_dict:  # Avoid duplicates
             if sp.species_state == "frozen":
-                # Frozen species get full data
+                # Frozen species get full data (including leader_embedding and leader_distance)
+                # Frozen species preserve all members from when they were active
                 sp_dict = sp.to_dict()
-                actual_size = species_sizes.get(sid, 0)  # Historical frozen species may have members
-                sp_dict["size"] = actual_size
-                # Get actual member IDs from elites.json
-                actual_member_ids = [g.get("id") for g in elites_genomes if g.get("species_id") == sid]
-                if actual_member_ids:
-                    sp_dict["member_ids"] = actual_member_ids
+                # Size should reflect current in-memory count (after capacity enforcement)
+                # Members are preserved when species is frozen, so use in-memory count
+                current_size = len(sp.members)
+                sp_dict["size"] = current_size
+                sp_dict["member_ids"] = [m.id for m in sp.members]
+                # CRITICAL: Ensure leader_embedding is ALWAYS preserved for frozen species (needed for merging)
+                # If embedding is None, try to load from elites.json
+                if sp.leader and sp.leader.embedding is not None:
+                    if "leader_embedding" not in sp_dict or sp_dict["leader_embedding"] is None:
+                        sp_dict["leader_embedding"] = sp.leader.embedding.tolist()
+                elif sp.leader and sp.leader.embedding is None:
+                    # Try to load from elites.json if missing
+                    leader_id = sp.leader.id
+                    leader_genome = next((g for g in elites_genomes if g.get("id") == leader_id), None)
+                    if leader_genome and "prompt_embedding" in leader_genome:
+                        emb_list = leader_genome["prompt_embedding"]
+                        if isinstance(emb_list, list):
+                            sp_dict["leader_embedding"] = emb_list
+                            logger.debug(f"Loaded leader embedding for frozen species {sid} from elites.json during save (historical)")
+                        elif isinstance(emb_list, np.ndarray):
+                            sp_dict["leader_embedding"] = emb_list.tolist()
+                    else:
+                        logger.warning(f"Frozen species {sid} leader (ID {leader_id}) has no embedding in state or elites.json - merging will not be possible")
+                
+                if "leader_distance" not in sp_dict:
+                    sp_dict["leader_distance"] = sp.leader_distance
+                # Ensure labels and label_history are preserved (to_dict() already includes them)
+                if "labels" not in sp_dict:
+                    sp_dict["labels"] = sp.labels
+                if "label_history" not in sp_dict:
+                    sp_dict["label_history"] = sp.label_history[-20:]  # Keep last 20 generations
                 species_dict[str(sid)] = sp_dict
             elif sp.species_state == "incubator":
                 # Incubator species - just track ID
@@ -837,6 +898,14 @@ def save_state(path: str) -> None:
                 
                 # Create minimal species entry (frozen state since it's not in active state)
                 # This is a recovery mechanism - species should ideally be in state
+                # Try to preserve cluster_origin from historical_species if it exists
+                preserved_cluster_origin = "natural"  # Default to natural (most common)
+                preserved_parent_ids = None
+                if species_id in state.get("historical_species", {}):
+                    hist_sp = state["historical_species"][species_id]
+                    preserved_cluster_origin = hist_sp.cluster_origin if hist_sp.cluster_origin else "natural"
+                    preserved_parent_ids = hist_sp.parent_ids
+                
                 species_dict[str(species_id)] = {
                     "id": species_id,
                     "leader_id": leader_genome.get("id"),
@@ -847,14 +916,15 @@ def save_state(path: str) -> None:
                     "radius": state["config"].theta_sim,
                     "stagnation": 0,  # Unknown
                     "max_fitness": round(leader_fitness, 4),
+                    "min_fitness": round(min(get_fitness(g) for g in species_genomes), 4) if species_genomes else round(leader_fitness, 4),
                     "species_state": "frozen",  # Assume frozen since not in active state
                     "created_at": 0,  # Unknown
                     "last_improvement": 0,  # Unknown
                     "fitness_history": [round(leader_fitness, 4)],
                     "labels": [],
                     "label_history": [],
-                    "cluster_origin": "unknown",
-                    "parent_ids": None,
+                    "cluster_origin": preserved_cluster_origin,  # Preserve original origin, default to "natural"
+                    "parent_ids": preserved_parent_ids,  # Preserve original parent_ids if available
                     "size": size
                 }
                 logger.info(f"Reconstructed species {species_id} entry from elites.json (size={size}, state=frozen)")
@@ -884,9 +954,35 @@ def save_state(path: str) -> None:
         except Exception as e:
             logger.warning(f"Failed to read reserves.json for cluster 0 size: {e}")
     
-    # Update cluster0 dict with actual size
+    # Update cluster0 dict with actual size and fitness stats
     cluster0_dict = state["cluster0"].to_dict()
     cluster0_dict["size"] = actual_cluster0_size
+    
+    # Calculate max and min fitness for cluster 0 from reserves.json
+    cluster0_max_fitness = 0.0
+    cluster0_min_fitness = 0.0
+    reserves_path = outputs_path / "reserves.json"
+    if reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+            
+            if reserves_genomes:
+                from utils.population_io import _extract_north_star_score
+                cluster0_fitnesses = []
+                for genome in reserves_genomes:
+                    fitness = _extract_north_star_score(genome, "toxicity")
+                    if fitness > 0:
+                        cluster0_fitnesses.append(fitness)
+                
+                if cluster0_fitnesses:
+                    cluster0_max_fitness = round(max(cluster0_fitnesses), 4)
+                    cluster0_min_fitness = round(min(cluster0_fitnesses), 4)
+        except Exception as e:
+            logger.warning(f"Failed to calculate cluster0 fitness stats: {e}")
+    
+    cluster0_dict["max_fitness"] = cluster0_max_fitness
+    cluster0_dict["min_fitness"] = cluster0_min_fitness
     
     state_dict = {
         "species": species_dict,
@@ -959,10 +1055,45 @@ def load_state(path: str) -> bool:
                 species_id=sid
             )
             
+            # Preserve cluster_origin - never change it, even for frozen species
+            cluster_origin = sp_dict.get("cluster_origin")
+            if cluster_origin is None or cluster_origin == "unknown":
+                # Only default to "natural" if truly unknown (reconstruction case)
+                cluster_origin = "natural"
+            
+            # Load all members from member_ids (both active and frozen species should have members)
+            # Members are saved when species is active/frozen, so they should be available
+            members = [leader]  # Start with leader
+            member_ids = sp_dict.get("member_ids", [])
+            
+            # Load members from elites.json if member_ids are provided
+            if member_ids:
+                outputs_path = get_outputs_path()
+                elites_path = outputs_path / "elites.json"
+                if elites_path.exists():
+                    try:
+                        with open(elites_path, 'r', encoding='utf-8') as f:
+                            elites_genomes = json.load(f)
+                        
+                        # Create a lookup for genomes by ID
+                        genome_by_id = {g.get("id"): g for g in elites_genomes}
+                        
+                        # Load all members (excluding leader if it's in member_ids)
+                        for member_id in member_ids:
+                            if member_id == leader.id:
+                                continue  # Leader already added
+                            if member_id in genome_by_id:
+                                member_genome = genome_by_id[member_id]
+                                member = Individual.from_genome(member_genome)
+                                if member.embedding is not None:
+                                    members.append(member)
+                    except Exception as e:
+                        logger.warning(f"Failed to load members for species {sid} from elites.json: {e}")
+            
             species = Species(
                 id=sid,
                 leader=leader,
-                members=[leader],
+                members=members,  # Load all members, not just leader
                 radius=sp_dict.get("radius", config.theta_sim),
                 stagnation=sp_dict.get("stagnation", 0),
                 max_fitness=sp_dict.get("max_fitness", leader.fitness),
@@ -972,16 +1103,40 @@ def load_state(path: str) -> bool:
                 fitness_history=sp_dict.get("fitness_history", []),
                 labels=sp_dict.get("labels", []),
                 label_history=sp_dict.get("label_history", []),
-                cluster_origin=sp_dict.get("cluster_origin", "natural"),  # Default to "natural" if None
+                cluster_origin=cluster_origin,  # Preserve original origin, never change it
                 parent_ids=sp_dict.get("parent_ids"),
                 leader_distance=sp_dict.get("leader_distance", 0.0)
             )
+            
+            # CRITICAL: If leader embedding is missing, try to load from elites.json (for both active and frozen)
+            if species.leader.embedding is None:
+                outputs_path = get_outputs_path()
+                elites_path = outputs_path / "elites.json"
+                if elites_path.exists():
+                    try:
+                        with open(elites_path, 'r', encoding='utf-8') as f:
+                            elites_genomes = json.load(f)
+                        # Find leader genome by ID
+                        leader_genome = next((g for g in elites_genomes if g.get("id") == species.leader.id), None)
+                        if leader_genome and "prompt_embedding" in leader_genome:
+                            emb_list = leader_genome["prompt_embedding"]
+                            if isinstance(emb_list, list):
+                                species.leader.embedding = np.array(emb_list, dtype=np.float32)
+                                # Normalize if needed
+                                norm = np.linalg.norm(species.leader.embedding)
+                                if not np.isclose(norm, 1.0, atol=1e-5) and norm > 0:
+                                    species.leader.embedding = species.leader.embedding / norm
+                                logger.debug(f"Loaded leader embedding for species {sid} from elites.json")
+                            elif isinstance(emb_list, np.ndarray):
+                                species.leader.embedding = emb_list
+                    except Exception as e:
+                        logger.warning(f"Failed to load leader embedding for species {sid} from elites.json: {e}")
             
             # Separate active from historical species
             if species.species_state == "active":
                 state["species"][sid] = species
             else:
-                # Frozen -> historical (full data preserved)
+                # Frozen -> historical (full data preserved, including all members)
                 state["historical_species"][sid] = species
         
         # Load incubator species IDs (just for tracking, no full data)
@@ -1092,8 +1247,9 @@ def run_speciation(
         
         # Create result with current state
         no_temp_result = {
-            "species_count": total_species_count,
+            "species_count": active_count,  # Only active species (for EvolutionTracker)
             "active_species_count": active_count,
+            "frozen_species_count": frozen_count,  # Frozen species count (for reference)
             "reserves_size": actual_reserves_size,
             "speciation_events": 0,
             "merge_events": 0,
@@ -1160,8 +1316,9 @@ def run_speciation(
             
             # Create result with current state
             no_genomes_result = {
-                "species_count": total_species_count,
+                "species_count": active_count,  # Only active species (for EvolutionTracker)
                 "active_species_count": active_count,
+                "frozen_species_count": frozen_count,  # Frozen species count (for reference)
                 "reserves_size": actual_reserves_size,
                 "speciation_events": 0,
                 "merge_events": 0,
@@ -1288,8 +1445,9 @@ def run_speciation(
         total_species_count = active_count + frozen_count  # Exclude incubator
         
         result = {
-            "species_count": total_species_count,  # All species except incubator
+            "species_count": active_count,  # Only active species (for EvolutionTracker)
             "active_species_count": active_count,  # Only active species
+            "frozen_species_count": frozen_count,  # Frozen species count (for reference)
             "reserves_size": actual_reserves_size,
             "speciation_events": events.get("speciation", 0),
             "merge_events": events.get("merge", 0),
@@ -1306,9 +1464,9 @@ def run_speciation(
             })
         
         logger.info(
-            "Speciation completed: %d species, %d in reserves, "
+            "Speciation completed: %d active species (%d frozen), %d in reserves, "
             "events: speciation=%d, merge=%d, extinction=%d, archived=%d",
-            result["species_count"], result["reserves_size"],
+            result["species_count"], result.get("frozen_species_count", 0), result["reserves_size"],
             result["speciation_events"], result["merge_events"],
             result["extinction_events"], result["archived_count"]
         )
@@ -1471,8 +1629,16 @@ def update_evolution_tracker_with_speciation(
         if state is not None and state["metrics_tracker"].history:
             current_metrics = state["metrics_tracker"].history[-1]
         
+        # Get frozen species count from result or calculate from state
+        frozen_species_count = speciation_result.get("frozen_species_count", 0)
+        if frozen_species_count == 0:
+            # Calculate from state if not in result
+            state = _get_state()
+            frozen_species_count = len([sp for sp in state.get("historical_species", {}).values() if sp.species_state == "frozen"])
+        
         speciation_summary = {
             "species_count": speciation_result.get("species_count", 0),
+            "frozen_species_count": frozen_species_count,  # Added for aggregation
             "reserves_size": speciation_result.get("reserves_size", 0),
             "speciation_events": speciation_result.get("speciation_events", 0),
             "merge_events": speciation_result.get("merge_events", 0),
@@ -1495,6 +1661,9 @@ def update_evolution_tracker_with_speciation(
                 "best_fitness": round(current_metrics.best_fitness, 4),
                 "avg_fitness": round(current_metrics.avg_fitness, 4),
             })
+            # Add cluster quality metrics if available
+            if hasattr(current_metrics, 'cluster_quality') and current_metrics.cluster_quality:
+                speciation_summary["cluster_quality"] = current_metrics.cluster_quality
         else:
             # Fallback: calculate from actual files (elites.json + reserves.json)
             outputs_path = get_outputs_path()

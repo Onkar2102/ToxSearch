@@ -21,7 +21,8 @@ Black-box evolutionary framework for systematic LLM safety testing through promp
 
 **Speciation**: Leader-Follower clustering with ensemble distance `d_ensemble = 0.7×d_genotype + 0.3×d_phenotype`
 - Assignment: `d_ensemble(u, leader) < θ_sim = 0.2`
-- Merging: `d_ensemble(leader_i, leader_j) < θ_merge = 0.1`
+- Merging: `d_ensemble(leader_i, leader_j) < θ_merge = 0.1` (active species only)
+- Freeze: `stagnation ≥ 20` → species frozen (preserved with embeddings for potential merging)
 - Capacity: `|S_i| ≤ 100`, `|R| ≤ 1000`
 
 ## Installation
@@ -54,11 +55,17 @@ python src/main.py \
 ## Outputs
 
 `data/outputs/YYYYMMDD_HHMM/`:
-- `elites.json` - Species members (species_id > 0)
-- `reserves.json` - Cluster 0 (species_id = 0)
-- `EvolutionTracker.json` - Complete history
-- `speciation_state.json` - Species state
-- `operator_effectiveness_cumulative.csv` - Operator metrics
-- `figures/` - Visualizations
+- `elites.json` - Species members (species_id > 0, all generations)
+- `reserves.json` - Cluster 0 (species_id = 0, max 1000)
+- `archive.json` - Archived genomes (capacity overflow)
+- `EvolutionTracker.json` - Complete evolution history with metrics
+- `speciation_state.json` - Species state (active/frozen/incubator) with leader embeddings
+- `operator_effectiveness_cumulative.csv` - Operator effectiveness metrics (RQ1)
+- `figures/` - Visualizations (fitness, diversity, operator metrics)
+
+**Species States**:
+- **active**: Participates in evolution
+- **frozen**: Stagnated (≥20 gens), excluded from selection, preserved with embeddings
+- **incubator**: Moved to cluster 0 when `size < min_island_size` (default: < 2), tracked by ID only
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for details.

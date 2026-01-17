@@ -47,6 +47,7 @@ class ParentSelector:
         """
         self.north_star_metric = north_star_metric
         self.logger = get_logger("ParentSelector", log_file)
+        self._last_outputs_path = None  # Store for fallback logic
         self.logger.debug(f"ParentSelector initialized with north_star_metric={north_star_metric}")
 
     def _load_speciation_state(self, outputs_path: str) -> Dict[str, Any]:
@@ -181,6 +182,86 @@ class ParentSelector:
         
         return active_species
 
+    def _fallback_to_reserves_or_frozen(
+        self,
+        elites: List[Dict[str, Any]],
+        reserves: List[Dict[str, Any]],
+        species_groups: Dict[int, List[Dict[str, Any]]],
+        active_species_ids: set,
+        outputs_path: str = None,
+        num_parents: int = 2
+    ) -> List[Dict[str, Any]]:
+        """
+        Fallback logic when no active species found.
+        
+        Priority:
+        1. Select from reserves if available and sufficient
+        2. If reserves empty/insufficient, include frozen species and use normal selection
+        
+        Args:
+            elites: List of elite genomes
+            reserves: List of reserve genomes
+            species_groups: Dict mapping species_id -> genomes
+            active_species_ids: Set of active species IDs
+            outputs_path: Path to outputs directory (for loading speciation state)
+            num_parents: Number of parents needed
+            
+        Returns:
+            List of selected parents, or empty list if fallback fails
+        """
+        all_genomes = elites + reserves
+        
+        # First try: select from reserves only
+        if reserves and len(reserves) >= num_parents:
+            self.logger.info(f"Selecting {num_parents} parents from reserves (all species frozen)")
+            return random.sample(reserves, num_parents)
+        
+        # Second try: if reserves empty or insufficient, include frozen species
+        if outputs_path is None:
+            outputs_path = get_outputs_path()
+        
+        speciation_state = self._load_speciation_state(outputs_path)
+        frozen_species_ids = set()
+        species_dict = speciation_state.get("species", {})
+        historical_species = speciation_state.get("historical_species", {})
+        
+        # Check both active species dict and historical_species for frozen
+        for sid_str, sp_data in list(species_dict.items()) + list(historical_species.items()):
+            sid = int(sid_str) if isinstance(sid_str, str) else sid_str
+            species_state = sp_data.get("species_state", "active")
+            if species_state == "frozen":
+                frozen_species_ids.add(sid)
+        
+        if not frozen_species_ids:
+            # No frozen species either, return empty to trigger final fallback
+            return []
+        
+        # Include frozen species in active set for selection
+        active_species_ids_with_frozen = active_species_ids.copy()
+        active_species_ids_with_frozen.update(frozen_species_ids)
+        active_species_ids_with_frozen.add(CLUSTER_0_ID)  # Always include reserves
+        
+        # Try again with frozen species included
+        sorted_species_with_frozen = self._get_sorted_active_species(species_groups, active_species_ids_with_frozen)
+        if sorted_species_with_frozen:
+            self.logger.info(f"Using frozen species for parent selection (reserves empty/insufficient, {len(frozen_species_ids)} frozen species available)")
+            # Use normal selection logic with frozen species
+            # For simplicity, select randomly from available species
+            selected_species = random.choice(sorted_species_with_frozen)
+            species_id, species_genomes, _ = selected_species
+            if len(species_genomes) >= num_parents:
+                return random.sample(species_genomes, num_parents)
+            else:
+                # Species has < num_parents members, select what we can and supplement from all
+                selected = list(species_genomes)
+                remaining = [g for g in all_genomes if g not in selected]
+                needed = num_parents - len(selected)
+                if remaining and needed > 0:
+                    selected.extend(random.sample(remaining, min(needed, len(remaining))))
+                return selected[:num_parents] if len(selected) >= num_parents else selected
+        
+        return []
+
     def _get_genome_with_highest_fitness(self, genomes: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Get the genome with the highest fitness score from a list.
@@ -229,8 +310,47 @@ class ParentSelector:
         sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
         
         if not sorted_species:
-            # No active species, fall back to random
-            self.logger.warning("No active species found, falling back to random selection")
+            # No active species - prefer reserves first, then frozen species
+            self.logger.warning("No active species found, checking reserves and frozen species")
+            
+            # First try: select from reserves only
+            if reserves and len(reserves) >= 2:
+                self.logger.info("Selecting parents from reserves (all species frozen)")
+                return random.sample(reserves, min(2, len(reserves)))
+            
+            # Second try: if reserves empty or insufficient, include frozen species
+            # Get frozen species IDs from speciation state
+            speciation_state = self._load_speciation_state(outputs_path if hasattr(self, '_last_outputs_path') else get_outputs_path())
+            frozen_species_ids = set()
+            species_dict = speciation_state.get("species", {})
+            historical_species = speciation_state.get("historical_species", {})
+            
+            # Check both active species dict and historical_species for frozen
+            for sid_str, sp_data in list(species_dict.items()) + list(historical_species.items()):
+                sid = int(sid_str) if isinstance(sid_str, str) else sid_str
+                species_state = sp_data.get("species_state", "active")
+                if species_state == "frozen":
+                    frozen_species_ids.add(sid)
+            
+            # Include frozen species in active set for selection
+            active_species_ids_with_frozen = active_species_ids.copy()
+            active_species_ids_with_frozen.update(frozen_species_ids)
+            active_species_ids_with_frozen.add(CLUSTER_0_ID)  # Always include reserves
+            
+            # Try again with frozen species included
+            sorted_species_with_frozen = self._get_sorted_active_species(species_groups, active_species_ids_with_frozen)
+            if sorted_species_with_frozen:
+                self.logger.info(f"Using frozen species for parent selection (reserves empty, {len(frozen_species_ids)} frozen species available)")
+                selected_species = random.choice(sorted_species_with_frozen)
+                species_id, species_genomes, _ = selected_species
+                if len(species_genomes) >= 2:
+                    return random.sample(species_genomes, 2)
+                else:
+                    # Fallback to all genomes if species has < 2 members
+                    return random.sample(all_genomes, min(2, len(all_genomes)))
+            
+            # Final fallback: random from all genomes
+            self.logger.warning("No active or frozen species found, falling back to random selection from all genomes")
             return random.sample(all_genomes, min(2, len(all_genomes)))
         
         # Randomly select one species
@@ -288,8 +408,12 @@ class ParentSelector:
         sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
         
         if not sorted_species:
-            # No active species, fall back to random
-            self.logger.warning("No active species found, falling back to random selection")
+            # No active species - prefer reserves first, then frozen species
+            self.logger.warning("No active species found for exploitation, checking reserves and frozen species")
+            selected_parents = self._fallback_to_reserves_or_frozen(elites, reserves, species_groups, active_species_ids, outputs_path=getattr(self, '_last_outputs_path', None), num_parents=3)
+            if selected_parents:
+                return selected_parents
+            # Final fallback
             return random.sample(all_genomes, min(3, len(all_genomes)))
         
         # Filter species with at least 3 genomes
@@ -367,8 +491,12 @@ class ParentSelector:
         sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
         
         if not sorted_species:
-            # No active species, fall back to random
-            self.logger.warning("No active species found, falling back to random selection")
+            # No active species - prefer reserves first, then frozen species
+            self.logger.warning("No active species found for exploration, checking reserves and frozen species")
+            selected_parents = self._fallback_to_reserves_or_frozen(elites, reserves, species_groups, active_species_ids, outputs_path=getattr(self, '_last_outputs_path', None), num_parents=3)
+            if selected_parents:
+                return selected_parents
+            # Final fallback
             return random.sample(all_genomes, min(3, len(all_genomes)))
         
         # Need at least 3 different species

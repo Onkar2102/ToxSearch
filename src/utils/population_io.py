@@ -1639,7 +1639,7 @@ def update_adaptive_selection_logic(
                 if gen["generation_number"] == current_generation:
                     # For the current generation, use the calculated value we just computed
                     generations_with_avg_fitness.append(gen)
-                elif gen["avg_fitness"] > 0.0 or gen.get("elites_count", 0) > 0 or gen.get("reserves_count", 0) > 0:
+                elif gen["avg_fitness"] > 0.0 or gen.get("elites_count", 0) > 0 or gen.get("reserves_count", 0) > 0 or gen.get("archived_count", 0) > 0:
                     # For past generations, include if avg_fitness > 0 or if population exists (indicating it was calculated)
                     generations_with_avg_fitness.append(gen)
                 # Otherwise, skip 0.0 values that are likely placeholders
@@ -1736,6 +1736,7 @@ def calculate_generation_statistics(
         "initial_population_size": 0,
         "elites_count": 0,
         "reserves_count": 0,
+        "archived_count": 0,
         "total_population": 0,
         "max_score_variants": 0.0001,
         "min_score_variants": 0.0001,
@@ -1768,9 +1769,20 @@ def calculate_generation_statistics(
             with open(temp_path, 'r', encoding='utf-8') as f:
                 temp_genomes = json.load(f)
         
+        # Load archive.json (archived genomes)
+        archive_path = outputs_dir / "archive.json"
+        archive_genomes = []
+        if archive_path.exists():
+            try:
+                with open(archive_path, 'r', encoding='utf-8') as f:
+                    archive_genomes = json.load(f)
+            except Exception as e:
+                _logger.warning(f"Failed to load archive.json: {e}")
+        
         # Calculate counts
         stats["elites_count"] = len(elites_genomes)
         stats["reserves_count"] = len(reserves_genomes)
+        stats["archived_count"] = len(archive_genomes)
         stats["total_population"] = stats["elites_count"] + stats["reserves_count"]
         
         # Calculate elite fitness statistics
@@ -1824,10 +1836,10 @@ def calculate_generation_statistics(
         stats.update(budget_metrics)
         
         _logger.debug(
-            "Gen %d stats: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), total=%d, avg_gen=%.4f, llm_calls=%d, api_calls=%d",
+            "Gen %d stats: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), archived=%d, total=%d, avg_gen=%.4f, llm_calls=%d, api_calls=%d",
             current_generation, stats["elites_count"], stats["avg_fitness_elites"],
             stats["reserves_count"], stats["avg_fitness_reserves"],
-            stats["total_population"], stats["avg_fitness_generation"],
+            stats["archived_count"], stats["total_population"], stats["avg_fitness_generation"],
             stats.get("llm_calls", 0), stats.get("api_calls", 0)
         )
         
@@ -1887,6 +1899,7 @@ def update_evolution_tracker_with_statistics(
         gen_entry.update({
             "elites_count": statistics.get("elites_count", 0),
             "reserves_count": statistics.get("reserves_count", 0),
+            "archived_count": statistics.get("archived_count", 0),
             "total_population": statistics.get("total_population", 0),
             "max_score_variants": round(statistics.get("max_score_variants", 0.0001), 4),
             "min_score_variants": round(statistics.get("min_score_variants", 0.0001), 4),
@@ -1961,9 +1974,10 @@ def update_evolution_tracker_with_statistics(
             json.dump(tracker, f, indent=2, ensure_ascii=False)
         
         _logger.info(
-            "Updated EvolutionTracker gen %d: elites=%d, reserves=%d, avg_fitness=%.4f",
+            "Updated EvolutionTracker gen %d: elites=%d, reserves=%d, archived=%d, avg_fitness=%.4f",
             current_generation, statistics.get("elites_count", 0),
-            statistics.get("reserves_count", 0), statistics.get("avg_fitness_generation", 0.0001)
+            statistics.get("reserves_count", 0), statistics.get("archived_count", 0),
+            statistics.get("avg_fitness_generation", 0.0001)
         )
         
         return True

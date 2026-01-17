@@ -420,10 +420,8 @@ class EvolutionEngine:
         single_parent_operators = self._get_single_parent_operators()
         multi_parent_operators = self._get_multi_parent_operators()
 
-        # Calculate and store expected variant count for operator effectiveness metrics
-        expected_variant_count = self._calculate_expected_variant_count(len(parents))
-        self._store_expected_variant_count(expected_variant_count, evolution_tracker)
-        self.logger.debug(f"Expected variant count for {len(parents)} parents: {expected_variant_count}")
+        # Note: expected_variant_count removed - not used for metric calculations, only validation
+        # Metrics use calculated_total from operator statistics instead
 
         if len(parents) >= 2:
             self.logger.debug(f"Running crossover globally with {len(parents)} parents and {len(multi_parent_operators)} operators.")
@@ -763,7 +761,7 @@ class EvolutionEngine:
         
         return filtered_operators
 
-    def _calculate_expected_variant_count(self, num_parents: int) -> int:
+    def _calculate_expected_variant_count(self, num_parents: int) -> int:  # DEPRECATED: Not used anymore
         """
         Calculate expected variant count based on number of parents.
         
@@ -798,7 +796,7 @@ class EvolutionEngine:
         
         return expected_count
 
-    def _store_expected_variant_count(self, expected_count: int, evolution_tracker: Dict[str, Any] = None) -> None:
+    def _store_expected_variant_count(self, expected_count: int, evolution_tracker: Dict[str, Any] = None) -> None:  # DEPRECATED: Not used anymore
         """
         Store expected variant count in EvolutionTracker.json for operator effectiveness calculation.
         
