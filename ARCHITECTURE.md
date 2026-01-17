@@ -37,13 +37,13 @@ Genetic algorithm with semantic speciation (Leader-Follower clustering) for evol
 - Leader: `leader(S_i) = argmax_{x∈S_i} f(x)`
 
 **Operations**:
-- Merge: `d_ensemble(leader_i, leader_j) < θ_merge` (only active species merge)
-- Freeze: `stagnation(S_i) ≥ 20` → species moved to "frozen" state
+- Merge: `d_ensemble(leader_i, leader_j) < θ_merge` (active and frozen species can merge)
+- Freeze: `stagnation(S_i) ≥ 20` → species moved to "frozen" state (preserved with all members)
 - Capacity: Archive excess when `|S_i| > 100` or `|R| > 1000`
 
 **Species States**:
 - **active**: Participates in evolution and parent selection
-- **frozen**: Stagnated (≥20 generations without improvement), excluded from parent selection but preserved with full data (leader embeddings, distances) for potential merging
+- **frozen**: Stagnated (≥20 generations without improvement), excluded from parent selection but preserved with full data (leader embeddings, distances, labels, history, and all members). Members are preserved from when species was active (saved in `member_ids` in speciation_state.json). Can merge with active or other frozen species. Both active and frozen are "alive" - only difference is parent selection preference.
 - **incubator**: Moved to cluster 0 when `size < min_island_size` (default: < 2), tracked by ID only
   - **Note**: Uses `min_island_size` (min 2), NOT `species_capacity` (max 100)
   - Condition: `actual_size < min_island_size` (strictly less than)
@@ -77,7 +77,7 @@ Genetic algorithm with semantic speciation (Leader-Follower clustering) for evol
 - `archive.json`: Capacity overflow (removed due to limits)
 - `temp.json`: Staging (new variants before speciation)
 - `EvolutionTracker.json`: Complete evolution history with metrics
-- `speciation_state.json`: Species state (active, frozen, incubator) with leader embeddings preserved
+- `speciation_state.json`: Species state (active, frozen, incubator) with full data preserved (leader embeddings, distances, labels, history, member_ids)
 
 ## Species Management
 
@@ -94,6 +94,7 @@ Genetic algorithm with semantic speciation (Leader-Follower clustering) for evol
 - Frozen species that merge are reactivated (moved back to active species)
 
 **Evolution Continuation**:
-- If all species freeze, evolution continues using cluster 0 (reserves)
+- If all species freeze, evolution continues using cluster 0 (reserves) for parent selection
+- If all species freeze and reserves are empty, evolution continues using frozen species (treated as active for parent selection)
 - Cluster 0 is always active and can form new species
-- Fallback mechanism selects from all genomes if no active species found
+- Fallback mechanism: reserves → frozen species → all genomes
