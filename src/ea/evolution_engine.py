@@ -631,30 +631,16 @@ class EvolutionEngine:
             if current_gen is None:
                 # Get selection_mode from EvolutionTracker root level for this generation
                 selection_mode = tracker.get("selection_mode", "default")
-                # Create new generation entry
-                current_gen = {
-                    "generation_number": current_generation,
-                    "genome_id": None,
-                    "max_score_variants": 0.0001,
-                    "min_score_variants": 0.0001,
-                    "avg_fitness": 0.0001,
-                    # Variant statistics from temp.json (before distribution)
-                    "avg_fitness_variants": 0.0001,
-                    # Population statistics (after distribution)
-                    "avg_fitness_generation": 0.0001,
-                    "avg_fitness_elites": 0.0001,
-                    "avg_fitness_reserves": 0.0001,
-                    "parents": [],
-                    "top_10": [],
-                    "variants_created": 0,
-                    "mutation_variants": 0,
-                    "crossover_variants": 0,
-                    "elites_count": 0,
-                    "operator_statistics": {},
-                    "selection_mode": selection_mode  # Add selection mode for this generation
-                }
+                # Create new generation entry with all standard fields
+                from utils.population_io import _get_standard_generation_entry_template
+                current_gen = _get_standard_generation_entry_template(current_generation, selection_mode)
                 tracker.setdefault("generations", []).append(current_gen)
                 self.logger.info(f"Created new generation entry: {current_generation}")
+            else:
+                # Ensure existing entry has all fields
+                from utils.population_io import _ensure_generation_entry_has_all_fields
+                selection_mode = tracker.get("selection_mode", "default")
+                current_gen = _ensure_generation_entry_has_all_fields(current_gen, current_generation, selection_mode)
             
             # Read parent IDs from parents.json
             parent_ids = []

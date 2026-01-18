@@ -287,8 +287,17 @@ class Species:
         """
         Record current best fitness and update fitness history.
         
-        Updates stagnation: increments ONLY if species was selected as parent AND no improvement.
-        Resets to 0 if fitness improved (regardless of parent selection).
+        Freezing Logic:
+        - For a species to become frozen, it must not improve since the last species_stagnation generations
+          where it was selected as parent.
+        - When species is selected as parent AND there's no improvement in highest fitness, increment counter by 1.
+        - When counter reaches species_stagnation, meaning species was selected species_stagnation times
+          as parent and didn't improve at all, freeze that species.
+        
+        Stagnation Counter Behavior:
+        - Increments ONLY if species was selected as parent AND no improvement in max_fitness.
+        - Resets to 0 if fitness improved (regardless of parent selection).
+        - Remains unchanged if species was NOT selected as parent (even if no improvement).
         
         CRITICAL: Stagnation only increments when species is selected as parent and doesn't improve.
         This ensures species only freeze after being selected as parents for species_stagnation generations
@@ -297,7 +306,7 @@ class Species:
         NOTE: This is called for ALL species, including frozen species. For frozen species,
         stagnation continues to increment if they were selected as parents, allowing calculation of frozen duration:
         frozen_generations = stagnation - species_stagnation
-        (e.g., if frozen at stagnation=20 and current stagnation=25, it's been frozen for 5 generations)
+        (e.g., if frozen at stagnation=30 and current stagnation=35, it's been frozen for 5 generations)
         
         Args:
             generation: Current generation number

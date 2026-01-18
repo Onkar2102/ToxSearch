@@ -65,7 +65,14 @@ def merge_islands(
     # Sort by fitness and trim to capacity
     combined = sorted(combined, key=lambda x: x.fitness, reverse=True)[:max_capacity]
     # Select new leader as highest fitness from ALL combined members (not just old leaders)
-    new_leader = combined[0] if combined else max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
+    if not combined:
+        # Fallback: use highest fitness leader from either species (both should exist)
+        if not sp1.leader or not sp2.leader:
+            logger.error(f"Cannot merge species {sp1.id} and {sp2.id}: both have no members and at least one has no leader")
+            raise ValueError(f"Cannot merge species {sp1.id} and {sp2.id}: insufficient members and leaders")
+        new_leader = max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
+    else:
+        new_leader = combined[0]
     
     # Note: Duplicate leader check will be done in run_speciation.py after merge
     # since we don't have access to all species here
@@ -187,7 +194,16 @@ def process_merges(
     # Frozen species can merge with active or other frozen species
     # Both active and frozen species are "alive" - only difference is parent selection preference
     # Note: Frozen species are now in the active species dict (not historical_species)
-    all_species_for_merging = dict(species)  # Start with active and frozen species
+    # CRITICAL: Filter out species without leaders or with incubator state (should not merge)
+    all_species_for_merging = {}
+    for sid, sp in species.items():
+        # Only include species that have a leader and are not incubator
+        if sp.leader is not None and sp.species_state != "incubator":
+            all_species_for_merging[sid] = sp
+        elif sp.species_state == "incubator":
+            logger.debug(f"Skipping species {sid} from merge candidates: incubator state (no leader)")
+        elif sp.leader is None:
+            logger.warning(f"Skipping species {sid} from merge candidates: no leader (state={sp.species_state})")
     
     # BACKWARD COMPATIBILITY: Check historical_species for any frozen species
     # This handles state files from before the refactoring where frozen species were in historical_species
@@ -214,7 +230,12 @@ def process_merges(
         species_list = list(all_species_for_merging.items())
         for i, (id1, sp1) in enumerate(species_list):
             for j, (id2, sp2) in enumerate(species_list[i + 1:], start=i + 1):
+                # Check if leaders exist and have embeddings before accessing
+                if not sp1.leader or not sp2.leader:
+                    logger.debug(f"Skipping merge check for {id1}+{id2}: one or both species have no leader")
+                    continue
                 if sp1.leader.embedding is None or sp2.leader.embedding is None:
+                    logger.debug(f"Skipping merge check for {id1}+{id2}: one or both leaders have no embedding")
                     continue
                 dist = ensemble_distance(
                     sp1.leader.embedding, sp2.leader.embedding,
@@ -236,6 +257,12 @@ def process_merges(
         sp2 = all_species_for_merging.get(id2)
         
         if not sp1 or not sp2:
+            logger.warning(f"Skipping merge {id1}+{id2}: one or both species not found in all_species_for_merging")
+            continue
+        
+        # Validate that both species have leaders before merging
+        if not sp1.leader or not sp2.leader:
+            logger.warning(f"Skipping merge {id1}+{id2}: one or both species have no leader (sp1.leader={sp1.leader is not None}, sp2.leader={sp2.leader is not None})")
             continue
         
         merged, outliers = merge_islands(sp1, sp2, current_gen, theta_sim, max_capacity, w_genotype, w_phenotype, logger)

@@ -1933,6 +1933,77 @@ def calculate_generation_statistics(
         return stats
 
 
+def _get_standard_generation_entry_template(generation_number: int, selection_mode: str = "default") -> Dict[str, Any]:
+    """
+    Create a standard generation entry template with ALL required fields.
+    
+    This ensures all generation entries have consistent fields across all updates.
+    
+    Args:
+        generation_number: Generation number
+        selection_mode: Selection mode (default: "default")
+        
+    Returns:
+        Dictionary with all standard fields initialized to defaults
+    """
+    return {
+        "generation_number": generation_number,
+        "genome_id": None,
+        "max_score_variants": 0.0001,
+        "min_score_variants": 0.0001,
+        "avg_fitness": 0.0001,
+        "avg_fitness_variants": 0.0001,
+        "avg_fitness_generation": 0.0001,
+        "avg_fitness_elites": 0.0001,
+        "avg_fitness_reserves": 0.0001,
+        "parents": [],
+        "top_10": [],
+        "variants_created": 0,
+        "mutation_variants": 0,
+        "crossover_variants": 0,
+        "elites_count": 0,
+        "reserves_count": 0,
+        "archived_count": 0,
+        "total_population": 0,
+        "selection_mode": selection_mode,
+        "operator_statistics": {},
+        "speciation": None,  # Will be set by speciation update
+        "budget": None  # Will be set if available
+    }
+
+
+def _ensure_generation_entry_has_all_fields(gen_entry: Dict[str, Any], generation_number: int, selection_mode: str = "default") -> Dict[str, Any]:
+    """
+    Ensure generation entry has all standard fields, filling in missing ones with defaults.
+    
+    Args:
+        gen_entry: Existing generation entry (may be partial)
+        generation_number: Generation number
+        selection_mode: Selection mode (default: "default")
+        
+    Returns:
+        Generation entry with all fields present
+    """
+    template = _get_standard_generation_entry_template(generation_number, selection_mode)
+    
+    # Merge template with existing entry (existing values take precedence)
+    result = template.copy()
+    result.update(gen_entry)
+    
+    # Ensure generation_number is correct
+    result["generation_number"] = generation_number
+    
+    # Ensure lists are lists (not None)
+    if result.get("parents") is None:
+        result["parents"] = []
+    if result.get("top_10") is None:
+        result["top_10"] = []
+    if result.get("operator_statistics") is None:
+        result["operator_statistics"] = {}
+    
+    return result
+
+
 def update_evolution_tracker_with_statistics(
     evolution_tracker_path: str,
     current_generation: int,
@@ -1974,24 +2045,37 @@ def update_evolution_tracker_with_statistics(
                 gen_entry = gen
                 break
         
+        selection_mode = tracker.get("selection_mode", "default")
+        
         if gen_entry is None:
-            gen_entry = {"generation_number": current_generation}
+            # Create new entry with all standard fields
+            gen_entry = _get_standard_generation_entry_template(current_generation, selection_mode)
             generations.append(gen_entry)
+        else:
+            # Ensure existing entry has all fields
+            gen_entry = _ensure_generation_entry_has_all_fields(gen_entry, current_generation, selection_mode)
         
         # Update with statistics (round all float values to 4 decimal places)
+        # Preserve existing speciation data if present
+        existing_speciation = gen_entry.get("speciation")
+        
         gen_entry.update({
             "elites_count": statistics.get("elites_count", 0),
             "reserves_count": statistics.get("reserves_count", 0),
             "archived_count": statistics.get("archived_count", 0),
             "total_population": statistics.get("total_population", 0),
-            "max_score_variants": round(statistics.get("max_score_variants", 0.0001), 4),
-            "min_score_variants": round(statistics.get("min_score_variants", 0.0001), 4),
-            "avg_fitness_variants": round(statistics.get("avg_fitness_variants", 0.0001), 4),
-            "avg_fitness_generation": round(statistics.get("avg_fitness_generation", 0.0001), 4),
-            "avg_fitness": round(statistics.get("avg_fitness_generation", 0.0001), 4),  # Alias for compatibility
-            "avg_fitness_elites": round(statistics.get("avg_fitness_elites", 0.0001), 4),
-            "avg_fitness_reserves": round(statistics.get("avg_fitness_reserves", 0.0001), 4),
+            "max_score_variants": round(statistics.get("max_score_variants", gen_entry.get("max_score_variants", 0.0001)), 4),
+            "min_score_variants": round(statistics.get("min_score_variants", gen_entry.get("min_score_variants", 0.0001)), 4),
+            "avg_fitness_variants": round(statistics.get("avg_fitness_variants", gen_entry.get("avg_fitness_variants", 0.0001)), 4),
+            "avg_fitness_generation": round(statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness_generation", 0.0001)), 4),
+            "avg_fitness": round(statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness", 0.0001)), 4),  # Alias for compatibility
+            "avg_fitness_elites": round(statistics.get("avg_fitness_elites", gen_entry.get("avg_fitness_elites", 0.0001)), 4),
+            "avg_fitness_reserves": round(statistics.get("avg_fitness_reserves", gen_entry.get("avg_fitness_reserves", 0.0001)), 4),
         })
+        
+        # Restore speciation data if it was present
+        if existing_speciation is not None:
+            gen_entry["speciation"] = existing_speciation
         
         # Add budget metrics if available
         if "llm_calls" in statistics:

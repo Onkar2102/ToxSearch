@@ -28,6 +28,12 @@ def process_extinctions(
     """
     Process species freezing and move small species to cluster 0.
     
+    Freezing Logic:
+    - A species becomes frozen when it was selected as parent for species_stagnation generations
+      and didn't improve its highest fitness in any of those generations.
+    - The stagnation counter increments only when species is selected as parent AND no improvement.
+    - When stagnation >= species_stagnation, the species is frozen (EXTINCTION - tracked separately).
+    
     Actions:
     1. Freeze species with stagnation >= species_stagnation (EXTINCTION - tracked separately)
     2. Move species with count < min_size to cluster 0 (NOT extinction - tracked separately)
@@ -40,7 +46,7 @@ def process_extinctions(
         species: Dict of species (modified in-place)
         cluster0: Cluster 0 (reserves) for small species
         current_generation: Current generation number
-        species_stagnation: Maximum stagnation before freezing
+        species_stagnation: Maximum stagnation before freezing (number of times selected as parent without improvement)
         min_size: Minimum species size (below this, move to cluster 0)
         logger: Optional logger instance
     

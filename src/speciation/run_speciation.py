@@ -415,8 +415,8 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                 sp.species_state = "incubator"
                 sp.members = []  # Clear members
                 
-                # Move leader to cluster 0
-                if state["cluster0"].size < state["config"].cluster0_max_capacity:
+                # Move leader to cluster 0 (if leader exists)
+                if sp.leader and state["cluster0"].size < state["config"].cluster0_max_capacity:
                     state["cluster0"].add(sp.leader, current_generation)
                 
                 # Remove from active species (will be preserved in speciation_state.json with incubator state)
@@ -662,33 +662,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state["logger"].info("=== Phase 3: Merging ===")
     
     # 11. Merging of all species (existing + newly formed)
-    # CRITICAL: Stagnation only increments if species was selected as parent AND no improvement
-    # This ensures species only freeze after being selected as parents for species_stagnation generations
-    # without improvement. Species that are never selected as parents will never freeze.
-    # Load parents.json to determine which species were selected as parents
-    selected_species_ids = set()
-    if current_generation > 0:  # Generation 0 has no parents
-        try:
-            outputs_path = get_outputs_path()
-            parents_path = outputs_path / "parents.json"
-            if parents_path.exists():
-                with open(parents_path, 'r', encoding='utf-8') as f:
-                    parents = json.load(f)
-                if isinstance(parents, list):
-                    # Extract species IDs from selected parents
-                    # Note: Cluster 0 (species_id=0) is included but won't cause issues since
-                    # we only call record_fitness() on species in state["species"], and cluster 0 is not there
-                    for parent in parents:
-                        species_id = parent.get("species_id")
-                        if species_id is not None:
-                            selected_species_ids.add(int(species_id))
-                    state["logger"].debug(f"Loaded {len(selected_species_ids)} species from parents.json: {sorted(selected_species_ids)}")
-        except Exception as e:
-            state["logger"].warning(f"Failed to load parents.json to determine selected species: {e}")
-    
-    for sid, sp in state["species"].items():
-        was_selected = sid in selected_species_ids
-        sp.record_fitness(current_generation, was_selected_as_parent=was_selected)
+    # NOTE: record_fitness() is called ONCE per generation in Phase 4 (Freeze & Incubator)
+    # to avoid double-incrementing stagnation. We skip it here to prevent calling it twice.
+    # This ensures stagnation only increments once per generation, preventing premature freezing.
     
     species_count_before_merge = len(state["species"])
     state["species"], merge_events, merge_outliers, extinct_parents = process_merges(
@@ -1836,15 +1812,22 @@ def save_state(path: str) -> None:
             elites_genomes = json.load(f)
         
         # Count genomes per species and collect all member IDs
+        # CRITICAL: Use sets to track unique IDs since elites.json is cumulative
+        # (same genome may appear in multiple generations with same species_id)
+        species_member_ids_sets = {}  # Track unique IDs per species
         for genome in elites_genomes:
             species_id = genome.get("species_id")
             if species_id is not None and species_id > 0:
                 species_sizes[species_id] = species_sizes.get(species_id, 0) + 1
                 genome_id = genome.get("id")
                 if genome_id is not None:
-                    if species_id not in species_member_ids:
-                        species_member_ids[species_id] = []
-                    species_member_ids[species_id].append(genome_id)
+                    if species_id not in species_member_ids_sets:
+                        species_member_ids_sets[species_id] = set()
+                    species_member_ids_sets[species_id].add(genome_id)
+        
+        # Convert sets to lists for JSON serialization (preserve order by sorting)
+        for species_id, id_set in species_member_ids_sets.items():
+            species_member_ids[species_id] = sorted(list(id_set))
         
         logger.debug(f"Calculated species sizes from elites.json: {len(species_sizes)} species, {len(elites_genomes)} total genomes")
     else:
@@ -1858,55 +1841,43 @@ def save_state(path: str) -> None:
     for sid, sp in state["species"].items():
         if sp.species_state == "active":
             sp_dict = sp.to_dict()
-            # Size should reflect total count from elites.json (all generations)
-            # This matches what validation expects and what elites.json actually contains
-            if sid in species_sizes:
-                current_size = species_sizes[sid]
-                sp_dict["size"] = current_size
-            else:
-                # If elites.json exists but species not found, this is unexpected
-                if elites_path.exists():
-                    logger.warning(f"Species {sid} not found in elites.json, using in-memory size {len(sp.members)}")
-                current_size = len(sp.members)
-                sp_dict["size"] = current_size
             
-            # Get actual member IDs from elites.json (all members across all generations)
-            # This ensures member_ids matches the size field and includes all genomes
+            # Get actual member IDs from elites.json (all members across all generations, unique)
+            # Size should match the unique count of member_ids
             if sid in species_member_ids:
                 sp_dict["member_ids"] = species_member_ids[sid]
-                logger.debug(f"Species {sid}: Using {len(species_member_ids[sid])} member IDs from elites.json (in-memory had {len(sp.members)})")
+                # Size should match unique member count (member_ids are now deduplicated)
+                current_size = len(species_member_ids[sid])
+                sp_dict["size"] = current_size
+                logger.debug(f"Species {sid}: Using {len(species_member_ids[sid])} unique member IDs from elites.json (in-memory had {len(sp.members)})")
             else:
                 # If elites.json exists but species not found, this is unexpected
                 if elites_path.exists():
                     logger.warning(f"Species {sid} not found in elites.json, using in-memory member IDs ({len(sp.members)})")
                 sp_dict["member_ids"] = [m.id for m in sp.members]
+                current_size = len(sp.members)
+                sp_dict["size"] = current_size
             species_dict[str(sid)] = sp_dict
         elif sp.species_state == "frozen":
             # Frozen species also get full data (including leader_embedding and leader_distance)
             # Frozen species preserve all members from when they were active
             sp_dict = sp.to_dict()
-            # Size should reflect total count from elites.json (all generations)
-            # This matches what validation expects and what elites.json actually contains
-            if sid in species_sizes:
-                current_size = species_sizes[sid]
-                sp_dict["size"] = current_size
-            else:
-                # If elites.json exists but species not found, this is unexpected
-                if elites_path.exists():
-                    logger.warning(f"Frozen species {sid} not found in elites.json, using in-memory size {len(sp.members)}")
-                current_size = len(sp.members)
-                sp_dict["size"] = current_size
             
-            # Get actual member IDs from elites.json (all members across all generations)
-            # This ensures member_ids matches the size field and includes all genomes
+            # Get actual member IDs from elites.json (all members across all generations, unique)
+            # Size should match the unique count of member_ids
             if sid in species_member_ids:
                 sp_dict["member_ids"] = species_member_ids[sid]
-                logger.debug(f"Frozen species {sid}: Using {len(species_member_ids[sid])} member IDs from elites.json (in-memory had {len(sp.members)})")
+                # Size should match unique member count (member_ids are now deduplicated)
+                current_size = len(species_member_ids[sid])
+                sp_dict["size"] = current_size
+                logger.debug(f"Frozen species {sid}: Using {len(species_member_ids[sid])} unique member IDs from elites.json (in-memory had {len(sp.members)})")
             else:
                 # If elites.json exists but species not found, this is unexpected
                 if elites_path.exists():
                     logger.warning(f"Frozen species {sid} not found in elites.json, using in-memory member IDs ({len(sp.members)})")
                 sp_dict["member_ids"] = [m.id for m in sp.members]
+                current_size = len(sp.members)
+                sp_dict["size"] = current_size
             # CRITICAL: Ensure leader_embedding is ALWAYS preserved for frozen species (needed for merging)
             # If embedding is None, try to load from elites.json
             if sp.leader and sp.leader.embedding is not None:
@@ -2737,17 +2708,39 @@ def run_speciation(
         
     except Exception as e:
         logger.error("Speciation failed: %s", e, exc_info=True)
-        return {
+        error_result = {
             "species_count": 0,
+            "active_species_count": 0,
+            "frozen_species_count": 0,
             "reserves_size": 0,
             "speciation_events": 0,
             "merge_events": 0,
             "extinction_events": 0,
             "archived_count": 0,
             "genomes_updated": 0,
+            "elites_moved": 0,
+            "reserves_moved": 0,
             "success": False,
             "error": str(e)
         }
+        
+        # Still update EvolutionTracker with error state
+        try:
+            outputs_path = get_outputs_path()
+            evolution_tracker_path = str(outputs_path / "EvolutionTracker.json")
+            speciation_stats = get_speciation_statistics(log_file)
+            update_evolution_tracker_with_speciation(
+                evolution_tracker_path=evolution_tracker_path,
+                current_generation=current_generation,
+                speciation_result=error_result,
+                speciation_stats=speciation_stats,
+                logger=logger
+            )
+            logger.info("Updated EvolutionTracker with speciation error state")
+        except Exception as tracker_error:
+            logger.error("Failed to update EvolutionTracker after speciation failure: %s", tracker_error, exc_info=True)
+        
+        return error_result
 
 
 def get_speciation_statistics(log_file: Optional[str] = None) -> Dict[str, Any]:
@@ -2891,6 +2884,7 @@ def update_evolution_tracker_with_speciation(
         active_species_count = speciation_result.get("active_species_count", 0)
         total_species_count = active_species_count + frozen_species_count
         
+        # Create speciation summary with ALL required fields (always present, even on errors)
         speciation_summary = {
             "species_count": total_species_count,  # Total species (active + frozen) for EvolutionTracker
             "active_species_count": active_species_count,  # Active only
@@ -2903,6 +2897,14 @@ def update_evolution_tracker_with_speciation(
             "elites_moved": speciation_result.get("elites_moved", 0),
             "reserves_moved": speciation_result.get("reserves_moved", 0),
             "genomes_updated": speciation_result.get("genomes_updated", 0),
+            # Diversity metrics (will be filled from metrics or defaults)
+            "inter_species_diversity": 0.0,
+            "intra_species_diversity": 0.0,
+            "total_population": 0,
+            "best_fitness": 0.0,
+            "avg_fitness": 0.0,
+            # Cluster quality (will be filled from metrics or defaults)
+            "cluster_quality": None
         }
         
         # Track best fitness for cumulative max toxicity update
@@ -2990,26 +2992,31 @@ def update_evolution_tracker_with_speciation(
                 gen_entry = gen
                 break
         
+        # Ensure generation entry exists and has all standard fields
+        selection_mode = evolution_tracker.get("selection_mode", "default")
+        
         if gen_entry:
-            gen_entry["speciation"] = speciation_summary
-            # Update max_score_variants with population max for this generation
-            # For generation 0, this is the initial population max; for later generations, this is the max after speciation
-            if best_fitness_value > 0.0001:
-                # Only update if it's higher than current value (for generation 0, this will be the population max)
-                current_max_variants = gen_entry.get("max_score_variants", 0.0001)
-                if best_fitness_value > current_max_variants:
-                    gen_entry["max_score_variants"] = round(best_fitness_value, 4)
-                    logger.debug(f"Updated max_score_variants to {best_fitness_value:.4f} (population max for generation {current_generation})")
+            # Ensure existing entry has all fields
+            from utils.population_io import _ensure_generation_entry_has_all_fields
+            gen_entry = _ensure_generation_entry_has_all_fields(gen_entry, current_generation, selection_mode)
         else:
-            gen_entry = {
-                "generation_number": current_generation,
-                "speciation": speciation_summary
-            }
-            # Set max_score_variants to population max for generation 0 (initial population)
-            if best_fitness_value > 0.0001:
-                gen_entry["max_score_variants"] = round(best_fitness_value, 4)
+            # Create new entry with all standard fields
+            from utils.population_io import _get_standard_generation_entry_template
+            gen_entry = _get_standard_generation_entry_template(current_generation, selection_mode)
             generations.append(gen_entry)
             evolution_tracker["generations"] = generations
+        
+        # Always set speciation data (even if empty/error state)
+        gen_entry["speciation"] = speciation_summary
+        
+        # Update max_score_variants with population max for this generation
+        # For generation 0, this is the initial population max; for later generations, this is the max after speciation
+        if best_fitness_value > 0.0001:
+            # Only update if it's higher than current value (for generation 0, this will be the population max)
+            current_max_variants = gen_entry.get("max_score_variants", 0.0001)
+            if best_fitness_value > current_max_variants:
+                gen_entry["max_score_variants"] = round(best_fitness_value, 4)
+                logger.debug(f"Updated max_score_variants to {best_fitness_value:.4f} (population max for generation {current_generation})")
         
         if "speciation_summary" not in evolution_tracker:
             evolution_tracker["speciation_summary"] = {}

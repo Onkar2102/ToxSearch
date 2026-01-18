@@ -56,6 +56,21 @@ EXPERIMENTS=(
         --operators all \
         --max-variants 1 \
         --seed-file data/prompt.csv"
+
+    # qwen 5
+  "python src/main.py --generations 120 --operators all --max-variants 1 \
+   --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 \
+   --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf \
+   --pg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_L.gguf \
+   --seed-file data/prompt.csv"
+
+       # llama 5
+  "python src/main.py --generations 120 --operators all --max-variants 1 \
+   --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 \
+   --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf \
+   --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf \
+   --seed-file data/prompt.csv"
+
 )
 
 echo "Starting ${#EXPERIMENTS[@]} experiments..."

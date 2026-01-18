@@ -14,7 +14,9 @@ how they differ from other species.
 """
 
 import re
+import json
 import numpy as np
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from collections import Counter
 
@@ -118,10 +120,32 @@ def extract_species_labels(
     species_ids = list(species_dict.keys())
     documents = []
     
+    # Load prompts from elites.json for frozen species (they may not have all members in memory)
+    from utils import get_system_utils
+    _, _, _, get_outputs_path, _, _ = get_system_utils()
+    outputs_path = get_outputs_path()
+    elites_path = outputs_path / "elites.json"
+    elites_genomes = []
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load elites.json for label extraction: {e}")
+    
     for sid in species_ids:
         species = species_dict[sid]
-        # Concatenate all member prompts
-        prompts = [m.prompt for m in species.members if m.prompt]
+        # For frozen species or species with few members, load prompts from elites.json
+        # This ensures we have all member prompts for accurate labeling
+        prompts = []
+        if species.species_state == "frozen" or len(species.members) < 3:
+            # Load from elites.json for frozen species or small species
+            species_genomes = [g for g in elites_genomes if g.get("species_id") == sid]
+            prompts = [g.get("prompt", "") for g in species_genomes if g.get("prompt")]
+        else:
+            # Use in-memory members for active species
+            prompts = [m.prompt for m in species.members if m.prompt]
+        
         combined_text = ' '.join(prompts)
         preprocessed = preprocess_text(combined_text)
         documents.append(preprocessed)

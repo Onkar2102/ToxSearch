@@ -281,15 +281,24 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 existing_gen = gen
                 break
 
+        selection_mode = evolution_tracker.get("selection_mode", "default")
+        
+        # Import helper functions
+        from utils.population_io import _get_standard_generation_entry_template, _ensure_generation_entry_has_all_fields
+        
         if existing_gen:
+            # Ensure existing entry has all fields
+            existing_gen = _ensure_generation_entry_has_all_fields(existing_gen, gen_number, selection_mode)
+            
             variants_created = generation_data.get("variants_created", 0)
             mutation_variants = generation_data.get("mutation_variants", 0)
             crossover_variants = generation_data.get("crossover_variants", 0)
 
             _logger.info(f"Updating generation {gen_number} with variant counts: created={variants_created}, mutation={mutation_variants}, crossover={crossover_variants}")
 
-            selection_mode = evolution_tracker.get("selection_mode", "default")
-
+            # Preserve existing speciation data if present
+            existing_speciation = existing_gen.get("speciation")
+            
             existing_gen.update({
                 "genome_id": best_genome_id,
                 "max_score_variants": best_score,
@@ -299,6 +308,11 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "crossover_variants": crossover_variants,
                 "selection_mode": selection_mode
             })
+            
+            # Restore speciation data if it was present
+            if existing_speciation is not None:
+                existing_gen["speciation"] = existing_speciation
+            
             _logger.info("Updated existing generation %d globally with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
         else:
             _logger.warning("Generation %d not found - creating new entry", gen_number)
@@ -306,28 +320,19 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             mutation_variants = generation_data.get("mutation_variants", 0)
             crossover_variants = generation_data.get("crossover_variants", 0)
 
-            selection_mode = evolution_tracker.get("selection_mode", "default")
-
-            new_gen = {
-                "generation_number": gen_number,
+            # Create new entry with all standard fields
+            new_gen = _get_standard_generation_entry_template(gen_number, selection_mode)
+            new_gen.update({
                 "genome_id": best_genome_id,
                 "avg_fitness": round(avg_fitness, 4),
                 "max_score_variants": best_score,
                 "min_score_variants": min_score,
                 "avg_fitness_variants": avg_score,
                 "avg_fitness_generation": round(avg_fitness, 4),
-                "avg_fitness_elites": 0.0001,
-                "avg_fitness_reserves": 0.0001,
-                "avg_fitness_reserves": 0.0001,
-                "parents": [],
-                "top_10": [],
                 "variants_created": variants_created,
                 "mutation_variants": mutation_variants,
                 "crossover_variants": crossover_variants,
-                "elites_count": 0,
-                "reserves_count": 0,
-                "selection_mode": selection_mode,
-            }
+            })
             evolution_tracker.setdefault("generations", []).append(new_gen)
             _logger.info("Created new generation entry %d with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
 
