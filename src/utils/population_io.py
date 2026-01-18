@@ -40,6 +40,80 @@ def get_data_path():
 # Global variable to store the outputs path for the current run
 _current_outputs_path = None
 
+def get_max_genome_id_from_all_files(outputs_path: Optional[Union[str, Path]] = None) -> int:
+    """
+    Find the maximum genome ID across all genome files (elites.json, reserves.json, archive.json).
+    
+    This ensures that new genomes always get unique IDs that don't conflict with existing
+    genomes in alive or dead populations.
+    
+    Args:
+        outputs_path: Path to outputs directory. If None, uses get_outputs_path()
+        
+    Returns:
+        Maximum genome ID found across all files, or 0 if no genomes exist
+    """
+    if outputs_path is None:
+        outputs_path = get_outputs_path()
+    else:
+        outputs_path = Path(outputs_path)
+    
+    max_id = 0
+    
+    # Check elites.json
+    elites_path = outputs_path / "elites.json"
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites = json.load(f)
+            for genome in elites:
+                genome_id = genome.get("id")
+                if genome_id is not None and isinstance(genome_id, (int, float)):
+                    max_id = max(max_id, int(genome_id))
+        except Exception as e:
+            logger = get_logger("GetMaxGenomeID")
+            logger.warning(f"Failed to read elites.json for max ID: {e}")
+    
+    # Check reserves.json
+    reserves_path = outputs_path / "reserves.json"
+    if reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves = json.load(f)
+            for genome in reserves:
+                genome_id = genome.get("id")
+                if genome_id is not None and isinstance(genome_id, (int, float)):
+                    max_id = max(max_id, int(genome_id))
+        except Exception as e:
+            logger = get_logger("GetMaxGenomeID")
+            logger.warning(f"Failed to read reserves.json for max ID: {e}")
+    
+    # Check archive.json
+    archive_path = outputs_path / "archive.json"
+    if archive_path.exists():
+        try:
+            with open(archive_path, 'r', encoding='utf-8') as f:
+                archive = json.load(f)
+            # archive.json can be a list or empty dict
+            if isinstance(archive, list):
+                for genome in archive:
+                    genome_id = genome.get("id")
+                    if genome_id is not None and isinstance(genome_id, (int, float)):
+                        max_id = max(max_id, int(genome_id))
+            elif isinstance(archive, dict) and len(archive) > 0:
+                # Handle dict format (shouldn't happen, but handle gracefully)
+                for genome in archive.values():
+                    if isinstance(genome, dict):
+                        genome_id = genome.get("id")
+                        if genome_id is not None and isinstance(genome_id, (int, float)):
+                            max_id = max(max_id, int(genome_id))
+        except Exception as e:
+            logger = get_logger("GetMaxGenomeID")
+            logger.warning(f"Failed to read archive.json for max ID: {e}")
+    
+    return max_id
+
+
 def get_outputs_path():
     """Get the absolute path to the outputs directory"""
     global _current_outputs_path
@@ -1776,10 +1850,19 @@ def calculate_generation_statistics(
             try:
                 with open(archive_path, 'r', encoding='utf-8') as f:
                     archive_genomes = json.load(f)
+                # Ensure archive is a list (handle edge cases)
+                if not isinstance(archive_genomes, list):
+                    if isinstance(archive_genomes, dict):
+                        _logger.warning(f"archive.json is a dict (expected list), converting to list")
+                        archive_genomes = list(archive_genomes.values()) if len(archive_genomes) > 0 else []
+                    else:
+                        _logger.warning(f"archive.json has unexpected format, treating as empty")
+                        archive_genomes = []
             except Exception as e:
                 _logger.warning(f"Failed to load archive.json: {e}")
         
-        # Calculate counts
+        # Calculate counts (cumulative - files contain all genomes from all generations)
+        # elites.json and reserves.json are cumulative, so counts represent total up to current generation
         stats["elites_count"] = len(elites_genomes)
         stats["reserves_count"] = len(reserves_genomes)
         stats["archived_count"] = len(archive_genomes)

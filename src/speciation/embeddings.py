@@ -8,6 +8,7 @@ Model: all-MiniLM-L6-v2 (384-dimensional, L2-normalized embeddings)
 """
 
 import json
+import warnings
 import numpy as np
 from typing import List, Union, Optional
 from pathlib import Path
@@ -15,6 +16,10 @@ from pathlib import Path
 from utils import get_custom_logging
 from utils.device_utils import get_optimal_device
 from utils import get_system_utils
+
+# Suppress FutureWarning from Keras/TensorFlow about np.object deprecation
+# This warning comes from third-party libraries (keras/tf2onnx) and cannot be fixed in our code
+warnings.filterwarnings('ignore', category=FutureWarning, message='.*np.object.*')
 
 get_logger, _, _, _ = get_custom_logging()
 _, _, _, get_outputs_path, _, _ = get_system_utils()

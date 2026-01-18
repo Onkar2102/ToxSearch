@@ -67,6 +67,9 @@ def merge_islands(
     # Select new leader as highest fitness from ALL combined members (not just old leaders)
     new_leader = combined[0] if combined else max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
     
+    # Note: Duplicate leader check will be done in run_speciation.py after merge
+    # since we don't have access to all species here
+    
     # Verify all members are within radius of new leader (post-merge radius verification)
     members_within_radius = []
     members_outside_radius = []

@@ -76,8 +76,17 @@ def validate_speciation_consistency(
         # Load archive
         archive = []
         if archive_path.exists():
-            with open(archive_path, 'r', encoding='utf-8') as f:
-                archive = json.load(f)
+            try:
+                with open(archive_path, 'r', encoding='utf-8') as f:
+                    archive = json.load(f)
+                # Ensure archive is a list (handle edge cases)
+                if not isinstance(archive, list):
+                    if isinstance(archive, dict):
+                        archive = list(archive.values()) if len(archive) > 0 else []
+                    else:
+                        archive = []
+            except Exception as e:
+                logger.warning(f"Failed to load archive.json: {e}")
         
         # Check 1: Species ID consistency
         elite_species_ids = {g.get("species_id") for g in elites if g.get("species_id") is not None}

@@ -111,9 +111,19 @@ def load_execution_data(output_dir: Path):
         # Load archive
         archive_path = output_dir / "archive.json"
         if archive_path.exists():
-            with open(archive_path, 'r') as f:
-                archive_data = json.load(f)
-                data['archive'] = archive_data if isinstance(archive_data, list) else []
+            try:
+                with open(archive_path, 'r') as f:
+                    archive_data = json.load(f)
+                # Ensure archive is a list (handle edge cases)
+                if isinstance(archive_data, list):
+                    data['archive'] = archive_data
+                elif isinstance(archive_data, dict):
+                    data['archive'] = list(archive_data.values()) if len(archive_data) > 0 else []
+                else:
+                    data['archive'] = []
+            except Exception as e:
+                print(f"Warning: Failed to load archive.json: {e}")
+                data['archive'] = []
         
         # Load operator effectiveness CSV
         oe_path = output_dir / "operator_effectiveness_cumulative.csv"

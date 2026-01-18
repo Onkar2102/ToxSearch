@@ -25,6 +25,45 @@ get_logger, _, _, _ = get_custom_logging()
 _, _, _, get_outputs_path, _, _ = get_system_utils()
 
 
+def _ensure_unique_leader(species: Dict[int, Species], new_leader: Individual, current_species_id: int, logger) -> None:
+    """
+    Ensure new_leader is not already leader of another species.
+    
+    If duplicate is found, reassigns the old species leader to next highest fitness member.
+    If old species only has that leader, marks it for incubator (will be processed by process_extinctions).
+    
+    Note: This function only marks species as incubator but does NOT move members to cluster 0.
+    The caller (process_extinctions) will handle moving members to cluster 0 and removing from dict.
+    
+    Args:
+        species: Dict of all species
+        new_leader: Individual that will become leader
+        current_species_id: ID of species getting the new leader
+        logger: Logger instance
+    """
+    for sid, sp in species.items():
+        if sid != current_species_id and sp.leader and sp.leader.id == new_leader.id:
+            logger.warning(f"Genome {new_leader.id} is already leader of species {sid}, reassigning species {sid} leader")
+            # Reassign old species leader to next highest fitness
+            # First, remove the old leader from members (it's becoming leader of another species)
+            if new_leader in sp.members:
+                sp.members.remove(new_leader)
+                new_leader.species_id = None  # Will be set when added to new species
+            
+            if len(sp.members) > 0:
+                # Find next highest fitness member from remaining members
+                sp.leader = max(sp.members, key=lambda x: x.fitness)
+                # Ensure new leader is in members (should be, but verify)
+                if sp.leader not in sp.members:
+                    sp.members.insert(0, sp.leader)
+                logger.info(f"Reassigned species {sid} leader to genome {sp.leader.id} (fitness={sp.leader.fitness:.4f})")
+            else:
+                # No other members - mark for incubator (process_extinctions will handle cleanup)
+                sp.species_state = "incubator"
+                sp.leader = None  # No leader if no members
+                logger.info(f"Species {sid} has no other members, marking as incubator (will be processed by process_extinctions)")
+
+
 def leader_follower_clustering(
     temp_path: Optional[str] = None,
     speciation_state_path: Optional[str] = None,
@@ -33,6 +72,7 @@ def leader_follower_clustering(
     w_genotype: float = 0.7,
     w_phenotype: float = 0.3,
     min_island_size: int = 2,
+    skip_cluster0_outliers: bool = False,
     logger=None) -> Tuple[Dict[int, Species], Set[int]]:
     """
     Leader-Follower clustering algorithm that reads and writes files directly.
@@ -61,10 +101,11 @@ def leader_follower_clustering(
     4. For Generation N:
        - Checks each genome against existing species leaders
        - If within theta_sim, assigns to that species
-       - If not, checks against cluster 0 outliers (from reserves.json) as potential leaders
+       - If not, and skip_cluster0_outliers=False, checks against cluster 0 outliers (from reserves.json) as potential leaders
        - If within theta_sim of an outlier, add as follower (tracked but no species yet)
        - When a potential leader has (min_island_size - 1) followers, species forms
        - If not within radius of any leader or outlier, adds to cluster 0
+       - If skip_cluster0_outliers=True, all unassigned variants go directly to cluster 0 (no outlier checking)
        - check_speciation() handles additional species formation from remaining cluster 0 individuals
     5. Updates temp.json with species_id for each genome
     6. Updates speciation_state.json with new species structure
@@ -77,6 +118,7 @@ def leader_follower_clustering(
         w_genotype: Weight for genotype (embedding) distance in ensemble distance
         w_phenotype: Weight for phenotype distance in ensemble distance
         min_island_size: Minimum species size required before assigning species ID (default: 2)
+        skip_cluster0_outliers: If True, skip loading and using cluster 0 outliers as potential leaders (default: False)
         logger: Optional logger instance
     
     Returns:
@@ -189,9 +231,9 @@ def leader_follower_clustering(
     # Determine if this is Generation 0 (no species exist, or only species 0)
     is_generation_0 = len(existing_species) == 0
     
-    # Load cluster 0 outliers for Generation N (if not already loaded above)
+    # Load cluster 0 outliers for Generation N (if not already loaded above and not skipping)
     cluster0_outliers: List[Tuple[np.ndarray, Optional[np.ndarray], Individual]] = []
-    if not is_generation_0:
+    if not is_generation_0 and not skip_cluster0_outliers:
         outputs_path = get_outputs_path()
         reserves_path = outputs_path / "reserves.json"
         if reserves_path.exists():
@@ -212,6 +254,8 @@ def leader_follower_clustering(
                 logger.debug(f"Loaded {len(cluster0_outliers)} cluster 0 outliers from reserves.json")
             except Exception as e:
                 logger.warning(f"Failed to load cluster 0 outliers from reserves.json: {e}")
+    elif not is_generation_0 and skip_cluster0_outliers:
+        logger.debug("Skipping cluster 0 outliers loading (skip_cluster0_outliers=True)")
     
     # Sort population by fitness (descending) - highest fitness processed first
     sorted_pop = sorted(valid_population, key=lambda x: x.fitness, reverse=True)
@@ -233,10 +277,10 @@ def leader_follower_clustering(
     # followers_list: List of Individual objects that are followers of this potential leader
     potential_leaders: Dict[str, Tuple[Optional[int], np.ndarray, Optional[np.ndarray], Individual, List[Individual]]] = {}
     
-    # For Generation N: Track cluster 0 outliers as potential leaders
+    # For Generation N: Track cluster 0 outliers as potential leaders (only if not skipping)
     # Format: Dict mapping leader_id -> (species_id_or_None, embedding, phenotype, Individual, followers_list)
     cluster0_potential_leaders: Dict[str, Tuple[Optional[int], np.ndarray, Optional[np.ndarray], Individual, List[Individual]]] = {}
-    if not is_generation_0 and cluster0_outliers:
+    if not is_generation_0 and cluster0_outliers and not skip_cluster0_outliers:
         # Convert cluster 0 outliers to potential leaders
         for outlier_emb, outlier_pheno, outlier_ind in cluster0_outliers:
             cluster0_potential_leaders[outlier_ind.id] = (None, outlier_emb, outlier_pheno, outlier_ind, [])
@@ -300,6 +344,8 @@ def leader_follower_clustering(
                     if ind.fitness > sp.max_fitness:
                         sp.max_fitness = ind.fitness
                         sp.stagnation = 0
+                    # Ensure new leader is not already leader of another species
+                    _ensure_unique_leader(species, ind, nearest_leader_id, logger)
                     sp.leader = ind
                     sp.leader_distance = min_dist
                     # Reactivate frozen species when leader is updated (without merging)
@@ -332,29 +378,69 @@ def leader_follower_clustering(
                             # Determine leader (highest fitness among leader + followers)
                             all_members = [pl_ind] + followers
                             leader = max(all_members, key=lambda x: x.fitness)
-                            other_members = [m for m in all_members if m.id != leader.id]
                             
-                            new_species = Species(
-                                id=new_species_id,
-                                leader=leader,
-                                members=[leader] + other_members,
-                                radius=theta_sim,
-                                created_at=current_generation,
-                                last_improvement=current_generation,
-                                cluster_origin="natural",
-                                parent_ids=None,
-                                leader_distance=0.0
-                            )
-                            species[new_species_id] = new_species
-                            # Assign species_id to all members
+                            # CRITICAL FIX: After choosing the new leader, verify all members are within radius
+                            # This prevents species from being created with members outside the new leader's radius
+                            # which would cause them to be removed immediately in radius cleanup
+                            # This matches the logic in check_speciation() for consistency
+                            valid_members = [leader]  # Leader always included
                             for member in all_members:
-                                member.species_id = new_species_id
-                            species_with_new_members.add(new_species_id)
-                            # Update potential_leaders entry with new species ID (use new leader's embedding/phenotype)
-                            potential_leaders[pl_id] = (new_species_id, leader.embedding, leader.phenotype, leader, followers)
-                            # Add to leaders list for future distance checks (use new leader's embedding/phenotype)
-                            leaders.append((new_species_id, leader.embedding, leader.phenotype))
-                            logger.info(f"Species {new_species_id} formed: leader {leader.id} + {len(followers)} followers (total={total_size}, min={min_island_size})")
+                                if member.id == leader.id:
+                                    continue  # Skip leader (already added)
+                                
+                                if member.embedding is None:
+                                    continue  # Skip members without embeddings
+                                
+                                # Check distance to new leader
+                                dist = ensemble_distance(
+                                    member.embedding, leader.embedding,
+                                    member.phenotype, leader.phenotype,
+                                    w_genotype, w_phenotype
+                                )
+                                
+                                if dist < theta_sim:
+                                    valid_members.append(member)
+                            
+                            # Only create species if it has at least min_island_size valid members
+                            if len(valid_members) >= min_island_size:
+                                # Ensure leader is not already leader of another species
+                                _ensure_unique_leader(species, leader, new_species_id, logger)
+                                other_members = [m for m in valid_members if m.id != leader.id]
+                                
+                                new_species = Species(
+                                    id=new_species_id,
+                                    leader=leader,
+                                    members=valid_members,
+                                    radius=theta_sim,
+                                    created_at=current_generation,
+                                    last_improvement=current_generation,
+                                    cluster_origin="natural",
+                                    parent_ids=None,
+                                    leader_distance=0.0
+                                )
+                                species[new_species_id] = new_species
+                                # Assign species_id to all valid members
+                                for member in valid_members:
+                                    member.species_id = new_species_id
+                                species_with_new_members.add(new_species_id)
+                                # Update potential_leaders entry with new species ID (use new leader's embedding/phenotype)
+                                potential_leaders[pl_id] = (new_species_id, leader.embedding, leader.phenotype, leader, followers)
+                                # Add to leaders list for future distance checks (use new leader's embedding/phenotype)
+                                leaders.append((new_species_id, leader.embedding, leader.phenotype))
+                                logger.info(
+                                    f"Species {new_species_id} formed: leader {leader.id} + {len(other_members)} followers "
+                                    f"(total={len(valid_members)}, min={min_island_size}, filtered from {len(all_members)} candidates)"
+                                )
+                            else:
+                                # Not enough valid members after filtering - remove invalid members from followers
+                                invalid_members = [m for m in all_members if m not in valid_members]
+                                for invalid in invalid_members:
+                                    if invalid in followers:
+                                        followers.remove(invalid)
+                                logger.debug(
+                                    f"Potential leader {pl_ind.id}: {len(all_members)} candidates but only {len(valid_members)} "
+                                    f"within new leader's radius (need {min_island_size}), not creating species"
+                                )
                         else:
                             # Not enough followers yet, keep tracking
                             logger.debug(f"Potential leader {pl_ind.id} now has {len(followers)} followers (need {min_island_size - 1} total)")
@@ -404,6 +490,8 @@ def leader_follower_clustering(
                             # Determine leader (highest fitness among leader + followers)
                             all_members = [pl_ind] + followers
                             leader = max(all_members, key=lambda x: x.fitness)
+                            # Ensure leader is not already leader of another species
+                            _ensure_unique_leader(species, leader, new_species_id, logger)
                             other_members = [m for m in all_members if m.id != leader.id]
                             
                             new_species = Species(
@@ -441,6 +529,8 @@ def leader_follower_clustering(
                             if ind.fitness > sp.max_fitness:
                                 sp.max_fitness = ind.fitness
                                 sp.stagnation = 0
+                            # Ensure new leader is not already leader of another species
+                            _ensure_unique_leader(species, ind, pl_species_id, logger)
                             sp.leader = ind
                             sp.leader_distance = dist
                             # Reactivate frozen species when leader is updated (without merging)

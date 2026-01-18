@@ -86,24 +86,9 @@ class Individual:
             >>> genome = {"id": 1, "prompt": "test", "toxicity": 0.8, "prompt_embedding": [0.1, 0.2, ...]}
             >>> ind = Individual.from_genome(genome)
         """
-        # Try multiple locations for fitness score (handles different genome formats)
-        # Priority: north_star_score > moderation_result.google.scores > toxicity > scores.toxicity
-        fitness = 0.0
-        if "north_star_score" in genome:
-            fitness = genome["north_star_score"]
-        elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
-            # Check moderation_result.google.scores.toxicity (standard format)
-            google_result = genome["moderation_result"].get("google", {})
-            if google_result and "scores" in google_result:
-                fitness = google_result["scores"].get("toxicity", 0.0)
-            else:
-                # Fallback to moderation_result.scores.toxicity (legacy format)
-                scores = genome["moderation_result"].get("scores", {})
-                fitness = scores.get("toxicity", 0.0)
-        elif "toxicity" in genome:
-            fitness = genome["toxicity"]
-        elif "scores" in genome and isinstance(genome["scores"], dict):
-            fitness = genome["scores"].get("toxicity", 0.0)
+        # Extract fitness using standardized method from utils.population_io
+        from utils.population_io import _extract_north_star_score
+        fitness = _extract_north_star_score(genome, "toxicity")
         
         # Extract embedding from genome if present (preferred over parameter)
         final_embedding = embedding
@@ -298,23 +283,36 @@ class Species:
             return True
         return False
     
-    def record_fitness(self, generation: int) -> None:
+    def record_fitness(self, generation: int, was_selected_as_parent: bool = False) -> None:
         """
         Record current best fitness and update fitness history.
         
-        Updates stagnation: increments if no improvement, resets to 0 if improved.
+        Updates stagnation: increments ONLY if species was selected as parent AND no improvement.
+        Resets to 0 if fitness improved (regardless of parent selection).
+        
+        CRITICAL: Stagnation only increments when species is selected as parent and doesn't improve.
+        This ensures species only freeze after being selected as parents for species_stagnation generations
+        without improvement. Species that are never selected as parents will never freeze.
+        
+        NOTE: This is called for ALL species, including frozen species. For frozen species,
+        stagnation continues to increment if they were selected as parents, allowing calculation of frozen duration:
+        frozen_generations = stagnation - species_stagnation
+        (e.g., if frozen at stagnation=20 and current stagnation=25, it's been frozen for 5 generations)
         
         Args:
             generation: Current generation number
+            was_selected_as_parent: Whether this species was selected as a parent in this generation
         """
         current_best = self.best_fitness
         # Check if we've improved
         if self.fitness_history and current_best > max(self.fitness_history):
             self.last_improvement = generation
-            self.stagnation = 0  # Reset stagnation when fitness improves
+            self.stagnation = 0  # Reset stagnation when fitness improves (regardless of parent selection)
         else:
-            # No improvement: increment stagnation
-            self.stagnation += 1
+            # No improvement: increment stagnation ONLY if species was selected as parent
+            if was_selected_as_parent:
+                self.stagnation += 1
+            # If not selected as parent, stagnation remains unchanged
         # Append to history for trend analysis
         # Only append if this generation hasn't been recorded yet (avoid duplicates)
         # For generation 0, __post_init__ already added the initial fitness, so we check if we need to add again

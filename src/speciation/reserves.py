@@ -71,6 +71,9 @@ class Cluster0:
         min_cluster_size: int = 2,
         theta_sim: float = 0.2,
         max_capacity: int = 1000,
+        min_island_size: int = 2,
+        w_genotype: float = 0.7,
+        w_phenotype: float = 0.3,
         logger=None
     ):
         """
@@ -80,12 +83,18 @@ class Cluster0:
             min_cluster_size: Minimum cluster size for speciation
             theta_sim: Semantic distance threshold for clustering (also used as species radius)
             max_capacity: Maximum number of individuals in Cluster 0 (reserves) (default: 1000)
+            min_island_size: Minimum species size required (used to verify species after leader selection)
+            w_genotype: Weight for genotype distance in ensemble distance
+            w_phenotype: Weight for phenotype distance in ensemble distance
             logger: Optional logger instance
         """
         self.members: List[Cluster0Individual] = []
         self.min_cluster_size = min_cluster_size
         self.theta_sim = theta_sim
         self.max_capacity = max_capacity
+        self.min_island_size = min_island_size
+        self.w_genotype = w_genotype
+        self.w_phenotype = w_phenotype
         self.logger = logger or get_logger("Cluster0")
         self.speciation_events: List[Dict] = []  # Track speciation events from Cluster 0 (reserves)
     
@@ -219,7 +228,7 @@ class Cluster0:
                     distances = ensemble_distances_batch(
                         ind.embedding, leader_embeddings_array,
                         ind.phenotype, leader_phenotypes,
-                        0.7, 0.3  # Default weights
+                        self.w_genotype, self.w_phenotype
                     )
                     min_idx = np.argmin(distances)
                     min_dist = distances[min_idx]
@@ -228,7 +237,7 @@ class Cluster0:
                     min_dist = ensemble_distance(
                         ind.embedding, leader_embeddings[0],
                         ind.phenotype, leader_phenotypes[0],
-                        0.7, 0.3
+                        self.w_genotype, self.w_phenotype
                     )
                     nearest_leader_id = leader_ids[0]
                 
@@ -241,42 +250,93 @@ class Cluster0:
                         followers.append(ind)
                         # Check if we've reached minimum size
                         total_size = 1 + len(followers)  # leader + followers
-                        if total_size >= self.min_cluster_size:
+                        if total_size >= self.min_island_size:
                             # Minimum size reached! Create the species now
                             new_species_id = generate_species_id()
                             # Determine leader (highest fitness among leader + followers)
                             all_members = [pl_ind] + followers
                             leader = max(all_members, key=lambda x: x.fitness)
-                            other_members = [m for m in all_members if m.id != leader.id]
                             
-                            new_species = Species(
-                                id=new_species_id,
-                                leader=leader,
-                                members=[leader] + other_members,
-                                radius=self.theta_sim,  # Constant radius
-                                created_at=current_generation,
-                                last_improvement=current_generation,
-                                cluster_origin="natural",  # Formed naturally from Cluster 0
-                                parent_ids=None,
-                                leader_distance=0.0  # New species leader is reference point
-                            )
+                            # CRITICAL FIX: After choosing the new leader, verify all members are within radius
+                            # This prevents species from being created with members outside the new leader's radius
+                            # which would cause them to be removed immediately in radius cleanup
+                            valid_members = [leader]  # Leader always included
+                            for member in all_members:
+                                if member.id == leader.id:
+                                    continue  # Skip leader (already added)
+                                
+                                if member.embedding is None:
+                                    continue  # Skip members without embeddings
+                                
+                                # Check distance to new leader
+                                dist = ensemble_distance(
+                                    member.embedding, leader.embedding,
+                                    member.phenotype, leader.phenotype,
+                                    self.w_genotype, self.w_phenotype
+                                )
+                                
+                                if dist < self.theta_sim:
+                                    valid_members.append(member)
                             
-                            # Mark this potential leader as having formed a species
-                            potential_leaders[nearest_leader_id] = (new_species_id, pl_emb, pl_pheno, pl_ind, followers)
-                            
-                            # Track for removal and event logging
-                            individuals_to_remove.extend(all_members)
-                            new_species_list.append(new_species)
-                            
-                            # Track speciation event
-                            self.speciation_events.append({
-                                "generation": current_generation,
-                                "species_id": new_species.id,
-                                "size": len(all_members),
-                                "leader_fitness": leader.fitness,
-                                "origin": "cluster_0_speciation"
-                            })
-                            self.logger.info(f"Speciation event! Created species {new_species.id} from {len(all_members)} Cluster 0 (reserves) individuals")
+                            # Only create species if it has at least min_island_size valid members
+                            if len(valid_members) >= self.min_island_size:
+                                other_members = [m for m in valid_members if m.id != leader.id]
+                                
+                                new_species = Species(
+                                    id=new_species_id,
+                                    leader=leader,
+                                    members=valid_members,
+                                    radius=self.theta_sim,  # Constant radius
+                                    created_at=current_generation,
+                                    last_improvement=current_generation,
+                                    cluster_origin="natural",  # Formed naturally from Cluster 0
+                                    parent_ids=None,
+                                    leader_distance=0.0  # New species leader is reference point
+                                )
+                                
+                                # Mark this potential leader as having formed a species
+                                potential_leaders[nearest_leader_id] = (new_species_id, pl_emb, pl_pheno, pl_ind, followers)
+                                
+                                # Track for removal and event logging (only valid members)
+                                individuals_to_remove.extend(valid_members)
+                                new_species_list.append(new_species)
+                                
+                                # Track speciation event
+                                self.speciation_events.append({
+                                    "generation": current_generation,
+                                    "species_id": new_species.id,
+                                    "size": len(valid_members),
+                                    "leader_fitness": leader.fitness,
+                                    "origin": "cluster_0_speciation"
+                                })
+                                self.logger.info(
+                                    f"Speciation event! Created species {new_species.id} from {len(valid_members)} "
+                                    f"Cluster 0 (reserves) individuals (filtered from {len(all_members)} candidates)"
+                                )
+                            else:
+                                # Not enough valid members after filtering - don't create species
+                                # Invalid members stay in Cluster 0 and can be reassigned to other potential leaders
+                                # or become new potential leaders themselves
+                                invalid_members = [m for m in all_members if m not in valid_members]
+                                # Remove invalid members from followers list so they're not counted for future attempts
+                                # They'll stay in Cluster 0 and be processed again in the loop
+                                for invalid in invalid_members:
+                                    if invalid in followers:
+                                        followers.remove(invalid)
+                                # Check if the original potential leader (pl_ind) is invalid
+                                # Note: pl_ind is the original potential leader, not a follower, so it's never in followers
+                                if pl_ind not in valid_members:
+                                    # Original potential leader is outside new leader's radius
+                                    # This can happen if a different member became the new leader and pl_ind is too far
+                                    self.logger.debug(
+                                        f"Cluster 0 speciation: original potential leader {pl_ind.id} is outside "
+                                        f"new leader's radius (new leader is {leader.id if 'leader' in locals() else 'unknown'})"
+                                    )
+                                self.logger.debug(
+                                    f"Cluster 0 speciation: {len(all_members)} candidates but only {len(valid_members)} "
+                                    f"within new leader's radius (need {self.min_island_size}), not creating species. "
+                                    f"Invalid members ({len(invalid_members)}) remain in Cluster 0 for reassignment."
+                                )
                     assigned = True
             
             # If not assigned to any potential leader, become a new potential leader

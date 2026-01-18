@@ -97,13 +97,26 @@ class EvolutionEngine:
         self._genomes_loaded = True
 
     def update_next_id(self):
-        """Update next_id based on current genomes."""
+        """
+        Update next_id based on ALL genome files (elites.json, reserves.json, archive.json).
+        
+        This ensures next_id is always higher than any existing genome ID across
+        alive and dead populations, preventing duplicate IDs.
+        """
+        from utils.population_io import get_max_genome_id_from_all_files
+        
+        # Get max ID from all files (elites, reserves, archive)
+        # get_max_genome_id_from_all_files handles None outputs_path by using get_outputs_path()
+        max_id = get_max_genome_id_from_all_files(self.outputs_path)
+        
+        # Also check in-memory genomes as fallback/validation
         if self.genomes:
-            max_id = max(g["id"] for g in self.genomes if g.get("id") is not None)
-            self.next_id = max_id + 1
-        else:
-            self.next_id = 1
-        self.logger.debug(f"Updated next_id to {self.next_id}")
+            in_memory_max = max((g["id"] for g in self.genomes if g.get("id") is not None), default=0)
+            max_id = max(max_id, in_memory_max)
+        
+        # Set next_id to max_id + 1 (or 1 if no genomes exist)
+        self.next_id = max_id + 1 if max_id > 0 else 1
+        self.logger.debug(f"Updated next_id to {self.next_id} (max_id found: {max_id})")
 
 
     def _count_variants_from_temp(self) -> Dict[str, int]:
@@ -200,6 +213,10 @@ class EvolutionEngine:
         if self.prompt_generator and hasattr(self.prompt_generator, 'model_cfg'):
             prompt_generator_name = self.prompt_generator.model_cfg.get("name", "")
 
+        # Ensure next_id is updated before creating child (defensive check)
+        if self.next_id == 0:
+            self.update_next_id()
+        
         child = {
             "id": self.next_id,
             "prompt": prompt,

@@ -30,14 +30,29 @@ from speciation.distance import ensemble_distance
 from speciation.phenotype_distance import extract_phenotype_vector
 
 
-def load_genomes(execution_dir: Path) -> List[dict]:
-    """Load genomes from elites.json."""
+def load_genomes(execution_dir: Path, include_reserves: bool = True) -> List[dict]:
+    """Load genomes from elites.json and optionally reserves.json."""
+    genomes = []
+    
     elites_path = execution_dir / "elites.json"
-    if not elites_path.exists():
+    if elites_path.exists():
+        with open(elites_path, 'r') as f:
+            elites = json.load(f)
+            genomes.extend(elites)
+            print(f"  Loaded {len(elites)} genomes from elites.json")
+    else:
         raise FileNotFoundError(f"elites.json not found in {execution_dir}")
     
-    with open(elites_path, 'r') as f:
-        genomes = json.load(f)
+    if include_reserves:
+        reserves_path = execution_dir / "reserves.json"
+        if reserves_path.exists():
+            try:
+                with open(reserves_path, 'r') as f:
+                    reserves = json.load(f)
+                    genomes.extend(reserves)
+                    print(f"  Loaded {len(reserves)} genomes from reserves.json")
+            except Exception as e:
+                print(f"  Warning: Could not load reserves.json: {e}")
     
     return genomes
 
@@ -89,7 +104,7 @@ def filter_valid_genomes(genomes: List[dict], compute_embeddings: bool = True) -
     return valid
 
 
-def test_non_negativity(genomes: List[dict], num_samples: int = 100) -> Tuple[bool, List[float], int]:
+def test_non_negativity(genomes: List[dict], num_samples: int = 100, test_all: bool = False) -> Tuple[bool, List[float], int]:
     """
     Test Property 1: Non-negativity
     d(u, v) ≥ 0 for all u, v
@@ -113,8 +128,26 @@ def test_non_negativity(genomes: List[dict], num_samples: int = 100) -> Tuple[bo
     negative_count = 0
     identical_pairs = 0
     
-    for _ in range(num_samples):
-        i, j = np.random.choice(len(valid_genomes), size=2, replace=False)
+    # Test all pairs if feasible, otherwise sample
+    if test_all and len(valid_genomes) * (len(valid_genomes) - 1) // 2 <= num_samples:
+        # Test all pairs
+        pairs_to_test = [(i, j) for i in range(len(valid_genomes)) 
+                        for j in range(i + 1, len(valid_genomes))]
+        print(f"  Testing all {len(pairs_to_test)} pairs...")
+    else:
+        # Sample random pairs
+        pairs_to_test = []
+        seen_pairs = set()
+        for _ in range(num_samples):
+            while True:
+                i, j = np.random.choice(len(valid_genomes), size=2, replace=False)
+                pair = (min(i, j), max(i, j))
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    pairs_to_test.append((i, j))
+                    break
+    
+    for i, j in pairs_to_test:
         g1, g2 = valid_genomes[i], valid_genomes[j]
         
         e1, p1 = extract_embedding_and_phenotype(g1)
@@ -158,7 +191,7 @@ def test_non_negativity(genomes: List[dict], num_samples: int = 100) -> Tuple[bo
     mean_dist = np.mean(distances) if distances else 0
     
     print(f"\nResults:")
-    print(f"  Total pairs tested: {num_samples}")
+    print(f"  Total pairs tested: {len(pairs_to_test)}")
     print(f"  Negative distances: {negative_count}")
     print(f"  Zero distances: {len(zero_distances)}")
     print(f"  Identical pairs (e1=e2 and p1=p2): {identical_pairs}")
@@ -175,7 +208,7 @@ def test_non_negativity(genomes: List[dict], num_samples: int = 100) -> Tuple[bo
     return all_non_negative, distances, negative_count
 
 
-def test_symmetry(genomes: List[dict], num_samples: int = 100) -> Tuple[bool, List[float], int]:
+def test_symmetry(genomes: List[dict], num_samples: int = 100, test_all: bool = False) -> Tuple[bool, List[float], int]:
     """
     Test Property 2: Symmetry
     d(u, v) = d(v, u) for all u, v
@@ -196,8 +229,24 @@ def test_symmetry(genomes: List[dict], num_samples: int = 100) -> Tuple[bool, Li
     violations = 0
     tolerance = 1e-10
     
-    for _ in range(num_samples):
-        i, j = np.random.choice(len(valid_genomes), size=2, replace=False)
+    # Test all pairs if feasible, otherwise sample
+    if test_all and len(valid_genomes) * (len(valid_genomes) - 1) // 2 <= num_samples:
+        pairs_to_test = [(i, j) for i in range(len(valid_genomes)) 
+                        for j in range(i + 1, len(valid_genomes))]
+        print(f"  Testing all {len(pairs_to_test)} pairs...")
+    else:
+        pairs_to_test = []
+        seen_pairs = set()
+        for _ in range(num_samples):
+            while True:
+                i, j = np.random.choice(len(valid_genomes), size=2, replace=False)
+                pair = (min(i, j), max(i, j))
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    pairs_to_test.append((i, j))
+                    break
+    
+    for i, j in pairs_to_test:
         g1, g2 = valid_genomes[i], valid_genomes[j]
         
         e1, p1 = extract_embedding_and_phenotype(g1)
@@ -222,7 +271,7 @@ def test_symmetry(genomes: List[dict], num_samples: int = 100) -> Tuple[bool, Li
     mean_diff = np.mean(differences) if differences else 0
     
     print(f"\nResults:")
-    print(f"  Total pairs tested: {num_samples}")
+    print(f"  Total pairs tested: {len(pairs_to_test)}")
     print(f"  Violations (|d(u,v) - d(v,u)| > {tolerance}): {violations}")
     print(f"  Max difference: {max_diff:.10f}")
     print(f"  Mean difference: {mean_diff:.10f}")
@@ -237,7 +286,7 @@ def test_symmetry(genomes: List[dict], num_samples: int = 100) -> Tuple[bool, Li
     return all_symmetric, differences, violations
 
 
-def test_triangle_inequality(genomes: List[dict], num_samples: int = 100) -> Tuple[bool, List[float], int]:
+def test_triangle_inequality(genomes: List[dict], num_samples: int = 100, test_all: bool = False) -> Tuple[bool, List[float], int]:
     """
     Test Property 3: Triangle Inequality
     d(u, w) ≤ d(u, v) + d(v, w) for all u, v, w
@@ -258,8 +307,26 @@ def test_triangle_inequality(genomes: List[dict], num_samples: int = 100) -> Tup
     violation_count = 0
     tolerance = 1e-6  # Allow small numerical errors
     
-    for _ in range(num_samples):
-        i, j, k = np.random.choice(len(valid_genomes), size=3, replace=False)
+    # Test all triples if feasible, otherwise sample
+    max_triples = len(valid_genomes) * (len(valid_genomes) - 1) * (len(valid_genomes) - 2) // 6
+    if test_all and max_triples <= num_samples:
+        triples_to_test = [(i, j, k) for i in range(len(valid_genomes))
+                          for j in range(i + 1, len(valid_genomes))
+                          for k in range(j + 1, len(valid_genomes))]
+        print(f"  Testing all {len(triples_to_test)} triples...")
+    else:
+        triples_to_test = []
+        seen_triples = set()
+        for _ in range(num_samples):
+            while True:
+                i, j, k = np.random.choice(len(valid_genomes), size=3, replace=False)
+                triple = tuple(sorted([i, j, k]))
+                if triple not in seen_triples:
+                    seen_triples.add(triple)
+                    triples_to_test.append((i, j, k))
+                    break
+    
+    for i, j, k in triples_to_test:
         g1, g2, g3 = valid_genomes[i], valid_genomes[j], valid_genomes[k]
         
         e1, p1 = extract_embedding_and_phenotype(g1)
@@ -292,7 +359,7 @@ def test_triangle_inequality(genomes: List[dict], num_samples: int = 100) -> Tup
     mean_violation = np.mean(violations) if violations else 0
     
     print(f"\nResults:")
-    print(f"  Total triples tested: {num_samples}")
+    print(f"  Total triples tested: {len(triples_to_test)}")
     print(f"  Violations (d(u,w) > d(u,v) + d(v,w) + {tolerance}): {violation_count}")
     if violations:
         print(f"  Max violation: {max_violation:.6f}")
@@ -313,53 +380,226 @@ def test_triangle_inequality(genomes: List[dict], num_samples: int = 100) -> Tup
     return all_satisfy, violations, violation_count
 
 
+def select_diverse_genomes(genomes: List[dict], n: int = 100) -> List[dict]:
+    """
+    Select a diverse subset of n genomes for testing.
+    
+    Strategy: Use stratified sampling to ensure diversity:
+    1. Group by species_id if available
+    2. Sample proportionally from each group
+    3. If no species_id, use random sampling
+    """
+    if len(genomes) <= n:
+        return genomes
+    
+    # Try to group by species_id for diversity
+    species_groups = {}
+    no_species = []
+    
+    for genome in genomes:
+        species_id = genome.get('species_id')
+        if species_id is not None and species_id > 0:
+            if species_id not in species_groups:
+                species_groups[species_id] = []
+            species_groups[species_id].append(genome)
+        else:
+            no_species.append(genome)
+    
+    selected = []
+    
+    if species_groups:
+        # Stratified sampling: sample proportionally from each species
+        total_with_species = sum(len(g) for g in species_groups.values())
+        remaining = n
+        
+        # Sort species by size (largest first)
+        sorted_species = sorted(species_groups.items(), key=lambda x: len(x[1]), reverse=True)
+        
+        for species_id, group in sorted_species:
+            if remaining <= 0:
+                break
+            # Sample proportionally, but at least 1 from each species
+            proportion = len(group) / total_with_species
+            sample_size = max(1, min(len(group), int(proportion * n), remaining))
+            
+            # Random sample from this species
+            np.random.seed(42)
+            indices = np.random.choice(len(group), size=sample_size, replace=False)
+            selected.extend([group[i] for i in indices])
+            remaining -= sample_size
+        
+        # Fill remaining slots with no_species genomes
+        if remaining > 0 and no_species:
+            np.random.seed(42)
+            sample_size = min(remaining, len(no_species))
+            indices = np.random.choice(len(no_species), size=sample_size, replace=False)
+            selected.extend([no_species[i] for i in indices])
+    else:
+        # No species info, use random sampling
+        np.random.seed(42)
+        indices = np.random.choice(len(genomes), size=n, replace=False)
+        selected = [genomes[i] for i in indices]
+    
+    return selected[:n]  # Ensure exactly n genomes
+
+
+def load_genomes_from_multiple_dirs(execution_dirs: List[Path], min_genomes: int = 100) -> List[dict]:
+    """Load genomes from multiple execution directories until we have at least min_genomes."""
+    all_genomes = []
+    seen_ids = set()
+    
+    for execution_dir in execution_dirs:
+        try:
+            genomes = load_genomes(execution_dir)
+            for genome in genomes:
+                genome_id = genome.get('id')
+                # Use a unique key: (execution_dir, id) to avoid duplicates across runs
+                unique_key = (execution_dir.name, genome_id)
+                if unique_key not in seen_ids:
+                    seen_ids.add(unique_key)
+                    all_genomes.append(genome)
+                    if len(all_genomes) >= min_genomes:
+                        return all_genomes
+        except Exception as e:
+            print(f"  Warning: Could not load from {execution_dir.name}: {e}")
+            continue
+    
+    return all_genomes
+
+
 def main():
     """Main function to run all metric property tests."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Verify ensemble distance metric properties")
+    parser.add_argument("--min-genomes", type=int, default=100,
+                       help="Minimum number of genomes to test with (default: 100)")
+    parser.add_argument("--execution-dir", type=str, default=None,
+                       help="Specific execution directory to use (default: use most recent)")
+    parser.add_argument("--use-multiple", action="store_true",
+                       help="Use multiple execution directories to reach min_genomes")
+    parser.add_argument("--num-samples", type=int, default=None,
+                       help="Number of samples for testing (default: adaptive based on genome count)")
+    args = parser.parse_args()
+    
     print("="*80)
     print("Ensemble Distance Metric Properties Verification")
     print("="*80)
+    print(f"Target: At least {args.min_genomes} genomes")
     
     # Default execution directory (can be changed)
     base_dir = Path(__file__).parent.parent / "data" / "outputs"
     
-    # Try to find a recent execution
+    # Default to the specified directory
+    default_execution_dir = "20260117_1152"
+    
+    # Try to find execution directories
     execution_dirs = sorted([d for d in base_dir.iterdir() if d.is_dir()], reverse=True)
     
     if not execution_dirs:
         print(f"ERROR: No execution directories found in {base_dir}")
         return
     
-    # Use the most recent execution
-    execution_dir = execution_dirs[0]
-    print(f"\nUsing execution directory: {execution_dir.name}")
-    
     try:
         # Load genomes
-        print("Loading genomes...")
-        genomes = load_genomes(execution_dir)
-        print(f"Loaded {len(genomes)} genomes")
+        if args.execution_dir:
+            # Use specific directory
+            execution_dir = base_dir / args.execution_dir
+            if not execution_dir.exists():
+                print(f"ERROR: Execution directory not found: {execution_dir}")
+                return
+            print(f"\nUsing specified execution directory: {execution_dir.name}")
+            genomes = load_genomes(execution_dir, include_reserves=True)
+        elif args.use_multiple:
+            # Load from multiple directories
+            print(f"\nLoading genomes from multiple execution directories...")
+            genomes = load_genomes_from_multiple_dirs(execution_dirs, min_genomes=args.min_genomes)
+        else:
+            # Use default directory (20260117_1152)
+            execution_dir = base_dir / default_execution_dir
+            if execution_dir.exists():
+                print(f"\nUsing default execution directory: {execution_dir.name}")
+                genomes = load_genomes(execution_dir, include_reserves=True)
+            else:
+                print(f"\nDefault directory {default_execution_dir} not found, using most recent")
+                execution_dir = execution_dirs[0]
+                print(f"Using most recent execution directory: {execution_dir.name}")
+                genomes = load_genomes(execution_dir, include_reserves=True)
         
         # Filter valid genomes (compute embeddings if missing)
-        print("Filtering valid genomes...")
+        print("\nFiltering valid genomes (with embeddings and phenotypes)...")
         valid_genomes = filter_valid_genomes(genomes, compute_embeddings=True)
         print(f"Found {len(valid_genomes)} genomes with both embeddings and phenotypes")
+        
+        if len(valid_genomes) < args.min_genomes:
+            print(f"\nWARNING: Only found {len(valid_genomes)} valid genomes (target: {args.min_genomes})")
+            if not args.use_multiple and len(execution_dirs) > 1:
+                print(f"   Consider using --use-multiple to combine genomes from multiple executions")
+            if len(valid_genomes) < 3:
+                print(f"\nERROR: Need at least 3 valid genomes for testing")
+                return
+        elif len(valid_genomes) > args.min_genomes:
+            # Select a diverse subset of 100 genomes for testing
+            print(f"\nSelecting {args.min_genomes} genomes from {len(valid_genomes)} available...")
+            selected_genomes = select_diverse_genomes(valid_genomes, args.min_genomes)
+            valid_genomes = selected_genomes
+            print(f"Selected {len(valid_genomes)} genomes for testing")
         
         if len(valid_genomes) < 3:
             print(f"\nERROR: Need at least 3 valid genomes for testing")
             print(f"   Found only {len(valid_genomes)} valid genomes")
             return
         
-        # Run tests
-        num_samples = min(100, len(valid_genomes) * 10)  # Adaptive sample size
+        # Determine number of samples
+        if args.num_samples:
+            num_samples = args.num_samples
+        else:
+            # Adaptive: use all pairs if feasible, otherwise sample
+            n = len(valid_genomes)
+            max_pairs = n * (n - 1) // 2
+            max_triples = n * (n - 1) * (n - 2) // 6
+            
+            # For pairs: test all if < 10000, otherwise sample 1000
+            if max_pairs < 10000:
+                num_samples_pairs = max_pairs
+            else:
+                num_samples_pairs = min(1000, max_pairs)
+            
+            # For triples: test all if < 10000, otherwise sample 1000
+            if max_triples < 10000:
+                num_samples_triples = max_triples
+            else:
+                num_samples_triples = min(1000, max_triples)
+            
+            num_samples = max(num_samples_pairs, num_samples_triples)
+            print(f"\nUsing {num_samples} samples for testing")
+            if num_samples < max_pairs:
+                print(f"  (Total possible pairs: {max_pairs}, triples: {max_triples})")
+        
+        # Determine if we should test all pairs/triples
+        test_all = len(valid_genomes) <= 50  # Test all if small enough
         
         # Test 1: Non-negativity
-        non_neg_pass, distances, neg_count = test_non_negativity(valid_genomes, num_samples)
+        non_neg_pass, distances, neg_count = test_non_negativity(valid_genomes, num_samples, test_all=test_all)
         
         # Test 2: Symmetry
-        symm_pass, differences, symm_violations = test_symmetry(valid_genomes, num_samples)
+        symm_pass, differences, symm_violations = test_symmetry(valid_genomes, num_samples, test_all=test_all)
         
         # Test 3: Triangle inequality
-        triangle_pass, violations, triangle_violations = test_triangle_inequality(valid_genomes, num_samples)
+        triangle_pass, violations, triangle_violations = test_triangle_inequality(valid_genomes, num_samples, test_all=test_all)
+        
+        # Additional statistics
+        print("\n" + "="*80)
+        print("ADDITIONAL STATISTICS")
+        print("="*80)
+        print(f"Total genomes tested: {len(valid_genomes)}")
+        print(f"Total pairs tested: {num_samples}")
+        print(f"Distance statistics:")
+        if distances:
+            print(f"  Min distance: {min(distances):.6f}")
+            print(f"  Max distance: {max(distances):.6f}")
+            print(f"  Mean distance: {np.mean(distances):.6f}")
+            print(f"  Std distance: {np.std(distances):.6f}")
         
         # Final summary
         print("\n" + "="*80)

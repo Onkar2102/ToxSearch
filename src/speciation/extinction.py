@@ -80,13 +80,23 @@ def process_extinctions(
     # In-memory size reflects the current generation's actual state
     small_species_ids = []
     for sid, sp in species.items():
-        if sp.species_state != "active":
+        # Check both active and frozen species for size < min_size
+        # Also check species already marked as incubator (may have been marked by _ensure_unique_leader or duplicate fix)
+        # Frozen species can also shrink below min_size and should be moved to incubator
+        if sp.species_state not in ["active", "frozen", "incubator"]:
             continue
         # Use in-memory size (current generation state), not elites.json (cumulative across all generations)
         current_size = sp.size
-        if current_size < min_size:
-            small_species_ids.append(sid)
-            logger.debug(f"Species {sid}: current size={current_size} (in-memory), min_size={min_size} -> will move to incubator")
+        # If already incubator, process it (may have been marked but not cleaned up yet)
+        # If active/frozen and size < min_size, mark for incubator
+        if sp.species_state == "incubator" or current_size < min_size:
+            if sp.species_state != "incubator":
+                small_species_ids.append(sid)
+                logger.debug(f"Species {sid}: current size={current_size} (in-memory), min_size={min_size}, state={sp.species_state} -> will move to incubator")
+            else:
+                # Already marked as incubator but not yet processed - add to list for cleanup
+                small_species_ids.append(sid)
+                logger.debug(f"Species {sid}: already marked as incubator but not yet processed, will complete cleanup")
     
     for sid in small_species_ids:
         if sid not in species:

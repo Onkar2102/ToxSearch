@@ -88,81 +88,54 @@ class SpeciationMetricsTracker:
         all_fitness = []
         elites_genomes = []  # Store for reuse
         
-        # Try to read from files first (most accurate)
+        # Read from files (required for accurate metrics)
         if elites_path and Path(elites_path).exists():
-            try:
-                with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites_genomes = json.load(f)
-                
-                # Calculate species_count from files (count unique species_id values)
-                unique_species_ids = set()
-                for genome in elites_genomes:
-                    species_id = genome.get("species_id")
-                    if species_id is not None and species_id > 0:
-                        unique_species_ids.add(species_id)
-                species_count = len(unique_species_ids)
-                self.logger.debug(f"Calculated species_count from elites.json: {species_count} species (in-memory had {len(species)})")
-                
-                # Calculate total_population from files
-                total_pop += len(elites_genomes)
-                # Extract fitness from elites
-                for genome in elites_genomes:
-                    fitness = 0.0
-                    if "north_star_score" in genome:
-                        fitness = genome["north_star_score"]
-                    elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
-                        google_result = genome["moderation_result"].get("google", {})
-                        if google_result and "scores" in google_result:
-                            fitness = google_result["scores"].get("toxicity", 0.0)
-                        else:
-                            scores = genome["moderation_result"].get("scores", {})
-                            fitness = scores.get("toxicity", 0.0)
-                    elif "toxicity" in genome:
-                        fitness = genome["toxicity"]
-                    if fitness > 0:
-                        all_fitness.append(float(fitness))
-            except Exception:
-                # Fallback to in-memory species if file read fails
-                total_pop = sum(sp.size for sp in species.values())
-                all_fitness = [m.fitness for sp in species.values() for m in sp.members]
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+            
+            # Calculate species_count from files (count unique species_id values)
+            unique_species_ids = set()
+            for genome in elites_genomes:
+                species_id = genome.get("species_id")
+                if species_id is not None and species_id > 0:
+                    unique_species_ids.add(species_id)
+            species_count = len(unique_species_ids)
+            self.logger.debug(f"Calculated species_count from elites.json: {species_count} species (in-memory had {len(species)})")
+            
+            # Calculate total_population from files
+            total_pop += len(elites_genomes)
+            # Extract fitness from elites using standardized method
+            from utils.population_io import _extract_north_star_score
+            for genome in elites_genomes:
+                fitness = _extract_north_star_score(genome, "toxicity")
+                if fitness > 0:
+                    all_fitness.append(float(fitness))
         else:
-            # Fallback: use in-memory species
+            # If elites_path not provided, use in-memory species (only for backward compatibility)
+            if elites_path:
+                self.logger.warning(f"elites.json not found at {elites_path}, using in-memory species (metrics may be inaccurate)")
             total_pop = sum(sp.size for sp in species.values())
             all_fitness = [m.fitness for sp in species.values() for m in sp.members]
         
-        # Add reserves from file (more accurate than cluster0.individuals)
-        actual_reserves_size = reserves_size  # Initialize with parameter
+        # Add reserves from file (required for accurate metrics)
+        actual_reserves_size = reserves_size
         if reserves_path and Path(reserves_path).exists():
-            try:
-                with open(reserves_path, 'r', encoding='utf-8') as f:
-                    reserves_genomes = json.load(f)
-                actual_reserves_size = len(reserves_genomes)
-                total_pop += actual_reserves_size
-                # Extract fitness from reserves
-                for genome in reserves_genomes:
-                    fitness = 0.0
-                    if "north_star_score" in genome:
-                        fitness = genome["north_star_score"]
-                    elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
-                        google_result = genome["moderation_result"].get("google", {})
-                        if google_result and "scores" in google_result:
-                            fitness = google_result["scores"].get("toxicity", 0.0)
-                        else:
-                            scores = genome["moderation_result"].get("scores", {})
-                            fitness = scores.get("toxicity", 0.0)
-                    elif "toxicity" in genome:
-                        fitness = genome["toxicity"]
-                    if fitness > 0:
-                        all_fitness.append(float(fitness))
-            except Exception:
-                # Fallback: add reserves_size if file read fails
-                total_pop += reserves_size
-                # Include cluster0 fitness if provided (backward compatibility)
-                if cluster0 is not None and hasattr(cluster0, 'individuals'):
-                    all_fitness.extend([ind.fitness for ind in cluster0.individuals])
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+            actual_reserves_size = len(reserves_genomes)
+            total_pop += actual_reserves_size
+            # Extract fitness from reserves using standardized method
+            from utils.population_io import _extract_north_star_score
+            for genome in reserves_genomes:
+                fitness = _extract_north_star_score(genome, "toxicity")
+                if fitness > 0:
+                    all_fitness.append(float(fitness))
         else:
-            # Fallback: add reserves_size and use cluster0 if available
+            # If reserves_path not provided, use parameter value
+            if reserves_path:
+                self.logger.warning(f"reserves.json not found at {reserves_path}, using parameter value (metrics may be inaccurate)")
             total_pop += reserves_size
+            # Include cluster0 fitness if provided (backward compatibility)
             if cluster0 is not None and hasattr(cluster0, 'individuals'):
                 all_fitness.extend([ind.fitness for ind in cluster0.individuals])
         
@@ -239,6 +212,55 @@ class SpeciationMetricsTracker:
     
     def to_dict(self) -> Dict:
         return {"history": [m.to_dict() for m in self.history], "summary": self.get_summary()}
+    
+    @classmethod
+    def from_dict(cls, metrics_dict: Dict, logger=None) -> "SpeciationMetricsTracker":
+        """
+        Create SpeciationMetricsTracker from dictionary (loaded from speciation_state.json).
+        
+        Args:
+            metrics_dict: Dictionary with "history" and "summary" keys
+            logger: Optional logger instance
+        
+        Returns:
+            SpeciationMetricsTracker instance with restored history and totals
+        """
+        tracker = cls(logger=logger)
+        
+        # Restore history
+        if "history" in metrics_dict:
+            for gen_dict in metrics_dict["history"]:
+                # Reconstruct GenerationMetrics from dict
+                metrics = GenerationMetrics(
+                    generation=gen_dict.get("generation", 0),
+                    species_count=gen_dict.get("species_count", 0),
+                    total_population=gen_dict.get("total_population", 0),
+                    reserves_size=gen_dict.get("reserves_size", 0),
+                    best_fitness=gen_dict.get("best_fitness", 0.0),
+                    avg_fitness=gen_dict.get("avg_fitness", 0.0),
+                    fitness_std=gen_dict.get("fitness_std", 0.0),
+                    speciation_events=gen_dict.get("speciation_events", 0),
+                    merge_events=gen_dict.get("merge_events", 0),
+                    extinction_events=gen_dict.get("extinction_events", 0),
+                    inter_species_diversity=gen_dict.get("inter_species_diversity", 0.0),
+                    intra_species_diversity=gen_dict.get("intra_species_diversity", 0.0),
+                    cluster_quality=gen_dict.get("cluster_quality")  # Optional
+                )
+                tracker.history.append(metrics)
+        
+        # Restore totals from summary if available
+        if "summary" in metrics_dict:
+            summary = metrics_dict["summary"]
+            tracker.total_speciation = summary.get("total_speciation_events", 0)
+            tracker.total_merges = summary.get("total_merge_events", 0)
+            tracker.total_extinctions = summary.get("total_extinction_events", 0)
+        else:
+            # Fallback: calculate totals from history
+            tracker.total_speciation = sum(m.speciation_events for m in tracker.history)
+            tracker.total_merges = sum(m.merge_events for m in tracker.history)
+            tracker.total_extinctions = sum(m.extinction_events for m in tracker.history)
+        
+        return tracker
 
 
 def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0.7, w_phenotype: float = 0.3,
@@ -360,14 +382,9 @@ def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0
                     if not np.isclose(norm, 1.0, atol=1e-5):
                         embedding = embedding / norm
                     
-                    # Extract fitness
-                    fitness = 0.0
-                    if "north_star_score" in genome:
-                        fitness = genome["north_star_score"]
-                    elif "moderation_result" in genome and isinstance(genome["moderation_result"], dict):
-                        google_result = genome["moderation_result"].get("google", {})
-                        if google_result and "scores" in google_result:
-                            fitness = google_result["scores"].get("toxicity", 0.0)
+                    # Extract fitness using standardized method
+                    from utils.population_io import _extract_north_star_score
+                    fitness = _extract_north_star_score(genome, "toxicity")
                     
                     member = Individual(
                         id=genome.get("id", 0),

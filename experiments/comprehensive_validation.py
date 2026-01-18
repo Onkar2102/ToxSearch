@@ -156,19 +156,45 @@ class ComprehensiveValidator:
                     if mid == leader_id:
                         continue
                     
-                    # Check radius enforcement (simplified - just check embedding distance)
+                    # Check radius enforcement using ensemble distance (same as system)
                     if member_genome.get("prompt_embedding"):
                         member_emb = np.array(member_genome["prompt_embedding"])
                         member_emb = member_emb / np.linalg.norm(member_emb)  # Normalize
                         
-                        # Cosine distance
-                        cosine_sim = np.clip(np.dot(leader_emb, member_emb), -1.0, 1.0)
-                        cosine_dist = 1.0 - cosine_sim
-                        
-                        # Note: This is just genotype distance, not full ensemble distance
-                        # Full validation would require phenotype, but this is a basic check
-                        if cosine_dist > radius * 1.5:  # Allow some tolerance
-                            self.warnings.append(f"Species {sid_int}: member {mid} may be outside radius (cosine_dist={cosine_dist:.4f}, radius={radius})")
+                        # Use ensemble distance (same as system) instead of cosine distance
+                        try:
+                            # Import ensemble distance function
+                            import sys
+                            from pathlib import Path
+                            sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+                            from speciation.distance import ensemble_distance
+                            
+                            # Extract phenotype vectors (not raw moderation_result dict)
+                            from speciation.phenotype_distance import extract_phenotype_vector
+                            leader_phenotype = extract_phenotype_vector(leader_genome)
+                            member_phenotype = extract_phenotype_vector(member_genome)
+                            
+                            # Get weights from config (default: w_genotype=0.7, w_phenotype=0.3)
+                            config = self.speciation_state.get("config", {})
+                            w_genotype = config.get("w_genotype", 0.7)
+                            w_phenotype = config.get("w_phenotype", 0.3)
+                            
+                            # Calculate ensemble distance
+                            dist = ensemble_distance(
+                                leader_emb, member_emb,
+                                leader_phenotype, member_phenotype,
+                                w_genotype, w_phenotype
+                            )
+                            
+                            # Allow some tolerance for floating point errors
+                            if dist > radius * 1.5:  # Allow some tolerance
+                                self.warnings.append(f"Species {sid_int}: member {mid} may be outside radius (ensemble_dist={dist:.4f}, radius={radius})")
+                        except Exception as e:
+                            # Fallback to cosine distance if ensemble distance fails
+                            cosine_sim = np.clip(np.dot(leader_emb, member_emb), -1.0, 1.0)
+                            cosine_dist = 1.0 - cosine_sim
+                            if cosine_dist > radius * 1.5:
+                                self.warnings.append(f"Species {sid_int}: member {mid} may be outside radius (cosine_dist={cosine_dist:.4f}, radius={radius}, ensemble_distance failed: {e})")
         
         self.validations_passed += 1
     
