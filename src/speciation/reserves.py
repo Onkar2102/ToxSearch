@@ -9,10 +9,9 @@ Cluster 0 is a special cluster with ID 0 that holds outliers and removed individ
 import numpy as np
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Tuple, TYPE_CHECKING
-from scipy.cluster.hierarchy import linkage, fcluster
 
 from .species import Individual, Species, generate_species_id
-from .distance import ensemble_distance
+from .distance import ensemble_distance, ensemble_distances_batch
 
 if TYPE_CHECKING:
     from .config import SpeciationConfig
@@ -61,7 +60,7 @@ class Cluster0:
     Key features:
     - Max capacity: Limited to cluster0_max_capacity (default 1000) individuals, ordered by fitness
     - Speciation detection: When Cluster 0 individuals form cohesive clusters, they create new species
-    - Agglomerative clustering: Uses hierarchical clustering to find groups in Cluster 0
+    - Leader-follower clustering: Uses leader-follower algorithm to find groups in Cluster 0
     
     This preserves diversity by giving novel high-fitness solutions a chance to
     form new species rather than being discarded.
@@ -143,147 +142,154 @@ class Cluster0:
         self.members = [lm for lm in self.members if lm.individual.id not in ids]
         return original - len(self.members)
     
-    def check_speciation(self, current_generation: int) -> Optional[Species]:
+    def check_speciation(self, current_generation: int) -> List[Species]:
         """
-        Check if Cluster 0 (reserves) individuals can form a new species via clustering.
+        Check if Cluster 0 (reserves) individuals can form new species via leader-follower clustering.
         
         This is the key mechanism for creating new species from Cluster 0. When enough
-        similar high-fitness individuals accumulate, they can form a cohesive cluster
-        and create a new species.
+        similar high-fitness individuals accumulate, they can form cohesive clusters
+        and create new species.
         
-        Algorithm:
+        Algorithm (Leader-Follower - Optimized to form all species in one pass):
         1. Check if enough individuals in Cluster 0 (>= min_cluster_size)
-        2. Perform agglomerative clustering on Cluster 0 individuals
-        3. Find largest cohesive cluster (all pairwise distances < theta_sim)
-        4. If cluster size >= min_cluster_size, create new species
-        5. Remove cluster members from Cluster 0
+        2. Sort individuals by fitness (descending)
+        3. Process all individuals:
+           - First individual becomes potential leader
+           - For each subsequent individual:
+             * Check distance to all potential leaders
+             * If within theta_sim, add as follower
+             * When leader has (min_cluster_size - 1) followers, form species immediately
+           - Continue processing remaining individuals even after forming species
+        4. Remove all formed species members from Cluster 0
+        5. Return list of all new species formed in this pass
         
         Args:
             current_generation: Current generation number
         
         Returns:
-            New Species if speciation occurred, else None
+            List of new Species formed (empty list if none formed)
         """
         # Check minimum size requirement
         if len(self.members) < self.min_cluster_size:
-            return None
+            return []
         
         # Filter to individuals with embeddings
         individuals = [lm.individual for lm in self.members if lm.individual.embedding is not None]
         if len(individuals) < self.min_cluster_size:
-            return None
+            return []
         
-        # Cluster individuals
-        clusters = self._agglomerative_clustering(individuals, self.theta_sim)
+        # Sort by fitness (descending) - highest fitness processed first
+        sorted_individuals = sorted(individuals, key=lambda x: x.fitness, reverse=True)
         
-        # Check clusters from largest to smallest
-        for cluster in sorted(clusters, key=len, reverse=True):
-            # Verify cluster is cohesive and large enough
-            if len(cluster) >= self.min_cluster_size and self._check_cohesion(cluster, self.theta_sim):
-                # Create new species with highest-fitness individual as leader
-                leader = max(cluster, key=lambda x: x.fitness)
-                new_species = Species(
-                    id=generate_species_id(),
-                    leader=leader,
-                    members=list(cluster),
-                    radius=self.theta_sim,  # Constant radius
-                    created_at=current_generation,
-                    last_improvement=current_generation,
-                    cluster_origin="natural",  # Formed naturally from Cluster 0, never None
-                    parent_ids=None,
-                    leader_distance=0.0  # New species leader is reference point
-                )
-                # Remove from Cluster 0 (they're now in a species)
-                self.remove_batch(cluster)
-                # Track speciation event
-                self.speciation_events.append({
-                    "generation": current_generation,
-                    "species_id": new_species.id,
-                    "size": len(cluster),
-                    "leader_fitness": leader.fitness,
-                    "origin": "cluster_0_speciation"
-                })
-                self.logger.info(f"Speciation event! Created species {new_species.id} from {len(cluster)} Cluster 0 (reserves) individuals")
-                return new_species
-        return None
+        # Potential leaders: Dict mapping leader_id -> (species_id_or_None, embedding, phenotype, Individual, followers_list)
+        # species_id is None until (min_cluster_size - 1) followers are found, then it's assigned
+        potential_leaders: Dict[str, Tuple[Optional[int], np.ndarray, Optional[np.ndarray], Individual, List[Individual]]] = {}
+        
+        # Track all new species formed in this pass
+        new_species_list: List[Species] = []
+        # Track all individuals to remove (from formed species)
+        individuals_to_remove: List[Individual] = []
+        
+        # First individual becomes first potential leader
+        first = sorted_individuals[0]
+        potential_leaders[first.id] = (None, first.embedding, first.phenotype, first, [])
+        remaining_individuals = sorted_individuals[1:]
+        
+        # Process remaining individuals
+        for ind in remaining_individuals:
+            assigned = False
+            min_dist = float('inf')
+            nearest_leader_id = None
+            
+            # Check against all potential leaders (excluding those that already formed species)
+            active_leaders = {pl_id: data for pl_id, data in potential_leaders.items() if data[0] is None}
+            if active_leaders:
+                # Collect all leader embeddings and phenotypes
+                leader_embeddings = []
+                leader_phenotypes = []
+                leader_ids = []
+                for pl_id, (_, pl_emb, pl_pheno, _, _) in active_leaders.items():
+                    leader_ids.append(pl_id)
+                    leader_embeddings.append(pl_emb)
+                    leader_phenotypes.append(pl_pheno)
+                
+                if len(leader_embeddings) > 1:
+                    # Vectorized distance computation
+                    leader_embeddings_array = np.array(leader_embeddings)
+                    distances = ensemble_distances_batch(
+                        ind.embedding, leader_embeddings_array,
+                        ind.phenotype, leader_phenotypes,
+                        0.7, 0.3  # Default weights
+                    )
+                    min_idx = np.argmin(distances)
+                    min_dist = distances[min_idx]
+                    nearest_leader_id = leader_ids[min_idx]
+                elif len(leader_embeddings) == 1:
+                    min_dist = ensemble_distance(
+                        ind.embedding, leader_embeddings[0],
+                        ind.phenotype, leader_phenotypes[0],
+                        0.7, 0.3
+                    )
+                    nearest_leader_id = leader_ids[0]
+                
+                # If within threshold, add as follower
+                if nearest_leader_id is not None and min_dist < self.theta_sim:
+                    pl_species_id, pl_emb, pl_pheno, pl_ind, followers = potential_leaders[nearest_leader_id]
+                    
+                    if pl_species_id is None:
+                        # Add as follower (tracked but no species yet)
+                        followers.append(ind)
+                        # Check if we've reached minimum size
+                        total_size = 1 + len(followers)  # leader + followers
+                        if total_size >= self.min_cluster_size:
+                            # Minimum size reached! Create the species now
+                            new_species_id = generate_species_id()
+                            # Determine leader (highest fitness among leader + followers)
+                            all_members = [pl_ind] + followers
+                            leader = max(all_members, key=lambda x: x.fitness)
+                            other_members = [m for m in all_members if m.id != leader.id]
+                            
+                            new_species = Species(
+                                id=new_species_id,
+                                leader=leader,
+                                members=[leader] + other_members,
+                                radius=self.theta_sim,  # Constant radius
+                                created_at=current_generation,
+                                last_improvement=current_generation,
+                                cluster_origin="natural",  # Formed naturally from Cluster 0
+                                parent_ids=None,
+                                leader_distance=0.0  # New species leader is reference point
+                            )
+                            
+                            # Mark this potential leader as having formed a species
+                            potential_leaders[nearest_leader_id] = (new_species_id, pl_emb, pl_pheno, pl_ind, followers)
+                            
+                            # Track for removal and event logging
+                            individuals_to_remove.extend(all_members)
+                            new_species_list.append(new_species)
+                            
+                            # Track speciation event
+                            self.speciation_events.append({
+                                "generation": current_generation,
+                                "species_id": new_species.id,
+                                "size": len(all_members),
+                                "leader_fitness": leader.fitness,
+                                "origin": "cluster_0_speciation"
+                            })
+                            self.logger.info(f"Speciation event! Created species {new_species.id} from {len(all_members)} Cluster 0 (reserves) individuals")
+                    assigned = True
+            
+            # If not assigned to any potential leader, become a new potential leader
+            if not assigned:
+                potential_leaders[ind.id] = (None, ind.embedding, ind.phenotype, ind, [])
+        
+        # Remove all formed species members from Cluster 0 in one batch
+        if individuals_to_remove:
+            self.remove_batch(individuals_to_remove)
+            self.logger.debug(f"Removed {len(individuals_to_remove)} individuals from Cluster 0 (formed {len(new_species_list)} new species)")
+        
+        return new_species_list
     
-    def _agglomerative_clustering(self, individuals: List[Individual], threshold: float) -> List[List[Individual]]:
-        """
-        Perform agglomerative hierarchical clustering on Cluster 0 (reserves) individuals.
-        
-        Uses scipy's linkage and fcluster to find groups of similar individuals.
-        
-        Args:
-            individuals: List of individuals to cluster
-            threshold: Distance threshold for clustering
-        
-        Returns:
-            List of clusters (each cluster is a list of individuals)
-        """
-        if len(individuals) < 2:
-            return [individuals] if individuals else []
-        
-        n = len(individuals)
-        embeddings = np.array([ind.embedding for ind in individuals])
-        # Compute pairwise distances (condensed distance matrix)
-        # Use ensemble distance with default weights
-        distances = [
-            ensemble_distance(
-                embeddings[i], embeddings[j],
-                individuals[i].phenotype if individuals[i].phenotype is not None else None,
-                individuals[j].phenotype if individuals[j].phenotype is not None else None,
-                0.7, 0.3
-            )
-            for i in range(n) for j in range(i + 1, n)
-        ]
-        
-        if not distances:
-            return [individuals]
-        
-        try:
-            # Hierarchical clustering with average linkage
-            Z = linkage(np.array(distances), method='average')
-            # Form clusters at threshold distance
-            labels = fcluster(Z, t=threshold, criterion='distance')
-        except Exception:
-            # Fallback: return all as single cluster
-            return [individuals]
-        
-        # Group individuals by cluster label
-        clusters: Dict[int, List[Individual]] = {}
-        for ind, label in zip(individuals, labels):
-            clusters.setdefault(label, []).append(ind)
-        return list(clusters.values())
-    
-    def _check_cohesion(self, cluster: List[Individual], threshold: float) -> bool:
-        """
-        Verify that all pairwise distances in cluster are below threshold.
-        
-        A cohesive cluster means all members are semantically similar to each other,
-        not just to the leader. This ensures the cluster is truly homogeneous.
-        
-        Args:
-            cluster: List of individuals to check
-            threshold: Maximum allowed pairwise distance
-        
-        Returns:
-            True if cluster is cohesive (all distances < threshold), else False
-        """
-        if len(cluster) < 2:
-            return True  # Single individual is trivially cohesive
-        # Check all pairwise distances
-        for i, ind1 in enumerate(cluster):
-            for ind2 in cluster[i + 1:]:
-                if ind1.embedding is None or ind2.embedding is None:
-                    continue
-                dist = ensemble_distance(
-                    ind1.embedding, ind2.embedding,
-                    ind1.phenotype, ind2.phenotype,
-                    0.7, 0.3
-                )
-                if dist > threshold:
-                    return False  # Found pair that's too far apart
-        return True  # All pairs are within threshold
     
     def get_best(self, n: int = 1) -> List[Individual]:
         """Get top N individuals by fitness."""

@@ -149,46 +149,60 @@ def process_merges(
     - Truncates to max_capacity if needed
     
     Frozen species can merge with active or other frozen species.
-    When a frozen species merges, it is reactivated (state="active").
+    When species merge, BOTH parent species become extinct (moved to historical_species).
+    The merged species is a new species with a new ID.
     
     Process iteratively until no more merge candidates are found.
     All eligible merges happen in a single generation.
     
     Args:
-        species: Dict of active species (modified in-place)
+        species: Dict of active and frozen species (modified in-place)
         theta_merge: Merge distance threshold (must be < theta_sim)
         theta_sim: Constant radius for merged species
         min_stability_gens: Minimum age for species to be mergeable
         current_gen: Current generation number
         max_capacity: Maximum members after merge (default: 100)
         max_merges_per_gen: Deprecated parameter (kept for backward compatibility, not used)
-        historical_species: Optional dict of frozen/incubator species (can merge with active)
+        historical_species: Optional dict for storing extinct parent species
         logger: Optional logger instance
     
     Returns:
-        Tuple of (updated_species, merge_events, outliers, reactivated_frozen)
-        - updated_species: Dict of species after merging
+        Tuple of (updated_species, merge_events, outliers, extinct_parents)
+        - updated_species: Dict of species after merging (parents removed, merged species added)
         - merge_events: List of merge event dictionaries
         - outliers: List of Individual objects outside radius after merge (to be moved to cluster 0 by caller)
-        - reactivated_frozen: Dict of frozen species that were reactivated via merging (to be moved back to active species)
+        - extinct_parents: Dict of parent species that became extinct via merging (to be moved to historical_species)
     """
     if logger is None:
         logger = get_logger("IslandMerging")
     
     events = []
     all_outliers = []  # Collect all outliers from merges
-    reactivated_frozen = {}  # Track frozen species reactivated via merging
+    extinct_parents = {}  # Track parent species that became extinct via merging
     
     # Combine active and frozen species for merge candidate search
     # Frozen species can merge with active or other frozen species
     # Both active and frozen species are "alive" - only difference is parent selection preference
-    all_species_for_merging = dict(species)  # Start with active species
+    # Note: Frozen species are now in the active species dict (not historical_species)
+    all_species_for_merging = dict(species)  # Start with active and frozen species
+    
+    # BACKWARD COMPATIBILITY: Check historical_species for any frozen species
+    # This handles state files from before the refactoring where frozen species were in historical_species
+    # TODO: Remove this after confirming all old state files have been migrated (track usage via logs)
+    frozen_in_historical_count = 0
     if historical_species:
-        # Add frozen species (but not incubator - they're too small)
         for sid, sp in historical_species.items():
             if sp.species_state == "frozen" and sp.leader and sp.leader.embedding is not None:
                 # Frozen species preserve all members from when they were active
                 all_species_for_merging[sid] = sp
+                frozen_in_historical_count += 1
+    
+    if frozen_in_historical_count > 0:
+        logger.warning(
+            f"Found {frozen_in_historical_count} frozen species in historical_species (backward compatibility). "
+            f"This indicates an old state file format. Frozen species should now be in the active species dict. "
+            f"Consider migrating your state files."
+        )
     
     # Continue merging until no more candidates are found
     while True:
@@ -234,13 +248,13 @@ def process_merges(
         species[merged.id] = merged
         all_species_for_merging[merged.id] = merged
         
-        # Track if frozen species were reactivated
-        if state1 == "frozen" and id1 in (historical_species or {}):
-            reactivated_frozen[id1] = sp1
-            logger.info(f"Frozen species {id1} reactivated via merge with species {id2}")
-        if state2 == "frozen" and id2 in (historical_species or {}):
-            reactivated_frozen[id2] = sp2
-            logger.info(f"Frozen species {id2} reactivated via merge with species {id1}")
+        # Mark both parent species as extinct (they will be moved to historical_species by caller)
+        sp1.species_state = "extinct"
+        sp2.species_state = "extinct"
+        
+        extinct_parents[id1] = sp1
+        extinct_parents[id2] = sp2
+        logger.info(f"Parent species {id1} and {id2} became extinct via merge -> new species {merged.id}")
         
         # Collect outliers for caller to handle
         if outliers:
@@ -257,6 +271,6 @@ def process_merges(
         logger.info(f"Completed merge {len(events)}: {id1}+{id2}->{merged.id} (total merges so far: {len(events)})")
     
     logger.info(f"Merge process complete: {len(events)} merges performed in generation {current_gen}")
-    if reactivated_frozen:
-        logger.info(f"Reactivated {len(reactivated_frozen)} frozen species via merging: {sorted(reactivated_frozen.keys())}")
-    return species, events, all_outliers, reactivated_frozen
+    if extinct_parents:
+        logger.info(f"{len(extinct_parents)} parent species became extinct via merging: {sorted(extinct_parents.keys())}")
+    return species, events, all_outliers, extinct_parents

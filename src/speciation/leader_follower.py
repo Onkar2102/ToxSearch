@@ -286,6 +286,9 @@ def leader_follower_clustering(
                 nearest_leader_id = leaders[0][0]
         
             # Assign to existing species if within threshold
+            # IMPORTANT: If multiple leaders are within theta_sim, we assign to the CLOSEST one
+            # (nearest_leader_id is determined by min_dist from ensemble_distances_batch above)
+            # This ensures deterministic and principled assignment when genomes could fit multiple species
             if nearest_leader_id is not None and min_dist < theta_sim:
                 sp = species[nearest_leader_id]
                 sp.add_member(ind)
@@ -299,6 +302,10 @@ def leader_follower_clustering(
                         sp.stagnation = 0
                     sp.leader = ind
                     sp.leader_distance = min_dist
+                    # Reactivate frozen species when leader is updated (without merging)
+                    if sp.species_state == "frozen":
+                        sp.species_state = "active"
+                        logger.info(f"Frozen species {nearest_leader_id} reactivated: new leader {ind.id} with fitness {ind.fitness:.4f} (stagnation reset to 0)")
                     for i, (sid, _, _) in enumerate(leaders):
                         if sid == nearest_leader_id:
                             leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
@@ -364,6 +371,10 @@ def leader_follower_clustering(
                                 sp.stagnation = 0
                             sp.leader = ind
                             sp.leader_distance = dist
+                            # Reactivate frozen species when leader is updated (without merging)
+                            if sp.species_state == "frozen":
+                                sp.species_state = "active"
+                                logger.info(f"Frozen species {pl_species_id} reactivated: new leader {ind.id} with fitness {ind.fitness:.4f} (stagnation reset to 0)")
                             # Update leaders list
                             for i, (sid, _, _) in enumerate(leaders):
                                 if sid == pl_species_id:
@@ -432,6 +443,10 @@ def leader_follower_clustering(
                                 sp.stagnation = 0
                             sp.leader = ind
                             sp.leader_distance = dist
+                            # Reactivate frozen species when leader is updated (without merging)
+                            if sp.species_state == "frozen":
+                                sp.species_state = "active"
+                                logger.info(f"Frozen species {pl_species_id} reactivated: new leader {ind.id} with fitness {ind.fitness:.4f} (stagnation reset to 0)")
                             # Update leaders list
                             for i, (sid, _, _) in enumerate(leaders):
                                 if sid == pl_species_id:

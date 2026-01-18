@@ -282,9 +282,9 @@ def remove_embeddings_from_temp(
     """
     Remove "prompt_embedding" field from all genomes in temp.json.
     
-    This function is called after speciation is complete to reduce storage size
-    when genomes are saved to other files (elites.json, etc.). The embeddings
-    are only needed during the clustering process, not for storage.
+    This function is called after speciation is complete to reduce storage size in temp.json.
+    Embeddings are preserved in elites.json and reserves.json (required for speciation, 
+    leader-follower clustering, and cluster quality metrics), but removed from archive.json.
     
     This function directly reads and updates temp.json.
     
@@ -314,7 +314,9 @@ def remove_embeddings_from_temp(
         genomes = json.load(f)
     
     if not genomes:
-        logger.warning("No genomes found in temp.json")
+        # This is expected after distribute_genomes() clears temp.json
+        # No need to warn - it's normal behavior
+        logger.debug("temp.json is empty (already cleared by distribute_genomes) - skipping embedding removal")
         return
     
     # Remove prompt_embedding field from all genomes

@@ -74,34 +74,19 @@ def process_extinctions(
     
     # Step 2: Move small species to cluster 0 (NOT extinction, just reorganization)
     # Species get state="incubator" and are kept in speciation_state.json for reference
-    # CRITICAL: Use actual size from elites.json if available, not in-memory size
-    # This prevents species from being incorrectly moved to incubator before distribution
-    species_actual_sizes = {}
-    if elites_path:
-        from pathlib import Path
-        try:
-            if Path(elites_path).exists():
-                import json
-                with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites_genomes = json.load(f)
-                # Count actual size per species from elites.json
-                for genome in elites_genomes:
-                    species_id = genome.get("species_id")
-                    if species_id is not None and species_id > 0:
-                        species_actual_sizes[species_id] = species_actual_sizes.get(species_id, 0) + 1
-        except Exception as e:
-            logger.debug(f"Could not read elites.json for actual species sizes: {e}, using in-memory sizes")
-    
-    # Check species size - use actual size from elites.json if available, else in-memory size
+    # CRITICAL: Use in-memory size (sp.size), NOT elites.json size
+    # elites.json accumulates genomes from ALL generations (cumulative), so it's not accurate for current state
+    # We want to move species to incubator based on CURRENT size (after radius cleanup, capacity enforcement)
+    # In-memory size reflects the current generation's actual state
     small_species_ids = []
     for sid, sp in species.items():
         if sp.species_state != "active":
             continue
-        # Use actual size from elites.json if available, otherwise in-memory size
-        actual_size = species_actual_sizes.get(sid, sp.size)
-        if actual_size < min_size:
+        # Use in-memory size (current generation state), not elites.json (cumulative across all generations)
+        current_size = sp.size
+        if current_size < min_size:
             small_species_ids.append(sid)
-            logger.debug(f"Species {sid}: in-memory size={sp.size}, actual size={actual_size} (from elites.json), min_size={min_size} -> will move to incubator")
+            logger.debug(f"Species {sid}: current size={current_size} (in-memory), min_size={min_size} -> will move to incubator")
     
     for sid in small_species_ids:
         if sid not in species:

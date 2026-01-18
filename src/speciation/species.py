@@ -188,8 +188,9 @@ class Species:
     
     Species States:
     - "active": Normal operating state, participates in evolution
-    - "frozen": Species frozen due to stagnation (species_stagnation exceeded), excluded from parent selection
+    - "frozen": Species frozen due to stagnation (species_stagnation exceeded), excluded from parent selection (but still alive)
     - "incubator": Species moved to cluster 0 (reserves), awaiting potential new species formation
+    - "extinct": Species that merged with another (parent species become extinct, merged species is new)
     
     Attributes:
         id: Unique species identifier (1+, 0 reserved for cluster 0)
@@ -198,7 +199,7 @@ class Species:
         radius: Semantic distance threshold for species membership (constant = theta_sim)
         stagnation: Number of generations without max_fitness improvement
         max_fitness: Current maximum fitness score in this species
-        species_state: "active", "frozen", or "incubator" (only active species used for parent selection)
+        species_state: "active", "frozen", "incubator", or "extinct" (only active species used for parent selection)
         created_at: Generation when this species was created
         last_improvement: Generation when fitness last improved
         fitness_history: List of best fitness values over time (for trend analysis)
@@ -214,7 +215,7 @@ class Species:
     radius: float = 0.4  # Constant radius (theta_sim), no dynamic adjustment
     stagnation: int = 0  # Generations without max_fitness improvement
     max_fitness: float = 0.0  # Current maximum fitness in this species
-    species_state: str = "active"  # "active", "frozen", or "incubator"
+    species_state: str = "active"  # "active", "frozen", "incubator", or "extinct"
     created_at: int = 0
     last_improvement: int = 0
     fitness_history: List[float] = field(default_factory=list)
