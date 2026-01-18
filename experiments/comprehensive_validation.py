@@ -650,7 +650,13 @@ class ComprehensiveValidator:
 
 def main():
     """Main validation function."""
-    execution_dir = Path("data/outputs/20260117_2107")
+    import sys
+    
+    # Allow command-line argument for execution directory
+    if len(sys.argv) > 1:
+        execution_dir = Path(sys.argv[1])
+    else:
+        execution_dir = Path("data/outputs/20260117_2107")
     
     if not execution_dir.exists():
         print(f"Error: Execution directory not found: {execution_dir}")

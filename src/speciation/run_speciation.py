@@ -321,11 +321,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                 state["logger"].info(f"Species {sid} became empty after radius cleanup - moved to incubator")
     
     # Step 3: Enforce capacities directly (species and cluster 0)
-    # Only process species that received new members (optimization: unaffected species remain unchanged)
-    for sid in species_with_new_members:
-        if sid not in state["species"]:
-            continue  # Species may have been removed
-        sp = state["species"][sid]
+    # Check ALL species for capacity (ensures no species exceeds capacity, even if no new members)
+    # This is important because species might exceed capacity from previous generations
+    for sid, sp in list(state["species"].items()):  # Use list() to avoid dict modification during iteration
         if sp.size > state["config"].species_capacity:
             # Sort members by fitness (descending)
             sp.members.sort(key=lambda x: x.fitness, reverse=True)
@@ -344,6 +342,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             # Ensure leader is still in members (should be, but verify)
             if sp.leader not in sp.members and sp.members:
                 sp.leader = max(sp.members, key=lambda x: x.fitness)
+            state["logger"].info(f"Species {sid}: enforced capacity ({state['config'].species_capacity}), archived {len(excess)} excess members")
     
     # For cluster 0: enforce capacity
     if state["cluster0"].size > state["config"].cluster0_max_capacity:
