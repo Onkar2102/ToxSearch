@@ -354,7 +354,7 @@ def save_questions_to_file(questions_df, filename=os.path.join("data", "harmful_
     return success
 
 def save_prompt_csv_stratified(categorical_questions_df, harmfulqa_questions_df, 
-                                n_per_dataset=250, random_state=42, filename="data/prompt.csv"):
+                                n_per_dataset=250, random_state=48, filename="data/prompt.csv"):
     """
     Create prompt.csv by sampling n_per_dataset questions from each dataset separately.
     
@@ -440,7 +440,7 @@ if __name__ == "__main__":
             categorical_questions, 
             harmfulqa_questions, 
             n_per_dataset=250, 
-            random_state=42
+            random_state=48
         )
         
         if saved and prompt_saved:
