@@ -2435,7 +2435,7 @@ def run_speciation(
         
         # Create result with current state
         no_temp_result = {
-            "species_count": active_count,  # Only active species (for EvolutionTracker)
+            "species_count": total_species_count,  # Total species (active + frozen) for EvolutionTracker
             "active_species_count": active_count,
             "frozen_species_count": frozen_count,  # Frozen species count (for reference)
             "reserves_size": actual_reserves_size,
@@ -2520,7 +2520,7 @@ def run_speciation(
             
             # Create result with current state
             no_genomes_result = {
-                "species_count": active_count,  # Only active species (for EvolutionTracker)
+                "species_count": total_species_count,  # Total species (active + frozen) for EvolutionTracker
                 "active_species_count": active_count,
                 "frozen_species_count": frozen_count,  # Frozen species count (for reference)
                 "reserves_size": actual_reserves_size,

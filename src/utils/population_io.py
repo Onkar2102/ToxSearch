@@ -1862,15 +1862,20 @@ def calculate_generation_statistics(
                 _logger.warning(f"Failed to load archive.json: {e}")
         
         # Calculate counts (cumulative - files contain all genomes from all generations)
-        # elites.json and reserves.json are cumulative, so counts represent total up to current generation
-        stats["elites_count"] = len(elites_genomes)
-        stats["reserves_count"] = len(reserves_genomes)
-        stats["archived_count"] = len(archive_genomes)
+        # elites.json and reserves.json are cumulative, so we count genomes up to and including current generation
+        # Filter genomes by generation to get cumulative count up to current generation
+        elites_up_to_gen = [g for g in elites_genomes if g.get("generation", 0) <= current_generation]
+        reserves_up_to_gen = [g for g in reserves_genomes if g.get("generation", 0) <= current_generation]
+        archive_up_to_gen = [g for g in archive_genomes if g.get("generation", 0) <= current_generation]
+        
+        stats["elites_count"] = len(elites_up_to_gen)
+        stats["reserves_count"] = len(reserves_up_to_gen)
+        stats["archived_count"] = len(archive_up_to_gen)
         stats["total_population"] = stats["elites_count"] + stats["reserves_count"]
         
-        # Calculate elite fitness statistics
+        # Calculate elite fitness statistics (use filtered genomes for accuracy)
         elite_scores = []
-        for g in elites_genomes:
+        for g in elites_up_to_gen:
             score = _extract_north_star_score(g, north_star_metric)
             if score > 0.0001:
                 elite_scores.append(score)
@@ -1878,9 +1883,9 @@ def calculate_generation_statistics(
         if elite_scores:
             stats["avg_fitness_elites"] = round(sum(elite_scores) / len(elite_scores), 4)
         
-        # Calculate reserves fitness statistics
+        # Calculate reserves fitness statistics (use filtered genomes for accuracy)
         reserves_scores = []
-        for g in reserves_genomes:
+        for g in reserves_up_to_gen:
             score = _extract_north_star_score(g, north_star_metric)
             if score > 0.0001:
                 reserves_scores.append(score)
