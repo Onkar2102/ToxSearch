@@ -760,9 +760,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     
     # 12. Record fitness for ALL species (not just those with new members)
     # CRITICAL: Stagnation only increments if species was selected as parent AND no improvement
-    # Load parents.json to determine which species were selected as parents.
-    # NOTE: EvolutionEngine.clean_parents_file() must NOT clear parents.json; run_speciation runs
-    # after variant generation, and it needs parents.json to compute was_selected_as_parent for freeze.
+    # Load parents.json to determine which species were selected as parents
     selected_species_ids = set()
     if current_generation > 0:  # Generation 0 has no parents
         try:
@@ -772,26 +770,20 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                 with open(parents_path, 'r', encoding='utf-8') as f:
                     parents = json.load(f)
                 if isinstance(parents, list):
-                    from_reserves = 0
                     for parent in parents:
                         species_id = parent.get("species_id")
                         # Only track actual species (id > 0). Cluster 0 (reserves) is not in state["species"].
                         if species_id is not None and species_id != 0:
                             selected_species_ids.add(int(species_id))
-                        elif species_id == 0:
-                            from_reserves += 1
                     state["logger"].debug(f"Loaded {len(selected_species_ids)} species from parents.json: {sorted(selected_species_ids)}")
-                    if len(selected_species_ids) == 0 and len(parents) > 0:
-                        state["logger"].warning(
-                            f"parents.json has {len(parents)} parent(s) but 0 with species_id>0 (reserves={from_reserves}). "
-                            "Stagnation will not increment; freeze cannot trigger. "
-                            "If EvolutionEngine.clean_parents_file() clears parents.json before run_speciation, it must be changed to only clear top_10.json."
-                        )
-                    elif len(selected_species_ids) == 0 and len(parents) == 0:
-                        state["logger"].warning(
-                            "parents.json is empty when loading for stagnation. Stagnation will not increment; freeze cannot trigger. "
-                            "EvolutionEngine.clean_parents_file() must NOT clear parents.json (only top_10.json)."
-                        )
+                if len(parents) > 0 and len(selected_species_ids) == 0:
+                    # All parents from reserves (species_id=0) or missing species_id -> stagnation never increments
+                    sid_vals = [p.get("species_id") for p in parents]
+                    state["logger"].info(
+                        "Stagnation: selected_species_ids is empty (all parents species_id in %s). "
+                        "Stagnation only increments when a non-reserve species is selected and does not improve.",
+                        sid_vals
+                    )
         except Exception as e:
             state["logger"].warning(f"Failed to load parents.json to determine selected species: {e}")
     
@@ -801,6 +793,11 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         was_selected = sid in selected_species_ids
         # Species created this gen: sid not in _prev_max_fitness -> treat as increased
         max_fitness_increased = sp.max_fitness > state.get("_prev_max_fitness", {}).get(sid, -1)
+        if was_selected and not max_fitness_increased:
+            state["logger"].info(
+                "Stagnation: species %s would increment (was_selected, max_fitness not increased: %.4f vs prev %.4f)",
+                sid, sp.max_fitness, state.get("_prev_max_fitness", {}).get(sid, -1)
+            )
         sp.record_fitness(current_generation, was_selected_as_parent=was_selected, max_fitness_increased=max_fitness_increased)
     
     # 13. Freeze stagnant species and move small species to cluster 0
