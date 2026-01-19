@@ -870,11 +870,14 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     
     # 16. Save corrected files (elites, reserves, archives)
     archived_genomes = state.get("_archived_genomes", [])
+    incubator_ids = [sid for sid, sp in state.get("historical_species", {}).items()
+                     if getattr(sp, "species_state", None) == "incubator"]
     save_to_files_corrected(
         current_generation=current_generation,
         species=state["species"],
         cluster0=state["cluster0"],
         archived_genomes=archived_genomes,
+        incubator_ids=incubator_ids,
         logger=state["logger"]
     )
     
@@ -1290,10 +1293,17 @@ def save_to_files_intermediate(
         genome["initial_state"] = "elite"
         cluster0_genomes.append(genome)
     
-    # Update existing files: remove genomes from current generation, add new ones
-    # This ensures we don't have duplicates across generations
+    # Update existing files: remove genomes from current generation, add new ones.
+    # Dedupe by genome id: a genome from a previous gen (gen != current) can still be
+    # in in-memory species; we must not add it again from species_genomes or we get
+    # duplicate ids in elites.json (ids are globally unique via next_id).
     elites_to_save = [g for g in existing_elites if g.get("generation", 0) != current_generation]
-    elites_to_save.extend(species_genomes)
+    elites_ids = {g.get("id") for g in elites_to_save if g.get("id") is not None}
+    for g in species_genomes:
+        if g.get("id") in elites_ids:
+            continue
+        elites_ids.add(g.get("id"))
+        elites_to_save.append(g)
     
     # Validate generation field consistency for elites
     missing_generation_elites = [g for g in species_genomes if "generation" not in g]
@@ -1303,7 +1313,12 @@ def save_to_files_intermediate(
             g["generation"] = current_generation
     
     reserves_to_save = [g for g in existing_reserves if g.get("generation", 0) != current_generation]
-    reserves_to_save.extend(cluster0_genomes)
+    reserves_ids = {g.get("id") for g in reserves_to_save if g.get("id") is not None}
+    for g in cluster0_genomes:
+        if g.get("id") in reserves_ids:
+            continue
+        reserves_ids.add(g.get("id"))
+        reserves_to_save.append(g)
     
     # Validate generation field consistency for reserves
     missing_generation_reserves = [g for g in cluster0_genomes if "generation" not in g]
@@ -1361,6 +1376,7 @@ def save_to_files_corrected(
     species: Dict[int, Species],
     cluster0: Cluster0,
     archived_genomes: List[Dict[str, Any]],
+    incubator_ids: Optional[List[int]] = None,
     logger=None
 ) -> Dict[str, int]:
     """
@@ -1372,11 +1388,15 @@ def save_to_files_corrected(
     - Cluster 0 (reserves.json)
     - Archived genomes (archive.json)
     
+    Genomes in existing_elites with species_id not in (species | incubators) are
+    reassigned to reserves (species_id=0) to avoid orphans.
+    
     Args:
         current_generation: Current generation number
         species: Dict of all species (active + frozen)
         cluster0: Cluster0 object
         archived_genomes: List of all archived genome dictionaries (all generations)
+        incubator_ids: Species IDs in incubator state (in historical_species); included in valid_species_ids
         logger: Optional logger instance
         
     Returns:
@@ -1393,30 +1413,39 @@ def save_to_files_corrected(
     reserves_path = outputs_path / "reserves.json"
     archive_path = outputs_path / "archive.json"
     
+    valid_species_ids = set(species.keys()) | set(incubator_ids or [])
+    orphaned_to_reserves = []
+    
     # Rebuild elites.json from all species (all generations up to current)
     elites_to_save = []
     species_genome_ids = set()
     
-    # First, load existing elites.json to get genomes from previous generations
+    # First, load existing elites.json to get genomes from previous generations.
+    # Dedupe by id. If species_id not in valid_species_ids (incl. incubators), reassign to reserves.
     if elites_path.exists():
         try:
             with open(elites_path, 'r', encoding='utf-8') as f:
                 existing_elites = json.load(f)
-            # Keep only genomes from previous generations (not current)
             for genome in existing_elites:
                 gen = genome.get("generation", 0)
-                if gen < current_generation:
-                    elites_to_save.append(genome)
-                    species_genome_ids.add(genome.get("id"))
+                if gen >= current_generation:
+                    continue
+                gid = genome.get("id")
+                species_id = genome.get("species_id")
+                if species_id is not None and species_id not in valid_species_ids:
+                    g = dict(genome)
+                    g["species_id"] = CLUSTER_0_ID
+                    orphaned_to_reserves.append(g)
+                    continue
+                if gid is not None and gid in species_genome_ids:
+                    continue
+                if gid is not None:
+                    species_genome_ids.add(gid)
+                elites_to_save.append(genome)
         except Exception as e:
             logger.warning(f"Failed to load existing elites.json: {e}")
     
-    # Add current generation genomes from species
-    # Only include genomes from species that exist in the species dict (active + frozen)
-    # This prevents orphaned species (genomes with species_id not in speciation_state.json)
-    valid_species_ids = set(species.keys())
-    orphaned_genomes = []
-    
+    # Add current generation genomes from species (all in valid_species_ids)
     for sid, sp in species.items():
         for member in sp.members:
             if member.id in species_genome_ids:
@@ -1435,41 +1464,40 @@ def save_to_files_corrected(
             
             elites_to_save.append(genome)
     
-    # Validate that all genomes in elites_to_save have valid species_id
-    # Check genomes from previous generations for orphaned species
-    for genome in elites_to_save:
-        species_id = genome.get("species_id")
-        if species_id is not None and species_id not in valid_species_ids:
-            # This genome belongs to a species that no longer exists (orphaned)
-            # Log warning but keep it (it's from a previous generation)
-            orphaned_genomes.append((genome.get("id"), species_id))
+    if orphaned_to_reserves:
+        logger.info(f"Reassigned {len(orphaned_to_reserves)} orphaned genomes (species_id not in state/incubators) to reserves")
     
-    if orphaned_genomes:
-        logger.warning(
-            f"Found {len(orphaned_genomes)} orphaned genomes in elites.json "
-            f"(species_id not in current speciation_state.json): {orphaned_genomes[:10]}"
-        )
-    
-    # Rebuild reserves.json from cluster 0 (all generations up to current)
+    # Rebuild reserves.json from cluster 0 (all generations up to current).
+    # Do not include any genome whose id is in elites (elites take priority).
+    elites_ids = {g.get("id") for g in elites_to_save if g.get("id") is not None}
     reserves_to_save = []
     reserves_genome_ids = set()
     
-    # First, load existing reserves.json to get genomes from previous generations
+    # First, load existing reserves.json to get genomes from previous generations.
+    # Dedupe by id when reading. Skip if id is in elites (avoid cross-file duplicates).
     if reserves_path.exists():
         try:
             with open(reserves_path, 'r', encoding='utf-8') as f:
                 existing_reserves = json.load(f)
-            # Keep only genomes from previous generations (not current)
             for genome in existing_reserves:
                 gen = genome.get("generation", 0)
-                if gen < current_generation:
-                    reserves_to_save.append(genome)
-                    reserves_genome_ids.add(genome.get("id"))
+                if gen >= current_generation:
+                    continue
+                gid = genome.get("id")
+                if gid is not None and gid in elites_ids:
+                    continue
+                if gid is not None and gid in reserves_genome_ids:
+                    continue
+                if gid is not None:
+                    reserves_genome_ids.add(gid)
+                reserves_to_save.append(genome)
         except Exception as e:
             logger.warning(f"Failed to load existing reserves.json: {e}")
     
     # Add current generation genomes from cluster 0
     for cm in cluster0.members:
+        if cm.individual.id in elites_ids:
+            continue  # Should not happen; elites take priority
         if cm.individual.id in reserves_genome_ids:
             continue  # Skip if already added from previous generations
         reserves_genome_ids.add(cm.individual.id)
@@ -1485,6 +1513,17 @@ def save_to_files_corrected(
             genome["generation"] = current_generation
         
         reserves_to_save.append(genome)
+    
+    # Merge orphaned_to_reserves (id-dedupe, not in elites)
+    for g in orphaned_to_reserves:
+        gid = g.get("id")
+        if gid is not None and gid in elites_ids:
+            continue
+        if gid is not None and gid in reserves_genome_ids:
+            continue
+        if gid is not None:
+            reserves_genome_ids.add(gid)
+        reserves_to_save.append(g)
     
     # Sort reserves by fitness (descending)
     from utils.population_io import _extract_north_star_score
@@ -1662,14 +1701,29 @@ def distribute_genomes(
             logger.debug(f"Genome {genome_id} from cluster 0 → reserves.json")
     
     # Save elites
-    # Embeddings preserved in elites.json for speciation and cluster quality
+    # Embeddings preserved in elites.json for speciation and cluster quality.
+    # Dedupe on load (keep first per id): corrupted or legacy files may have duplicate ids.
+    # Dedupe when extending: genome ids are globally unique (next_id); do not add if id
+    # already in elites_to_save (or if elites_to_move has duplicate ids).
     if elites_to_move:
         elites_to_save = []
         if elites_path.exists():
             with open(elites_path, 'r', encoding='utf-8') as f:
-                elites_to_save = json.load(f)
-        
-        elites_to_save.extend(elites_to_move)
+                raw = json.load(f)
+            seen = set()
+            for g in raw:
+                i = g.get("id")
+                if i is not None and i in seen:
+                    continue
+                if i is not None:
+                    seen.add(i)
+                elites_to_save.append(g)
+        elites_ids = {g.get("id") for g in elites_to_save if g.get("id") is not None}
+        for g in elites_to_move:
+            if g.get("id") in elites_ids:
+                continue
+            elites_ids.add(g.get("id"))
+            elites_to_save.append(g)
         
         # Write elites.json and ensure it's flushed to disk
         import os
@@ -1685,14 +1739,38 @@ def distribute_genomes(
         logger.debug(f"Moved {len(elites_to_move)} genomes from species to elites.json (total: {len(elites_to_save)})")
     
     # Save reserves (with capacity limit)
-    # Embeddings preserved in reserves.json for leader-follower clustering and speciation
+    # Embeddings preserved in reserves.json for leader-follower clustering and speciation.
+    # When merging reserves_to_move, skip ids already in reserves or in elites (avoid cross-file duplicates).
     if reserves_to_move:
+        elites_ids = set()
+        if elites_path.exists():
+            try:
+                with open(elites_path, 'r', encoding='utf-8') as f:
+                    elites_ids = {g.get("id") for g in json.load(f) if g.get("id") is not None}
+            except Exception:
+                pass
         reserves_to_save = []
         if reserves_path.exists():
             with open(reserves_path, 'r', encoding='utf-8') as f:
-                reserves_to_save = json.load(f)
-        
-        reserves_to_save.extend(reserves_to_move)
+                raw = json.load(f)
+            seen = set()
+            for g in raw:
+                i = g.get("id")
+                if i is not None and i in seen:
+                    continue
+                if i is not None:
+                    seen.add(i)
+                reserves_to_save.append(g)
+        reserves_ids = {g.get("id") for g in reserves_to_save if g.get("id") is not None}
+        for g in reserves_to_move:
+            gid = g.get("id")
+            if gid is not None and gid in elites_ids:
+                continue
+            if gid is not None and gid in reserves_ids:
+                continue
+            if gid is not None:
+                reserves_ids.add(gid)
+            reserves_to_save.append(g)
         reserves_to_save.sort(key=lambda g: _extract_north_star_score(g, north_star_metric), reverse=True)
         
         # Enforce capacity limit - archive excess genomes
@@ -1756,6 +1834,41 @@ def distribute_genomes(
                 f"{distribution_stats['archived_count']} archived")
     
     return distribution_stats
+
+
+def _update_speciation_state_cluster0_size_after_distribution(outputs_path) -> None:
+    """Update cluster0.size in speciation_state.json to match reserves.json after distribution.
+    save_state runs before distribution, so the persisted size can be stale. This corrects it."""
+    outputs_path = Path(outputs_path)
+    state_path = outputs_path / "speciation_state.json"
+    reserves_path = outputs_path / "reserves.json"
+    if not state_path.exists() or not reserves_path.exists():
+        return
+    try:
+        with open(reserves_path, 'r', encoding='utf-8') as f:
+            n = len(json.load(f))
+        with open(state_path, 'r', encoding='utf-8') as f:
+            state = json.load(f)
+        cluster0 = state.get("cluster0")
+        if isinstance(cluster0, dict):
+            cluster0["size"] = n
+        if "cluster0_size_from_reserves" in state:
+            state["cluster0_size_from_reserves"] = n
+        with open(state_path, 'w', encoding='utf-8') as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        try:
+            _log = _get_state().get("logger")
+            if _log:
+                _log.debug(f"Updated speciation_state cluster0 size to {n} (from reserves.json)")
+        except Exception:
+            pass
+    except Exception as e:
+        try:
+            _log = _get_state().get("logger")
+            if _log:
+                _log.warning(f"Failed to update speciation_state cluster0 size after distribution: {e}")
+        except Exception:
+            pass
 
 
 def _update_genomes_with_species(genomes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1828,7 +1941,9 @@ def save_state(path: str) -> None:
         # Convert sets to lists for JSON serialization (preserve order by sorting)
         for species_id, id_set in species_member_ids_sets.items():
             species_member_ids[species_id] = sorted(list(id_set))
-        
+        # Use unique count as species_sizes (size = number of distinct genomes, not raw rows)
+        for species_id, ids in species_member_ids.items():
+            species_sizes[species_id] = len(ids)
         logger.debug(f"Calculated species sizes from elites.json: {len(species_sizes)} species, {len(elites_genomes)} total genomes")
     else:
         logger.warning(f"elites.json not found at {elites_path} - species sizes will use in-memory counts")
@@ -1846,17 +1961,13 @@ def save_state(path: str) -> None:
             # Size should match the unique count of member_ids
             if sid in species_member_ids:
                 sp_dict["member_ids"] = species_member_ids[sid]
-                # Size should match unique member count (member_ids are now deduplicated)
-                current_size = len(species_member_ids[sid])
-                sp_dict["size"] = current_size
-                logger.debug(f"Species {sid}: Using {len(species_member_ids[sid])} unique member IDs from elites.json (in-memory had {len(sp.members)})")
             else:
-                # If elites.json exists but species not found, this is unexpected
                 if elites_path.exists():
                     logger.warning(f"Species {sid} not found in elites.json, using in-memory member IDs ({len(sp.members)})")
                 sp_dict["member_ids"] = [m.id for m in sp.members]
-                current_size = len(sp.members)
-                sp_dict["size"] = current_size
+            sp_dict["size"] = len(sp_dict["member_ids"])
+            if sid in species_member_ids:
+                logger.debug(f"Species {sid}: size={sp_dict['size']} from elites.json (in-memory had {len(sp.members)})")
             species_dict[str(sid)] = sp_dict
         elif sp.species_state == "frozen":
             # Frozen species also get full data (including leader_embedding and leader_distance)
@@ -1867,17 +1978,13 @@ def save_state(path: str) -> None:
             # Size should match the unique count of member_ids
             if sid in species_member_ids:
                 sp_dict["member_ids"] = species_member_ids[sid]
-                # Size should match unique member count (member_ids are now deduplicated)
-                current_size = len(species_member_ids[sid])
-                sp_dict["size"] = current_size
-                logger.debug(f"Frozen species {sid}: Using {len(species_member_ids[sid])} unique member IDs from elites.json (in-memory had {len(sp.members)})")
             else:
-                # If elites.json exists but species not found, this is unexpected
                 if elites_path.exists():
                     logger.warning(f"Frozen species {sid} not found in elites.json, using in-memory member IDs ({len(sp.members)})")
                 sp_dict["member_ids"] = [m.id for m in sp.members]
-                current_size = len(sp.members)
-                sp_dict["size"] = current_size
+            sp_dict["size"] = len(sp_dict["member_ids"])
+            if sid in species_member_ids:
+                logger.debug(f"Frozen species {sid}: size={sp_dict['size']} from elites.json (in-memory had {len(sp.members)})")
             # CRITICAL: Ensure leader_embedding is ALWAYS preserved for frozen species (needed for merging)
             # If embedding is None, try to load from elites.json
             if sp.leader and sp.leader.embedding is not None:
@@ -1913,9 +2020,11 @@ def save_state(path: str) -> None:
             if sp.species_state == "extinct":
                 # Extinct species (merged parents) get full data for reference
                 sp_dict = sp.to_dict()
-                current_size = species_sizes.get(sid, len(sp.members))
-                sp_dict["size"] = current_size
-                sp_dict["member_ids"] = [m.id for m in sp.members]
+                if sid in species_member_ids:
+                    sp_dict["member_ids"] = species_member_ids[sid]
+                else:
+                    sp_dict["member_ids"] = [m.id for m in sp.members]
+                sp_dict["size"] = len(sp_dict["member_ids"])
                 # Preserve leader embedding for reference
                 if sp.leader and sp.leader.embedding is not None:
                     if "leader_embedding" not in sp_dict or sp_dict["leader_embedding"] is None:
@@ -1970,7 +2079,7 @@ def save_state(path: str) -> None:
                     "leader_prompt": leader_genome.get("prompt", ""),
                     "leader_embedding": leader_genome.get("prompt_embedding", []),
                     "leader_fitness": round(leader_fitness, 4),
-                    "member_ids": member_ids,  # All member IDs from elites.json
+                    "member_ids": member_ids,  # All member IDs from elites.json (unique)
                     "radius": state["config"].theta_sim,
                     "stagnation": 0,  # Unknown
                     "max_fitness": round(leader_fitness, 4),
@@ -1983,9 +2092,9 @@ def save_state(path: str) -> None:
                     "label_history": [],
                     "cluster_origin": preserved_cluster_origin,  # Preserve original origin, default to "natural"
                     "parent_ids": preserved_parent_ids,  # Preserve original parent_ids if available
-                    "size": size
+                    "size": len(member_ids)  # Must match elites.json unique count
                 }
-                logger.info(f"Reconstructed species {species_id} entry from elites.json (size={size}, state=frozen)")
+                logger.info(f"Reconstructed species {species_id} entry from elites.json (size={len(member_ids)}, state=frozen)")
     
     # Validate no duplicate leader IDs in active/frozen species
     leader_ids = []
@@ -2035,7 +2144,22 @@ def save_state(path: str) -> None:
             except (ValueError, KeyError) as e:
                 # Skip invalid species IDs
                 continue
-    
+
+    # Ensure size always equals len(member_ids) (source of truth: elites.json)
+    min_island_size = state["config"].min_island_size
+    for sid_str, sp_dict in species_dict.items():
+        mids = sp_dict.get("member_ids", [])
+        n = len(mids)
+        if sp_dict.get("size") != n:
+            logger.warning(f"Species {sid_str}: size={sp_dict.get('size')} != len(member_ids)={n}; setting size={n}")
+            sp_dict["size"] = n
+        if n < min_island_size:
+            logger.debug(
+                "Species %s has size %d < min_island_size %d (count from elites.json); "
+                "process_extinctions should move such species to incubator when in-memory size drops.",
+                sid_str, n, min_island_size
+            )
+
     # Get actual cluster 0 size from reserves.json (more accurate than in-memory size)
     # This should match the in-memory size after all saves are complete
     reserves_path = outputs_path / "reserves.json"
@@ -2197,15 +2321,15 @@ def load_state(path: str) -> bool:
                         # Create a lookup for genomes by ID
                         genome_by_id = {g.get("id"): g for g in elites_genomes}
                         
-                        # Load all members (excluding leader if it's in member_ids)
+                        # Load all members (excluding leader if it's in member_ids).
+                        # Include all that exist in elites so sp.size matches len(member_ids) for process_extinctions.
                         for member_id in member_ids:
                             if member_id == leader.id:
                                 continue  # Leader already added
                             if member_id in genome_by_id:
                                 member_genome = genome_by_id[member_id]
                                 member = Individual.from_genome(member_genome)
-                                if member.embedding is not None:
-                                    members.append(member)
+                                members.append(member)
                     except Exception as e:
                         logger.warning(f"Failed to load members for species {sid} from elites.json: {e}")
             
@@ -2591,12 +2715,14 @@ def run_speciation(
         logger.info("Final distribution complete: %d elites, %d reserves",
                    distribution_result.get("elites_moved", 0),
                    distribution_result.get("reserves_moved", 0))
+        # save_state runs before distribution; update cluster0 size to match reserves.json
+        outputs_path = get_outputs_path()
+        _update_speciation_state_cluster0_size_after_distribution(outputs_path)
         
         # Get state reference
         state = _get_state()
         
         # Log generation summary using file-based data
-        outputs_path = get_outputs_path()
         elites_path = str(outputs_path / "elites.json")
         reserves_path = str(outputs_path / "reserves.json")
         

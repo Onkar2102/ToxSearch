@@ -114,7 +114,7 @@ def generate_speciation_plot(outputs_path: Optional[str] = None, logger=None) ->
         
         for g in generations:
             gen_nums.append(g.get("generation_number", 0))
-            speciation = g.get("speciation", {})
+            speciation = g.get("speciation") or {}
             species_counts.append(speciation.get("species_count", 0))
             reserves_counts.append(speciation.get("reserves_size", 0))
         
@@ -174,7 +174,7 @@ def generate_operator_statistics_plot(outputs_path: Optional[str] = None, logger
         operator_stats = defaultdict(lambda: {"duplicates_removed": 0, "question_mark_rejections": 0})
         
         for g in generations:
-            op_stats = g.get("operator_statistics", {})
+            op_stats = g.get("operator_statistics") or {}
             if isinstance(op_stats, dict):
                 for op_name, stats in op_stats.items():
                     if isinstance(stats, dict):

@@ -1980,33 +1980,34 @@ def _get_standard_generation_entry_template(generation_number: int, selection_mo
 def _ensure_generation_entry_has_all_fields(gen_entry: Dict[str, Any], generation_number: int, selection_mode: str = "default") -> Dict[str, Any]:
     """
     Ensure generation entry has all standard fields, filling in missing ones with defaults.
-    
+    Modifies gen_entry in place and returns it so the reference in tracker["generations"] is preserved.
+
     Args:
         gen_entry: Existing generation entry (may be partial)
         generation_number: Generation number
         selection_mode: Selection mode (default: "default")
-        
+
     Returns:
-        Generation entry with all fields present
+        The same gen_entry dict (mutated in place)
     """
     template = _get_standard_generation_entry_template(generation_number, selection_mode)
-    
-    # Merge template with existing entry (existing values take precedence)
-    result = template.copy()
-    result.update(gen_entry)
-    
-    # Ensure generation_number is correct
-    result["generation_number"] = generation_number
-    
-    # Ensure lists are lists (not None)
-    if result.get("parents") is None:
-        result["parents"] = []
-    if result.get("top_10") is None:
-        result["top_10"] = []
-    if result.get("operator_statistics") is None:
-        result["operator_statistics"] = {}
-    
-    return result
+
+    # Fill only missing keys from template (preserves existing values including speciation, etc.)
+    for k, v in template.items():
+        gen_entry.setdefault(k, v)
+
+    # Force generation_number
+    gen_entry["generation_number"] = generation_number
+
+    # Ensure lists/dicts are not None
+    if gen_entry.get("parents") is None:
+        gen_entry["parents"] = []
+    if gen_entry.get("top_10") is None:
+        gen_entry["top_10"] = []
+    if gen_entry.get("operator_statistics") is None:
+        gen_entry["operator_statistics"] = {}
+
+    return gen_entry
 
 
 def update_evolution_tracker_with_statistics(

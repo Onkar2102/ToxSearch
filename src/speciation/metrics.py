@@ -170,8 +170,9 @@ class SpeciationMetricsTracker:
                         except Exception:
                             use_temp = False
                     cluster_quality = calculate_cluster_quality_metrics(
-                        outputs_path=outputs_path, 
+                        outputs_path=outputs_path,
                         temp_path=temp_path if use_temp else None,
+                        num_species_total=len(species),
                         logger=self.logger
                     )
             except Exception as e:

@@ -282,27 +282,40 @@ def calculate_qd_score(
 def calculate_cluster_quality_metrics(
     outputs_path: Optional[str] = None,
     temp_path: Optional[str] = None,
+    num_species_total: Optional[int] = None,
     logger=None
 ) -> Dict[str, Any]:
     """
     Calculate all cluster quality metrics from the current population.
-    
-    Reads elites.json and reserves.json (or temp.json if provided) to extract embeddings 
-    and species assignments, then calculates quality metrics.
-    
+
+    Reads elites.json and reserves.json (and optionally backfills embeddings from temp.json)
+    to get genomes with both prompt_embedding and species_id > 0, then computes quality
+    metrics over that subset.
+
+    Why num_clusters can be less than species_count (num_species_total):
+    - Silhouette, Davies-Bouldin, and Calinski-Harabasz require embedding vectors.
+    - We only include genomes that have prompt_embedding and species_id > 0 (elites in
+      actual species; reserves use species_id=0 and are excluded).
+    - Species whose members were moved to reserves (e.g. frozen/incubator) have no
+      elites left, so they do not contribute.
+    - Elites that lack prompt_embedding (e.g. from older runs or code paths that drop it)
+      are excluded. So num_clusters is the number of species that have at least one
+      elite with an embedding. Ideally it equals species_count; if not, consider
+      ensuring prompt_embedding is persisted for all elites.
+
     Args:
         outputs_path: Path to outputs directory (defaults to get_outputs_path())
-        temp_path: Optional path to temp.json (if provided, uses temp.json instead of elites.json)
+        temp_path: Optional path to temp.json to backfill prompt_embedding where missing
+        num_species_total: Optional total species count (state: active+frozen); if
+            provided and num_clusters < this, a warning is logged.
         logger: Optional logger instance
-    
+
     Returns:
         Dictionary with cluster quality metrics:
-        - silhouette_score: Silhouette Score [-1, 1], higher is better
-        - davies_bouldin_index: Davies-Bouldin Index >= 0, lower is better
-        - calinski_harabasz_index: Calinski-Harabasz Index >= 0, higher is better
-        - qd_score: Quality-Diversity score (quality × diversity), higher is better
-        - num_samples: Number of samples used
-        - num_clusters: Number of clusters/species
+        - silhouette_score, davies_bouldin_index, calinski_harabasz_index, qd_score
+        - num_samples: Number of genomes used (with embedding and species_id > 0)
+        - num_clusters: Number of distinct species among those genomes
+        - num_species_total: Echo of num_species_total arg, if provided
     """
     _logger = logger or get_logger("ClusterQuality")
     
@@ -344,17 +357,26 @@ def calculate_cluster_quality_metrics(
                     if genome_id is not None:
                         genomes_with_embeddings[genome_id] = genome
         
-        # Then, load new genomes from temp.json (has embeddings before removal)
+        # Then, backfill prompt_embedding from temp.json for genomes we already have.
+        # Do NOT overwrite the whole genome: temp is pre-distribution and lacks species_id
+        # (and other fields set at distribution). Overwriting would wipe species_id and
+        # cause those genomes to be excluded (species_id > 0), yielding num_clusters=1
+        # when multiple species exist.
         if temp_path and Path(temp_path).exists():
             try:
                 with open(temp_path, 'r', encoding='utf-8') as f:
                     temp_genomes = json.load(f)
-                # Overwrite with temp.json genomes (newer, have embeddings)
+                backfilled = 0
                 for genome in temp_genomes:
                     genome_id = genome.get("id")
-                    if genome_id is not None:
-                        genomes_with_embeddings[genome_id] = genome
-                _logger.debug(f"Combined {len(temp_genomes)} genomes from temp.json with existing genomes for cluster quality metrics")
+                    emb = genome.get("prompt_embedding")
+                    if genome_id is not None and emb is not None:
+                        existing = genomes_with_embeddings.get(genome_id)
+                        if existing is not None and existing.get("prompt_embedding") is None:
+                            existing["prompt_embedding"] = emb
+                            backfilled += 1
+                if backfilled:
+                    _logger.debug(f"Backfilled prompt_embedding from temp.json for {backfilled} genomes")
             except Exception as e:
                 _logger.debug(f"Could not load temp.json: {e}")
         
@@ -395,7 +417,16 @@ def calculate_cluster_quality_metrics(
         
         metrics["num_samples"] = len(labels)
         metrics["num_clusters"] = len(np.unique(labels))
-        
+        if num_species_total is not None:
+            metrics["num_species_total"] = num_species_total
+            if metrics["num_clusters"] < num_species_total:
+                _logger.warning(
+                    "Cluster quality uses only %d of %d species (num_clusters < num_species_total). "
+                    "Excluded species have no elites with prompt_embedding, or all members are in reserves. "
+                    "To include all species, ensure prompt_embedding is persisted for all elites.",
+                    metrics["num_clusters"], num_species_total
+                )
+
         # Calculate cluster quality metrics (require embeddings)
         metrics["silhouette_score"] = round(calculate_silhouette_score(embeddings, labels, _logger), 4)
         metrics["davies_bouldin_index"] = round(calculate_davies_bouldin_index(embeddings, labels, _logger), 4)

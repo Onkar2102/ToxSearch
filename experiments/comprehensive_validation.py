@@ -120,15 +120,34 @@ class ComprehensiveValidator:
         if "config" in self.speciation_state:
             theta_sim = self.speciation_state["config"].get("theta_sim", 0.2)
         
+        # Elites-based counts per species_id (unique genome ids)
+        elites_count_by_sid = defaultdict(set)
+        for g in self.elites:
+            sid = g.get("species_id")
+            if sid is not None and sid > 0:
+                gid = g.get("id")
+                if gid is not None:
+                    elites_count_by_sid[sid].add(gid)
+        min_island = self.speciation_state.get("config", {}).get("min_island_size", 2)
+
         # Check species formation
         species_dict = self.speciation_state.get("species", {})
         for sid, sp_data in species_dict.items():
             sid_int = int(sid)
-            
-            # Check min_island_size
             size = sp_data.get("size", 0)
-            if size < 2:  # min_island_size default is 2
-                self.issues.append(f"Species {sid_int}: size={size} < min_island_size (2)")
+            member_ids = sp_data.get("member_ids", [])
+
+            # Size must equal len(member_ids) (source of truth: elites.json)
+            if size != len(member_ids):
+                self.issues.append(f"Species {sid_int}: size={size} != len(member_ids)={len(member_ids)}; size should match member_ids")
+
+            # Size should match count in elites.json (unique genomes with this species_id)
+            elites_n = len(elites_count_by_sid.get(sid_int, set()))
+            if size != elites_n:
+                self.issues.append(f"Species {sid_int}: size={size} != elites count={elites_n} (genomes in elites.json with species_id={sid_int})")
+
+            if size < min_island:
+                self.issues.append(f"Species {sid_int}: size={size} < min_island_size ({min_island})")
             
             # Check leader exists in elites
             leader_id = sp_data.get("leader_id")
@@ -139,7 +158,6 @@ class ComprehensiveValidator:
                     self.issues.append(f"Species {sid_int}: leader_id={leader_id} not found in elites.json")
             
             # Check members exist in elites and validate radius enforcement
-            member_ids = sp_data.get("member_ids", [])
             radius = sp_data.get("radius", theta_sim)
             
             if leader_genome and leader_genome.get("prompt_embedding"):
@@ -317,28 +335,32 @@ class ComprehensiveValidator:
         self.validations_passed += 1
     
     def validate_rq2_metrics(self):
-        """Validate RQ2 metrics (speciation metrics)."""
+        """Validate RQ2 metrics (speciation metrics).
+        Only validates species_count and frozen_species_count for the last generation;
+        per-generation speciation state is not stored, so earlier gens are skipped."""
         print("[3.2] Validating RQ2 Metrics...")
         
-        for gen_entry in self.tracker.get("generations", []):
+        generations = self.tracker.get("generations", [])
+        last_gen = max((g.get("generation_number", -1) for g in generations), default=-1)
+        
+        for gen_entry in generations:
             gen_num = gen_entry.get("generation_number")
-            spec_data = gen_entry.get("speciation", {})
+            spec_data = gen_entry.get("speciation") or {}
             
             if not spec_data:
                 continue
+            if gen_num != last_gen:
+                continue
             
-            # Check species_count matches speciation_state
-            species_count = spec_data.get("species_count", 0)
             species_dict = self.speciation_state.get("species", {})
             active_count = len([sp for sp in species_dict.values() if sp.get("species_state") == "active"])
             frozen_count = len([sp for sp in species_dict.values() if sp.get("species_state") == "frozen"])
             expected_total = active_count + frozen_count
+            species_count = spec_data.get("species_count", 0)
+            frozen_species_count = spec_data.get("frozen_species_count", 0)
             
             if species_count != expected_total:
                 self.issues.append(f"Gen {gen_num}: species_count={species_count}, expected {expected_total} (active={active_count}, frozen={frozen_count})")
-            
-            # Check frozen_species_count
-            frozen_species_count = spec_data.get("frozen_species_count", 0)
             if frozen_species_count != frozen_count:
                 self.issues.append(f"Gen {gen_num}: frozen_species_count={frozen_species_count}, expected {frozen_count}")
         
@@ -363,7 +385,7 @@ class ComprehensiveValidator:
         print("[3.4] Validating Cluster Quality Metrics...")
         
         for gen_entry in self.tracker.get("generations", []):
-            spec_data = gen_entry.get("speciation", {})
+            spec_data = gen_entry.get("speciation") or {}
             cluster_quality = spec_data.get("cluster_quality")
             
             if cluster_quality:
@@ -409,33 +431,32 @@ class ComprehensiveValidator:
         self.validations_passed += 1
     
     def validate_population_counts(self):
-        """Validate population counts."""
+        """Validate population counts.
+        Only the last generation is compared to current file counts (len(elites), etc.);
+        per-gen file snapshots are not stored, so earlier gens are skipped."""
         print("[4.2] Validating Population Counts...")
         
-        # elites.json and reserves.json are cumulative (contain all genomes up to current generation)
-        # EvolutionTracker.json stores counts at each generation (cumulative up to that generation)
+        generations = self.tracker.get("generations", [])
+        last_gen = max((g.get("generation_number", -1) for g in generations), default=-1)
         
-        # Compare with EvolutionTracker
-        for gen_entry in self.tracker.get("generations", []):
+        for gen_entry in generations:
             gen_num = gen_entry.get("generation_number")
+            if gen_num != last_gen:
+                continue
             
-            # Count genomes up to and including this generation (cumulative)
-            expected_elites = sum(1 for g in self.elites if g.get("generation", 0) <= gen_num)
-            expected_reserves = sum(1 for g in self.reserves if g.get("generation", 0) <= gen_num)
-            expected_archive = sum(1 for g in self.archive if g.get("generation", 0) <= gen_num)
-            
+            expected_elites = len(self.elites)
+            expected_reserves = len(self.reserves)
+            expected_archive = len(self.archive)
             actual_elites = gen_entry.get("elites_count", 0)
             actual_reserves = gen_entry.get("reserves_count", 0)
             actual_archive = gen_entry.get("archived_count", 0)
             
             if expected_elites != actual_elites:
-                self.issues.append(f"Gen {gen_num}: elites_count mismatch. Expected {expected_elites} (cumulative up to gen {gen_num}), got {actual_elites}")
-            
+                self.issues.append(f"Gen {gen_num}: elites_count mismatch. Expected {expected_elites} (len(elites)), got {actual_elites}")
             if expected_reserves != actual_reserves:
-                self.issues.append(f"Gen {gen_num}: reserves_count mismatch. Expected {expected_reserves} (cumulative up to gen {gen_num}), got {actual_reserves}")
-            
+                self.issues.append(f"Gen {gen_num}: reserves_count mismatch. Expected {expected_reserves} (len(reserves)), got {actual_reserves}")
             if expected_archive != actual_archive:
-                self.issues.append(f"Gen {gen_num}: archived_count mismatch. Expected {expected_archive} (cumulative up to gen {gen_num}), got {actual_archive}")
+                self.issues.append(f"Gen {gen_num}: archived_count mismatch. Expected {expected_archive} (len(archive)), got {actual_archive}")
         
         self.validations_passed += 1
     
@@ -595,7 +616,7 @@ class ComprehensiveValidator:
                 if gen_num == 0:
                     continue  # Generation 0 has no operator-created variants
                 
-                operator_stats = gen_entry.get("operator_statistics", {})
+                operator_stats = gen_entry.get("operator_statistics") or {}
                 if operator_stats:
                     # Generation has operator statistics but CSV is empty
                     # This might be expected if all variants were rejected/duplicated
@@ -626,11 +647,13 @@ class ComprehensiveValidator:
         if duplicates:
             self.issues.append(f"Duplicate genome IDs across files: {duplicates}")
         
-        # Check species IDs in elites match speciation_state
+        # Check species IDs in elites match speciation_state (species or incubators)
         elite_species_ids = {g.get("species_id") for g in self.elites if g.get("species_id") is not None and g.get("species_id") > 0}
         state_species_ids = {int(sid) for sid in self.speciation_state.get("species", {}).keys() if str(sid).isdigit()}
+        incubator_ids = set(self.speciation_state.get("incubators", []))
+        all_tracked_ids = state_species_ids | incubator_ids
         
-        missing_in_state = elite_species_ids - state_species_ids
+        missing_in_state = elite_species_ids - all_tracked_ids
         if missing_in_state:
             self.issues.append(f"Species IDs in elites.json but not in speciation_state.json: {missing_in_state}")
         
