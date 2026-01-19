@@ -1384,13 +1384,18 @@ def calculate_average_fitness(
     Calculate the average fitness of genomes.
     
     Two modes controlled by include_temp:
-    - include_temp=False (default): AFTER distribution - elites.json + reserves.json only
-    - include_temp=True: BEFORE speciation - elites.json + reserves.json + temp.json
+    - include_temp=False (default): mean(elites + reserves) only. Fallback in
+      update_adaptive_selection_logic when current_gen_avg_fitness not provided.
+    - include_temp=True: mean(elites + reserves + temp) = old elites + old reserves +
+      all new variants. Used for EvolutionTracker avg_fitness; called from main before
+      run_speciation (before distribution and before archiving). Gen 0: elites/reserves
+      empty, so effectively mean(temp).
     
-    In EvolutionTracker, avg_fitness = mean(elites + reserves + temp) before speciation,
-    after evaluation (and refusal penalty). Use include_temp=True for that; it is called
-    from main after evaluation and before run_speciation. avg_fitness_generation is
-    mean(elites + reserves) after distribution (include_temp=False).
+    avg_fitness = mean(old elites + old reserves + all new variants) before speciation.
+    avg_fitness_generation = mean(updated elites + updated reserves) after distribution
+    (from calculate_generation_statistics). Archived genomes are excluded from
+    avg_fitness_generation automatically — stats are computed from elites.json and
+    reserves.json only; archived have been removed from those files.
     
     Files:
     - elites.json: Elites assigned to species (species_id > 0)
@@ -1629,11 +1634,17 @@ def update_adaptive_selection_logic(
     previous_max_toxicity: float,
     stagnation_limit: int = 5,
     north_star_metric: str = "toxicity",
+    current_gen_avg_fitness: Optional[float] = None,
     logger=None,
     log_file: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Update the adaptive selection logic based on stagnation and fitness trends.
+    
+    The slope is built from gen["avg_fitness"] (avg_fitness = mean(old elites + old
+    reserves + all new variants) before speciation). When current_gen_avg_fitness is
+    provided (by main), it is used for the current gen so the slope uses avg_fitness
+    consistently; otherwise falls back to calculate_average_fitness(include_temp=False).
     
     Args:
         outputs_path: Path to outputs directory
@@ -1641,6 +1652,9 @@ def update_adaptive_selection_logic(
         previous_max_toxicity: Previous maximum toxicity score (for comparison)
         stagnation_limit: Number of generations without improvement before switching to explore mode
         north_star_metric: Metric to use for scoring (default: "toxicity")
+        current_gen_avg_fitness: If provided, avg_fitness for the current gen (mean(old elites+old
+            reserves+all new variants) before speciation). Used for slope consistency; else computed
+            from elites+reserves after distribution.
         logger: Logger instance
         log_file: Log file path
         
@@ -1675,8 +1689,12 @@ def update_adaptive_selection_logic(
             tracker["generations_since_improvement"] = tracker.get("generations_since_improvement", 0) + 1
             _logger.info(f"No improvement. Generations since improvement: {tracker['generations_since_improvement']}")
         
-        # Calculate current average fitness
-        current_avg_fitness = calculate_average_fitness(outputs_path, north_star_metric, logger=_logger, log_file=log_file)
+        # Use avg_fitness for current gen when provided (slope must use avg_fitness consistently).
+        # Otherwise fall back to mean(elites+reserves) after distribution.
+        if current_gen_avg_fitness is not None:
+            current_avg_fitness = float(current_gen_avg_fitness)
+        else:
+            current_avg_fitness = calculate_average_fitness(outputs_path, north_star_metric, logger=_logger, log_file=log_file)
         
         # Update avg_fitness_history using sliding window from generations
         avg_fitness_history = tracker.get("avg_fitness_history", [])
@@ -1911,6 +1929,8 @@ def calculate_generation_statistics(
         all_scores = elite_scores + reserves_scores
         if all_scores:
             stats["avg_fitness_generation"] = round(sum(all_scores) / len(all_scores), 4)
+            # population_max_toxicity (per-gen): max over elites+reserves; cumulative is
+            # updated in update_evolution_tracker_with_statistics. Used for Pareto quality.
             stats["population_max_toxicity"] = round(max(all_scores), 4)
         
         # avg_fitness is not computed here; it is supplied by main from
@@ -2069,7 +2089,8 @@ def update_evolution_tracker_with_statistics(
         # Update with statistics (round all float values to 4 decimal places)
         # Preserve existing speciation data if present
         existing_speciation = gen_entry.get("speciation")
-        # avg_fitness: before speciation, after evaluation (from main)
+        # avg_fitness: mean(old elites + old reserves + all new variants) before speciation
+        # (from main). Differs from avg_fitness_generation when genomes are archived this gen.
         gen_entry.update({
             "elites_count": statistics.get("elites_count", 0),
             "reserves_count": statistics.get("reserves_count", 0),
@@ -2135,8 +2156,8 @@ def update_evolution_tracker_with_statistics(
                 tracker["cumulative_budget"]["total_evaluation_time"] + statistics.get("total_evaluation_time", 0.0), 2
             )
         
-        # Update population max toxicity at tracker level (cumulative max across all generations)
-        # This tracks the maximum toxicity score achieved across all generations
+        # Update population_max_toxicity at tracker level (cumulative max across all generations).
+        # population_max_toxicity = max over all gens of (best toxicity in elites+reserves). Used for Pareto quality.
         new_max = statistics.get("population_max_toxicity")
         if new_max and new_max > 0.0001:
             # Initialize if not present

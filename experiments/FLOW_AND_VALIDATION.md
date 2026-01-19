@@ -99,10 +99,10 @@ Gen N (N≥1):
 
 **avg_fitness_generation vs avg_fitness:**
 
-- **avg_fitness_generation:** Average fitness of genomes in **elites.json** and **reserves.json** only. Computed after `distribute_genomes` (post-generation). From `calculate_generation_statistics`.
-- **avg_fitness:** Average fitness of **elites + reserves + temp** **before speciation, after evaluation** (and refusal penalty). From `calculate_average_fitness(include_temp=True)` in main; computed after evaluation and before `run_speciation`, then passed via `gen0_stats` / `gen_stats`.
+- **avg_fitness:** Mean over **old elites + old reserves + all new variants** (elites + reserves + temp) **before speciation**, after evaluation (and refusal penalty). From `calculate_average_fitness(include_temp=True)` in main. Gen 0: elites/reserves empty, so effectively mean(temp).
+- **avg_fitness_generation:** Mean over **updated elites + updated reserves** (elites.json + reserves.json) **after distribution**. From `calculate_generation_statistics`. Genomes moved to archive are automatically excluded — stats are computed from elites and reserves files only; archived have been removed from those files. Same as avg_fitness when no archiving this gen; differs when some genomes are archived this generation.
 
-*Implementation:* `calculate_generation_statistics` computes `avg_fitness_generation` only; `avg_fitness` is supplied by main from `calculate_average_fitness(include_temp=True)`. `update_evolution_tracker_with_statistics` uses `statistics["avg_fitness"]` when provided, else `avg_fitness_generation`.
+*Implementation:* `calculate_generation_statistics` computes `avg_fitness_generation` only; `avg_fitness` is supplied by main from `calculate_average_fitness(include_temp=True)`. `update_evolution_tracker_with_statistics` uses `statistics["avg_fitness"]` when provided, else `avg_fitness_generation`. The slope (`slope_of_avg_fitness`) is over `gen["avg_fitness"]`; `update_adaptive_selection_logic` receives `current_gen_avg_fitness` from main (same as `avg_fitness`) so the slope uses avg_fitness consistently for all generations.
 
 ---
 
@@ -125,8 +125,8 @@ Gen N (N≥1):
 | `operator_statistics` | **Variants (this gen)** | Rejections/duplicates per operator for this gen. |
 | `budget` (llm_calls, api_calls, *time) | **Variants (this gen)** | From genomes with `generation == current_generation`. |
 | `elites_count`, `reserves_count`, `total_population`, `archived_count` | **Post-generation (all genomes)** | `calculate_generation_statistics`: elites/reserves/archive with `generation <= current_generation` = full population at end of gen. |
-| `avg_fitness_generation` | **Post-generation (all genomes)** | **After distribution:** mean over elites.json + reserves.json only (living population). |
-| `avg_fitness` | **Before speciation, after evaluation** | Mean over elites + reserves + temp; from `calculate_average_fitness(include_temp=True)` in main after evaluation and before `run_speciation`. |
+| `avg_fitness_generation` | **Post-generation (all genomes)** | **After distribution:** mean over updated elites + reserves (from files). Archived excluded (not in elites/reserves). |
+| `avg_fitness` | **Before speciation, after evaluation** | Mean over old elites + old reserves + all new variants (elites+reserves+temp); from `calculate_average_fitness(include_temp=True)` in main before `run_speciation`. Differs from avg_fitness_generation when archiving this gen. |
 | `avg_fitness_elites`, `avg_fitness_reserves` | **Post-generation (all genomes)** | Over elites and reserves (up to `current_generation`) after distribution. |
 
 **`gen_entry["speciation"]` block:**

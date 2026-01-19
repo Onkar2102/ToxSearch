@@ -93,8 +93,8 @@ src/
 
 **avg_fitness vs avg_fitness_generation**
 
-- **avg_fitness:** Mean over **elites + reserves + temp before speciation, after evaluation** (and refusal penalty). From `calculate_average_fitness(include_temp=True)` in main; passed via gen0_stats/gen_stats.
-- **avg_fitness_generation:** Mean over **elites + reserves** after distribution. From `calculate_generation_statistics`.
+- **avg_fitness:** Mean over **old elites + old reserves + all new variants** (elites+reserves+temp) **before speciation**, after evaluation. From `calculate_average_fitness(include_temp=True)` in main. Gen 0: effectively mean(temp). Differs from avg_fitness_generation when genomes are archived this gen.
+- **avg_fitness_generation:** Mean over **updated elites + updated reserves** after distribution. From `calculate_generation_statistics` (elites.json + reserves.json only). Archived excluded automatically (removed from those files).
 
 **Refusal penalty**
 

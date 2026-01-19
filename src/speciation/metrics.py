@@ -69,7 +69,8 @@ class SpeciationMetricsTracker:
         
         Args:
             generation: Current generation number
-            species: Dict of species objects
+            species: Dict of all species in this generation (active + frozen). Used for
+                inter_species_diversity and intra_species_diversity over all species.
             reserves_size: Size of reserves (cluster 0) - should match reserves.json
             speciation_events: Number of speciation events
             merge_events: Number of merge events
@@ -269,14 +270,17 @@ def compute_diversity_metrics(species: Dict[int, Species], w_genotype: float = 0
     """
     Compute inter-species and intra-species diversity metrics.
     
-    Diversity metrics measure:
-    - Inter-species diversity: Average distance between species leaders
-      (high = species are diverse, low = species are similar/redundant)
-    - Intra-species diversity: Average distance within each species
-      (high = members are diverse, low = members are homogeneous)
+    Diversity is based on all species in that generation: active and frozen.
+    (Incubator and extinct species are not in the species dict when this is called.)
+    
+    - Inter-species diversity: Mean pairwise ensemble distance between species leaders
+      (high = species are diverse, low = species are similar/redundant). Used for
+      Pareto quality-vs-diversity and in speciation block.
+    - Intra-species diversity: Mean, over species, of mean pairwise distance within
+      each species (high = members are diverse, low = members are homogeneous).
     
     Args:
-        species: Dict of all current species
+        species: Dict of all current species (active + frozen). Typically state["species"].
         w_genotype: Weight for genotype (embedding) distance component
         w_phenotype: Weight for phenotype (toxicity scores) distance component
         elites_path: Optional path to elites.json to load actual members (if species.members is incomplete)

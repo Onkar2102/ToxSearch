@@ -760,7 +760,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     
     # 12. Record fitness for ALL species (not just those with new members)
     # CRITICAL: Stagnation only increments if species was selected as parent AND no improvement
-    # Load parents.json to determine which species were selected as parents
+    # Load parents.json to determine which species were selected as parents.
+    # NOTE: EvolutionEngine.clean_parents_file() must NOT clear parents.json; run_speciation runs
+    # after variant generation, and it needs parents.json to compute was_selected_as_parent for freeze.
     selected_species_ids = set()
     if current_generation > 0:  # Generation 0 has no parents
         try:
@@ -770,12 +772,26 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                 with open(parents_path, 'r', encoding='utf-8') as f:
                     parents = json.load(f)
                 if isinstance(parents, list):
+                    from_reserves = 0
                     for parent in parents:
                         species_id = parent.get("species_id")
                         # Only track actual species (id > 0). Cluster 0 (reserves) is not in state["species"].
                         if species_id is not None and species_id != 0:
                             selected_species_ids.add(int(species_id))
+                        elif species_id == 0:
+                            from_reserves += 1
                     state["logger"].debug(f"Loaded {len(selected_species_ids)} species from parents.json: {sorted(selected_species_ids)}")
+                    if len(selected_species_ids) == 0 and len(parents) > 0:
+                        state["logger"].warning(
+                            f"parents.json has {len(parents)} parent(s) but 0 with species_id>0 (reserves={from_reserves}). "
+                            "Stagnation will not increment; freeze cannot trigger. "
+                            "If EvolutionEngine.clean_parents_file() clears parents.json before run_speciation, it must be changed to only clear top_10.json."
+                        )
+                    elif len(selected_species_ids) == 0 and len(parents) == 0:
+                        state["logger"].warning(
+                            "parents.json is empty when loading for stagnation. Stagnation will not increment; freeze cannot trigger. "
+                            "EvolutionEngine.clean_parents_file() must NOT clear parents.json (only top_10.json)."
+                        )
         except Exception as e:
             state["logger"].warning(f"Failed to load parents.json to determine selected species: {e}")
     
@@ -3172,8 +3188,9 @@ def update_evolution_tracker_with_speciation(
             "total_extinction_events": metrics_summary.get("total_extinction_events", 0),
         })
         
-        # Update cumulative population max toxicity at tracker level
-        # This tracks the maximum toxicity across all generations (cumulative max)
+        # Update cumulative population_max_toxicity at tracker level.
+        # population_max_toxicity = max over all generations of (best toxicity in that
+        # generation's population, i.e. elites + reserves). Used for Pareto quality axis.
         if best_fitness_value > 0.0001:
             if "population_max_toxicity" not in evolution_tracker:
                 evolution_tracker["population_max_toxicity"] = 0.0001

@@ -133,7 +133,7 @@ def process_merges(
     species: Dict[int, Species],
     theta_merge: float = 0.1,
     theta_sim: float = 0.2,
-    min_stability_gens: int = 3,
+    min_stability_gens: int = 1,
     current_gen: int = 0,
     max_capacity: int = 100,
     max_merges_per_gen: int = 3,
@@ -148,7 +148,7 @@ def process_merges(
     Merging combines similar species to prevent excessive fragmentation.
     Two species merge if:
     1. Leader distance < theta_merge (very similar)
-    2. Both species are stable (existed for min_stability_gens)
+    2. Both species are stable (existed for min_stability_gens; default 1 = can merge if created in last or prior generation)
     
     Merged species:
     - Combines all members (deduplicated)
@@ -169,7 +169,7 @@ def process_merges(
         species: Dict of active and frozen species (modified in-place)
         theta_merge: Merge distance threshold (must be < theta_sim)
         theta_sim: Constant radius for merged species
-        min_stability_gens: Minimum age for species to be mergeable
+        min_stability_gens: Minimum age (generations) for species to be mergeable (default 1: can merge if created in last or prior generation)
         current_gen: Current generation number
         max_capacity: Maximum members after merge (default: 100)
         max_merges_per_gen: Deprecated parameter (kept for backward compatibility, not used)

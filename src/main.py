@@ -236,7 +236,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     except Exception as e:
         logger.error("Gen 0: Refusal penalty application failed: %s", e, exc_info=True)
 
-    # avg_fitness: before speciation, after evaluation (elites+reserves+temp)
+    # avg_fitness: mean(old elites + old reserves + all new variants) before speciation, after evaluation.
+    # Gen 0: elites/reserves empty, so effectively mean(temp).
     avg_fitness_before_speciation = 0.0001
     try:
         avg_fitness_before_speciation = calculate_average_fitness(
@@ -275,6 +276,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     previous_max_toxicity=0.0,
                     stagnation_limit=stagnation_limit,
                     north_star_metric=north_star_metric,
+                    current_gen_avg_fitness=avg_fitness_before_speciation,
                     logger=logger,
                     log_file=log_file
                 )
@@ -493,7 +495,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 logger.error("Gen %d: Refusal penalty application failed: %s", 
                             generation_count, e, exc_info=True)
             
-            # avg_fitness: before speciation, after evaluation (elites+reserves+temp)
+            # avg_fitness: mean(old elites + old reserves + all new variants) before speciation, after evaluation.
             avg_fitness_before_speciation = 0.0001
             try:
                 avg_fitness_before_speciation = calculate_average_fitness(
@@ -719,10 +721,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                             max_toxicity = max([_extract_north_star_score(g, north_star_metric) for g in temp_genomes], default=0.0)
                     adaptive_results = update_adaptive_selection_logic(
                         outputs_path=outputs_path,
-                                current_max_toxicity=max_toxicity,
+                        current_max_toxicity=max_toxicity,
                         previous_max_toxicity=previous_max_toxicity,
                         stagnation_limit=stagnation_limit,
                         north_star_metric=north_star_metric,
+                        current_gen_avg_fitness=avg_fitness_before_speciation,
                         logger=logger,
                         log_file=log_file
                     )

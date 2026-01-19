@@ -206,14 +206,18 @@ Format: JSON object.
 
   min_score_variants      float. Min toxicity among those variants.
 
-  avg_fitness             float. Mean over elites + reserves + temp before
-                          speciation, after evaluation (and refusal penalty).
-                          From calculate_average_fitness(include_temp=True) in
-                          main; computed after evaluation and before
-                          run_speciation.
+  avg_fitness             float. Mean over old elites + old reserves + all new
+                          variants (elites+reserves+temp) before speciation,
+                          after evaluation. From calculate_average_fitness(
+                          include_temp=True) in main. Gen 0: effectively
+                          mean(temp). Differs from avg_fitness_generation when
+                          genomes are archived this gen.
 
-  avg_fitness_generation  float. Mean over elites + reserves only (living
-                          population) after distribution.
+  avg_fitness_generation  float. Mean over updated elites + updated reserves
+                          after distribution. From calculate_generation_
+                          statistics (elites.json + reserves.json only).
+                          Archived genomes excluded automatically (removed from
+                          those files).
 
   avg_fitness_variants    float. Mean over this gen's variants in temp (before
                           speciation).
