@@ -292,6 +292,9 @@ def calculate_cluster_quality_metrics(
     to get genomes with both prompt_embedding and species_id > 0, then computes quality
     metrics over that subset.
 
+    Pareto-optimal selection or multi-objective optimization is not used; each metric
+    is computed independently.
+
     Why num_clusters can be less than species_count (num_species_total):
     - Silhouette, Davies-Bouldin, and Calinski-Harabasz require embedding vectors.
     - We only include genomes that have prompt_embedding and species_id > 0 (elites in

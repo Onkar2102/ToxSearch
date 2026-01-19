@@ -182,8 +182,9 @@ class Species:
         leader: Leader individual (highest fitness, defines species center)
         members: List of all individuals in this species (includes leader, max species_capacity)
         radius: Semantic distance threshold for species membership (constant = theta_sim)
-        stagnation: Number of generations without max_fitness improvement
-        max_fitness: Current maximum fitness score in this species
+        stagnation: Incremented when species was selected as parent and max_fitness did not increase;
+                    reset to 0 when max_fitness increased. Unchanged when not selected.
+        max_fitness: Actual max over current members only (no merge with stored/previous values).
         species_state: "active", "frozen", "incubator", or "extinct" (only active species used for parent selection)
         created_at: Generation when this species was created
         last_improvement: Generation when fitness last improved
@@ -283,48 +284,31 @@ class Species:
             return True
         return False
     
-    def record_fitness(self, generation: int, was_selected_as_parent: bool = False) -> None:
+    def record_fitness(self, generation: int, was_selected_as_parent: bool = False, max_fitness_increased: bool = False) -> None:
         """
         Record current best fitness and update fitness history.
         
-        Freezing Logic:
-        - For a species to become frozen, it must not improve since the last species_stagnation generations
-          where it was selected as parent.
-        - When species is selected as parent AND there's no improvement in highest fitness, increment counter by 1.
-        - When counter reaches species_stagnation, meaning species was selected species_stagnation times
-          as parent and didn't improve at all, freeze that species.
-        
-        Stagnation Counter Behavior:
-        - Increments ONLY if species was selected as parent AND no improvement in max_fitness.
-        - Resets to 0 if fitness improved (regardless of parent selection).
-        - Remains unchanged if species was NOT selected as parent (even if no improvement).
-        
-        CRITICAL: Stagnation only increments when species is selected as parent and doesn't improve.
-        This ensures species only freeze after being selected as parents for species_stagnation generations
-        without improvement. Species that are never selected as parents will never freeze.
+        Stagnation (improvement is defined solely by max_fitness_increased, not fitness_history):
+        - If max_fitness_increased is True -> stagnation = 0 (reset).
+        - Else, if was_selected_as_parent is True -> stagnation += 1.
+        - Else (not selected) -> stagnation unchanged.
         
         NOTE: This is called for ALL species, including frozen species. For frozen species,
-        stagnation continues to increment if they were selected as parents, allowing calculation of frozen duration:
-        frozen_generations = stagnation - species_stagnation
-        (e.g., if frozen at stagnation=30 and current stagnation=35, it's been frozen for 5 generations)
+        stagnation continues to increment if they were selected as parents.
         
         Args:
             generation: Current generation number
             was_selected_as_parent: Whether this species was selected as a parent in this generation
+            max_fitness_increased: Whether this species' max_fitness increased this generation (vs snapshot before Phase 1)
         """
         current_best = self.best_fitness
-        # Check if we've improved
-        if self.fitness_history and current_best > max(self.fitness_history):
+        if max_fitness_increased:
             self.last_improvement = generation
-            self.stagnation = 0  # Reset stagnation when fitness improves (regardless of parent selection)
-        else:
-            # No improvement: increment stagnation ONLY if species was selected as parent
-            if was_selected_as_parent:
-                self.stagnation += 1
-            # If not selected as parent, stagnation remains unchanged
+            self.stagnation = 0
+        elif was_selected_as_parent:
+            self.stagnation += 1
+        # else: stagnation unchanged
         # Append to history for trend analysis
-        # Only append if this generation hasn't been recorded yet (avoid duplicates)
-        # For generation 0, __post_init__ already added the initial fitness, so we check if we need to add again
         if not self.fitness_history or self.fitness_history[-1] != current_best or len(self.fitness_history) < generation + 1:
             self.fitness_history.append(current_best)
     
@@ -344,12 +328,12 @@ class Species:
             "leader_id": self.leader.id,
             "leader_prompt": self.leader.prompt,
             "leader_embedding": self.leader.embedding.tolist() if self.leader.embedding is not None else None,
-            "leader_fitness": self.leader.fitness,
-            "leader_distance": self.leader_distance,  # Ensemble distance score (0-1)
+            "leader_fitness": round(float(self.leader.fitness), 4),
+            "leader_distance": round(float(self.leader_distance), 4),  # Ensemble distance score (0-1) rounded for storage
             "member_ids": [m.id for m in self.members],
-            "radius": self.radius,
+            "radius": round(float(self.radius), 4),
             "stagnation": self.stagnation,
-            "max_fitness": self.max_fitness,
+            "max_fitness": round(float(self.max_fitness), 4),
             "min_fitness": round(self.min_fitness, 4),  # Lowest fitness in species
             "species_state": self.species_state,
             "created_at": self.created_at,

@@ -571,7 +571,10 @@ class EvolutionEngine:
             raise
     
     def clean_parents_file(self) -> None:
-        """Read parents.json and top_10.json, update EvolutionTracker, then empty the files after all operators have processed the parents."""
+        """Read parents.json and top_10.json, update EvolutionTracker, then empty top_10.json.
+        Do NOT clear parents.json: run_speciation (Phase 4) needs it to determine which species
+        were selected as parents for stagnation logic. parents.json is overwritten by the next
+        generation's parent selection."""
         try: 
             parents_path = Path(self.outputs_path) / "parents.json"
             top10_path = Path(self.outputs_path) / "top_10.json"
@@ -579,17 +582,12 @@ class EvolutionEngine:
             # Read files before cleaning and update EvolutionTracker
             self._update_evolution_tracker_from_files(parents_path, top10_path)
             
-            # Now clean the files
-            emptied = []
-            for path in [parents_path, top10_path]:
-                # Ensure parent directory exists
-                path.parent.mkdir(parents=True, exist_ok=True)
-                # Write empty list to file (creates or overwrites)
-                with open(path, 'w', encoding='utf-8') as f:
-                    json.dump([], f, indent=2, ensure_ascii=False)
-                emptied.append(str(path))
-            if emptied:
-                self.logger.info(f"Emptied files: {', '.join(emptied)}")
+            # Only clear top_10.json. Keep parents.json for run_speciation to compute
+            # selected_species_ids and was_selected_as_parent (stagnation).
+            top10_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(top10_path, 'w', encoding='utf-8') as f:
+                json.dump([], f, indent=2, ensure_ascii=False)
+            self.logger.debug("Emptied top_10.json (parents.json kept for speciation stagnation logic)")
         except Exception as e:
             self.logger.error(f"Failed to empty parents/top_10 file: {e}")
 

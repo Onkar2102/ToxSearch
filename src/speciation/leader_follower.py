@@ -197,14 +197,17 @@ def leader_follower_clustering(
                     species_id=sid
                 )
                 
-                # Reconstruct species (members will be populated during clustering)
+                # Reconstruct species (members will be populated during clustering).
+                # max_fitness = actual max over current members only, no merge with stored value.
+                members_init = [leader]
+                max_fit = max((m.fitness for m in members_init), default=0.0)
                 species = Species(
                     id=sid,
                     leader=leader,
-                    members=[leader],
+                    members=members_init,
                     radius=sp_dict.get("radius", theta_sim),
                     stagnation=sp_dict.get("stagnation", 0),
-                    max_fitness=sp_dict.get("max_fitness", leader.fitness),
+                    max_fitness=max_fit,
                     species_state=sp_dict.get("species_state", "active"),
                     created_at=sp_dict.get("created_at", 0),
                     last_improvement=sp_dict.get("last_improvement", 0),

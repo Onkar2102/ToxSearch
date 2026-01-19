@@ -11,13 +11,12 @@ from utils.device_utils import get_optimal_device, get_device_info
 
 DEVICE = get_optimal_device()
 DEVICE_INFO = get_device_info()
-print(f"[DEVICE] Using device: {DEVICE}")
-print(f"[DEVICE INFO] {DEVICE_INFO}")
 
 from utils import get_custom_logging
 from utils.population_io import (
-    update_population_index_single_file, 
+    update_population_index_single_file,
     update_adaptive_selection_logic,
+    calculate_average_fitness,
     calculate_generation_statistics,
     update_evolution_tracker_with_statistics
 )
@@ -168,6 +167,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
     log_file = get_log_filename()
     logger = get_logger("main", log_file)
     
+    logger.info(f"Using device: {DEVICE}")
+    logger.info(f"Device info: {DEVICE_INFO}")
+    
     log_system_info(logger)
     
     if moderation_methods is None:
@@ -219,7 +221,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.error("Evaluation failed: %s", e, exc_info=True)
         return
 
-    # Apply refusal penalties after evaluation
+    # Apply refusal penalties after evaluation, before speciation
     try:
         from utils.refusal_penalty import apply_refusal_penalties
         refusal_stats = apply_refusal_penalties(
@@ -233,6 +235,15 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                    refusal_stats.get("penalties_applied", 0))
     except Exception as e:
         logger.error("Gen 0: Refusal penalty application failed: %s", e, exc_info=True)
+
+    # avg_fitness: before speciation, after evaluation (elites+reserves+temp)
+    avg_fitness_before_speciation = 0.0001
+    try:
+        avg_fitness_before_speciation = calculate_average_fitness(
+            str(get_outputs_path()), north_star_metric, include_temp=True, logger=logger, log_file=log_file
+        )
+    except Exception as e:
+        logger.warning("Gen 0: Failed to compute avg_fitness before speciation: %s", e)
 
     # Create speciation config from parameters
     speciation_config = SpeciationConfig(
@@ -286,7 +297,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 scores = [s for s in scores if s > 0]  # Filter out zero scores
                 if scores:
                     gen0_max_score = round(max(scores), 4)
-        except:
+        except Exception:
             pass
     
     # Assign species/reserves for generation 0 (this also distributes genomes)
@@ -372,6 +383,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         # max_score_variants should reflect the highest fitness from temp.json (variants created in this generation)
         gen0_stats["population_max_toxicity"] = gen0_max_score
         gen0_stats["best_genome_id"] = None  # Can be calculated if needed
+        gen0_stats["avg_fitness"] = avg_fitness_before_speciation  # Before speciation, after evaluation
         gen0_stats["variants_created"] = 0  # No variants in generation 0
         gen0_stats["mutation_variants"] = 0
         gen0_stats["crossover_variants"] = 0
@@ -380,13 +392,18 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         gen0_stats["min_score_variants"] = 0.0001  # Default for generation 0
         gen0_stats["avg_fitness_variants"] = 0.0001  # Default for generation 0
         
-        # Add speciation metrics from the speciation result
+        # Add speciation metrics from the speciation result (for EvolutionTracker speciation block)
         gen0_stats["species_count"] = speciation_result.get("species_count", 0)
+        gen0_stats["active_species_count"] = speciation_result.get("active_species_count", 0)
+        gen0_stats["frozen_species_count"] = speciation_result.get("frozen_species_count", 0)
         gen0_stats["reserves_size"] = speciation_result.get("reserves_size", 0)
         gen0_stats["speciation_events"] = speciation_result.get("speciation_events", 0)
         gen0_stats["merge_events"] = speciation_result.get("merge_events", 0)
         gen0_stats["extinction_events"] = speciation_result.get("extinction_events", 0)
         gen0_stats["archived_count"] = speciation_result.get("archived_count", 0)
+        gen0_stats["elites_moved"] = speciation_result.get("elites_moved", 0)
+        gen0_stats["reserves_moved"] = speciation_result.get("reserves_moved", 0)
+        gen0_stats["genomes_updated"] = speciation_result.get("genomes_updated", 0)
         
         # Update EvolutionTracker with all statistics
         update_evolution_tracker_with_statistics(
@@ -459,7 +476,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 moderation_methods=moderation_methods
             )
             
-            # Apply refusal penalties after evaluation (before statistics calculation)
+            # Apply refusal penalties after evaluation, before speciation
             try:
                 from utils.refusal_penalty import apply_refusal_penalties
                 refusal_stats = apply_refusal_penalties(
@@ -475,6 +492,15 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             except Exception as e:
                 logger.error("Gen %d: Refusal penalty application failed: %s", 
                             generation_count, e, exc_info=True)
+            
+            # avg_fitness: before speciation, after evaluation (elites+reserves+temp)
+            avg_fitness_before_speciation = 0.0001
+            try:
+                avg_fitness_before_speciation = calculate_average_fitness(
+                    str(get_outputs_path()), north_star_metric, include_temp=True, logger=logger, log_file=log_file
+                )
+            except Exception as e:
+                logger.warning("Gen %d: Failed to compute avg_fitness before speciation: %s", generation_count, e)
             
             # Calculate variant counts and statistics BEFORE speciation (temp.json gets cleared during speciation)
             variant_counts = {"variants_created": 0, "mutation_variants": 0, "crossover_variants": 0}
@@ -683,7 +709,7 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                                 tracker = json.load(f)
                             prev_gen = tracker.get("generations", [{}])[-1] if tracker.get("generations") else {}
                             previous_max_toxicity = prev_gen.get("population_max_toxicity", 0.0)
-                        except:
+                        except Exception:
                             pass
                     
                     if temp_path_obj.exists():
@@ -725,6 +751,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     gen_stats["min_score_variants"] = min_score_variants
                     gen_stats["avg_fitness_variants"] = avg_fitness_variants
                     
+                    # avg_fitness: before speciation, after evaluation (from pre-speciation computation)
+                    gen_stats["avg_fitness"] = avg_fitness_before_speciation
+                    
                     # Add additional metrics
                     gen_stats["population_max_toxicity"] = max_toxicity
                     gen_stats["best_genome_id"] = best_genome_id
@@ -732,14 +761,19 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     gen_stats["mutation_variants"] = variant_counts["mutation_variants"]
                     gen_stats["crossover_variants"] = variant_counts["crossover_variants"]
                     
-                    # Add speciation metrics if available
+                    # Add speciation metrics if available (for EvolutionTracker speciation block)
                     if 'speciation_result' in locals():
                         gen_stats["species_count"] = speciation_result.get("species_count", 0)
+                        gen_stats["active_species_count"] = speciation_result.get("active_species_count", 0)
+                        gen_stats["frozen_species_count"] = speciation_result.get("frozen_species_count", 0)
                         gen_stats["reserves_size"] = speciation_result.get("reserves_size", 0)
                         gen_stats["speciation_events"] = speciation_result.get("speciation_events", 0)
                         gen_stats["merge_events"] = speciation_result.get("merge_events", 0)
                         gen_stats["extinction_events"] = speciation_result.get("extinction_events", 0)
                         gen_stats["archived_count"] = speciation_result.get("archived_count", 0)
+                        gen_stats["elites_moved"] = speciation_result.get("elites_moved", 0)
+                        gen_stats["reserves_moved"] = speciation_result.get("reserves_moved", 0)
+                        gen_stats["genomes_updated"] = speciation_result.get("genomes_updated", 0)
                     
                     # Update EvolutionTracker with all statistics
                     update_evolution_tracker_with_statistics(

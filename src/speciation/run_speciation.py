@@ -219,7 +219,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
       11a. Save intermediate (after merging)
     
     Phase 4: Freeze & Incubator
-      12. Freeze stagnant species
+      12. Sync max_fitness to actual max over current members; record_fitness(was_selected, max_fitness_increased).
+          max_fitness_increased is vs _prev_max_fitness snapshot taken before Phase 1. Stagnation: reset if
+          max_fitness_increased else +=1 if was_selected. Then freeze stagnant species.
       13. Move small species to incubator
       14. Save intermediate #3
     
@@ -276,7 +278,12 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     # PHASE 1: EXISTING SPECIES PROCESSING
     # ========================================================================
     state["logger"].info("=== Phase 1: Existing Species Processing ===")
-    
+
+    # Snapshot max_fitness before Phase 1 (leader_follower_clustering and later steps can update it).
+    # Used in Phase 4 for record_fitness(max_fitness_increased). Species created this gen are not in
+    # _prev_max_fitness -> treated as max_fitness_increased=True.
+    state["_prev_max_fitness"] = {int(sid): sp.max_fitness for sid, sp in state["species"].items()}
+
     # 1. Compute and save embeddings to temp.json
     if temp_path is None:
         outputs_path = get_outputs_path()
@@ -765,15 +772,20 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                 if isinstance(parents, list):
                     for parent in parents:
                         species_id = parent.get("species_id")
-                        if species_id is not None:
+                        # Only track actual species (id > 0). Cluster 0 (reserves) is not in state["species"].
+                        if species_id is not None and species_id != 0:
                             selected_species_ids.add(int(species_id))
                     state["logger"].debug(f"Loaded {len(selected_species_ids)} species from parents.json: {sorted(selected_species_ids)}")
         except Exception as e:
             state["logger"].warning(f"Failed to load parents.json to determine selected species: {e}")
     
     for sid, sp in state["species"].items():
+        # max_fitness = actual max over current members only (in case members were removed in radius/capacity)
+        sp.max_fitness = max((m.fitness for m in sp.members), default=0.0)
         was_selected = sid in selected_species_ids
-        sp.record_fitness(current_generation, was_selected_as_parent=was_selected)
+        # Species created this gen: sid not in _prev_max_fitness -> treat as increased
+        max_fitness_increased = sp.max_fitness > state.get("_prev_max_fitness", {}).get(sid, -1)
+        sp.record_fitness(current_generation, was_selected_as_parent=was_selected, max_fitness_increased=max_fitness_increased)
     
     # 13. Freeze stagnant species and move small species to cluster 0
     # CRITICAL: Use in-memory sizes (sp.size) - elites.json is cumulative across all generations
@@ -2185,6 +2197,15 @@ def save_state(path: str) -> None:
     # Update cluster0 dict with actual size and fitness stats
     cluster0_dict = state["cluster0"].to_dict()
     cluster0_dict["size"] = actual_cluster0_size
+
+    # Round speciation event fitness values for clean storage
+    if "speciation_events" in cluster0_dict:
+        for evt in cluster0_dict["speciation_events"]:
+            if isinstance(evt, dict) and "leader_fitness" in evt:
+                try:
+                    evt["leader_fitness"] = round(float(evt["leader_fitness"]), 4)
+                except Exception:
+                    pass
     
     # Calculate max and min fitness for cluster 0 from reserves.json
     cluster0_max_fitness = 0.0
@@ -2200,9 +2221,7 @@ def save_state(path: str) -> None:
                 cluster0_fitnesses = []
                 for genome in reserves_genomes:
                     fitness = _extract_north_star_score(genome, "toxicity")
-                    if fitness > 0:
-                        cluster0_fitnesses.append(fitness)
-                
+                    cluster0_fitnesses.append(float(fitness) if fitness is not None else 0.0)
                 if cluster0_fitnesses:
                     cluster0_max_fitness = round(max(cluster0_fitnesses), 4)
                     cluster0_min_fitness = round(min(cluster0_fitnesses), 4)
@@ -2333,13 +2352,15 @@ def load_state(path: str) -> bool:
                     except Exception as e:
                         logger.warning(f"Failed to load members for species {sid} from elites.json: {e}")
             
+            # max_fitness = actual max over current members only, no merge with stored value.
+            max_fit = max((m.fitness for m in members), default=0.0)
             species = Species(
                 id=sid,
                 leader=leader,
                 members=members,  # Load all members, not just leader
                 radius=sp_dict.get("radius", config.theta_sim),
                 stagnation=sp_dict.get("stagnation", 0),
-                max_fitness=sp_dict.get("max_fitness", leader.fitness),
+                max_fitness=max_fit,
                 species_state=sp_dict.get("species_state", "active"),
                 created_at=sp_dict.get("created_at", 0),
                 last_improvement=sp_dict.get("last_improvement", 0),
@@ -2502,6 +2523,9 @@ def run_speciation(
     """
     logger = get_logger("RunSpeciation", log_file)
     logger.info("Starting speciation: generation=%d", current_generation)
+
+    # Ensure global state is clean for each invocation (avoids cross-run contamination)
+    reset_speciation_module()
     
     if temp_path is None:
         outputs_path = get_outputs_path()
@@ -3010,7 +3034,8 @@ def update_evolution_tracker_with_speciation(
         active_species_count = speciation_result.get("active_species_count", 0)
         total_species_count = active_species_count + frozen_species_count
         
-        # Create speciation summary with ALL required fields (always present, even on errors)
+        # best_fitness and avg_fitness are not stored in speciation; they are only at gen level
+        # (population_max_toxicity, max_score_variants, avg_fitness).
         speciation_summary = {
             "species_count": total_species_count,  # Total species (active + frozen) for EvolutionTracker
             "active_species_count": active_species_count,  # Active only
@@ -3027,13 +3052,11 @@ def update_evolution_tracker_with_speciation(
             "inter_species_diversity": 0.0,
             "intra_species_diversity": 0.0,
             "total_population": 0,
-            "best_fitness": 0.0,
-            "avg_fitness": 0.0,
             # Cluster quality (will be filled from metrics or defaults)
             "cluster_quality": None
         }
         
-        # Track best fitness for cumulative max toxicity update
+        # best_fitness_value is used for population_max_toxicity and max_score_variants only
         best_fitness_value = 0.0
         
         if current_metrics:
@@ -3042,8 +3065,6 @@ def update_evolution_tracker_with_speciation(
                 "inter_species_diversity": round(current_metrics.inter_species_diversity, 4),
                 "intra_species_diversity": round(current_metrics.intra_species_diversity, 4),
                 "total_population": current_metrics.total_population,
-                "best_fitness": round(current_metrics.best_fitness, 4),
-                "avg_fitness": round(current_metrics.avg_fitness, 4),
             })
             # Add cluster quality metrics if available
             if hasattr(current_metrics, 'cluster_quality') and current_metrics.cluster_quality:
@@ -3098,18 +3119,14 @@ def update_evolution_tracker_with_speciation(
                     total_pop += len(cluster0.individuals)
             
             best_fitness_value = max(all_fitness) if all_fitness else 0.0
-            avg_fitness = sum(all_fitness) / len(all_fitness) if all_fitness else 0.0
             
             speciation_summary.update({
                 "inter_species_diversity": 0.0,
                 "intra_species_diversity": 0.0,
                 "total_population": total_pop,
-                "best_fitness": round(best_fitness_value, 4),
-                "avg_fitness": round(avg_fitness, 4),
             })
         
-        # Track best fitness for cumulative max toxicity update
-        best_fitness_value = speciation_summary.get("best_fitness", 0.0)
+        # best_fitness_value used for population_max_toxicity and max_score_variants
         
         generations = evolution_tracker.get("generations", [])
         gen_entry = None

@@ -14,10 +14,12 @@ Black-box evolutionary framework for systematic LLM safety testing through promp
 - DEFAULT (2 parents): `V = 10×2 + 2×1 = 22`
 - EXPLORATION/EXPLOITATION (3 parents): `V = 10×3 + 2×3 = 36`
 
-**Parent Selection**:
+**Parent Selection (3-category)**: Category 1 = active species ∪ reserves (species 0); Category 2 = frozen. Use Category 2 only when Category 1 is empty. Modes on the chosen category:
 - DEFAULT: 2 parents from same species (random)
 - EXPLOITATION: 3 parents from top species (local search)
 - EXPLORATION: 3 parents from 3 different species (diversity)
+
+**Post-evaluation**: After moderation, **refusal penalty** (15% reduction on toxicity for detected refusals) is applied; then **avg_fitness** = mean(elites+reserves+temp) before speciation. Both are used in EvolutionTracker.
 
 **Speciation**: Leader-Follower clustering with ensemble distance `d_ensemble = 0.7×d_genotype + 0.3×d_phenotype`
 - Assignment: `d_ensemble(u, leader) < θ_sim = 0.2`
@@ -58,14 +60,19 @@ python src/main.py \
 - `elites.json` - Species members (species_id > 0, all generations)
 - `reserves.json` - Cluster 0 (species_id = 0, max 1000)
 - `archive.json` - Archived genomes (capacity overflow)
-- `EvolutionTracker.json` - Complete evolution history with metrics
-- `speciation_state.json` - Species state (active/frozen/incubator) with full data preserved (leader embeddings, distances, labels, history, member_ids)
-- `operator_effectiveness_cumulative.csv` - Operator effectiveness metrics (RQ1)
-- `figures/` - Visualizations (fitness, diversity, operator metrics)
+- `temp.json` - Variants before speciation (per generation; cleared/repopulated each gen)
+- `EvolutionTracker.json` - Per-generation stats (avg_fitness, variant stats, speciation block), cumulative max, selection state. best_fitness/avg_fitness at gen level only; speciation block has species_count, diversity, cluster_quality, etc.
+- `speciation_state.json` - Species (active/frozen/incubator), leader_*, member_ids, max_fitness, stagnation; cluster0; metrics
+- `genome_tracker.json` - ID → metadata for lineage
+- `operator_effectiveness_cumulative.csv` - Operator effectiveness (RQ1)
+- `figures/` - Fitness, diversity, operator visualizations
 
 **Species States**:
 - **active**: Participates in evolution and parent selection
 - **frozen**: Stagnated (≥20 gens), excluded from parent selection, preserved with all members (leader embeddings, distances, labels, history). Can merge with active or other frozen species. Both active and frozen are "alive" - only difference is parent selection preference.
 - **incubator**: Moved to cluster 0 when `size < min_island_size` (default: < 2), tracked by ID only
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
+**Docs**:
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Modules, flow, parent selection, speciation, metrics
+- [FIELD_DEFINITIONS.txt](FIELD_DEFINITIONS.txt) — Field definitions for all JSON/CSV outputs
+- [experiments/FLOW_AND_VALIDATION.md](experiments/FLOW_AND_VALIDATION.md) — Flow, validation, and field basis

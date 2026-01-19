@@ -407,6 +407,7 @@ class ComprehensiveValidator:
         print("\n[4.1] Validating EvolutionTracker.json Structure...")
         
         generations = self.tracker.get("generations", [])
+        last_gen = max((g.get("generation_number", -1) for g in generations), default=-1)
         
         for i, gen_entry in enumerate(generations):
             gen_num = gen_entry.get("generation_number")
@@ -427,6 +428,18 @@ class ComprehensiveValidator:
             
             if elites_count + reserves_count != total_population:
                 self.issues.append(f"Gen {gen_num}: elites_count({elites_count}) + reserves_count({reserves_count}) != total_population({total_population})")
+            
+            # Last gen: speciation.species_count and reserves_size vs speciation_state
+            if gen_num == last_gen:
+                spec = gen_entry.get("speciation") or {}
+                species_dict = self.speciation_state.get("species", {})
+                expected_species = len([sp for sp in species_dict.values() if sp.get("species_state") in ("active", "frozen")])
+                sc = spec.get("species_count")
+                if sc is not None and sc != expected_species:
+                    self.issues.append(f"Gen {gen_num}: speciation.species_count={sc} != species in state={expected_species}")
+                rs = spec.get("reserves_size")
+                if rs is not None and rs != len(self.reserves):
+                    self.issues.append(f"Gen {gen_num}: speciation.reserves_size={rs} != len(reserves)={len(self.reserves)}")
         
         self.validations_passed += 1
     
@@ -537,6 +550,15 @@ class ComprehensiveValidator:
         
         self.validations_passed += 1
     
+    def _extract_score(self, genome: Dict, metric: str = "toxicity") -> float:
+        """Extract fitness/score from genome. Uses utils.population_io if available."""
+        try:
+            sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+            from utils.population_io import _extract_north_star_score
+            return _extract_north_star_score(genome, metric) or 0.0
+        except Exception:
+            return float(genome.get("fitness") or genome.get("north_star_score") or genome.get("toxicity") or 0.0)
+
     def validate_speciation_state_json(self):
         """Validate speciation_state.json structure."""
         print("[5.4] Validating speciation_state.json...")
@@ -565,10 +587,43 @@ class ComprehensiveValidator:
             if species_state not in valid_states:
                 self.issues.append(f"Species {sid}: invalid species_state='{species_state}' (expected {valid_states})")
             
+            # max_fitness >= max(scores) over member_ids resolvable in elites
+            max_fitness = sp_data.get("max_fitness")
+            if max_fitness is not None:
+                member_ids = sp_data.get("member_ids", [])
+                scores = []
+                for mid in member_ids:
+                    g = next((x for x in self.elites if x.get("id") == mid), None)
+                    if g is not None:
+                        s = self._extract_score(g)
+                        scores.append(s)
+                if scores:
+                    actual_max = max(scores)
+                    if max_fitness < actual_max - 1e-5:
+                        self.issues.append(f"Species {sid}: max_fitness={max_fitness} < max(member scores)={actual_max}")
+                    if actual_max > 0 and max_fitness <= 0:
+                        self.issues.append(f"Species {sid}: max_fitness=0 but members have score > 0 (max={actual_max})")
+            
             # Check frozen species not in historical
             if species_state == "frozen":
                 # Already checked in validate_freezing_logic
                 pass
+        
+        # cluster0: size and cluster0_size_from_reserves == len(reserves); max_fitness consistent with max(score in reserves)
+        cluster0 = self.speciation_state.get("cluster0", {})
+        reserves_len = len(self.reserves)
+        c0_size = cluster0.get("size", 0)
+        c0_from_reserves = self.speciation_state.get("cluster0_size_from_reserves", 0)
+        if c0_size != reserves_len:
+            self.issues.append(f"cluster0.size={c0_size} != len(reserves)={reserves_len}")
+        if c0_from_reserves != reserves_len:
+            self.issues.append(f"cluster0_size_from_reserves={c0_from_reserves} != len(reserves)={reserves_len}")
+        if self.reserves:
+            reserve_scores = [self._extract_score(g) for g in self.reserves]
+            actual_max = max(reserve_scores)
+            c0_max = cluster0.get("max_fitness", 0)
+            if abs(c0_max - actual_max) > 1e-3 and (actual_max > 0 or c0_max > 0):
+                self.warnings.append(f"cluster0.max_fitness={c0_max} vs max(reserves scores)={actual_max} (may differ by rounding)")
         
         # Check for duplicate leader IDs
         leader_id_counts = Counter(leader_ids)

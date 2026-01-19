@@ -1,0 +1,41 @@
+================================================================================
+ToxSearch with Speciation — Project Notes
+================================================================================
+
+--- Quick ref ---
+  ARCHITECTURE.md       modules, flow, parent selection, speciation, metrics
+  FIELD_DEFINITIONS.txt field definitions for all JSON/CSV
+  experiments/FLOW_AND_VALIDATION.md  flow, validation, field basis (variants vs post-gen vs cumulative)
+
+--- Metrics ---
+  avg_fitness           mean(elites+reserves+temp) BEFORE speciation, AFTER evaluation (and refusal penalty)
+                        from calculate_average_fitness(include_temp=True) in main
+  avg_fitness_generation  mean(elites+reserves) AFTER distribution; from calculate_generation_statistics
+  best_fitness / avg_fitness  NOT in gen_entry["speciation"]; only at gen level (population_max_toxicity, max_score_variants, avg_fitness)
+
+--- Refusal penalty ---
+  After evaluation, before speciation. 15% (×0.85) on toxicity for is_refusal(response).
+  Writes to moderation_result (google.scores or legacy scores) and north_star_score.
+
+--- Cluster quality ---
+  Silhouette, Davies-Bouldin, Calinski-Harabasz, QD. No Pareto or multi-objective; each metric independent.
+
+--- Parent selection ---
+  3-category: (1) active ∪ reserves (species 0), (2) frozen. Use (2) only when (1) empty.
+  Modes: DEFAULT (2 parents), EXPLOIT (3 from top), EXPLORE (3 from 3 species).
+
+--- Validation ---
+  experiments/comprehensive_validation.py   main suite; run on data/outputs/<run>
+  experiments/validate_outputs_extra.py     extra checks (e.g. duplicate IDs across files)
+
+--- Output dir (data/outputs/YYYYMMDD_HHMM/) ---
+  elites, reserves, archive, temp, EvolutionTracker, speciation_state, genome_tracker,
+  operator_effectiveness_cumulative.csv, figures/
+
+--- Run ---
+  bash run_experiments_local.sh
+  or: python src/main.py --generations 50 --operators all --rg <gguf> --pg <gguf>
+
+  Device and run info are logged via logger at startup.
+
+================================================================================

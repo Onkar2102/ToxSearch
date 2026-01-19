@@ -1,100 +1,132 @@
-# System Architecture
+# ToxSearch with Speciation — Architecture
 
-Genetic algorithm with semantic speciation (Leader-Follower clustering) for evolving prompts to elicit toxic LLM responses.
+High-level design of the evolutionary toxicity-search system with leader-follower semantic speciation. For field-by-field definitions see [FIELD_DEFINITIONS.txt](FIELD_DEFINITIONS.txt); for validation and flow details see [experiments/FLOW_AND_VALIDATION.md](experiments/FLOW_AND_VALIDATION.md).
 
-## Algorithm
+---
 
-**Fitness**: `f(x) = toxicity_score(LLM(x)) ∈ [0, 1]`
+## 1. Module Layout
 
-**Population**: `P = E ∪ R`, `|E| = Σᵢ |Sᵢ|`, `|R| ≤ 1000`, `|Sᵢ| ≤ 100`
+```
+src/
+├── main.py              # Entry: Gen 0 init, Gen N loop, orchestration
+├── ea/                  # Evolutionary algorithm
+│   ├── evolution_engine.py   # next_id, create_child, operator dispatch
+│   ├── run_evolution.py      # load elites+reserves, parent selection, operators → temp
+│   ├── parent_selector.py    # 3-category adaptive tournament (active, reserves, frozen)
+│   ├── variation_operators.py
+│   └── ... (paraphrasing, crossover, mutation operators)
+├── gne/                 # Generate–Evaluate
+│   ├── response_generator.py # LLM → generated_output
+│   ├── evaluator.py          # Moderation (Google Perspective, hybrid)
+│   └── model_interface.py
+├── speciation/          # Speciation and distribution
+│   ├── run_speciation.py     # process_generation, distribute, EvolutionTracker speciation block
+│   ├── leader_follower.py    # Clustering: d_ensemble, θ_sim, θ_merge, cluster0
+│   ├── species.py, reserves.py, merging.py, extinction.py
+│   ├── embeddings.py, distance.py, phenotype_distance.py
+│   ├── metrics.py, genome_tracker.py, labeling.py
+│   └── validation.py
+└── utils/
+    ├── population_io.py      # elites/reserves/archive/temp, EvolutionTracker, calculate_average_fitness
+    ├── refusal_penalty.py    # 15% penalty on toxicity for refusals (after evaluation, before speciation)
+    ├── refusal_detector.py
+    ├── cluster_quality.py    # Silhouette, Davies-Bouldin, Calinski-Harabasz, QD (no Pareto)
+    ├── operator_effectiveness.py
+    ├── device_utils.py, data_loader.py, config.py
+    └── ...
+```
 
-## Parent Selection
+---
 
-**DEFAULT** (2 parents): `p₁ ~ U(S_random)`, `p₂ ~ U(S_p₁)` → `V = 22`
+## 2. High-Level Flow
 
-**EXPLOITATION** (3 parents): `p₁ = argmax_{x∈S_top} f(x)`, `p₂, p₃ ~ U(S_top\{p₁})` → `V = 36`
+**Gen 0**
 
-**EXPLORATION** (3 parents): `p₁ = argmax_{x∈S_top} f(x)`, `p₂ = argmax_{x∈S_j, j≠top} f(x)`, `p₃ = argmax_{x∈S_k, k≠{top,j}} f(x)` → `V = 36`
+1. Generate (response_generator) → `temp.json`
+2. Moderate (evaluator) → `moderation_result`, `north_star_score`
+3. **Refusal penalty** (after evaluation, before speciation): 15% reduction on toxicity for refusals; write to `moderation_result` and `north_star_score`
+4. **avg_fitness** = `calculate_average_fitness(include_temp=True)` — elites+reserves+temp, before speciation
+5. **run_speciation** (process_generation → distribute → update_evolution_tracker_with_speciation)
+6. operator_effectiveness(gen=0), calculate_generation_statistics, **update_evolution_tracker_with_statistics**(gen0_stats with avg_fitness)
 
-**Mode Switching**: `mode = DEFAULT if g ≤ 5 else EXPLOIT if Δf/Δg ≤ 0.00 else EXPLORE if stagnation ≥ 5`
+**Gen N (N ≥ 1)**
 
-## Variation Operators
+1. **run_evolution**: load elites+reserves → **adaptive_tournament_selection** (parents) → operators → `temp.json` (variants)
+2. Moderate (temp) → **refusal_penalty**
+3. **avg_fitness** = `calculate_average_fitness(include_temp=True)` — before speciation
+4. **run_speciation** (temp, gen=N)
+5. operator_effectiveness(gen=N), update_evolution_tracker_with_generation_global, update_adaptive_selection_logic
+6. calculate_generation_statistics → **update_evolution_tracker_with_statistics**(gen_stats with avg_fitness) → update_population_index_single_file
 
-**10 Mutation**: Informed Evolution, MLM, Paraphrasing, Back Translation, Synonym/Antonym Replacement (POS-aware), Negation, Concept Addition, Typographical Errors, Stylistic Mutation
+---
 
-**2 Crossover**: Semantic Similarity, Semantic Fusion
+## 3. Parent Selection (3-Category)
 
-## Speciation
+- **Category 1:** active species ∪ species 0 (reserves). **Category 2:** frozen species.
+- **Rule:** Use Category 2 only when Category 1 has no genomes; if both empty → `RuntimeError`.
 
-**Distance Metrics**:
-- Genotype: `d_genotype(u,v) = 1 - (e_u · e_v)` where `e_u, e_v ∈ ℝ³⁸⁴` (L2-normalized)
-- Phenotype: `d_phenotype(u,v) = ||p_u - p_v||_2 / √8` where `p_u, p_v ∈ [0,1]⁸`
-- Ensemble: `d_ensemble = 0.7×d_genotype + 0.3×d_phenotype`
+**Modes (on chosen category):**
 
-**Clustering**:
-- Assignment: `d_ensemble(u, leader) < θ_sim = 0.2`
-- Merging: `d_ensemble(leader_i, leader_j) < θ_merge = 0.1`
-- Leader: `leader(S_i) = argmax_{x∈S_i} f(x)`
+- **DEFAULT:** random species, 2 parents; fill from category if &lt;2.
+- **EXPLOIT:** top species by max fitness, 3 parents.
+- **EXPLORE:** top + 2 random species, 1 best parent each.
 
-**Operations**:
-- Merge: `d_ensemble(leader_i, leader_j) < θ_merge` (active and frozen species can merge)
-- Freeze: `stagnation(S_i) ≥ 20` → species moved to "frozen" state (preserved with all members)
-- Capacity: Archive excess when `|S_i| > 100` or `|R| > 1000`
+**Max fitness:** actual max over current genomes only (no merge with stored). Same for cluster0 over reserves.
 
-**Species States**:
-- **active**: Participates in evolution and parent selection
-- **frozen**: Stagnated (≥20 generations without improvement), excluded from parent selection but preserved with full data (leader embeddings, distances, labels, history, and all members). Members are preserved from when species was active (saved in `member_ids` in speciation_state.json). Can merge with active or other frozen species. Both active and frozen are "alive" - only difference is parent selection preference.
-- **incubator**: Moved to cluster 0 when `size < min_island_size` (default: < 2), tracked by ID only
-  - **Note**: Uses `min_island_size` (min 2), NOT `species_capacity` (max 100)
-  - Condition: `actual_size < min_island_size` (strictly less than)
+---
 
-## Process Flow
+## 4. Speciation (process_generation)
 
-1. **Generation 0**: Load CSV → Generate responses → Evaluate → Speciate → Distribute
-2. **Generation N**: Load population → Select parents → Apply operators → Generate responses → Evaluate → Deduplicate → Speciate → Distribute → Track
+1. Load `speciation_state` (if gen&gt;0); snapshot `_prev_max_fitness`.
+2. **Phase 1:** Embed temp → leader_follower_clustering (temp + state; `skip_cluster0_outliers=True`) → update `state["species"]`; radius cleanup; capacity; sync cluster0 with reserves.
+3. **Phase 2–3:** Merges (θ_merge), check_speciation (cluster0 → new species), extinctions (freeze/incubator).
+4. **Phase 4:** Sync `sp.max_fitness` from members; `record_fitness(gen, was_selected, max_fitness_increased)`; freeze/incubator.
+5. **Phase 5:** Cluster0 capacity; archive excess.
+6. **Phase 6:** `save_to_files_corrected` → elites, reserves, archive.
+7. **Phase 7:** Labels, `record_generation`, `save_state` (speciation_state.json), genome_tracker.
 
-**Deduplication**: Two-stage (intra-temp, then population-wide)
+**Distribution:** `distribute_genomes(temp)` appends to elites/reserves by `species_id`; dedupe by id. `update_evolution_tracker_with_speciation` writes `gen_entry["speciation"]` (species_count, active/frozen, reserves_size, events, diversity, cluster_quality). **best_fitness and avg_fitness are not in speciation;** they exist only at gen level.
 
-## Metrics
+---
 
-**Fitness**: `f_max = max_{x∈P} f(x)`, `f_avg = (1/|P|) Σ_{x∈P} f(x)`
+## 5. Key Metrics and Conventions
 
-**Diversity**: `D_inter = (1/(K(K-1)/2)) Σ_{i<j} d_ensemble(leader_i, leader_j)`, `D_intra = (1/K) Σᵢ (1/(|Sᵢ|(|Sᵢ|-1)/2)) Σ_{u,v∈Sᵢ} d_ensemble(u,v)`
+**avg_fitness vs avg_fitness_generation**
 
-**Operator Effectiveness** (RQ1):
-- `NE = (non_elite_count / calculated_total) × 100` - % variants archived
-- `EHR = (elite_count / calculated_total) × 100` - % variants became elites
-- `IR = (rejections / calculated_total) × 100` - % variants rejected
-- `cEHR = (elite_count / total_variants) × 100` - % valid variants that became elites
-- `Δμ = mean(f(v) - f(parent(v)))` - Average fitness change
-- `Δσ = std(f(v) - f(parent(v)))` - Std dev of fitness change
-- Where `calculated_total = total_variants + rejections + duplicates`
+- **avg_fitness:** Mean over **elites + reserves + temp before speciation, after evaluation** (and refusal penalty). From `calculate_average_fitness(include_temp=True)` in main; passed via gen0_stats/gen_stats.
+- **avg_fitness_generation:** Mean over **elites + reserves** after distribution. From `calculate_generation_statistics`.
 
-## Files
+**Refusal penalty**
 
-- `elites.json`: `species_id > 0` (all species members across all generations)
-- `reserves.json`: `species_id = 0` (cluster 0, max 1000)
-- `archive.json`: Capacity overflow (removed due to limits)
-- `temp.json`: Staging (new variants before speciation)
-- `EvolutionTracker.json`: Complete evolution history with metrics
-- `speciation_state.json`: Species state (active, frozen, incubator) with full data preserved (leader embeddings, distances, labels, history, member_ids)
+- Applied after evaluation, before speciation. 15% (×0.85) on toxicity for genomes with `is_refusal(response)==True`. Writes to `moderation_result["google"]["scores"][north_star_metric]` (or legacy `moderation_result["scores"]`); also `genome["north_star_score"]`. `_extract_north_star_score` uses these.
 
-## Species Management
+**Cluster quality**
 
-**Frozen Species**:
-- Preserved with full data: leader embeddings, leader distance, labels, history, and all members
-- Members are preserved from when species was active (saved in `member_ids` in speciation_state.json)
-- Not included in parent selection (evolution focuses on active species)
-- Can merge with active or other frozen species (both are "alive", only difference is parent selection preference)
+- Silhouette, Davies-Bouldin, Calinski-Harabasz, QD. **Pareto-optimal or multi-objective optimization is not used;** each metric is computed independently.
 
-**Merging**:
-- Active and frozen species can merge (frozen species included)
-- Requires leader embeddings for distance calculation
-- Merged species get new ID, reset stagnation, combine members
-- Frozen species that merge are reactivated (moved back to active species)
+**EvolutionTracker `gen_entry["speciation"]`**
 
-**Evolution Continuation**:
-- If all species freeze, evolution continues using cluster 0 (reserves) for parent selection
-- If all species freeze and reserves are empty, evolution continues using frozen species (treated as active for parent selection)
-- Cluster 0 is always active and can form new species
-- Fallback mechanism: reserves → frozen species → all genomes
+- Contains: species_count, active_species_count, frozen_species_count, reserves_size; speciation_events, merge_events, extinction_events; archived_count, elites_moved, reserves_moved, genomes_updated; inter/intra_species_diversity, total_population, cluster_quality. **No best_fitness or avg_fitness** (those are at gen level: population_max_toxicity, max_score_variants, avg_fitness).
+
+---
+
+## 6. Output Files (data/outputs/YYYYMMDD_HHMM/)
+
+| File | Role |
+|------|------|
+| `elites.json` | Species members (species_id &gt; 0), cumulative |
+| `reserves.json` | Cluster 0 (species_id = 0), capacity-limited |
+| `archive.json` | Archived (capacity overflow, etc.) |
+| `temp.json` | Current variants before speciation; cleared/repopulated each gen |
+| `EvolutionTracker.json` | Per-gen stats, speciation block, cumulative max, selection state |
+| `speciation_state.json` | Species (leader_*, member_ids, max_fitness, stagnation, state), cluster0, metrics |
+| `genome_tracker.json` | ID → metadata for lineage |
+| `operator_effectiveness_cumulative.csv` | RQ1: per (generation, operator) metrics |
+| `figures/` | Fitness, diversity, operator plots |
+
+---
+
+## 7. References
+
+- [FIELD_DEFINITIONS.txt](FIELD_DEFINITIONS.txt) — Field and subfield definitions for all JSON/CSV outputs.
+- [experiments/FLOW_AND_VALIDATION.md](experiments/FLOW_AND_VALIDATION.md) — Flow, validation, and field basis (variants vs post-generation vs cumulative).

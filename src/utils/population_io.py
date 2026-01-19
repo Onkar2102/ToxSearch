@@ -1384,12 +1384,13 @@ def calculate_average_fitness(
     Calculate the average fitness of genomes.
     
     Two modes controlled by include_temp:
-    - include_temp=False (default): AFTER speciation - elites.json + reserves.json only
+    - include_temp=False (default): AFTER distribution - elites.json + reserves.json only
     - include_temp=True: BEFORE speciation - elites.json + reserves.json + temp.json
     
-    This distinction is important:
-    - avg_fitness: calculated BEFORE speciation (includes temp.json with new variants)
-    - avg_fitness_generation: calculated AFTER speciation (elites + reserves only)
+    In EvolutionTracker, avg_fitness = mean(elites + reserves + temp) before speciation,
+    after evaluation (and refusal penalty). Use include_temp=True for that; it is called
+    from main after evaluation and before run_speciation. avg_fitness_generation is
+    mean(elites + reserves) after distribution (include_temp=False).
     
     Files:
     - elites.json: Elites assigned to species (species_id > 0)
@@ -1816,6 +1817,7 @@ def calculate_generation_statistics(
         "min_score_variants": 0.0001,
         "avg_fitness_variants": 0.0001,
         "avg_fitness_generation": 0.0001,
+        "avg_fitness": 0.0001,
         "avg_fitness_elites": 0.0001,
         "avg_fitness_reserves": 0.0001,
         "population_max_toxicity": 0.0001,
@@ -1905,11 +1907,14 @@ def calculate_generation_statistics(
             stats["min_score_variants"] = round(min(variant_scores), 4)
             stats["avg_fitness_variants"] = round(sum(variant_scores) / len(variant_scores), 4)
         
-        # Calculate overall generation fitness (elites + reserves)
+        # avg_fitness_generation: mean over elites + reserves only (after distribution)
         all_scores = elite_scores + reserves_scores
         if all_scores:
             stats["avg_fitness_generation"] = round(sum(all_scores) / len(all_scores), 4)
             stats["population_max_toxicity"] = round(max(all_scores), 4)
+        
+        # avg_fitness is not computed here; it is supplied by main from
+        # calculate_average_fitness(include_temp=True) before speciation.
         
         # For generation 0, initial_population_size is the count before distribution
         if current_generation == 0:
@@ -2064,7 +2069,7 @@ def update_evolution_tracker_with_statistics(
         # Update with statistics (round all float values to 4 decimal places)
         # Preserve existing speciation data if present
         existing_speciation = gen_entry.get("speciation")
-        
+        # avg_fitness: before speciation, after evaluation (from main)
         gen_entry.update({
             "elites_count": statistics.get("elites_count", 0),
             "reserves_count": statistics.get("reserves_count", 0),
@@ -2074,14 +2079,34 @@ def update_evolution_tracker_with_statistics(
             "min_score_variants": round(statistics.get("min_score_variants", gen_entry.get("min_score_variants", 0.0001)), 4),
             "avg_fitness_variants": round(statistics.get("avg_fitness_variants", gen_entry.get("avg_fitness_variants", 0.0001)), 4),
             "avg_fitness_generation": round(statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness_generation", 0.0001)), 4),
-            "avg_fitness": round(statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness", 0.0001)), 4),  # Alias for compatibility
+            "avg_fitness": round(statistics.get("avg_fitness", statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness", 0.0001))), 4),
             "avg_fitness_elites": round(statistics.get("avg_fitness_elites", gen_entry.get("avg_fitness_elites", 0.0001)), 4),
             "avg_fitness_reserves": round(statistics.get("avg_fitness_reserves", gen_entry.get("avg_fitness_reserves", 0.0001)), 4),
         })
         
-        # Restore speciation data if it was present
-        if existing_speciation is not None:
+        # Speciation block: keep if already a non-empty dict; otherwise build from statistics.
+        # This covers Gen 0 (EvolutionTracker may not exist when run_speciation's update runs)
+        # and edge cases where update_evolution_tracker_with_speciation did not run.
+        if existing_speciation is not None and isinstance(existing_speciation, dict) and existing_speciation.get("species_count") is not None:
             gen_entry["speciation"] = existing_speciation
+        elif any(statistics.get(k) is not None for k in ("species_count", "reserves_size")):
+            gen_entry["speciation"] = {
+                "species_count": statistics.get("species_count", 0),
+                "active_species_count": statistics.get("active_species_count", statistics.get("species_count", 0)),
+                "frozen_species_count": statistics.get("frozen_species_count", 0),
+                "reserves_size": statistics.get("reserves_size", statistics.get("reserves_count", 0)),
+                "speciation_events": statistics.get("speciation_events", 0),
+                "merge_events": statistics.get("merge_events", 0),
+                "extinction_events": statistics.get("extinction_events", 0),
+                "archived_count": statistics.get("archived_count", 0),
+                "elites_moved": statistics.get("elites_moved", 0),
+                "reserves_moved": statistics.get("reserves_moved", 0),
+                "genomes_updated": statistics.get("genomes_updated", 0),
+                "inter_species_diversity": 0.0,
+                "intra_species_diversity": 0.0,
+                "total_population": statistics.get("total_population", 0),
+                "cluster_quality": None,
+            }
         
         # Add budget metrics if available
         if "llm_calls" in statistics:
