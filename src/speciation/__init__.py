@@ -39,6 +39,7 @@ from .phenotype_distance import (
 from .leader_follower import (
     leader_follower_clustering
 )
+from .gen0_clustering import Gen0Clustering
 
 # Cluster 0 (reserves)
 from .reserves import (
@@ -93,6 +94,7 @@ __all__ = [
     
     # Clustering
     "leader_follower_clustering",
+    "Gen0Clustering",
     
     # Cluster 0
     "Cluster0", "Cluster0Individual", "CLUSTER_0_ID",

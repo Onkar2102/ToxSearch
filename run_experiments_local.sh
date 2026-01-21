@@ -42,7 +42,7 @@ EXPERIMENTS=(
         --moderation-methods google \
         --stagnation-limit 3 \
         --theta-sim 0.25 \
-        --theta-merge 0.15 \
+        --theta-merge 0.40 \
         --species-capacity 5 \
         --cluster0-max-capacity 1000 \
         --cluster0-min-cluster-size 2 \

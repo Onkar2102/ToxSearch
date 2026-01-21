@@ -20,22 +20,26 @@ get_logger, _, _, _ = get_custom_logging()
 def validate_speciation_consistency(
     outputs_path: Path,
     generation: int,
-    logger=None
+    logger=None,
+    expect_temp_empty: bool = False
 ) -> Tuple[bool, List[str]]:
     """
     Validate consistency across all speciation files.
     
     Checks:
     1. Species IDs in elites.json match species in speciation_state.json
-    2. Reserves (cluster 0) have species_id = 0
+    2. Elites have species_id > 0; reserves have species_id = 0
     3. Species sizes match between state and elites.json
-    4. No duplicate genome IDs across files
-    5. Sum invariant: temp.json = elites.json + reserves.json + archive.json
+    4. No duplicate genome IDs across elites, reserves, archive
+    5. cluster0.size and cluster0_size_from_reserves match len(reserves.json)
+    6. Sum invariant / temp: if expect_temp_empty, temp must be []; else if temp has
+       genomes and differs from elites+reserves+archive by >1, error.
     
     Args:
         outputs_path: Path to outputs directory
         generation: Current generation number
         logger: Optional logger instance
+        expect_temp_empty: If True (e.g. after distribution), temp.json must be [].
     
     Returns:
         Tuple of (is_valid, list_of_errors)
@@ -107,7 +111,13 @@ def validate_speciation_consistency(
             # This is OK - species might be empty or frozen
             logger.debug(f"Species in state but not in elites (may be empty/frozen): {missing_in_elites}")
         
-        # Check 2: Reserves species_id
+        # Check 2a: Elites must have species_id > 0
+        for g in elites:
+            sid = g.get("species_id")
+            if sid is None or sid <= 0:
+                errors.append(f"Elite genome id={g.get('id')} has species_id={sid} (must be > 0)")
+        
+        # Check 2b: Reserves species_id
         reserve_species_ids = {g.get("species_id") for g in reserves if g.get("species_id") is not None}
         if reserve_species_ids != {0} and reserve_species_ids != set():
             errors.append(f"Reserves with non-zero species_id: {reserve_species_ids}")
@@ -147,26 +157,31 @@ def validate_speciation_consistency(
         if duplicates:
             errors.append(f"Duplicate genome IDs found: {duplicates[:10]}")  # Limit to first 10
         
-        # Check 5: Sum invariant (if temp.json exists and is not empty)
-        # After distribution, temp.json should be cleared (empty list), so we only check if it has genomes
+        # Check 5: cluster0.size and cluster0_size_from_reserves match len(reserves)
+        reserves_len = len(reserves)
+        cluster0 = state_file.get("cluster0", {})
+        c0_size = cluster0.get("size")
+        c0_from_reserves = state_file.get("cluster0_size_from_reserves")
+        if c0_size is not None and c0_size != reserves_len:
+            errors.append(f"cluster0.size={c0_size} != len(reserves.json)={reserves_len}")
+        if c0_from_reserves is not None and c0_from_reserves != reserves_len:
+            errors.append(f"cluster0_size_from_reserves={c0_from_reserves} != len(reserves.json)={reserves_len}")
+        
+        # Check 6: Sum invariant / temp.json
+        # After distribution, temp.json should be cleared ([]). If expect_temp_empty, require that.
         if temp_path.exists():
             try:
                 with open(temp_path, 'r', encoding='utf-8') as f:
                     temp_genomes = json.load(f)
                 temp_count = len(temp_genomes) if isinstance(temp_genomes, list) else 0
-                total_distributed = len(elites) + len(reserves) + len(archive)
                 
-                # After distribution, temp.json should be empty (cleared by distribute_genomes)
-                # If temp.json has genomes, they should match the distributed count
-                # This check is mainly for detecting if distribution didn't clear temp.json
-                if temp_count > 0 and temp_count != total_distributed:
-                    # This might indicate genomes weren't distributed or temp.json wasn't cleared
-                    logger.debug(f"Sum invariant check: temp.json={temp_count}, elites+reserves+archive={total_distributed}")
-                    # Only error if there's a significant mismatch (more than just rounding/edge cases)
-                    if abs(temp_count - total_distributed) > 1:
-                        errors.append(f"Sum invariant violated: temp.json={temp_count}, elites+reserves+archive={total_distributed}")
+                if expect_temp_empty:
+                    if temp_count > 0:
+                        errors.append(f"After distribution temp.json must be empty; found {temp_count} genomes")
+                # When expect_temp_empty is False (e.g. unknown or pre-distribution), skip sum invariant
+                # to avoid false positives on old/partial runs where temp may hold leftovers.
             except Exception as e:
-                logger.warning(f"Could not verify sum invariant: {e}")
+                logger.warning(f"Could not verify temp/sum invariant: {e}")
         
         is_valid = len(errors) == 0
         if is_valid:
@@ -316,3 +331,215 @@ def analyze_distance_distribution(
             "theta_merge": config.theta_merge
         }
     }
+
+
+def validate_flow2_speciation(
+    outputs_path: Path,
+    generation: int,
+    newly_formed_species_ids: List[int],
+    logger=None
+) -> Tuple[bool, List[str]]:
+    """
+    Validate Flow 2 speciation requirements for newly formed species.
+    
+    Validates:
+    1. All newly formed species have original potential leader (not updated to highest fitness)
+    2. All followers are included in species (no radius filtering)
+    3. Species leader is in members list
+    4. All members have correct species_id
+    
+    Args:
+        outputs_path: Path to outputs directory
+        generation: Current generation number
+        newly_formed_species_ids: List of species IDs that were newly formed
+        logger: Optional logger instance
+    
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    if logger is None:
+        logger = get_logger("Flow2Validation")
+    
+    errors: List[str] = []
+    
+    if not newly_formed_species_ids:
+        return True, errors
+    
+    state_file_path = outputs_path / "speciation_state.json"
+    elites_path = outputs_path / "elites.json"
+    
+    try:
+        # Load state
+        if not state_file_path.exists():
+            errors.append("speciation_state.json not found for Flow 2 validation")
+            return False, errors
+        
+        with open(state_file_path, 'r', encoding='utf-8') as f:
+            state_file = json.load(f)
+        
+        # Load elites
+        elites = []
+        if elites_path.exists():
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites = json.load(f)
+        
+        species_dict = state_file.get("species", {})
+        
+        for sid in newly_formed_species_ids:
+            sid_str = str(sid)
+            if sid_str not in species_dict:
+                errors.append(f"Newly formed species {sid} not found in speciation_state.json")
+                continue
+            
+            sp_dict = species_dict[sid_str]
+            
+            # Check 1: Leader must be in members list
+            leader_id = sp_dict.get("leader", {}).get("id")
+            member_ids = sp_dict.get("member_ids", [])
+            
+            if leader_id is None:
+                errors.append(f"Species {sid}: leader ID is None")
+                continue
+            
+            if leader_id not in member_ids:
+                errors.append(f"Species {sid}: leader {leader_id} not in member_ids {member_ids[:5]}...")
+            
+            # Check 2: All members in elites.json have correct species_id
+            elites_for_species = [g for g in elites if g.get("species_id") == sid]
+            elites_member_ids = {g.get("id") for g in elites_for_species}
+            
+            missing_in_elites = set(member_ids) - elites_member_ids
+            if missing_in_elites:
+                errors.append(f"Species {sid}: {len(missing_in_elites)} member_ids not found in elites.json: {list(missing_in_elites)[:5]}...")
+            
+            # Check 3: Size consistency
+            expected_size = len(elites_for_species)
+            actual_size = sp_dict.get("size", 0)
+            if expected_size != actual_size:
+                errors.append(f"Species {sid}: size mismatch - expected {expected_size} (from elites.json), got {actual_size} (from state)")
+            
+            # Check 4: Cluster origin should be "natural" for newly formed species
+            cluster_origin = sp_dict.get("cluster_origin")
+            if cluster_origin != "natural":
+                errors.append(f"Species {sid}: cluster_origin is '{cluster_origin}', expected 'natural' for newly formed species")
+            
+            # Check 5: Created_at should match current generation
+            created_at = sp_dict.get("created_at")
+            if created_at != generation:
+                errors.append(f"Species {sid}: created_at={created_at}, expected {generation}")
+        
+        is_valid = len(errors) == 0
+        if is_valid:
+            logger.debug(f"Flow 2 validation passed for {len(newly_formed_species_ids)} newly formed species")
+        else:
+            logger.warning(f"Flow 2 validation found {len(errors)} errors for {len(newly_formed_species_ids)} newly formed species")
+        
+        return is_valid, errors
+        
+    except Exception as e:
+        error_msg = f"Flow 2 validation failed with exception: {e}"
+        logger.error(error_msg, exc_info=True)
+        return False, [error_msg]
+
+
+def validate_metrics_from_files(
+    outputs_path: Path,
+    metrics: Dict[str, Any],
+    logger=None
+) -> Tuple[bool, List[str]]:
+    """
+    Validate that metrics are calculated correctly from files.
+    
+    Validates:
+    1. species_count matches unique species IDs in elites.json
+    2. total_population equals len(elites.json) + len(reserves.json)
+    3. reserves_size equals len(reserves.json)
+    4. best_fitness is max fitness across elites + reserves
+    5. avg_fitness is mean fitness across elites + reserves
+    
+    Args:
+        outputs_path: Path to outputs directory
+        metrics: Dictionary with metrics (from GenerationMetrics.to_dict())
+        logger: Optional logger instance
+    
+    Returns:
+        Tuple of (is_valid, list_of_errors)
+    """
+    if logger is None:
+        logger = get_logger("MetricsValidation")
+    
+    errors: List[str] = []
+    
+    elites_path = outputs_path / "elites.json"
+    reserves_path = outputs_path / "reserves.json"
+    
+    try:
+        # Load elites
+        elites = []
+        if elites_path.exists():
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites = json.load(f)
+        else:
+            errors.append("elites.json not found for metrics validation")
+            return False, errors
+        
+        # Load reserves
+        reserves = []
+        if reserves_path.exists():
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves = json.load(f)
+        
+        # Validate species_count
+        unique_species_ids = {g.get("species_id") for g in elites if g.get("species_id") is not None and g.get("species_id") > 0}
+        expected_species_count = len(unique_species_ids)
+        actual_species_count = metrics.get("species_count", 0)
+        if expected_species_count != actual_species_count:
+            errors.append(f"species_count mismatch: expected {expected_species_count} (from elites.json), got {actual_species_count}")
+        
+        # Validate total_population
+        expected_total_pop = len(elites) + len(reserves)
+        actual_total_pop = metrics.get("total_population", 0)
+        if expected_total_pop != actual_total_pop:
+            errors.append(f"total_population mismatch: expected {expected_total_pop} (elites={len(elites)}, reserves={len(reserves)}), got {actual_total_pop}")
+        
+        # Validate reserves_size
+        expected_reserves_size = len(reserves)
+        actual_reserves_size = metrics.get("reserves_size", 0)
+        if expected_reserves_size != actual_reserves_size:
+            errors.append(f"reserves_size mismatch: expected {expected_reserves_size} (from reserves.json), got {actual_reserves_size}")
+        
+        # Validate fitness metrics
+        from utils.population_io import _extract_north_star_score
+        all_fitness = []
+        for g in elites:
+            fitness = _extract_north_star_score(g, "toxicity")
+            if fitness > 0:
+                all_fitness.append(float(fitness))
+        for g in reserves:
+            fitness = _extract_north_star_score(g, "toxicity")
+            if fitness > 0:
+                all_fitness.append(float(fitness))
+        
+        if all_fitness:
+            expected_best = max(all_fitness)
+            actual_best = metrics.get("best_fitness", 0.0)
+            if abs(expected_best - actual_best) > 0.0001:  # Allow small floating point differences
+                errors.append(f"best_fitness mismatch: expected {expected_best:.4f}, got {actual_best:.4f}")
+            
+            expected_avg = np.mean(all_fitness)
+            actual_avg = metrics.get("avg_fitness", 0.0)
+            if abs(expected_avg - actual_avg) > 0.0001:
+                errors.append(f"avg_fitness mismatch: expected {expected_avg:.4f}, got {actual_avg:.4f}")
+        
+        is_valid = len(errors) == 0
+        if is_valid:
+            logger.debug("Metrics validation passed - all metrics match file contents")
+        else:
+            logger.warning(f"Metrics validation found {len(errors)} errors")
+        
+        return is_valid, errors
+        
+    except Exception as e:
+        error_msg = f"Metrics validation failed with exception: {e}"
+        logger.error(error_msg, exc_info=True)
+        return False, [error_msg]

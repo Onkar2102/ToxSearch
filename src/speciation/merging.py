@@ -27,14 +27,14 @@ def merge_islands(
     Merge two islands into a single species.
     
     Merging combines two similar species into one:
-    - Members: All members from both species (deduplicated by ID)
-    - Leader: Highest-fitness individual (from either species)
-    - Mode: Reset to DEFAULT (forces re-adaptation)
+    - Members: All members from both species (deduplicated by ID) - NO radius/capacity filtering
+    - Leader: Highest-fitness individual from ALL combined members
     - Radius: Constant theta_sim (same for all species)
     - Stagnation: Reset to 0 (fresh start for merged species)
     - Origin: "merge" with parent_ids = [sp1.id, sp2.id]
     
-    If total members exceed max_capacity (100), keeps highest-fitness individuals.
+    NOTE: This function does NOT enforce radius or capacity. All combined members are kept.
+    Radius and capacity enforcement will be done in Phase 4 of run_speciation.py after all merges.
     
     Note: Creates a NEW species ID (not reusing sp1.id or sp2.id) to avoid confusion.
     
@@ -43,13 +43,13 @@ def merge_islands(
         sp2: Second species to merge
         current_generation: Current generation number
         theta_sim: Constant radius for the merged species (default: 0.2, matches config.py)
-        max_capacity: Maximum members after merge (default: 100)
+        max_capacity: Deprecated - not used (kept for backward compatibility)
         logger: Optional logger instance
     
     Returns:
-        Tuple of (merged Species, list of outliers outside radius)
+        Tuple of (merged Species, empty list)
         - merged: New merged Species with cluster_origin="merge" and parent_ids=[sp1.id, sp2.id]
-        - outliers: List of Individual objects outside radius (to be moved to cluster 0 by caller)
+        - outliers: Empty list (no filtering during merge, will be done in Phase 4)
     """
     if logger is None:
         logger = get_logger("IslandMerging")
@@ -62,9 +62,7 @@ def merge_islands(
             combined.append(m)
             seen.add(m.id)
     
-    # Sort by fitness and trim to capacity
-    combined = sorted(combined, key=lambda x: x.fitness, reverse=True)[:max_capacity]
-    # Select new leader as highest fitness from ALL combined members (not just old leaders)
+    # Select new leader as highest fitness from ALL combined members
     if not combined:
         # Fallback: use highest fitness leader from either species (both should exist)
         if not sp1.leader or not sp2.leader:
@@ -72,42 +70,16 @@ def merge_islands(
             raise ValueError(f"Cannot merge species {sp1.id} and {sp2.id}: insufficient members and leaders")
         new_leader = max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
     else:
-        new_leader = combined[0]
+        new_leader = max(combined, key=lambda x: x.fitness)  # Highest fitness from all members
     
-    # Note: Duplicate leader check will be done in run_speciation.py after merge
-    # since we don't have access to all species here
+    # Note: Duplicate leader check will be done in run_speciation.py Phase 4 after merge
+    # Note: Radius and capacity enforcement will be done in run_speciation.py Phase 4 after all merges
     
-    # Verify all members are within radius of new leader (post-merge radius verification)
-    members_within_radius = []
-    members_outside_radius = []
-    
-    for member in combined:
-        if member.id == new_leader.id:
-            # Leader always stays
-            members_within_radius.append(member)
-            continue
-        
-        if member.embedding is None or new_leader.embedding is None:
-            # Members without embeddings go to cluster 0 (handled by caller)
-            members_outside_radius.append(member)
-            continue
-        
-        dist = ensemble_distance(
-            member.embedding, new_leader.embedding,
-            member.phenotype, new_leader.phenotype,
-            w_genotype, w_phenotype
-        )
-        
-        if dist < theta_sim:
-            members_within_radius.append(member)
-        else:
-            members_outside_radius.append(member)
-    
-    # Create merged species with only members within radius
+    # Create merged species with ALL members (NO radius/capacity filtering)
     merged = Species(
         id=generate_species_id(),  # New ID for clarity
         leader=new_leader,
-        members=members_within_radius,
+        members=combined,  # ALL members, NO filtering
         radius=theta_sim,  # Constant radius for all species
         stagnation=0,
         max_fitness=new_leader.fitness,
@@ -118,15 +90,12 @@ def merge_islands(
         parent_ids=[sp1.id, sp2.id]  # Both parent IDs
     )
     
-    # Update species assignments for members within radius
-    for m in members_within_radius:
+    # Update species assignments for all members
+    for m in combined:
         m.species_id = merged.id
     
-    if members_outside_radius:
-        logger.warning(f"Merge {sp1.id}+{sp2.id}->{merged.id}: {len(members_outside_radius)} members outside radius of new leader (will be moved to cluster 0 by caller)")
-    
-    logger.info(f"Merged species {sp1.id} + {sp2.id} -> {merged.id} ({merged.size} members within radius, {len(members_outside_radius)} outside)")
-    return merged, members_outside_radius  # Return outliers for caller to handle
+    logger.info(f"Merged species {sp1.id} + {sp2.id} -> {merged.id} ({merged.size} members, no filtering applied - will be enforced in Phase 4)")
+    return merged, []  # Return empty outliers list (no filtering during merge)
 
 
 def process_merges(
@@ -152,11 +121,10 @@ def process_merges(
     
     Merged species:
     - Combines all members (deduplicated)
-    - Keeps highest-fitness leader
-    - Resets to DEFAULT mode
+    - Keeps highest-fitness leader from all combined members
     - Uses constant theta_sim radius
     - Has cluster_origin="merge" and parent_ids=[id1, id2]
-    - Truncates to max_capacity if needed
+    - NO radius/capacity enforcement (deferred to Phase 4 in run_speciation.py)
     
     Frozen species can merge with active or other frozen species.
     When species merge, BOTH parent species become extinct (moved to historical_species).
@@ -180,7 +148,7 @@ def process_merges(
         Tuple of (updated_species, merge_events, outliers, extinct_parents)
         - updated_species: Dict of species after merging (parents removed, merged species added)
         - merge_events: List of merge event dictionaries
-        - outliers: List of Individual objects outside radius after merge (to be moved to cluster 0 by caller)
+        - outliers: Empty list (no filtering during merge, radius enforcement deferred to Phase 4)
         - extinct_parents: Dict of parent species that became extinct via merging (to be moved to historical_species)
     """
     if logger is None:
