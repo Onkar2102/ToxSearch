@@ -17,7 +17,7 @@ from collections import defaultdict
 OPERATOR_MODES = ['ops', 'comb']
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
-base_dir = os.path.join(script_dir, "..", "data", "outputs")
+base_dir = os.path.join(script_dir, "..", "archive", "output", "toxsearch_outputs")
 base_dir = os.path.normpath(base_dir)
 
 output_dir = script_dir
@@ -1054,7 +1054,7 @@ CROSSOVER_OPERATORS = {'SemanticSimilarityCrossover', 'SemanticFusionCrossover'}
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
-base_data_dir = os.path.join(project_root, "data", "outputs")
+base_data_dir = os.path.join(project_root, "archive", "output", "toxsearch_outputs")
 base_data_dir = os.path.normpath(base_data_dir)
 
 pattern = os.path.join(base_data_dir, "run*_comb")
@@ -1281,54 +1281,6 @@ for operator in sorted(all_operators):
 
 final_table_df = pd.DataFrame(table_rows)
 
-fig, ax = plt.subplots(figsize=(16, len(final_table_df) * 0.5 + 2))
-ax.axis('tight')
-ax.axis('off')
-
-headers = ['Operator', 'Exec', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ']
-table_data = [[row['Operator'], row['Exec'],
-               f"{row['NE']:.2f}" if not pd.isna(row['NE']) else 'N/A',
-               f"{row['EHR']:.2f}" if not pd.isna(row['EHR']) else 'N/A',
-               f"{row['IR']:.2f}" if not pd.isna(row['IR']) else 'N/A',
-               f"{row['cEHR']:.2f}" if not pd.isna(row['cEHR']) else 'N/A',
-               f"{row['Δμ']:.2f}" if not pd.isna(row['Δμ']) else 'N/A',
-               f"{row['Δσ']:.2f}" if not pd.isna(row['Δσ']) else 'N/A']
-              for _, row in final_table_df.iterrows()]
-
-table = ax.table(cellText=table_data, colLabels=headers, cellLoc='center', loc='center')
-table.auto_set_font_size(False)
-table.set_fontsize(9)
-table.scale(1, 1.8)
-
-for i in range(len(headers)):
-    table[(0, i)].set_facecolor('#4CAF50')
-    table[(0, i)].set_text_props(weight='bold', color='white')
-
-for row_idx, (_, row) in enumerate(final_table_df.iterrows(), start=1):
-    for j in range(len(headers)):
-        if row['is_mean']:
-            table[(row_idx, j)].set_facecolor('#B3E5FC')
-            table[(row_idx, j)].set_text_props(weight='bold')
-        else:
-            table[(row_idx, j)].set_facecolor('#f0f0f0' if row_idx % 2 == 0 else 'white')
-
-plt.title('RQ2: Operator Performance Metrics (Rates % and Deltas)', fontsize=14, fontweight='bold', pad=20)
-
-output_dir = script_dir
-
-filename_pdf = os.path.join(output_dir, "rq2_operator_metrics_table.pdf")
-if os.path.exists(filename_pdf):
-    os.remove(filename_pdf)
-plt.savefig(filename_pdf, dpi=150, bbox_inches='tight')
-plt.close()
-
-simplified_table_df = final_table_df[final_table_df['is_mean'] == True].copy()
-simplified_table_df = simplified_table_df[['Operator', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ']].copy()
-simplified_table_df = simplified_table_df.sort_values('Operator').reset_index(drop=True)
-
-csv_filename = os.path.join(output_dir, "rq2_operator_metrics_simplified.csv")
-simplified_table_df.to_csv(csv_filename, index=False)
-
 if 'final_table_df' not in globals() or final_table_df.empty:
     raise ValueError("final_table_df not found. Please run the main processing section first.")
 
@@ -1545,6 +1497,75 @@ if pairwise_all:
     pairwise_df.to_csv(csv_filename, index=False)
 
 
+
+fig, ax = plt.subplots(figsize=(16, len(final_table_df) * 0.5 + 2))
+ax.axis('tight')
+ax.axis('off')
+
+headers = ['Operator', 'Exec', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ']
+
+sig_operators_per_metric = {}
+for m in metrics:
+    if m in statistical_results and 'significant_pairs' in statistical_results[m]:
+        sig = set()
+        for t in statistical_results[m]['significant_pairs']:
+            sig.add(t[0])
+            sig.add(t[1])
+        sig_operators_per_metric[m] = sig
+
+metric_cols = ['NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ']
+table_data = []
+for _, row in final_table_df.iterrows():
+    row_list = [row['Operator'], row['Exec']]
+    for m in metric_cols:
+        if pd.isna(row[m]):
+            s = 'N/A'
+        else:
+            if row['is_mean'] and row['Operator'] in sig_operators_per_metric.get(m, set()):
+                s = f"{row[m]:.2f}*"
+            else:
+                s = f"{row[m]:.2f}"
+        row_list.append(s)
+    table_data.append(row_list)
+
+table = ax.table(cellText=table_data, colLabels=headers, cellLoc='center', loc='center')
+table.auto_set_font_size(False)
+table.set_fontsize(9)
+table.scale(1, 1.8)
+
+for i in range(len(headers)):
+    table[(0, i)].set_facecolor('#4CAF50')
+    table[(0, i)].set_text_props(weight='bold', color='white')
+
+for row_idx, (_, row) in enumerate(final_table_df.iterrows(), start=1):
+    for j in range(len(headers)):
+        if row['is_mean']:
+            table[(row_idx, j)].set_facecolor('#B3E5FC')
+            table[(row_idx, j)].set_text_props(weight='bold')
+        else:
+            table[(row_idx, j)].set_facecolor('#f0f0f0' if row_idx % 2 == 0 else 'white')
+
+plt.title('RQ2: Operator Performance Metrics (Rates % and Deltas)', fontsize=14, fontweight='bold', pad=20)
+
+fig.subplots_adjust(bottom=0.05)
+fig.text(0.5, 0.01, '(*) In ≥1 significant pairwise difference for that metric (Mann-Whitney U, Bonferroni).', ha='center', fontsize=8, transform=fig.transFigure)
+
+output_dir = script_dir
+
+filename_pdf = os.path.join(output_dir, "rq2_operator_metrics_table.pdf")
+if os.path.exists(filename_pdf):
+    os.remove(filename_pdf)
+plt.savefig(filename_pdf, dpi=150, bbox_inches='tight')
+plt.close()
+
+simplified_table_df = final_table_df[final_table_df['is_mean'] == True].copy()
+simplified_table_df = simplified_table_df[['Operator', 'NE', 'EHR', 'IR', 'cEHR', 'Δμ', 'Δσ']].copy()
+simplified_table_df = simplified_table_df.sort_values('Operator').reset_index(drop=True)
+
+csv_filename = os.path.join(output_dir, "rq2_operator_metrics_simplified.csv")
+simplified_table_df.to_csv(csv_filename, index=False)
+
+
 def get_max_toxicity(elite):
     """Extracts the maximum toxicity score across all models for an elite prompt."""
     models_dict = elite.get('models', {})
@@ -1683,7 +1704,7 @@ def main():
     """Main function that processes elite prompts and generates RQ3 analysis outputs."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
-    base_data_dir = os.path.join(project_root, "data", "outputs")
+    base_data_dir = os.path.join(project_root, "archive", "output", "toxsearch_outputs")
     base_data_dir = os.path.normpath(base_data_dir)
     
     
@@ -1767,26 +1788,21 @@ def main():
     
     elites_with_toxicity.sort(key=lambda x: x['toxicity'], reverse=True)
     
-    total_count = len(elites_with_toxicity)
-    top_25_percent_count = int(total_count * 0.25)
+    all_prompts = [item['elite']['prompt'] for item in elites_with_toxicity]
     
-    top_25_percent_elites = elites_with_toxicity[:top_25_percent_count]
-    
-    top_prompts = [item['elite']['prompt'] for item in top_25_percent_elites]
-    
-    df_top = pd.DataFrame({'questions': top_prompts})
+    df_top = pd.DataFrame({'questions': all_prompts})
     
     
     csv_path = os.path.join(project_root, "data", "combined_elites.csv")
     df_top.to_csv(csv_path, index=False, encoding='utf-8')
     
     
-    top_25_prompts = {item['elite']['prompt'] for item in top_25_percent_elites}
+    elite_prompts = {item['elite']['prompt'] for item in elites_with_toxicity}
     
-    original_toxicity_scores = [item['toxicity'] for item in top_25_percent_elites]
+    original_toxicity_scores = [item['toxicity'] for item in elites_with_toxicity]
     
-    top_25_elites = []
-    for idx, item in enumerate(top_25_percent_elites, start=1):
+    all_elites = []
+    for idx, item in enumerate(elites_with_toxicity, start=1):
         elite = item['elite'].copy()
         
         if 'models' in elite:
@@ -1803,10 +1819,10 @@ def main():
             elite['models'] = normalized_models
         
         elite['id'] = idx
-        top_25_elites.append(elite)
+        all_elites.append(elite)
     
     prompt_to_elite = {}
-    for elite in top_25_elites:
+    for elite in all_elites:
         prompt = elite.get('prompt', '')
         normalized = normalize_prompt(prompt)
         prompt_to_elite[normalized] = elite
@@ -1820,6 +1836,8 @@ def main():
     
     model_toxicity_scores = {}
     model_toxicity_scores['Llama-3.1-8B'] = original_toxicity_scores
+    
+    elite_prompts_normalized = {p.strip().lower() for p in elite_prompts}
     
     for model_dir in sorted(model_dirs):
         model_name = model_dir.name
@@ -1883,9 +1901,8 @@ def main():
             for record in all_model_records:
                 prompt = record.get('prompt', '')
                 normalized_prompt = prompt.strip().lower()
-                top_25_normalized = {p.strip().lower() for p in top_25_prompts}
                 
-                if normalized_prompt in top_25_normalized:
+                if normalized_prompt in elite_prompts_normalized:
                     toxicity = extract_toxicity(record)
                     if toxicity is not None:
                         model_scores.append(toxicity)
@@ -1935,15 +1952,15 @@ def main():
                         }
     
     all_model_names = set()
-    for elite in top_25_elites:
+    for elite in all_elites:
         models = elite.get('models', {})
         all_model_names.update(models.keys())
     
     all_7_models = sorted(all_model_names)
     
-    output_path = os.path.join(script_dir, "rq3_top25_elites_with_models.json")
+    output_path = os.path.join(script_dir, "rq3_all_elites_with_models.json")
     with open(output_path, 'w', encoding='utf-8') as f:
-        json.dump(top_25_elites, f, indent=2, ensure_ascii=False)
+        json.dump(all_elites, f, indent=2, ensure_ascii=False)
     
     missing_responses_per_model = {}
     missing_scores_per_model = {}
@@ -1956,7 +1973,7 @@ def main():
         missing_models_per_model[model_name] = 0
         refusal_responses_per_model[model_name] = 0
     
-    for elite in top_25_elites:
+    for elite in all_elites:
         models = elite.get('models', {})
         for model_name in all_7_models:
             if model_name not in models:
@@ -1994,7 +2011,7 @@ def main():
         else:
             model_names_short.append(name[:20])
     
-    total_prompts = len(top_25_elites)
+    total_prompts = len(all_elites)
     invalid_counts = []
     for model_name in model_names:
         missing_model = missing_models_per_model[model_name]
@@ -2120,7 +2137,7 @@ def main():
     ax.set_axisbelow(True)
 
     fig.tight_layout(pad=1.2)
-    plot_path = Path(script_dir) / "top_25_percent_elites_toxicity_distribution_all_models.pdf"
+    plot_path = Path(script_dir) / "all_elites_toxicity_distribution_all_models.pdf"
     fig.savefig(plot_path, bbox_inches='tight', format='pdf')
     plt.close(fig)
 
