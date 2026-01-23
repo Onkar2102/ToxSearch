@@ -3305,6 +3305,12 @@ def run_speciation(
         
         total_species_count = active_count + frozen_count  # Exclude incubator
         
+        # Get latest metrics from metrics_tracker (includes diversity metrics calculated in record_generation)
+        current_metrics = None
+        if state and "metrics_tracker" in state and state["metrics_tracker"].history:
+            current_metrics = state["metrics_tracker"].history[-1]
+            logger.debug(f"Retrieved metrics from metrics_tracker for generation {current_generation}")
+        
         result = {
             "species_count": total_species_count,  # Total species (active + frozen) for EvolutionTracker
             "active_species_count": active_count,  # Only active species
@@ -3317,6 +3323,19 @@ def run_speciation(
             "genomes_updated": state["_genome_tracker"].get_distribution_stats()["total_genomes"] if "_genome_tracker" in state else 0,
             "success": True
         }
+        
+        # Add diversity metrics if available (from metrics_tracker)
+        if current_metrics:
+            result["inter_species_diversity"] = round(current_metrics.inter_species_diversity, 4)
+            result["intra_species_diversity"] = round(current_metrics.intra_species_diversity, 4)
+            if hasattr(current_metrics, 'cluster_quality') and current_metrics.cluster_quality:
+                result["cluster_quality"] = current_metrics.cluster_quality
+            logger.debug(f"Added diversity metrics: inter={result['inter_species_diversity']:.4f}, intra={result['intra_species_diversity']:.4f}")
+        else:
+            result["inter_species_diversity"] = 0.0
+            result["intra_species_diversity"] = 0.0
+            result["cluster_quality"] = None
+            logger.debug("No metrics available, using default diversity values (0.0)")
         
         # Distribution stats are available from genome_tracker
         if "_genome_tracker" in state:
@@ -3365,6 +3384,9 @@ def run_speciation(
             "genomes_updated": 0,
             "elites_moved": 0,
             "reserves_moved": 0,
+            "inter_species_diversity": 0.0,
+            "intra_species_diversity": 0.0,
+            "cluster_quality": None,
             "success": False,
             "error": str(e)
         }

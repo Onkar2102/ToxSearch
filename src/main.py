@@ -749,56 +749,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             
             # Recompute thresholds, redistribute files, and update tracker for this generation
             try:
-                previous_max_toxicity = 0.0001
-                
-                # Update adaptive selection logic (for parent selection, not speciation)
-                try:
-                    outputs_path = str(get_outputs_path())
-                    temp_path_obj = get_outputs_path() / "temp.json"
-                    
-                    # Get previous max from EvolutionTracker (for stagnation detection)
-                    # Use max_score_variants from previous generation (not population_max_toxicity which is cumulative)
-                    if generation_count > 1:
-                        try:
-                            evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
-                            if evolution_tracker_path.exists():
-                                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                                    tracker = json.load(f)
-                                generations = tracker.get("generations", [])
-                                if generations and len(generations) >= 2:
-                                    # Get max_score_variants from previous generation (generation_count - 1)
-                                    prev_gen_num = generation_count - 1
-                                    for gen in generations:
-                                        if gen.get("generation_number") == prev_gen_num:
-                                            previous_max_toxicity = gen.get("max_score_variants", 0.0001)
-                                            break
-                        except Exception as e:
-                            logger.debug(f"Failed to get previous max from tracker: {e}")
-                            previous_max_toxicity = 0.0001
-                    
-                    # Get current max from temp.json (variants created this generation)
-                    max_toxicity = 0.0
-                    if temp_path_obj.exists():
-                        with open(temp_path_obj, 'r', encoding='utf-8') as f:
-                            temp_genomes = json.load(f)
-                        if temp_genomes:
-                            max_toxicity = max([_extract_north_star_score(g, north_star_metric) for g in temp_genomes], default=0.0)
-                    adaptive_results = update_adaptive_selection_logic(
-                        outputs_path=outputs_path,
-                        current_max_toxicity=max_toxicity,
-                        previous_max_toxicity=previous_max_toxicity,
-                        stagnation_limit=stagnation_limit,
-                        north_star_metric=north_star_metric,
-                        current_gen_avg_fitness=avg_fitness_before_speciation,
-                        logger=logger,
-                        log_file=log_file
-                    )
-                    logger.debug("Selection: mode=%s, since_improvement=%d, avg=%.4f, slope=%.4f",
-                               adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
-                               adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
-                except Exception as e:
-                    logger.warning("Failed to update adaptive selection logic: %s", e)
-                
                 # Phase 5: Calculate comprehensive generation statistics
                 # Note: variant statistics (max_score_variants, etc.) are already calculated above before speciation
                 try:
@@ -844,6 +794,29 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         gen_stats["elites_moved"] = speciation_result.get("elites_moved", 0)
                         gen_stats["reserves_moved"] = speciation_result.get("reserves_moved", 0)
                         gen_stats["genomes_updated"] = speciation_result.get("genomes_updated", 0)
+                        # Add diversity metrics if available (from metrics_tracker)
+                        if "inter_species_diversity" in speciation_result:
+                            gen_stats["inter_species_diversity"] = speciation_result.get("inter_species_diversity", 0.0)
+                        if "intra_species_diversity" in speciation_result:
+                            gen_stats["intra_species_diversity"] = speciation_result.get("intra_species_diversity", 0.0)
+                        # Add cluster quality if available
+                        if "cluster_quality" in speciation_result:
+                            gen_stats["cluster_quality"] = speciation_result.get("cluster_quality")
+                    
+                    # Get previous cumulative population_max_toxicity BEFORE updating tracker
+                    # (needed for improvement comparison)
+                    previous_cumulative_population_max = 0.0001
+                    if generation_count > 0 and evolution_tracker_path.exists():
+                        try:
+                            with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                                tracker_before = json.load(f)
+                            previous_cumulative_population_max = tracker_before.get("population_max_toxicity", 0.0001)
+                            logger.debug(f"Previous cumulative population_max_toxicity: {previous_cumulative_population_max:.4f}")
+                        except Exception as e:
+                            logger.debug(f"Failed to read previous population_max_toxicity: {e}")
+                    
+                    # Current generation's per-generation population_max_toxicity (from elites+reserves after distribution)
+                    current_population_max = gen_stats.get("population_max_toxicity", 0.0001)
                     
                     # Update EvolutionTracker with all statistics
                     update_evolution_tracker_with_statistics(
@@ -854,6 +827,28 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         logger=logger,
                         log_file=log_file
                     )
+                    
+                    # Update adaptive selection logic (AFTER statistics are calculated and saved)
+                    # Compare current generation's population_max_toxicity vs previous cumulative
+                    # If current > previous cumulative, there's improvement (new best found)
+                    try:
+                        outputs_path = str(get_outputs_path())
+                        
+                        adaptive_results = update_adaptive_selection_logic(
+                            outputs_path=outputs_path,
+                            current_max_toxicity=current_population_max,
+                            previous_max_toxicity=previous_cumulative_population_max,
+                            stagnation_limit=stagnation_limit,
+                            north_star_metric=north_star_metric,
+                            current_gen_avg_fitness=avg_fitness_before_speciation,
+                            logger=logger,
+                            log_file=log_file
+                        )
+                        logger.debug("Selection: mode=%s, since_improvement=%d, avg=%.4f, slope=%.4f",
+                                   adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
+                                   adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
+                    except Exception as e:
+                        logger.warning("Failed to update adaptive selection logic: %s", e)
                     
                     logger.info("Gen%d metrics: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), archived=%d, variants: max=%.4f, min=%.4f, avg=%.4f",
                                 generation_count, gen_stats["elites_count"], gen_stats["avg_fitness_elites"],

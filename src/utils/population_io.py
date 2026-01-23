@@ -2080,6 +2080,12 @@ def update_evolution_tracker_with_statistics(
         with open(tracker_path, 'r', encoding='utf-8') as f:
             tracker = json.load(f)
         
+        # Preserve top-level adaptive selection fields (updated by update_adaptive_selection_logic)
+        preserved_generations_since_improvement = tracker.get("generations_since_improvement")
+        preserved_selection_mode = tracker.get("selection_mode")
+        preserved_avg_fitness_history = tracker.get("avg_fitness_history", [])
+        preserved_slope_of_avg_fitness = tracker.get("slope_of_avg_fitness")
+        
         # Find or create generation entry
         generations = tracker.setdefault("generations", [])
         gen_entry = None
@@ -2135,10 +2141,10 @@ def update_evolution_tracker_with_statistics(
                 "elites_moved": statistics.get("elites_moved", 0),
                 "reserves_moved": statistics.get("reserves_moved", 0),
                 "genomes_updated": statistics.get("genomes_updated", 0),
-                "inter_species_diversity": 0.0,
-                "intra_species_diversity": 0.0,
+                "inter_species_diversity": statistics.get("inter_species_diversity", existing_speciation.get("inter_species_diversity", 0.0) if existing_speciation else 0.0),
+                "intra_species_diversity": statistics.get("intra_species_diversity", existing_speciation.get("intra_species_diversity", 0.0) if existing_speciation else 0.0),
                 "total_population": statistics.get("total_population", 0),
-                "cluster_quality": None,
+                "cluster_quality": statistics.get("cluster_quality", existing_speciation.get("cluster_quality") if existing_speciation else None),
             }
         
         # Add budget metrics if available
@@ -2199,6 +2205,16 @@ def update_evolution_tracker_with_statistics(
         
         # Sort generations by number
         tracker["generations"] = sorted(generations, key=lambda x: x.get("generation_number", 0))
+        
+        # Restore preserved top-level adaptive selection fields (if they were set by update_adaptive_selection_logic)
+        if preserved_generations_since_improvement is not None:
+            tracker["generations_since_improvement"] = preserved_generations_since_improvement
+        if preserved_selection_mode is not None:
+            tracker["selection_mode"] = preserved_selection_mode
+        if preserved_avg_fitness_history:
+            tracker["avg_fitness_history"] = preserved_avg_fitness_history
+        if preserved_slope_of_avg_fitness is not None:
+            tracker["slope_of_avg_fitness"] = preserved_slope_of_avg_fitness
         
         # Save updated tracker (use indent=2 to match other JSON files)
         with open(tracker_path, 'w', encoding='utf-8') as f:

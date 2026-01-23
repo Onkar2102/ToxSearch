@@ -399,11 +399,12 @@ def validate_flow2_speciation(
             sp_dict = species_dict[sid_str]
             
             # Check 1: Leader must be in members list
-            leader_id = sp_dict.get("leader", {}).get("id")
+            # Note: species.to_dict() uses "leader_id" (not nested "leader.id")
+            leader_id = sp_dict.get("leader_id") or (sp_dict.get("leader", {}).get("id") if isinstance(sp_dict.get("leader"), dict) else None)
             member_ids = sp_dict.get("member_ids", [])
             
             if leader_id is None:
-                errors.append(f"Species {sid}: leader ID is None")
+                errors.append(f"Species {sid}: leader ID is None (checked both 'leader_id' and 'leader.id')")
                 continue
             
             if leader_id not in member_ids:

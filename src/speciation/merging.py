@@ -103,11 +103,34 @@ def merge_islands(
         state = _get_state()
         genome_tracker = state.get("_genome_tracker")
         if genome_tracker:
-            # Prepare batch update: all members from both parents -> new merged species_id
-            updates = {str(m.id): merged.id for m in combined}
+            # CRITICAL: Update ALL genomes from tracker that belong to parent species, not just in-memory members
+            # In-memory members might not include all genomes (e.g., from previous generations, archived genomes)
+            # Get all genome IDs from tracker for both parent species
+            parent1_genome_ids = genome_tracker.get_all_genomes_by_species(sp1.id)
+            parent2_genome_ids = genome_tracker.get_all_genomes_by_species(sp2.id)
+            all_parent_genome_ids = set(parent1_genome_ids) | set(parent2_genome_ids)
+            
+            # Also include in-memory members (in case they're not in tracker yet)
+            in_memory_ids = {str(m.id) for m in combined}
+            all_genome_ids_to_update = all_parent_genome_ids | in_memory_ids
+            
+            # Prepare batch update: ALL genomes from both parents -> new merged species_id
+            updates = {str(gid): merged.id for gid in all_genome_ids_to_update}
+            
+            if len(all_parent_genome_ids) > len(in_memory_ids):
+                logger.debug(
+                    f"Merge {sp1.id}+{sp2.id}->{merged.id}: Updating {len(all_parent_genome_ids)} genomes from tracker "
+                    f"(in-memory had {len(in_memory_ids)} members, {len(all_parent_genome_ids) - len(in_memory_ids)} additional from tracker)"
+                )
+            
             result = genome_tracker.batch_update(updates, current_generation, f"merge_{sp1.id}_{sp2.id}_to_{merged.id}")
             if result["failed"] > 0:
                 logger.warning(f"Genome tracker batch update had {result['failed']} failures during merge")
+            elif len(all_parent_genome_ids) > len(in_memory_ids):
+                logger.info(
+                    f"Merge {sp1.id}+{sp2.id}->{merged.id}: Successfully updated {result['succeeded']} genomes "
+                    f"({len(all_parent_genome_ids) - len(in_memory_ids)} additional from tracker beyond in-memory members)"
+                )
             
             # Log reassignment events for genomes that were archived but are now in merged species
             reassigned_from_archive = result.get("reassigned_from_archive", [])
