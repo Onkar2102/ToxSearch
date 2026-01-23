@@ -2015,6 +2015,54 @@ def process_generation(current_generation: int,
     outputs_path = get_outputs_path()
     _update_speciation_state_cluster0_size_after_distribution(outputs_path)
     
+    # Also update in-memory cluster0 to match reserves.json (synchronize members list)
+    # This ensures in-memory state matches the file state after Phase 7 redistribution
+    reserves_path = outputs_path / "reserves.json"
+    if reserves_path.exists() and "_genome_tracker" in state:
+        try:
+            # Get all genome IDs with species_id=0 from tracker (authoritative source)
+            reserves_genome_ids = state["_genome_tracker"].get_all_genomes_by_species(0)
+            
+            # Load actual genome data from reserves.json
+            reserves_genomes = _load_genomes_by_ids(reserves_genome_ids, outputs_path, state["logger"])
+            
+            # Rebuild in-memory cluster0 members from reserves.json
+            # Remove genomes that are no longer in reserves (species_id changed)
+            reserves_ids_set = {str(g.get("id")) for g in reserves_genomes if g.get("id") is not None}
+            state["cluster0"].members = [
+                cm for cm in state["cluster0"].members 
+                if str(cm.individual.id) in reserves_ids_set
+            ]
+            
+            # Add genomes from reserves.json that aren't in in-memory cluster0
+            existing_cluster0_ids = {str(cm.individual.id) for cm in state["cluster0"].members}
+            added_count = 0
+            for genome in reserves_genomes:
+                genome_id = genome.get("id")
+                if genome_id is None:
+                    continue
+                genome_id_str = str(genome_id)
+                
+                if genome_id_str not in existing_cluster0_ids:
+                    # Check if genome has embedding (required for cluster0)
+                    if genome.get("prompt_embedding"):
+                        try:
+                            from .species import Individual
+                            ind = Individual.from_genome(genome)
+                            if ind.embedding is not None:
+                                state["cluster0"].add(ind, current_generation)
+                                added_count += 1
+                        except Exception as e:
+                            state["logger"].debug(f"Failed to add genome {genome_id} to cluster0: {e}")
+            
+            if added_count > 0 or len(state["cluster0"].members) != len(reserves_genomes):
+                state["logger"].debug(
+                    f"Synced in-memory cluster0: {len(state['cluster0'].members)} members "
+                    f"(reserves.json has {len(reserves_genomes)}, added {added_count})"
+                )
+        except Exception as e:
+            state["logger"].warning(f"Failed to sync in-memory cluster0 with reserves.json: {e}")
+    
     # ========================================================================
     # PHASE 8: METRICS & STATISTICS
     # ========================================================================
