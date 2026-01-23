@@ -17,6 +17,7 @@ from .reserves import Cluster0, CLUSTER_0_ID
 from .merging import process_merges
 from .extinction import process_extinctions
 from .metrics import SpeciationMetricsTracker, log_generation_summary
+from .events_tracker import EventsTracker
 from .genome_tracker import GenomeTracker
 from .validation import validate_speciation_consistency, analyze_distance_distribution, validate_flow2_speciation, validate_metrics_from_files
 
@@ -53,8 +54,7 @@ def _init_state(config: Optional[SpeciationConfig] = None, logger=None) -> None:
             "metrics_tracker": SpeciationMetricsTracker(logger=logger or get_logger("Speciation")),
             "_current_gen_events": {"speciation": 0, "merge": 0, "extinction": 0, "moved_to_cluster0": 0},
             "_embedding_model": None,
-            "_archived_count": 0,
-            "_archived_genomes": []  # Track all archived genomes for final corrected save
+            "_archived_count": 0
         }
         _state["logger"].info(f"Speciation initialized: theta_sim={_state['config'].theta_sim}, species_capacity={_state['config'].species_capacity}")
     else:
@@ -108,10 +108,11 @@ def _validate_active_count(state: Dict[str, Any], calculated_count: int, source:
 
 def _archive_individuals(individuals: List[Individual], generation: int, reason: str) -> None:
     """
-    Archive individuals to archive.json and track them in state for final corrected save.
+    Archive individuals to archive.json.
     
-    This function archives individuals and maintains a list of all archived genomes
-    in the global state so they can be included in the final corrected save.
+    This function archives individuals to archive.json. The archive.json file is the
+    authoritative source for archived genomes. Genome tracking is handled by genome_tracker.json,
+    and speciation_state.json only contains species metadata, not full genome details.
     """
     if not individuals:
         return
@@ -119,10 +120,6 @@ def _archive_individuals(individuals: List[Individual], generation: int, reason:
     state = _get_state()
     state["_archived_count"] += len(individuals)
     logger = state["logger"]
-    
-    # Initialize archived genomes list in state if not exists
-    if "_archived_genomes" not in state:
-        state["_archived_genomes"] = []
     
     try:
         outputs_path = get_outputs_path()
@@ -186,8 +183,6 @@ def _archive_individuals(individuals: List[Individual], generation: int, reason:
                 del entry["prompt_embedding"]
             
             archive.append(entry)
-            # Also track in state for final corrected save
-            state["_archived_genomes"].append(entry)
         
         # Save updated archive
         with open(archive_path, 'w', encoding='utf-8') as f:
@@ -199,13 +194,404 @@ def _archive_individuals(individuals: List[Individual], generation: int, reason:
         logger.warning(f"Failed to archive individuals: {e}")
 
 
+def phase1_compute_embeddings(temp_path: Optional[str] = None, current_generation: int = 0) -> Tuple[List[Dict[str, Any]], bool]:
+    """
+    Phase 1: Prompt to Embedding
+    
+    Steps:
+    1. Read temp.json, sort by fitness (descending)
+    2. Compute embeddings, add to genome structure
+    3. Check if elites.json and reserves.json are empty to determine generation type
+    4. Initialize genome tracker, register all genomes with species_id=0 (temporary)
+    
+    Args:
+        temp_path: Path to temp.json
+        current_generation: Current generation number
+        
+    Returns:
+        Tuple of (genomes_with_embeddings, is_generation_0)
+    """
+    state = _get_state()
+    logger = state["logger"]
+    outputs_path = get_outputs_path()
+    
+    if temp_path is None:
+        temp_path = str(outputs_path / "temp.json")
+    
+    temp_path_obj = Path(temp_path)
+    if not temp_path_obj.exists():
+        logger.warning(f"temp.json not found at {temp_path}")
+        return [], True
+    
+    # 1. Read temp.json
+    with open(temp_path_obj, 'r', encoding='utf-8') as f:
+        genomes = json.load(f)
+    
+    if not genomes:
+        logger.warning("No genomes found in temp.json")
+        return [], True
+    
+    # 2. Sort by fitness (descending)
+    from utils.population_io import _extract_north_star_score
+    genomes.sort(key=lambda g: _extract_north_star_score(g, "toxicity"), reverse=True)
+    
+    # 3. Compute embeddings
+    compute_and_save_embeddings(
+        temp_path=temp_path,
+        model_name=state["config"].embedding_model,
+        batch_size=state["config"].embedding_batch_size,
+        logger=logger
+    )
+    
+    # Reload genomes with embeddings
+    with open(temp_path_obj, 'r', encoding='utf-8') as f:
+        genomes = json.load(f)
+    
+    # 4. Determine generation type
+    elites_path = outputs_path / "elites.json"
+    reserves_path = outputs_path / "reserves.json"
+    
+    elites_empty = True
+    reserves_empty = True
+    
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+                elites_empty = len(elites_genomes) == 0
+        except Exception:
+            elites_empty = True
+    
+    if reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+                reserves_empty = len(reserves_genomes) == 0
+        except Exception:
+            reserves_empty = True
+    
+    # Generation 0 if both empty OR elites.json is empty
+    is_generation_0 = (elites_empty and reserves_empty) or elites_empty
+    
+    logger.info(f"Phase 1: Computed embeddings for {len(genomes)} genomes, is_generation_0={is_generation_0}")
+    
+    # 5. Register all genomes in tracker with species_id=0 (temporary, will be updated in Phase 2/3)
+    if "_genome_tracker" in state:
+        genome_tracker = state["_genome_tracker"]
+        for genome in genomes:
+            genome_id = genome.get("id")
+            if genome_id:
+                genome_tracker.register(str(genome_id), 0, current_generation)
+    
+    return genomes, is_generation_0
+
+
+def phase8_redistribute_genomes(temp_path: Optional[str] = None, current_generation: int = 0) -> Dict[str, int]:
+    """
+    Phase 8: Redistribution of Genomes
+    
+    Uses genome tracker as source of truth for distribution.
+    
+    Steps:
+    1. Read genome tracker (source of truth), group by species_id
+    2. Locate actual genome data: check temp.json → elites.json → reserves.json → archive.json (lazy load)
+    3. Prepare distribution buckets based on tracker's species_id
+    4. Handle existing files (preserve untracked genomes from previous generations)
+    5. Merge and deduplicate, ensure all genomes have species_id matching tracker
+    6. Validate consistency: if file shows different species_id, use tracker's value (tracker is authoritative)
+    7. Write files atomically (temp file + rename)
+    8. Final validation using tracker.validate_consistency()
+    
+    Args:
+        temp_path: Path to temp.json
+        current_generation: Current generation number
+        
+    Returns:
+        Dictionary with distribution statistics
+    """
+    state = _get_state()
+    logger = state["logger"]
+    outputs_path = get_outputs_path()
+    
+    if temp_path is None:
+        temp_path = str(outputs_path / "temp.json")
+    
+    temp_path_obj = Path(temp_path)
+    elites_path = outputs_path / "elites.json"
+    reserves_path = outputs_path / "reserves.json"
+    archive_path = outputs_path / "archive.json"
+    
+    if "_genome_tracker" not in state:
+        logger.error("Genome tracker not initialized")
+        return {"elites_moved": 0, "reserves_moved": 0, "archived_moved": 0, "total_processed": 0}
+    
+    genome_tracker = state["_genome_tracker"]
+    
+    # Step 1: Read genome tracker (source of truth), group by species_id
+    stats = genome_tracker.get_distribution_stats()
+    has_archived = int(stats["by_species_id"].get("-1", 0)) > 0
+    
+    # Group genomes by destination
+    elites_genome_ids = []
+    reserves_genome_ids = []
+    archive_genome_ids = []
+    
+    for genome_id, data in genome_tracker.genomes.items():
+        species_id = data["species_id"]
+        if species_id > 0:
+            elites_genome_ids.append(genome_id)
+        elif species_id == 0:
+            reserves_genome_ids.append(genome_id)
+        elif species_id == -1:
+            archive_genome_ids.append(genome_id)
+    
+    logger.info(f"Phase 8: Distribution plan - {len(elites_genome_ids)} elites, {len(reserves_genome_ids)} reserves, {len(archive_genome_ids)} archived")
+    
+    # Step 2: Locate actual genome data
+    # Load temp.json
+    temp_genomes = []
+    if temp_path_obj.exists():
+        try:
+            with open(temp_path_obj, 'r', encoding='utf-8') as f:
+                temp_genomes = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load temp.json: {e}")
+    
+    # Load elites.json
+    elites_genomes = []
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load elites.json: {e}")
+    
+    # Load reserves.json
+    reserves_genomes = []
+    if reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load reserves.json: {e}")
+    
+    # Load archive.json (lazy - only if needed)
+    archive_genomes = []
+    if has_archived and archive_path.exists():
+        try:
+            with open(archive_path, 'r', encoding='utf-8') as f:
+                archive_genomes = json.load(f)
+            logger.debug(f"Loaded archive.json with {len(archive_genomes)} genomes (lazy loading)")
+        except Exception as e:
+            logger.warning(f"Failed to load archive.json: {e}")
+    
+    # Create lookup map: genome_id -> genome data
+    genome_data_map = {}
+    
+    # Add from temp.json (current generation, highest priority)
+    for genome in temp_genomes:
+        genome_id = genome.get("id")
+        if genome_id:
+            genome_data_map[str(genome_id)] = genome
+    
+    # Add from elites.json (if not in temp)
+    for genome in elites_genomes:
+        genome_id = genome.get("id")
+        if genome_id and str(genome_id) not in genome_data_map:
+            genome_data_map[str(genome_id)] = genome
+    
+    # Add from reserves.json (if not in temp or elites)
+    for genome in reserves_genomes:
+        genome_id = genome.get("id")
+        if genome_id and str(genome_id) not in genome_data_map:
+            genome_data_map[str(genome_id)] = genome
+    
+    # Add from archive.json (if not in others, and only if needed)
+    for genome in archive_genomes:
+        genome_id = genome.get("id")
+        if genome_id and str(genome_id) not in genome_data_map:
+            genome_data_map[str(genome_id)] = genome
+    
+    # Step 3-5: Prepare distribution buckets and fix mismatches
+    elites_to_save = []
+    reserves_to_save = []
+    archive_to_save = []
+    
+    # Process tracked genomes
+    for genome_id in genome_tracker.genomes.keys():
+        tracker_species_id = genome_tracker.get_species_id(genome_id)
+        
+        if genome_id in genome_data_map:
+            genome = genome_data_map[genome_id].copy()
+            
+            # Safety check: If genome has archive_reason, it should always go to archive
+            # regardless of tracker's species_id (archive_reason takes precedence)
+            if genome.get("archive_reason"):
+                # Update tracker to reflect archived state (species_id = -1)
+                if tracker_species_id != -1:
+                    genome_tracker.update_species_id(genome_id, -1, current_generation, f"archive_reason_{genome.get('archive_reason')}")
+                    logger.debug(f"Genome {genome_id} has archive_reason '{genome.get('archive_reason')}' - updated tracker from species_id {tracker_species_id} to -1")
+                # Remove embeddings before archiving (save space)
+                if "prompt_embedding" in genome:
+                    del genome["prompt_embedding"]
+                # Ensure species_id is set to -1 for archived genomes
+                genome["species_id"] = -1
+                archive_to_save.append(genome)
+                logger.debug(f"Genome {genome_id} has archive_reason '{genome.get('archive_reason')}' - moving to archive.json (overriding tracker species_id {tracker_species_id})")
+                continue
+            
+            # Fix mismatch: use tracker's species_id (tracker is authoritative)
+            file_species_id = genome.get("species_id")
+            if file_species_id != tracker_species_id:
+                logger.debug(f"Fixing mismatch: genome {genome_id} - file shows {file_species_id}, tracker shows {tracker_species_id} (using tracker)")
+                genome["species_id"] = tracker_species_id
+            
+            # Distribute based on tracker's species_id
+            if tracker_species_id > 0:
+                elites_to_save.append(genome)
+            elif tracker_species_id == 0:
+                reserves_to_save.append(genome)
+            elif tracker_species_id == -1:
+                # Remove embeddings before archiving (save space)
+                if "prompt_embedding" in genome:
+                    del genome["prompt_embedding"]
+                archive_to_save.append(genome)
+        else:
+            # Genome in tracker but not in files (might be newly registered)
+            logger.debug(f"Genome {genome_id} in tracker but not found in files (newly registered)")
+    
+    # Step 4: Preserve untracked genomes from previous generations
+    # IMPORTANT: Genomes with archive_reason should ALWAYS go to archive.json, never to elites.json or reserves.json
+    tracked_ids = set(genome_tracker.genomes.keys())
+    
+    # Preserve untracked genomes from elites.json
+    for genome in elites_genomes:
+        genome_id = str(genome.get("id")) if genome.get("id") else None
+        if genome_id and genome_id not in tracked_ids:
+            # Check if genome is archived - if so, move to archive, not elites
+            if genome.get("archive_reason"):
+                # Register in tracker as archived (species_id = -1)
+                genome_tracker.register(genome_id, -1, current_generation)
+                # Remove embeddings before archiving (save space)
+                if "prompt_embedding" in genome:
+                    del genome["prompt_embedding"]
+                genome["species_id"] = -1
+                archive_to_save.append(genome)
+                logger.debug(f"Untracked genome {genome_id} has archive_reason - registered in tracker as archived and moved to archive.json")
+            else:
+                # Untracked genome - preserve it (might be from previous generation)
+                elites_to_save.append(genome)
+    
+    # Preserve untracked genomes from reserves.json
+    for genome in reserves_genomes:
+        genome_id = str(genome.get("id")) if genome.get("id") else None
+        if genome_id and genome_id not in tracked_ids:
+            # Check if genome is archived - if so, move to archive, not reserves
+            if genome.get("archive_reason"):
+                # Register in tracker as archived (species_id = -1)
+                genome_tracker.register(genome_id, -1, current_generation)
+                # Remove embeddings before archiving (save space)
+                if "prompt_embedding" in genome:
+                    del genome["prompt_embedding"]
+                genome["species_id"] = -1
+                archive_to_save.append(genome)
+                logger.debug(f"Untracked genome {genome_id} has archive_reason - registered in tracker as archived and moved to archive.json")
+            else:
+                # Untracked genome - preserve it
+                reserves_to_save.append(genome)
+    
+    # Preserve untracked genomes from archive.json (if loaded)
+    for genome in archive_genomes:
+        genome_id = str(genome.get("id")) if genome.get("id") else None
+        if genome_id and genome_id not in tracked_ids:
+            # Untracked genome - preserve it in archive
+            archive_to_save.append(genome)
+    
+    # Deduplicate by genome_id (tracker-based list takes precedence)
+    seen_ids = set()
+    elites_deduped = []
+    for genome in elites_to_save:
+        genome_id = str(genome.get("id")) if genome.get("id") else None
+        if genome_id and genome_id not in seen_ids:
+            seen_ids.add(genome_id)
+            elites_deduped.append(genome)
+    
+    seen_ids = set()
+    reserves_deduped = []
+    for genome in reserves_to_save:
+        genome_id = str(genome.get("id")) if genome.get("id") else None
+        if genome_id and genome_id not in seen_ids:
+            seen_ids.add(genome_id)
+            reserves_deduped.append(genome)
+    
+    seen_ids = set()
+    archive_deduped = []
+    for genome in archive_to_save:
+        genome_id = str(genome.get("id")) if genome.get("id") else None
+        if genome_id and genome_id not in seen_ids:
+            seen_ids.add(genome_id)
+            archive_deduped.append(genome)
+    
+    # Step 7: Write files atomically
+    # Write elites.json
+    if elites_deduped:
+        temp_elites_path = elites_path.with_suffix('.json.tmp')
+        with open(temp_elites_path, 'w', encoding='utf-8') as f:
+            json.dump(elites_deduped, f, indent=2, ensure_ascii=False)
+        temp_elites_path.replace(elites_path)
+        logger.info(f"Wrote {len(elites_deduped)} genomes to elites.json")
+    
+    # Write reserves.json
+    if reserves_deduped:
+        temp_reserves_path = reserves_path.with_suffix('.json.tmp')
+        with open(temp_reserves_path, 'w', encoding='utf-8') as f:
+            json.dump(reserves_deduped, f, indent=2, ensure_ascii=False)
+        temp_reserves_path.replace(reserves_path)
+        logger.info(f"Wrote {len(reserves_deduped)} genomes to reserves.json")
+    
+    # Write archive.json (only if non-empty)
+    if archive_deduped:
+        temp_archive_path = archive_path.with_suffix('.json.tmp')
+        with open(temp_archive_path, 'w', encoding='utf-8') as f:
+            json.dump(archive_deduped, f, indent=2, ensure_ascii=False)
+        temp_archive_path.replace(archive_path)
+        logger.info(f"Wrote {len(archive_deduped)} genomes to archive.json")
+    
+    # Clear temp.json
+    with open(temp_path_obj, 'w', encoding='utf-8') as f:
+        json.dump([], f, indent=2, ensure_ascii=False)
+    
+    # Step 8: Final validation
+    is_consistent, errors = genome_tracker.validate_consistency(
+        elites_path, reserves_path, archive_path, load_archive=has_archived
+    )
+    
+    if not is_consistent:
+        logger.warning(f"Phase 8 validation found {len(errors)} inconsistencies:")
+        for error in errors[:10]:  # Log first 10 errors
+            logger.warning(f"  - {error}")
+    else:
+        logger.info("Phase 8 validation passed - all genomes consistent")
+    
+    distribution_stats = {
+        "elites_moved": len(elites_deduped),
+        "reserves_moved": len(reserves_deduped),
+        "archived_moved": len(archive_deduped),
+        "total_processed": len(genome_tracker.genomes),
+        "validation_errors": len(errors) if not is_consistent else 0
+    }
+    
+    logger.info(f"Phase 8 complete: {distribution_stats}")
+    return distribution_stats
+
+
 def process_generation(population: List[Dict[str, Any]], current_generation: int,
                        mutate_fn: Optional[Callable] = None, temp_path: Optional[str] = None,
                        config: Optional[SpeciationConfig] = None, logger=None) -> Tuple[Dict[int, Species], Cluster0]:
     """
-    Process a single generation with full speciation pipeline (NEW FLOW).
+    Process a single generation with full speciation pipeline.
     
-    New Pipeline (9 Phases):
+    Pipeline (8 Phases):
     Phase 1: Existing Species Processing
       1. Compute embeddings
       2. Process variants against existing species (skip cluster 0 outliers)
@@ -250,7 +636,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     Phase 8: Update Metrics & Stats
       21. Update metrics from corrected files
     
-    Phase 9: Return (distribution happens in run_speciation)
+    NOTE: Final distribution (Phase 8 redistribution) happens in run_speciation() after
+    process_generation() completes. It uses genome_tracker as authoritative source of truth
+    and overwrites intermediate files saved during process_generation().
     
     Args:
         population: List of genome dictionaries (with prompts and fitness)
@@ -269,12 +657,26 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state["logger"].info(f"=== Speciation Generation {current_generation} ===")
     state["_current_gen_events"] = {"speciation": 0, "merge": 0, "extinction": 0, "moved_to_cluster0": 0}
     state["_archived_count"] = 0
-    # Initialize archived genomes list if not exists
-    if "_archived_genomes" not in state:
-        state["_archived_genomes"] = []
     
-    # Initialize genome tracker for audit trail
-    genome_tracker = GenomeTracker(current_generation, logger=state["logger"])
+    # Initialize events tracker for audit trail
+    events_tracker = EventsTracker(current_generation, logger=state["logger"])
+    state["_events_tracker"] = events_tracker
+    
+    # Ensure Individual is available in function scope
+    # This prevents UnboundLocalError when Individual is used before conditional imports later
+    # Individual is imported at module level, but local imports later make it a local variable
+    from .species import Individual
+    
+    # Initialize genome tracker (master registry)
+    genome_tracker = GenomeTracker(logger=state["logger"])
+    genome_tracker.load()  # Load existing tracker or start fresh
+    
+    # Auto-migrate if tracker is empty but source files exist
+    if len(genome_tracker.genomes) == 0:
+        from .migration import auto_migrate_if_needed
+        auto_migrate_if_needed(logger=state["logger"])
+        genome_tracker.load()  # Reload after migration
+    
     state["_genome_tracker"] = genome_tracker
     
     # Auto-load previous state if not first generation
@@ -284,9 +686,6 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         if Path(state_path).exists():
             load_state(state_path)
             state["logger"].info("Restored speciation state from previous generation")
-            # Ensure archived genomes list exists after loading state
-            if "_archived_genomes" not in state:
-                state["_archived_genomes"] = []
     
     # ========================================================================
     # PHASE 1: EXISTING SPECIES PROCESSING
@@ -340,30 +739,111 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     # 2a. Generation 0: Immediate capacity enforcement after species formation
     # For Generation 0, enforce capacity immediately after species are formed (before merging)
     # For Generation N, capacity enforcement is deferred to Phase 4 (after merging)
+    # Capacity enforcement considers ALL genomes from genome_tracker (all generations), not just in-memory members
     is_generation_0 = (current_generation == 0 and species_count_before_clustering == 0)
     if is_generation_0 and new_species_from_clustering > 0:
         state["logger"].info("=== Generation 0: Immediate Capacity Enforcement (after species formation) ===")
+        outputs_path = get_outputs_path()
+        elites_path = outputs_path / "elites.json"
+        
         for sid in list(state["species"].keys()):
             sp = state["species"][sid]
-            if sp.size > state["config"].species_capacity:
-                # Sort members by fitness (descending)
-                sp.members.sort(key=lambda x: x.fitness, reverse=True)
-                # Remove excess genomes (keep top species_capacity)
-                excess = sp.members[state["config"].species_capacity:]
-                sp.members = sp.members[:state["config"].species_capacity]
-                # Archive removed genomes
-                _archive_individuals(excess, current_generation, "species_capacity_exceeded")
-                # Track archival events
+            
+            # Load ALL genomes for this species (need full genome data with fitness for sorting)
+            # Get genome IDs from tracker, then load actual genome data from elites.json + temp.json
+            all_species_genomes = []
+            
+            # Get all genome IDs for this species from genome_tracker
+            if "_genome_tracker" not in state:
+                state["logger"].error("Genome tracker not initialized - cannot enforce capacity")
+                continue
+            species_genome_ids = state["_genome_tracker"].get_all_genomes_by_species(sid)
+            
+            # Load actual genome data from elites.json (for fitness sorting)
+            if elites_path.exists():
+                try:
+                    with open(elites_path, 'r', encoding='utf-8') as f:
+                        elites_genomes = json.load(f)
+                    all_species_genomes = [g for g in elites_genomes if g.get("id") in species_genome_ids]
+                except Exception as e:
+                    state["logger"].warning(f"Failed to load elites.json for capacity enforcement: {e}")
+            
+            # Add current in-memory members that might not be in elites.json yet
+            in_memory_ids = {m.id for m in sp.members}
+            for member in sp.members:
+                if not any(g.get("id") == member.id for g in all_species_genomes):
+                    # Convert Individual to genome dict
+                    genome = _individual_to_genome_dict(member, current_generation)
+                    genome["species_id"] = sid
+                    all_species_genomes.append(genome)
+            
+            # Sort ALL genomes by fitness (descending) - from all generations
+            from utils.population_io import _extract_north_star_score
+            all_species_genomes.sort(key=lambda g: _extract_north_star_score(g, "toxicity"), reverse=True)
+            
+            # Keep top species_capacity, archive the rest
+            if len(all_species_genomes) > state["config"].species_capacity:
+                keep_genomes = all_species_genomes[:state["config"].species_capacity]
+                excess_genomes = all_species_genomes[state["config"].species_capacity:]
+                
+                # Update in-memory members to match kept genomes
+                keep_ids = {g.get("id") for g in keep_genomes if g.get("id") is not None}
+                sp.members = [m for m in sp.members if m.id in keep_ids]
+                
+                # Add any kept genomes that aren't in in-memory members yet (from previous generations)
+                for genome in keep_genomes:
+                    gid = genome.get("id")
+                    if gid and not any(m.id == gid for m in sp.members):
+                        # Create Individual from genome if needed
+                        from .species import Individual
+                        ind = Individual.from_genome(genome)
+                        sp.members.append(ind)
+                
+                # Ensure leader is highest fitness member
+                if sp.members:
+                    sp.leader = max(sp.members, key=lambda x: x.fitness)
+                    if sp.leader not in sp.members:
+                        sp.members.insert(0, sp.leader)
+                
+                # Archive excess genomes (convert to Individual for archiving)
+                excess_individuals = []
+                for genome in excess_genomes:
+                    from .species import Individual
+                    ind = Individual.from_genome(genome)
+                    excess_individuals.append(ind)
+                
+                _archive_individuals(excess_individuals, current_generation, "species_capacity_exceeded")
+                
+                # Update genome tracker: mark excess genomes as archived (species_id=-1)
                 if "_genome_tracker" in state:
-                    for ind in excess:
-                        state["_genome_tracker"].log(
+                    updates = {str(ind.id): -1 for ind in excess_individuals}
+                    result = state["_genome_tracker"].batch_update(updates, current_generation, f"capacity_archived_species_{sid}")
+                    if result["failed"] > 0:
+                        state["logger"].warning(f"Genome tracker batch update had {result['failed']} failures during capacity enforcement")
+                
+                # Track archival events
+                if "_events_tracker" in state:
+                    for ind in excess_individuals:
+                        state["_events_tracker"].log(
                             ind.id, "capacity_archived",
                             {"species_id": sid, "reason": "species_capacity", "capacity": state["config"].species_capacity}
                         )
-                # Ensure leader is still in members
-                if sp.leader not in sp.members and sp.members:
-                    sp.leader = max(sp.members, key=lambda x: x.fitness)
-                state["logger"].info(f"Generation 0: Species {sid} capacity enforced ({state['config'].species_capacity}), archived {len(excess)} excess members")
+                
+                # NOTE: Files will be updated by phase8_redistribute_genomes() based on genome_tracker.
+                # This intermediate update is for consistency, but tracker is authoritative.
+                # Remove archived genomes from elites.json immediately (intermediate update)
+                if elites_path.exists():
+                    try:
+                        with open(elites_path, 'r', encoding='utf-8') as f:
+                            elites_genomes = json.load(f)
+                        excess_ids = {g.get("id") for g in excess_genomes if g.get("id") is not None}
+                        elites_genomes = [g for g in elites_genomes if g.get("id") not in excess_ids]
+                        with open(elites_path, 'w', encoding='utf-8') as f:
+                            json.dump(elites_genomes, f, indent=2, ensure_ascii=False)
+                    except Exception as e:
+                        state["logger"].warning(f"Failed to update elites.json after capacity enforcement: {e}")
+                
+                state["logger"].info(f"Generation 0: Species {sid} capacity enforced ({state['config'].species_capacity}), archived {len(excess_genomes)} excess genomes from {len(all_species_genomes)} total (all generations)")
     
     # 2b: Sync cluster 0 with reserves.json (add new variants that went to cluster 0)
     # After leader_follower_clustering, outliers that formed species are updated in reserves.json
@@ -461,7 +941,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                 for member in members_to_remove:
                     if state["cluster0"].size < state["config"].cluster0_max_capacity:
                         state["cluster0"].add(member, current_generation)
-                        _patch_species_id_in_file(member.id, CLUSTER_0_ID, outputs_path)
+                        # Genome tracker updated separately - Phase 8 will fix files
                 
                 # Check if species is now empty or too small (only leader or below min_island_size)
                 if len(sp.members) <= 1:
@@ -489,13 +969,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["logger"].debug("Skipping capacity enforcement in Phase 1 (moved to Phase 4, after merging)")
     
     # 5. Save intermediate #1 (existing species processing complete)
-    save_to_files_intermediate(
-        current_generation=current_generation,
-        species=state["species"],
-        cluster0=state["cluster0"],
-        save_type="existing_species",
-        logger=state["logger"]
-    )
+        # Intermediate saves removed - Phase 8 (phase8_redistribute_genomes) is authoritative
     
     # ========================================================================
     # PHASE 2: CLUSTER 0 SPECIATION (ISOLATED)
@@ -590,9 +1064,9 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["logger"].info(f"Species {new_species.id} formed from cluster 0 ({new_species.size} members)")
         
         # Track speciation events
-        if "_genome_tracker" in state:
+        if "_events_tracker" in state:
             for member in new_species.members:
-                state["_genome_tracker"].log(
+                state["_events_tracker"].log(
                     member.id, "species_formed_from_cluster0",
                     {"species_id": new_species.id, "size": new_species.size}
                 )
@@ -606,13 +1080,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state["logger"].debug("Skipping capacity enforcement in Phase 2 (moved to Phase 4, after merging)")
     
     # 10. Save intermediate #2 (cluster 0 speciation complete)
-    save_to_files_intermediate(
-        current_generation=current_generation,
-        species=state["species"],
-        cluster0=state["cluster0"],
-        save_type="cluster0_speciation",
-        logger=state["logger"]
-    )
+        # Intermediate saves removed - Phase 8 (phase8_redistribute_genomes) is authoritative
     
     # Validate Flow 2 requirements for newly formed species
     if newly_formed_species_ids:
@@ -645,8 +1113,8 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["species"],
         theta_merge=state["config"].theta_merge,
         theta_sim=state["config"].theta_sim,
+        min_stability_gens=1,
         current_gen=current_generation,
-        max_capacity=state["config"].species_capacity,
         w_genotype=state["config"].w_genotype,
         w_phenotype=state["config"].w_phenotype,
         historical_species=state.get("historical_species", {}),
@@ -693,9 +1161,28 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             if state["cluster0"].size < state["config"].cluster0_max_capacity:
                 state["cluster0"].add(outlier, current_generation)
                 outlier.species_id = CLUSTER_0_ID
-                _patch_species_id_in_file(outlier.id, CLUSTER_0_ID, outputs_path)
+                # Genome tracker updated separately - Phase 8 will fix files
+                
+                # Update genome tracker
                 if "_genome_tracker" in state:
-                    state["_genome_tracker"].log(
+                    success, reassignment_info = state["_genome_tracker"].update_species_id(
+                        str(outlier.id), CLUSTER_0_ID, current_generation, "merge_outlier_to_reserves"
+                    )
+                    # Log reassignment event if genome was reassigned from archive
+                    if reassignment_info and "_events_tracker" in state:
+                        genome_id, old_sid, new_sid = reassignment_info
+                        state["_events_tracker"].log(
+                            genome_id, "reassigned_from_archive",
+                            {
+                                "from_species_id": old_sid,
+                                "to_species_id": new_sid,
+                                "reason": "merge_outlier_to_reserves",
+                                "note": "Genome was previously archived but is now in reserves (cluster 0)"
+                            }
+                        )
+                
+                if "_events_tracker" in state:
+                    state["_events_tracker"].log(
                         outlier.id, "merge_outlier_to_cluster0",
                         {"reason": "outside_radius_after_merge"}
                     )
@@ -705,26 +1192,18 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["logger"].debug("No merge outliers (merge_islands no longer filters during merge - radius enforcement deferred to Phase 4)")
     
     # Track merge events
-    if "_genome_tracker" in state:
+    if "_events_tracker" in state:
         for merge_event in merge_events:
             merged_ids = merge_event.get("merged", [])
             result_id = merge_event.get("result_id")
             if result_id and result_id in state["species"]:
                 for member in state["species"][result_id].members:
-                    state["_genome_tracker"].log(
+                    state["_events_tracker"].log(
                         member.id, "species_merged",
                         {"from_species": merged_ids, "to_species": result_id}
                     )
     
-    # Save immediately after merging (major data modification)
-    # Merging creates new species and removes parent species (no outliers - merge_islands returns empty list)
-    save_to_files_intermediate(
-        current_generation=current_generation,
-        species=state["species"],
-        cluster0=state["cluster0"],
-        save_type="after_merging_only",
-        logger=state["logger"]
-    )
+    # Intermediate saves removed - Phase 8 (phase8_redistribute_genomes) is authoritative
     
     # ========================================================================
     # PHASE 4: RADIUS & CAPACITY ENFORCEMENT
@@ -779,7 +1258,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
             for member in members_to_remove:
                 if state["cluster0"].size < state["config"].cluster0_max_capacity:
                     state["cluster0"].add(member, current_generation)
-                    _patch_species_id_in_file(member.id, CLUSTER_0_ID, outputs_path)
+                    # Genome tracker updated separately - Phase 8 will fix files
             
             # Check if species is now empty or too small
             if len(sp.members) <= 1:
@@ -802,26 +1281,118 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     # 13. Capacity enforcement for ALL species
     # NOTE: Generation 0 already enforced capacity immediately after species formation (Phase 1, step 2a),
     # but we enforce again here for consistency after merging (merged species may exceed capacity)
+    # CRITICAL: Capacity enforcement considers ALL genomes from genome_tracker (all generations), not just in-memory members
+    outputs_path = get_outputs_path()
+    elites_path = outputs_path / "elites.json"
+    
     for sid, sp in list(state["species"].items()):
-        if sp.size > state["config"].species_capacity:
-            # Sort members by fitness (descending)
-            sp.members.sort(key=lambda x: x.fitness, reverse=True)
-            # Remove excess genomes (keep top species_capacity)
-            excess = sp.members[state["config"].species_capacity:]
-            sp.members = sp.members[:state["config"].species_capacity]
-            # Archive removed genomes
-            _archive_individuals(excess, current_generation, "species_capacity_exceeded")
-            # Track archival events
+        # Load ALL genomes for this species (need full genome data with fitness for sorting)
+        # Get genome IDs from tracker, then load actual genome data from elites.json + temp.json
+        all_species_genomes = []
+        
+        # Get all genome IDs for this species from genome_tracker
+        if "_genome_tracker" in state:
+            species_genome_ids = state["_genome_tracker"].get_all_genomes_by_species(sid)
+        else:
+            # Fallback: get from elites.json if tracker not available
+            species_genome_ids = []
+            if elites_path.exists():
+                try:
+                    with open(elites_path, 'r', encoding='utf-8') as f:
+                        elites_genomes = json.load(f)
+                    species_genome_ids = [g.get("id") for g in elites_genomes if g.get("species_id") == sid and g.get("id")]
+                except Exception as e:
+                    state["logger"].warning(f"Failed to load elites.json for capacity enforcement: {e}")
+        
+        # Load actual genome data from elites.json (for fitness sorting)
+        if elites_path.exists():
+            try:
+                with open(elites_path, 'r', encoding='utf-8') as f:
+                    elites_genomes = json.load(f)
+                all_species_genomes = [g for g in elites_genomes if g.get("id") in species_genome_ids]
+            except Exception as e:
+                state["logger"].warning(f"Failed to load elites.json for capacity enforcement: {e}")
+        
+        # Add current in-memory members from temp.json that might not be in elites.json yet
+        in_memory_ids = {m.id for m in sp.members}
+        for member in sp.members:
+            if member.id not in species_genome_ids:
+                # This member is not yet in tracker, add it
+                if "_genome_tracker" in state:
+                    state["_genome_tracker"].register(str(member.id), sid, current_generation)
+            if not any(g.get("id") == member.id for g in all_species_genomes):
+                # Convert Individual to genome dict
+                genome = _individual_to_genome_dict(member, current_generation)
+                genome["species_id"] = sid
+                all_species_genomes.append(genome)
+        
+        # Sort ALL genomes by fitness (descending) - from all generations
+        from utils.population_io import _extract_north_star_score
+        all_species_genomes.sort(key=lambda g: _extract_north_star_score(g, "toxicity"), reverse=True)
+        
+        # Keep top species_capacity, archive the rest
+        if len(all_species_genomes) > state["config"].species_capacity:
+            keep_genomes = all_species_genomes[:state["config"].species_capacity]
+            excess_genomes = all_species_genomes[state["config"].species_capacity:]
+            
+            # Update in-memory members to match kept genomes
+            keep_ids = {g.get("id") for g in keep_genomes if g.get("id") is not None}
+            sp.members = [m for m in sp.members if m.id in keep_ids]
+            
+            # Add any kept genomes that aren't in in-memory members yet (from previous generations)
+            for genome in keep_genomes:
+                gid = genome.get("id")
+                if gid and not any(m.id == gid for m in sp.members):
+                    # Create Individual from genome if needed
+                    from .species import Individual
+                    ind = Individual.from_genome(genome)
+                    sp.members.append(ind)
+            
+            # Ensure leader is highest fitness member
+            if sp.members:
+                sp.leader = max(sp.members, key=lambda x: x.fitness)
+                if sp.leader not in sp.members:
+                    sp.members.insert(0, sp.leader)
+            
+            # Archive excess genomes (convert to Individual for archiving)
+            excess_individuals = []
+            for genome in excess_genomes:
+                from .species import Individual
+                ind = Individual.from_genome(genome)
+                excess_individuals.append(ind)
+            
+            _archive_individuals(excess_individuals, current_generation, "species_capacity_exceeded")
+            
+            # Update genome tracker: mark excess genomes as archived (species_id=-1)
             if "_genome_tracker" in state:
-                for ind in excess:
-                    state["_genome_tracker"].log(
+                updates = {str(ind.id): -1 for ind in excess_individuals}
+                result = state["_genome_tracker"].batch_update(updates, current_generation, f"capacity_archived_species_{sid}")
+                if result["failed"] > 0:
+                    state["logger"].warning(f"Genome tracker batch update had {result['failed']} failures during capacity enforcement")
+            
+            # Track archival events
+            if "_events_tracker" in state:
+                for ind in excess_individuals:
+                    state["_events_tracker"].log(
                         ind.id, "capacity_archived",
                         {"species_id": sid, "reason": "species_capacity", "capacity": state["config"].species_capacity}
                     )
-            # Ensure leader is still in members
-            if sp.leader not in sp.members and sp.members:
-                sp.leader = max(sp.members, key=lambda x: x.fitness)
-            state["logger"].info(f"Species {sid}: enforced capacity ({state['config'].species_capacity}), archived {len(excess)} excess members")
+            
+                    # NOTE: Files will be updated by phase8_redistribute_genomes() based on genome_tracker.
+                    # This intermediate update is for consistency, but tracker is authoritative.
+                    # Remove archived genomes from elites.json immediately (intermediate update)
+                    if elites_path.exists():
+                        try:
+                            with open(elites_path, 'r', encoding='utf-8') as f:
+                                elites_genomes = json.load(f)
+                            excess_ids = {g.get("id") for g in excess_genomes if g.get("id") is not None}
+                            elites_genomes = [g for g in elites_genomes if g.get("id") not in excess_ids]
+                            with open(elites_path, 'w', encoding='utf-8') as f:
+                                json.dump(elites_genomes, f, indent=2, ensure_ascii=False)
+                        except Exception as e:
+                            state["logger"].warning(f"Failed to update elites.json after capacity enforcement: {e}")
+            
+            state["logger"].info(f"Species {sid}: enforced capacity ({state['config'].species_capacity}), archived {len(excess_genomes)} excess genomes from {len(all_species_genomes)} total (all generations)")
     
     # 14. Validate no duplicate leader IDs across all species
     leader_ids = {}
@@ -868,13 +1439,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
                     state["logger"].info(f"Species {sid} has no other members, marking as incubator (will be processed by process_extinctions)")
     
     # 15. Save intermediate (after radius & capacity enforcement)
-    save_to_files_intermediate(
-        current_generation=current_generation,
-        species=state["species"],
-        cluster0=state["cluster0"],
-        save_type="after_radius_capacity",
-        logger=state["logger"]
-    )
+        # Intermediate saves removed - Phase 8 (phase8_redistribute_genomes) is authoritative
     
     # ========================================================================
     # PHASE 5: FREEZE & INCUBATOR
@@ -882,7 +1447,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     state["logger"].info("=== Phase 5: Freeze & Incubator ===")
     
     # 16. Record fitness for ALL species (not just those with new members)
-    # CRITICAL: Stagnation only increments if species was selected as parent AND no improvement
+    # Stagnation only increments if species was selected as parent AND no improvement
     # Load parents.json to determine which species were selected as parents
     selected_species_ids = set()
     if current_generation > 0:  # Generation 0 has no parents
@@ -924,8 +1489,8 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         sp.record_fitness(current_generation, was_selected_as_parent=was_selected, max_fitness_increased=max_fitness_increased)
     
     # 17. Freeze stagnant species and move small species to cluster 0
-    # CRITICAL: Use in-memory sizes (sp.size) - elites.json is cumulative across all generations
-    # We want to move species to incubator based on CURRENT size (after radius cleanup, capacity enforcement)
+    # Use in-memory sizes (sp.size) - elites.json is cumulative across all generations.
+    # We move species to incubator based on CURRENT size (after radius cleanup, capacity enforcement).
     species_count_before_extinction = len(state["species"])
     cluster0_ids_before = {cm.individual.id for cm in state["cluster0"].members}
     state["species"], extinction_events, moved_to_cluster0_events, incubator_species = process_extinctions(
@@ -940,8 +1505,17 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     cluster0_ids_after = {cm.individual.id for cm in state["cluster0"].members}
     new_in_cluster0 = cluster0_ids_after - cluster0_ids_before
     outputs_path = get_outputs_path()
-    for gid in new_in_cluster0:
-        _patch_species_id_in_file(gid, CLUSTER_0_ID, outputs_path)
+    
+    # Update species_id in elites.json to 0 (cluster0) for all genomes moved to incubator
+    # When a species becomes incubator, its genomes should be in reserves, not elites
+    for event in moved_to_cluster0_events:
+        moved_member_ids = event.get("moved_member_ids", [])
+        if moved_member_ids:
+            # Genome tracker updated separately - Phase 8 will fix files
+            state["logger"].debug(f"Updated species_id to 0 (cluster0) for {len(moved_member_ids)} genomes from incubator species {event.get('species_id')} in elites.json")
+    
+    # Also patch any other newly added genomes (for consistency)
+    # Genome tracker updated separately - Phase 8 will fix files
     species_count_after_extinction = len(state["species"])
     # Only frozen species (stagnation-based) count as extinction events
     # Moving to cluster 0 (size-based) is NOT extinction, just reorganization
@@ -975,13 +1549,7 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         state["logger"].debug(f"Moved incubator species {sid} to historical_species (will be tracked by ID only in save_state)")
     
     # 18. Save intermediate #3 (after merging and incubator)
-    save_to_files_intermediate(
-        current_generation=current_generation,
-        species=state["species"],
-        cluster0=state["cluster0"],
-        save_type="after_merging",
-        logger=state["logger"]
-    )
+        # Intermediate saves removed - Phase 8 (phase8_redistribute_genomes) is authoritative
     
     # ========================================================================
     # PHASE 6: CLUSTER 0 CAPACITY ENFORCEMENT
@@ -998,10 +1566,18 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         # Archive removed genomes
         excess_individuals = [m.individual for m in excess_members]
         _archive_individuals(excess_individuals, current_generation, "cluster0_capacity_exceeded")
-        # Track archival events
+        
+        # Update genome tracker: mark excess genomes as archived (species_id=-1)
         if "_genome_tracker" in state:
+            updates = {str(ind.id): -1 for ind in excess_individuals}
+            result = state["_genome_tracker"].batch_update(updates, current_generation, "reserves_capacity_archived")
+            if result["failed"] > 0:
+                state["logger"].warning(f"Genome tracker batch update had {result['failed']} failures during reserves capacity enforcement")
+        
+        # Track archival events
+        if "_events_tracker" in state:
             for ind in excess_individuals:
-                state["_genome_tracker"].log(
+                state["_events_tracker"].log(
                     ind.id, "capacity_archived",
                     {"reason": "cluster0_capacity", "capacity": state["config"].cluster0_max_capacity}
                 )
@@ -1009,31 +1585,14 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
         
         # Save immediately after cluster 0 capacity enforcement (major data modification)
         # Cluster 0 size is reduced and excess genomes are archived
-        save_to_files_intermediate(
-            current_generation=current_generation,
-            species=state["species"],
-            cluster0=state["cluster0"],
-            save_type="after_cluster0_capacity",
-            logger=state["logger"]
-        )
+        # Intermediate saves removed - Phase 8 (phase8_redistribute_genomes) is authoritative
     
     # ========================================================================
-    # PHASE 7: FINAL CORRECTED SAVE
+    # PHASE 7: SKIPPED - Final distribution happens in Phase 8 (phase8_redistribute_genomes)
     # ========================================================================
-    state["logger"].info("=== Phase 7: Final Corrected Save ===")
-    
-    # 20. Save corrected files (elites, reserves, archives)
-    archived_genomes = state.get("_archived_genomes", [])
-    incubator_ids = [sid for sid, sp in state.get("historical_species", {}).items()
-                     if getattr(sp, "species_state", None) == "incubator"]
-    save_to_files_corrected(
-        current_generation=current_generation,
-        species=state["species"],
-        cluster0=state["cluster0"],
-        archived_genomes=archived_genomes,
-        incubator_ids=incubator_ids,
-        logger=state["logger"]
-    )
+    state["logger"].info("=== Phase 7: Skipped - Final distribution in Phase 8 ===")
+    # NOTE: File distribution is handled by phase8_redistribute_genomes() in run_speciation()
+    # which uses genome_tracker as the single source of truth. No intermediate saves needed.
     
     # ========================================================================
     # PHASE 8: UPDATE METRICS & STATS
@@ -1095,16 +1654,22 @@ def process_generation(population: List[Dict[str, Any]], current_generation: int
     save_state(state_path)
     state["logger"].debug("Saved speciation state after metrics update")
     
-    # Save genome tracker
+    # Save events tracker
+    if "_events_tracker" in state:
+        state["_events_tracker"].save()
+        tracker_summary = state["_events_tracker"].get_summary()
+        state["logger"].debug(f"Events tracker: {tracker_summary['total_events']} events for {tracker_summary['unique_genomes']} genomes")
+    
+    # Save genome tracker (master registry)
     if "_genome_tracker" in state:
         state["_genome_tracker"].save()
-        tracker_summary = state["_genome_tracker"].get_summary()
-        state["logger"].debug(f"Genome tracker: {tracker_summary['total_events']} events for {tracker_summary['unique_genomes']} genomes")
+        stats = state["_genome_tracker"].get_distribution_stats()
+        state["logger"].debug(f"Genome tracker: {stats['total_genomes']} genomes tracked")
     
     # ========================================================================
-    # PHASE 9: RETURN (distribution happens in run_speciation)
+    # PHASE 9: RETURN (final distribution happens in run_speciation via phase8_redistribute_genomes)
     # ========================================================================
-    state["logger"].info("=== Phase 9: Complete - Returning to run_speciation for distribution ===")
+    state["logger"].info("=== Phase 9: Complete - Returning to run_speciation for final distribution (Phase 8) ===")
     
     return state["species"], state["cluster0"]
 
@@ -1305,648 +1870,6 @@ def _individual_to_genome_dict(ind: Individual, current_generation: int) -> Dict
     return genome
 
 
-def save_to_files_intermediate(
-    current_generation: int,
-    species: Dict[int, Species],
-    cluster0: Cluster0,
-    save_type: str,
-    logger=None
-) -> Dict[str, int]:
-    """
-    Save elites.json and reserves.json at intermediate points.
-    
-    This function saves the current state of species and cluster 0 to files
-    during the speciation pipeline. It preserves embeddings and ensures
-    consistency between in-memory state and file state.
-    
-    Args:
-        current_generation: Current generation number
-        species: Dict of species to save
-        cluster0: Cluster0 object
-        save_type: Type of save ("existing_species", "cluster0_speciation", "after_merging_only", "after_radius_capacity", "after_merging", "after_cluster0_capacity")
-        logger: Optional logger instance
-        
-    Returns:
-        Dict with statistics: {"elites_saved": count, "reserves_saved": count}
-    """
-    import os
-    from pathlib import Path
-    
-    if logger is None:
-        logger = get_logger("IntermediateSave")
-    
-    outputs_path = get_outputs_path()
-    elites_path = outputs_path / "elites.json"
-    reserves_path = outputs_path / "reserves.json"
-    
-    # Load existing files
-    existing_elites = []
-    if elites_path.exists():
-        try:
-            with open(elites_path, 'r', encoding='utf-8') as f:
-                existing_elites = json.load(f)
-        except Exception as e:
-            logger.warning(f"Failed to load existing elites.json: {e}")
-            existing_elites = []
-    
-    existing_reserves = []
-    if reserves_path.exists():
-        try:
-            with open(reserves_path, 'r', encoding='utf-8') as f:
-                existing_reserves = json.load(f)
-        except Exception as e:
-            logger.warning(f"Failed to load existing reserves.json: {e}")
-            existing_reserves = []
-    
-    # V2: exclude from elites genomes now in cluster0; exclude from reserves genomes now in species
-    species_member_ids = {m.id for sp in species.values() for m in sp.members}
-    cluster0_ids = {cm.individual.id for cm in cluster0.members}
-    
-    # Extract genomes from species (current generation only)
-    species_genomes = []
-    species_genome_ids = set()
-    
-    for sid, sp in species.items():
-        for member in sp.members:
-            if member.id in species_genome_ids:
-                continue  # Skip duplicates
-            species_genome_ids.add(member.id)
-            
-            # Convert Individual to genome dict
-            genome = _individual_to_genome_dict(member, current_generation)
-            genome["species_id"] = sid
-            genome["initial_state"] = "elite"
-            species_genomes.append(genome)
-    
-    # Extract genomes from cluster 0 (from reserves.json, update with current state)
-    # For cluster 0, we need to get genomes from reserves.json and update species_id
-    cluster0_genomes = []
-    cluster0_genome_ids = set()
-    
-    # Get cluster 0 members from in-memory cluster0
-    for cm in cluster0.members:
-        if cm.individual.id in cluster0_genome_ids:
-            continue  # Skip duplicates
-        cluster0_genome_ids.add(cm.individual.id)
-        
-        # Convert Individual to genome dict
-        genome = _individual_to_genome_dict(cm.individual, current_generation)
-        genome["species_id"] = CLUSTER_0_ID
-        genome["initial_state"] = "elite"
-        cluster0_genomes.append(genome)
-    
-    # Update existing files: remove genomes from current generation, add new ones.
-    # Dedupe by genome id: a genome from a previous gen (gen != current) can still be
-    # in in-memory species; we must not add it again from species_genomes or we get
-    # duplicate ids in elites.json (ids are globally unique via next_id).
-    # V2: do not add to elites genomes that are now in cluster0 (moved by radius/merge/incubator).
-    elites_to_save = [g for g in existing_elites if g.get("generation", 0) != current_generation and (g.get("id") is None or g.get("id") not in cluster0_ids)]
-    elites_ids = {g.get("id") for g in elites_to_save if g.get("id") is not None}
-    for g in species_genomes:
-        if g.get("id") in elites_ids:
-            continue
-        elites_ids.add(g.get("id"))
-        elites_to_save.append(g)
-    
-    # Validate generation field consistency for elites
-    missing_generation_elites = [g for g in species_genomes if "generation" not in g]
-    if missing_generation_elites:
-        logger.warning(f"Intermediate save ({save_type}): {len(missing_generation_elites)} species genomes missing generation field")
-        for g in missing_generation_elites:
-            g["generation"] = current_generation
-    
-    # V2: do not add to reserves genomes that are now in species (formed from reserves or reassigned).
-    reserves_to_save = [g for g in existing_reserves if g.get("generation", 0) != current_generation and (g.get("id") is None or g.get("id") not in species_member_ids)]
-    reserves_ids = {g.get("id") for g in reserves_to_save if g.get("id") is not None}
-    for g in cluster0_genomes:
-        if g.get("id") in reserves_ids:
-            continue
-        reserves_ids.add(g.get("id"))
-        reserves_to_save.append(g)
-    
-    # Validate generation field consistency for reserves
-    missing_generation_reserves = [g for g in cluster0_genomes if "generation" not in g]
-    if missing_generation_reserves:
-        logger.warning(f"Intermediate save ({save_type}): {len(missing_generation_reserves)} cluster 0 genomes missing generation field")
-        for g in missing_generation_reserves:
-            g["generation"] = current_generation
-    
-    # Sort by fitness (descending) for reserves
-    from utils.population_io import _extract_north_star_score
-    reserves_to_save.sort(key=lambda g: _extract_north_star_score(g, "toxicity"), reverse=True)
-    
-    # Atomic write for elites.json
-    elites_saved = 0
-    if elites_to_save:
-        try:
-            # Write to temp file first
-            temp_elites_path = elites_path.with_suffix('.tmp')
-            with open(temp_elites_path, 'w', encoding='utf-8') as f:
-                json.dump(elites_to_save, f, indent=2, ensure_ascii=False)
-                f.flush()
-                os.fsync(f.fileno())
-            
-            # Atomic rename
-            temp_elites_path.replace(elites_path)
-            elites_saved = len(species_genomes)
-            logger.debug(f"Intermediate save ({save_type}): Saved {elites_saved} species genomes to elites.json (total: {len(elites_to_save)})")
-        except Exception as e:
-            logger.error(f"Failed to save elites.json: {e}")
-    
-    # Atomic write for reserves.json
-    reserves_saved = 0
-    if reserves_to_save:
-        try:
-            # Write to temp file first
-            temp_reserves_path = reserves_path.with_suffix('.tmp')
-            with open(temp_reserves_path, 'w', encoding='utf-8') as f:
-                json.dump(reserves_to_save, f, indent=2, ensure_ascii=False)
-                f.flush()
-                os.fsync(f.fileno())
-            
-            # Atomic rename
-            temp_reserves_path.replace(reserves_path)
-            reserves_saved = len(cluster0_genomes)
-            logger.debug(f"Intermediate save ({save_type}): Saved {reserves_saved} cluster 0 genomes to reserves.json (total: {len(reserves_to_save)})")
-        except Exception as e:
-            logger.error(f"Failed to save reserves.json: {e}")
-    
-    logger.info(f"Intermediate save ({save_type}): elites={elites_saved}, reserves={reserves_saved}")
-    return {"elites_saved": elites_saved, "reserves_saved": reserves_saved}
-
-
-def save_to_files_corrected(
-    current_generation: int,
-    species: Dict[int, Species],
-    cluster0: Cluster0,
-    archived_genomes: List[Dict[str, Any]],
-    incubator_ids: Optional[List[int]] = None,
-    logger=None
-) -> Dict[str, int]:
-    """
-    Final corrected save of elites.json, reserves.json, and archive.json.
-    
-    This function rebuilds all files from scratch to ensure consistency.
-    It includes all genomes up to the current generation from:
-    - Species (elites.json)
-    - Cluster 0 (reserves.json)
-    - Archived genomes (archive.json)
-    
-    Genomes in existing_elites with species_id not in (species | incubators) are
-    reassigned to reserves (species_id=0) to avoid orphans.
-    
-    Args:
-        current_generation: Current generation number
-        species: Dict of all species (active + frozen)
-        cluster0: Cluster0 object
-        archived_genomes: List of all archived genome dictionaries (all generations)
-        incubator_ids: Species IDs in incubator state (in historical_species); included in valid_species_ids
-        logger: Optional logger instance
-        
-    Returns:
-        Dict with statistics: {"elites_saved": count, "reserves_saved": count, "archived_saved": count}
-    """
-    import os
-    from pathlib import Path
-    
-    if logger is None:
-        logger = get_logger("CorrectedSave")
-    
-    outputs_path = get_outputs_path()
-    elites_path = outputs_path / "elites.json"
-    reserves_path = outputs_path / "reserves.json"
-    archive_path = outputs_path / "archive.json"
-    
-    valid_species_ids = set(species.keys()) | set(incubator_ids or [])
-    orphaned_to_reserves = []
-    # V2: exclude from elites genomes now in cluster0; exclude from reserves genomes now in species
-    species_member_ids = {m.id for sp in species.values() for m in sp.members}
-    cluster0_ids = {cm.individual.id for cm in cluster0.members}
-    
-    # Rebuild elites.json from all species (all generations up to current)
-    elites_to_save = []
-    species_genome_ids = set()
-    
-    # First, load existing elites.json to get genomes from previous generations.
-    # Dedupe by id. If species_id not in valid_species_ids (incl. incubators), reassign to reserves.
-    if elites_path.exists():
-        try:
-            with open(elites_path, 'r', encoding='utf-8') as f:
-                existing_elites = json.load(f)
-            for genome in existing_elites:
-                gen = genome.get("generation", 0)
-                if gen >= current_generation:
-                    continue
-                gid = genome.get("id")
-                species_id = genome.get("species_id")
-                if species_id is not None and species_id not in valid_species_ids:
-                    g = dict(genome)
-                    g["species_id"] = CLUSTER_0_ID
-                    orphaned_to_reserves.append(g)
-                    continue
-                if gid is not None and gid in cluster0_ids:
-                    continue
-                if gid is not None and gid in species_genome_ids:
-                    continue
-                if gid is not None:
-                    species_genome_ids.add(gid)
-                elites_to_save.append(genome)
-        except Exception as e:
-            logger.warning(f"Failed to load existing elites.json: {e}")
-    
-    # Add current generation genomes from species (all in valid_species_ids)
-    for sid, sp in species.items():
-        for member in sp.members:
-            if member.id in species_genome_ids:
-                continue  # Skip if already added from previous generations
-            species_genome_ids.add(member.id)
-            
-            # Convert Individual to genome dict
-            genome = _individual_to_genome_dict(member, current_generation)
-            genome["species_id"] = sid
-            genome["initial_state"] = "elite"
-            
-            # Validate generation field
-            if "generation" not in genome:
-                logger.warning(f"Corrected save: genome {member.id} missing generation field, setting to {current_generation}")
-                genome["generation"] = current_generation
-            
-            elites_to_save.append(genome)
-    
-    if orphaned_to_reserves:
-        logger.info(f"Reassigned {len(orphaned_to_reserves)} orphaned genomes (species_id not in state/incubators) to reserves")
-    
-    # Rebuild reserves.json from cluster 0 (all generations up to current).
-    # Do not include any genome whose id is in elites (elites take priority).
-    elites_ids = {g.get("id") for g in elites_to_save if g.get("id") is not None}
-    reserves_to_save = []
-    reserves_genome_ids = set()
-    
-    # First, load existing reserves.json to get genomes from previous generations.
-    # Dedupe by id when reading. Skip if id is in elites (avoid cross-file duplicates).
-    if reserves_path.exists():
-        try:
-            with open(reserves_path, 'r', encoding='utf-8') as f:
-                existing_reserves = json.load(f)
-            for genome in existing_reserves:
-                gen = genome.get("generation", 0)
-                if gen >= current_generation:
-                    continue
-                gid = genome.get("id")
-                if gid is not None and gid in elites_ids:
-                    continue
-                if gid is not None and gid in species_member_ids:
-                    continue
-                if gid is not None and gid in reserves_genome_ids:
-                    continue
-                if gid is not None:
-                    reserves_genome_ids.add(gid)
-                reserves_to_save.append(genome)
-        except Exception as e:
-            logger.warning(f"Failed to load existing reserves.json: {e}")
-    
-    # Add current generation genomes from cluster 0
-    for cm in cluster0.members:
-        if cm.individual.id in elites_ids:
-            continue  # Should not happen; elites take priority
-        if cm.individual.id in reserves_genome_ids:
-            continue  # Skip if already added from previous generations
-        reserves_genome_ids.add(cm.individual.id)
-        
-        # Convert Individual to genome dict
-        genome = _individual_to_genome_dict(cm.individual, current_generation)
-        genome["species_id"] = CLUSTER_0_ID
-        genome["initial_state"] = "elite"
-        
-        # Validate generation field
-        if "generation" not in genome:
-            logger.warning(f"Corrected save: cluster 0 genome {cm.individual.id} missing generation field, setting to {current_generation}")
-            genome["generation"] = current_generation
-        
-        reserves_to_save.append(genome)
-    
-    # Merge orphaned_to_reserves (id-dedupe, not in elites)
-    for g in orphaned_to_reserves:
-        gid = g.get("id")
-        if gid is not None and gid in elites_ids:
-            continue
-        if gid is not None and gid in reserves_genome_ids:
-            continue
-        if gid is not None:
-            reserves_genome_ids.add(gid)
-        reserves_to_save.append(g)
-    
-    # Sort reserves by fitness (descending)
-    from utils.population_io import _extract_north_star_score
-    reserves_to_save.sort(key=lambda g: _extract_north_star_score(g, "toxicity"), reverse=True)
-    
-    # Rebuild archive.json from all archived genomes (all generations up to current)
-    # First, load all existing archived genomes from archive.json (most complete source)
-    archive_to_save = []
-    existing_archive_ids = set()
-    
-    if archive_path.exists():
-        try:
-            with open(archive_path, 'r', encoding='utf-8') as f:
-                existing_archive = json.load(f)
-            # archive.json can be a list or empty dict
-            if isinstance(existing_archive, list):
-                # Add all existing archived genomes
-                for genome in existing_archive:
-                    genome_id = genome.get("id")
-                    if genome_id and genome_id not in existing_archive_ids:
-                        archive_to_save.append(genome)
-                        existing_archive_ids.add(genome_id)
-                logger.debug(f"Loaded {len(existing_archive)} archived genomes from archive.json")
-            elif isinstance(existing_archive, dict):
-                # Empty dict or dict format (shouldn't happen, but handle gracefully)
-                if len(existing_archive) > 0:
-                    logger.warning(f"archive.json is a dict (expected list), attempting to extract genomes")
-                    for genome in existing_archive.values():
-                        if isinstance(genome, dict):
-                            genome_id = genome.get("id")
-                            if genome_id and genome_id not in existing_archive_ids:
-                                archive_to_save.append(genome)
-                                existing_archive_ids.add(genome_id)
-                else:
-                    logger.debug("archive.json is empty dict (no archived genomes)")
-        except Exception as e:
-            logger.warning(f"Failed to load existing archive.json: {e}")
-    
-    # Add archived genomes from state (current generation archives)
-    # These may be newer than what's in archive.json, so add them (avoiding duplicates)
-    if archived_genomes:
-        for genome in archived_genomes:
-            genome_id = genome.get("id")
-            if genome_id and genome_id not in existing_archive_ids:
-                archive_to_save.append(genome)
-                existing_archive_ids.add(genome_id)
-        logger.debug(f"Added {len(archived_genomes)} archived genomes from state to archive.json")
-    
-    # Atomic writes
-    elites_saved = 0
-    try:
-        temp_elites_path = elites_path.with_suffix('.tmp')
-        with open(temp_elites_path, 'w', encoding='utf-8') as f:
-            json.dump(elites_to_save, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        temp_elites_path.replace(elites_path)
-        elites_saved = len(elites_to_save)
-        logger.info(f"Final corrected save: Saved {elites_saved} genomes to elites.json")
-    except Exception as e:
-        logger.error(f"Failed to save corrected elites.json: {e}")
-    
-    reserves_saved = 0
-    try:
-        temp_reserves_path = reserves_path.with_suffix('.tmp')
-        with open(temp_reserves_path, 'w', encoding='utf-8') as f:
-            json.dump(reserves_to_save, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        temp_reserves_path.replace(reserves_path)
-        reserves_saved = len(reserves_to_save)
-        logger.info(f"Final corrected save: Saved {reserves_saved} genomes to reserves.json")
-    except Exception as e:
-        logger.error(f"Failed to save corrected reserves.json: {e}")
-    
-    archived_saved = 0
-    try:
-        temp_archive_path = archive_path.with_suffix('.tmp')
-        with open(temp_archive_path, 'w', encoding='utf-8') as f:
-            json.dump(archive_to_save, f, indent=2, ensure_ascii=False)
-            f.flush()
-            os.fsync(f.fileno())
-        temp_archive_path.replace(archive_path)
-        archived_saved = len(archive_to_save)
-        logger.info(f"Final corrected save: Saved {archived_saved} genomes to archive.json")
-    except Exception as e:
-        logger.error(f"Failed to save corrected archive.json: {e}")
-    
-    logger.info(f"Final corrected save complete: elites={elites_saved}, reserves={reserves_saved}, archived={archived_saved}")
-    return {"elites_saved": elites_saved, "reserves_saved": reserves_saved, "archived_saved": archived_saved}
-
-
-def distribute_genomes(
-    temp_path: Optional[str] = None,
-    north_star_metric: str = "toxicity",
-    current_generation: Optional[int] = None) -> Dict[str, int]:
-    """
-    Distribute genomes from temp.json to elites.json and reserves.json.
-    
-    Distribution is based on species_id:
-    - Genomes with species_id > 0 → elites.json (all species members)
-    - Genomes with species_id == 0 → reserves.json (cluster 0 / reserves)
-    - Genomes exceeding capacity → archive.json (non-elites)
-    
-    Sets initial_state for Table 4 metrics:
-    - "elite": Genomes going to elites.json or reserves.json (reserves are elites)
-    - "non-elite": Genomes archived due to capacity limits
-    
-    Args:
-        temp_path: Path to temp.json file (defaults to outputs_path / "temp.json")
-        north_star_metric: The metric to use for scoring (default: "toxicity")
-        current_generation: Current generation number (for tracking archived variants)
-        
-    Returns:
-        dict: Distribution statistics with elites_moved, reserves_moved, total_processed, archived_count
-    """
-    from utils.population_io import _extract_north_star_score
-    from utils.constants import FileConstants
-    
-    state = _get_state()
-    config = state["config"]
-    logger = state["logger"]
-    
-    if temp_path is None:
-        outputs_path = get_outputs_path()
-        temp_path = str(outputs_path / "temp.json")
-    
-    temp_path_obj = Path(temp_path)
-    if not temp_path_obj.exists():
-        logger.warning("temp.json not found for distribution")
-        return {"elites_moved": 0, "reserves_moved": 0, "total_processed": 0, "archived_count": 0}
-    
-    outputs_path = get_outputs_path()
-    elites_path = outputs_path / "elites.json"
-    reserves_path = outputs_path / "reserves.json"
-    archive_path = outputs_path / "archive.json"
-    
-    # Load genomes from temp.json
-    with open(temp_path_obj, 'r', encoding='utf-8') as f:
-        temp_genomes = json.load(f)
-    
-    if not temp_genomes:
-        logger.debug("No genomes in temp.json to distribute")
-        return {"elites_moved": 0, "reserves_moved": 0, "total_processed": 0, "archived_count": 0}
-    
-    elites_to_move = []
-    reserves_to_move = []
-    archived_genomes = []
-    
-    # Get current generation from state if not provided
-    if current_generation is None:
-        # Try to get from state or default to 0
-        current_generation = state.get("_current_generation", 0)
-    
-    # Distribute genomes based on species_id
-    for genome in temp_genomes:
-        if not genome or not genome.get("prompt"):
-            continue
-        
-        genome_id = genome.get("id")
-        species_id = genome.get("species_id", CLUSTER_0_ID)
-        genome_generation = genome.get("generation", current_generation)
-        
-        # Distribute based on species_id
-        if species_id is not None and species_id > 0:
-            # Goes to elites.json - all species members are elites
-            genome["initial_state"] = "elite"
-            elites_to_move.append(genome)
-            logger.debug(f"Genome {genome_id} from species {species_id} → elites.json")
-        else:
-            # Goes to reserves.json initially (reserves are also elites)
-            genome["initial_state"] = "elite"  # Reserves are elites
-            genome["species_id"] = CLUSTER_0_ID
-            reserves_to_move.append(genome)
-            logger.debug(f"Genome {genome_id} from cluster 0 → reserves.json")
-    
-    # Save elites
-    # Embeddings preserved in elites.json for speciation and cluster quality.
-    # Dedupe on load (keep first per id): corrupted or legacy files may have duplicate ids.
-    # Dedupe when extending: genome ids are globally unique (next_id); do not add if id
-    # already in elites_to_save (or if elites_to_move has duplicate ids).
-    if elites_to_move:
-        elites_to_save = []
-        if elites_path.exists():
-            with open(elites_path, 'r', encoding='utf-8') as f:
-                raw = json.load(f)
-            seen = set()
-            for g in raw:
-                i = g.get("id")
-                if i is not None and i in seen:
-                    continue
-                if i is not None:
-                    seen.add(i)
-                elites_to_save.append(g)
-        elites_ids = {g.get("id") for g in elites_to_save if g.get("id") is not None}
-        for g in elites_to_move:
-            if g.get("id") in elites_ids:
-                continue
-            elites_ids.add(g.get("id"))
-            elites_to_save.append(g)
-        
-        # Write elites.json and ensure it's flushed to disk
-        import os
-        with open(elites_path, 'w', encoding='utf-8') as f:
-            json.dump(elites_to_save, f, indent=2, ensure_ascii=False)
-            f.flush()  # Ensure data is written to disk
-            try:
-                os.fsync(f.fileno())  # Force sync to disk (Unix/Linux/Mac)
-            except (AttributeError, OSError):
-                # Windows or file doesn't support fsync
-                pass
-        
-        logger.debug(f"Moved {len(elites_to_move)} genomes from species to elites.json (total: {len(elites_to_save)})")
-    
-    # Save reserves (with capacity limit)
-    # Embeddings preserved in reserves.json for leader-follower clustering and speciation.
-    # When merging reserves_to_move, skip ids already in reserves or in elites (avoid cross-file duplicates).
-    if reserves_to_move:
-        elites_ids = set()
-        if elites_path.exists():
-            try:
-                with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites_ids = {g.get("id") for g in json.load(f) if g.get("id") is not None}
-            except Exception:
-                pass
-        reserves_to_save = []
-        if reserves_path.exists():
-            with open(reserves_path, 'r', encoding='utf-8') as f:
-                raw = json.load(f)
-            seen = set()
-            for g in raw:
-                i = g.get("id")
-                if i is not None and i in seen:
-                    continue
-                if i is not None:
-                    seen.add(i)
-                reserves_to_save.append(g)
-        reserves_ids = {g.get("id") for g in reserves_to_save if g.get("id") is not None}
-        for g in reserves_to_move:
-            gid = g.get("id")
-            if gid is not None and gid in elites_ids:
-                continue
-            if gid is not None and gid in reserves_ids:
-                continue
-            if gid is not None:
-                reserves_ids.add(gid)
-            reserves_to_save.append(g)
-        reserves_to_save.sort(key=lambda g: _extract_north_star_score(g, north_star_metric), reverse=True)
-        
-        # Enforce capacity limit - archive excess genomes
-        if len(reserves_to_save) > config.cluster0_max_capacity:
-            excess_count = len(reserves_to_save) - config.cluster0_max_capacity
-            excess_genomes = reserves_to_save[config.cluster0_max_capacity:]
-            reserves_to_save = reserves_to_save[:config.cluster0_max_capacity]
-            
-            # Mark excess genomes as non-elite and archive them
-            for excess_genome in excess_genomes:
-                # Remove embeddings before archiving (save space)
-                if "prompt_embedding" in excess_genome:
-                    del excess_genome["prompt_embedding"]
-                # Only track variants from current generation
-                if excess_genome.get("generation") == current_generation:
-                    excess_genome["initial_state"] = "non-elite"
-                    archived_genomes.append(excess_genome)
-                    logger.debug(f"Genome {excess_genome.get('id')} archived due to capacity (non-elite)")
-            
-            logger.debug(f"Reserves capacity exceeded, keeping top {config.cluster0_max_capacity} genomes, archiving {excess_count}")
-        
-        with open(reserves_path, 'w', encoding='utf-8') as f:
-            json.dump(reserves_to_save, f, indent=2, ensure_ascii=False)
-        
-        logger.debug(f"Moved {len(reserves_to_move)} genomes to reserves.json (capacity: {len(reserves_to_save)})")
-    
-    # Archive genomes that were removed due to capacity
-    # Remove embeddings before archiving (save space, not needed for archived genomes)
-    if archived_genomes:
-        archive_to_save = []
-        if archive_path.exists():
-            with open(archive_path, 'r', encoding='utf-8') as f:
-                archive_to_save = json.load(f)
-        
-        # Remove embeddings from all archived genomes before saving
-        for archived_genome in archived_genomes:
-            if "prompt_embedding" in archived_genome:
-                del archived_genome["prompt_embedding"]
-        
-        archive_to_save.extend(archived_genomes)
-        
-        with open(archive_path, 'w', encoding='utf-8') as f:
-            json.dump(archive_to_save, f, indent=2, ensure_ascii=False)
-        
-        logger.debug(f"Archived {len(archived_genomes)} genomes from current generation to archive.json")
-    
-    # Clear temp.json
-    with open(temp_path_obj, 'w', encoding='utf-8') as f:
-        json.dump([], f, indent=2, ensure_ascii=False)
-    
-    distribution_stats = {
-        "elites_moved": len(elites_to_move),
-        "reserves_moved": len(reserves_to_move),
-        "total_processed": len(temp_genomes),
-        "archived_count": len(archived_genomes)
-    }
-    
-    logger.info(f"Distribution complete: {distribution_stats['total_processed']} genomes → "
-                f"{distribution_stats['elites_moved']} elites, "
-                f"{distribution_stats['reserves_moved']} reserves, "
-                f"{distribution_stats['archived_count']} archived")
-    
-    return distribution_stats
-
-
 def _update_speciation_state_cluster0_size_after_distribution(outputs_path) -> None:
     """Update cluster0.size in speciation_state.json to match reserves.json after distribution.
     save_state runs before distribution, so the persisted size can be stale. This corrects it."""
@@ -1982,48 +1905,6 @@ def _update_speciation_state_cluster0_size_after_distribution(outputs_path) -> N
             pass
 
 
-def _patch_species_id_in_file(genome_id: int, new_species_id: int, outputs_path: Path) -> bool:
-    """
-    Patch only the species_id field for a genome in temp.json, elites.json, or reserves.json.
-    Tries temp, then elites, then reserves; returns True when the first match is patched.
-    Does not rewrite other fields.
-    """
-    for name in ("temp.json", "elites.json", "reserves.json"):
-        path = outputs_path / name
-        if not path.exists():
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, list):
-                continue
-            for g in data:
-                if g.get("id") == genome_id:
-                    g["species_id"] = new_species_id
-                    with open(path, "w", encoding="utf-8") as f:
-                        json.dump(data, f, indent=2, ensure_ascii=False)
-                    return True
-        except Exception:
-            continue
-    return False
-
-
-def _update_genomes_with_species(genomes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Update genomes with species IDs (0 for cluster 0, None if not found)."""
-    state = _get_state()
-    cluster0_ids = {ind.id for ind in state["cluster0"].individuals}
-    species_ids = {}
-    for sp in state["species"].values():
-        for m in sp.members:
-            species_ids[m.id] = sp.id
-    
-    for g in genomes:
-        genome_id = g.get("id")
-        if genome_id in cluster0_ids:
-            g["species_id"] = CLUSTER_0_ID
-        else:
-            g["species_id"] = species_ids.get(genome_id)
-    return genomes
 
 
 def save_state(path: str) -> None:
@@ -2033,14 +1914,25 @@ def save_state(path: str) -> None:
     The cluster0 section only contains metadata (size, speciation_events), not full member data
     since reserves.json already stores the complete genome data for cluster 0.
     
-    The size in speciation_state.json reflects the current total size of genomes in that species
-    from elites.json (all generations), not just the members in the Species object (current generation only).
+    Size calculation:
+    - For active/frozen species: size = count from member_ids (derived from elites.json after capacity enforcement).
+      Capacity enforcement considers ALL genomes from all generations via genome_tracker, sorts by fitness,
+      keeps top species_capacity, and archives the rest (species_id=-1 in tracker). The genome_tracker
+      is the authoritative source, and elites.json reflects the tracker state after Phase 8 distribution.
+    - For extinct species: size = count from elites.json (historical reference).
     
     Species storage strategy:
     - Active species (state="active") - full data saved in species dict (participate in evolution)
     - Frozen species (state="frozen") - full data saved in species dict (stagnated, excluded from parent selection, but still alive)
     - Extinct species (state="extinct") - full data saved in historical_species dict (merged parents, no longer alive)
     - Incubator species (state="incubator") - only species ID tracked in historical_species (moved to cluster 0, just for tracking)
+    
+    IMPORTANT: Members Storage:
+    - Species members are NOT saved as full Individual objects in speciation_state.json
+    - Only member_ids (list of genome IDs) are saved for storage efficiency
+    - The members list in memory may be empty even if size > 0 - this is EXPECTED
+    - Members are reconstructed lazily from elites.json when load_state() is called
+    - This is a storage optimization: full member data is in elites.json, only IDs are stored in state
     """
     import numpy as np
     
@@ -2049,7 +1941,7 @@ def save_state(path: str) -> None:
     
     # Calculate actual sizes and member IDs from elites.json for each species
     # This gives the true current size across all generations
-    # CRITICAL: Read elites.json AFTER distribution to ensure we have the latest data
+    # Read elites.json AFTER distribution to ensure we have the latest data
     outputs_path = get_outputs_path()
     elites_path = outputs_path / "elites.json"
     species_sizes = {}
@@ -2062,7 +1954,7 @@ def save_state(path: str) -> None:
             elites_genomes = json.load(f)
         
         # Count genomes per species and collect all member IDs
-        # CRITICAL: Use sets to track unique IDs since elites.json is cumulative
+        # Use sets to track unique IDs since elites.json is cumulative
         # (same genome may appear in multiple generations with same species_id)
         species_member_ids_sets = {}  # Track unique IDs per species
         for genome in elites_genomes:
@@ -2094,35 +1986,48 @@ def save_state(path: str) -> None:
         if sp.species_state == "active":
             sp_dict = sp.to_dict()
             
-            # Get actual member IDs from elites.json (all members across all generations, unique)
-            # Size should match the unique count of member_ids
-            if sid in species_member_ids:
-                sp_dict["member_ids"] = species_member_ids[sid]
+            # Get member IDs from elites.json (which reflects genome_tracker after Phase 8 distribution - only top species_capacity remain)
+            # Convert sid to int for lookup (state["species"] keys are strings, but species_member_ids uses int keys)
+            # NOTE: Only member_ids are saved, not full member objects (storage optimization)
+            # Members are reconstructed from elites.json when load_state() is called
+            sid_int = int(sid)
+            if sid_int in species_member_ids:
+                sp_dict["member_ids"] = species_member_ids[sid_int]
             else:
                 if elites_path.exists():
                     logger.warning(f"Species {sid} not found in elites.json, using in-memory member IDs ({len(sp.members)})")
                 sp_dict["member_ids"] = [m.id for m in sp.members]
+            # Size = count from elites.json (which reflects genome_tracker after Phase 8 - only top species_capacity genomes remain)
+            # Validation: size should match member_ids length
             sp_dict["size"] = len(sp_dict["member_ids"])
-            if sid in species_member_ids:
-                logger.debug(f"Species {sid}: size={sp_dict['size']} from elites.json (in-memory had {len(sp.members)})")
+            if sp_dict["size"] != len(sp_dict["member_ids"]):
+                logger.warning(f"Species {sid}: size mismatch - size={sp_dict['size']}, member_ids count={len(sp_dict['member_ids'])}")
+            if sid_int in species_member_ids:
+                logger.debug(f"Species {sid}: size={sp_dict['size']} from elites.json (reflects genome_tracker after Phase 8), in-memory={len(sp.members)}")
             species_dict[str(sid)] = sp_dict
         elif sp.species_state == "frozen":
             # Frozen species also get full data (including leader_embedding and leader_distance)
             # Frozen species preserve all members from when they were active
             sp_dict = sp.to_dict()
             
-            # Get actual member IDs from elites.json (all members across all generations, unique)
-            # Size should match the unique count of member_ids
-            if sid in species_member_ids:
-                sp_dict["member_ids"] = species_member_ids[sid]
+            # Get member IDs from elites.json (which reflects genome_tracker after Phase 8 distribution - only top species_capacity remain)
+            # Convert sid to int for lookup (state["species"] keys are strings, but species_member_ids uses int keys)
+            # NOTE: Only member_ids are saved, not full member objects (storage optimization)
+            sid_int = int(sid)
+            if sid_int in species_member_ids:
+                sp_dict["member_ids"] = species_member_ids[sid_int]
             else:
                 if elites_path.exists():
                     logger.warning(f"Frozen species {sid} not found in elites.json, using in-memory member IDs ({len(sp.members)})")
                 sp_dict["member_ids"] = [m.id for m in sp.members]
+            # Size = count from elites.json (which reflects genome_tracker after Phase 8 - only top species_capacity genomes remain)
             sp_dict["size"] = len(sp_dict["member_ids"])
-            if sid in species_member_ids:
-                logger.debug(f"Frozen species {sid}: size={sp_dict['size']} from elites.json (in-memory had {len(sp.members)})")
-            # CRITICAL: Ensure leader_embedding is ALWAYS preserved for frozen species (needed for merging)
+            # Validation: ensure size matches member_ids count
+            if sp_dict["size"] != len(sp_dict["member_ids"]):
+                logger.warning(f"Frozen species {sid}: size mismatch - size={sp_dict['size']}, member_ids count={len(sp_dict['member_ids'])}")
+            if sid_int in species_member_ids:
+                logger.debug(f"Frozen species {sid}: size={sp_dict['size']} from elites.json (after capacity enforcement), in-memory={len(sp.members)}")
+            # Ensure leader_embedding is ALWAYS preserved for frozen species (needed for merging)
             # If embedding is None, try to load from elites.json
             if sp.leader and sp.leader.embedding is not None:
                 if "leader_embedding" not in sp_dict or sp_dict["leader_embedding"] is None:
@@ -2157,21 +2062,29 @@ def save_state(path: str) -> None:
             if sp.species_state == "extinct":
                 # Extinct species (merged parents) get full data for reference
                 sp_dict = sp.to_dict()
-                if sid in species_member_ids:
-                    sp_dict["member_ids"] = species_member_ids[sid]
+                # Convert sid to int for lookup (historical_species keys may be strings or ints)
+                # NOTE: Only member_ids are saved for extinct species too (storage optimization)
+                sid_int = int(sid) if isinstance(sid, str) else sid
+                if sid_int in species_member_ids:
+                    sp_dict["member_ids"] = species_member_ids[sid_int]
                 else:
                     sp_dict["member_ids"] = [m.id for m in sp.members]
                 sp_dict["size"] = len(sp_dict["member_ids"])
-                # Preserve leader embedding for reference
-                if sp.leader and sp.leader.embedding is not None:
-                    if "leader_embedding" not in sp_dict or sp_dict["leader_embedding"] is None:
-                        sp_dict["leader_embedding"] = sp.leader.embedding.tolist()
+                # Validation: ensure size matches member_ids count
+                if sp_dict["size"] != len(sp_dict["member_ids"]):
+                    logger.warning(f"Extinct species {sid}: size mismatch - size={sp_dict['size']}, member_ids count={len(sp_dict['member_ids'])}")
+                
+                # STORAGE OPTIMIZATION: Remove leader_embedding for all extinct species to save storage space
+                # Extinct species are no longer active, so embeddings are not needed
+                if "leader_embedding" in sp_dict:
+                    del sp_dict["leader_embedding"]
+                logger.debug(f"Removed leader_embedding for extinct species {sid} (storage optimization)")
                 species_dict[str(sid)] = sp_dict
             elif sp.species_state == "incubator":
                 # Incubator species - just track ID
                 incubator_ids.append(sid)
     
-    # CRITICAL FIX: Add species that exist in elites.json but are missing from in-memory state
+    # Add species that exist in elites.json but are missing from in-memory state
     # This can happen if species were frozen/extinct in previous generations or state wasn't loaded properly
     from .species import Species
     from .distance import ensemble_distance
@@ -2205,6 +2118,7 @@ def save_state(path: str) -> None:
                 
                 # Use member IDs from species_member_ids if available (already calculated above)
                 # Otherwise use the species_genomes we just found
+                # species_id is already an int from elites.json, so no conversion needed
                 if species_id in species_member_ids:
                     member_ids = species_member_ids[species_id]
                 else:
@@ -2269,7 +2183,7 @@ def save_state(path: str) -> None:
                     logger.debug(f"Species {sid}: {len(missing_in_elites)} member_ids not found in elites.json (may be historical or moved to reserves)")
                 
                 # Check if there are genomes in elites.json not in member_ids
-                # This should not happen now that member_ids is populated from elites.json
+                # This should not happen now that member_ids is populated from elites.json (which reflects genome_tracker after Phase 8)
                 extra_in_elites = species_genome_ids - member_ids
                 if extra_in_elites:
                     logger.warning(f"Species {sid}: {len(extra_in_elites)} genomes in elites.json not in member_ids - this may indicate a data inconsistency")
@@ -2282,7 +2196,7 @@ def save_state(path: str) -> None:
                 # Skip invalid species IDs
                 continue
 
-    # Ensure size always equals len(member_ids) (source of truth: elites.json)
+    # Ensure size always equals len(member_ids) (source of truth: genome_tracker via elites.json after Phase 8 distribution)
     min_island_size = state["config"].min_island_size
     for sid_str, sp_dict in species_dict.items():
         mids = sp_dict.get("member_ids", [])
@@ -2356,9 +2270,6 @@ def save_state(path: str) -> None:
     cluster0_dict["max_fitness"] = cluster0_max_fitness
     cluster0_dict["min_fitness"] = cluster0_min_fitness
     
-    # Get archived genomes from state (for tracking across generations)
-    archived_genomes = state.get("_archived_genomes", [])
-    
     state_dict = {
         "species": species_dict,
         "incubators": sorted(incubator_ids),  # Just list of species IDs
@@ -2366,8 +2277,7 @@ def save_state(path: str) -> None:
         "cluster0_size_from_reserves": actual_cluster0_size,  # Store actual size from reserves.json
         "global_best_id": state["global_best"].id if state["global_best"] else None,
         "metrics": state["metrics_tracker"].to_dict(),
-        "config": state["config"].to_dict(),  # Save config to ensure arguments are preserved
-        "_archived_genomes": archived_genomes  # Save archived genomes list for tracking
+        "config": state["config"].to_dict()  # Save config to ensure arguments are preserved
     }
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(state_dict, f, indent=2, ensure_ascii=False)
@@ -2454,6 +2364,9 @@ def load_state(path: str) -> bool:
             member_ids = sp_dict.get("member_ids", [])
             
             # Load members from elites.json if member_ids are provided
+            # NOTE: This is lazy loading - members are reconstructed from elites.json
+            # The members list in saved state is empty (only member_ids are stored for efficiency)
+            # This is EXPECTED behavior: full member data is in elites.json, only IDs in state
             if member_ids:
                 outputs_path = get_outputs_path()
                 elites_path = outputs_path / "elites.json"
@@ -2467,6 +2380,7 @@ def load_state(path: str) -> bool:
                         
                         # Load all members (excluding leader if it's in member_ids).
                         # Include all that exist in elites so sp.size matches len(member_ids) for process_extinctions.
+                        loaded_count = 0
                         for member_id in member_ids:
                             if member_id == leader.id:
                                 continue  # Leader already added
@@ -2474,6 +2388,12 @@ def load_state(path: str) -> bool:
                                 member_genome = genome_by_id[member_id]
                                 member = Individual.from_genome(member_genome)
                                 members.append(member)
+                                loaded_count += 1
+                        
+                        # Validation: verify all member_ids were loaded (except leader)
+                        expected_count = len(member_ids) - (1 if leader.id in member_ids else 0)
+                        if loaded_count != expected_count:
+                            logger.warning(f"Species {sid}: member loading incomplete - loaded {loaded_count}/{expected_count} members from elites.json")
                     except Exception as e:
                         logger.warning(f"Failed to load members for species {sid} from elites.json: {e}")
             
@@ -2497,7 +2417,7 @@ def load_state(path: str) -> bool:
                 leader_distance=sp_dict.get("leader_distance", 0.0)
             )
             
-            # CRITICAL: If leader embedding is missing, try to load from elites.json (for both active and frozen)
+            # If leader embedding is missing, try to load from elites.json (for both active and frozen)
             if species.leader.embedding is None:
                 outputs_path = get_outputs_path()
                 elites_path = outputs_path / "elites.json"
@@ -2551,24 +2471,6 @@ def load_state(path: str) -> bool:
         else:
             state["metrics_tracker"] = SpeciationMetricsTracker(logger=logger)
         
-        # Restore archived genomes from state
-        if "_archived_genomes" in loaded_state:
-            state["_archived_genomes"] = loaded_state["_archived_genomes"]
-            logger.debug(f"Loaded {len(state['_archived_genomes'])} archived genomes from state")
-        else:
-            # Initialize from archive.json if not in state (backward compatibility)
-            state["_archived_genomes"] = []
-            outputs_path = get_outputs_path()
-            archive_path = outputs_path / "archive.json"
-            if archive_path.exists():
-                try:
-                    with open(archive_path, 'r', encoding='utf-8') as f:
-                        archive_genomes = json.load(f)
-                    state["_archived_genomes"] = archive_genomes
-                    logger.info(f"Initialized {len(archive_genomes)} archived genomes from archive.json (not in saved state)")
-                except Exception as e:
-                    logger.warning(f"Failed to load archived genomes from archive.json: {e}")
-        
         # Restore global best
         global_best_id = loaded_state.get("global_best_id")
         if global_best_id:
@@ -2588,7 +2490,7 @@ def load_state(path: str) -> bool:
         active_count = len([sp for sp in state["species"].values() if sp.species_state == "active"])
         frozen_count = len([sp for sp in state["species"].values() if sp.species_state == "frozen"])
         historical_count = len(state["historical_species"])
-        logger.info(f"Loaded speciation state from {path}: {active_count} active, {frozen_count} frozen, {historical_count} historical species, {len(state.get('_archived_genomes', []))} archived genomes")
+        logger.info(f"Loaded speciation state from {path}: {active_count} active, {frozen_count} frozen, {historical_count} historical species")
         return True
         
     except Exception as e:
@@ -2838,27 +2740,16 @@ def run_speciation(
             logger=logger
         )
         
-        # Reload genomes with embeddings
-        with open(temp_path_obj, 'r', encoding='utf-8') as f:
-            genomes = json.load(f)
-        
-        # Update genomes with species IDs
-        updated_genomes = _update_genomes_with_species(genomes)
-        
-        # Save updated genomes back to temp.json
-        with open(temp_path_obj, 'w', encoding='utf-8') as f:
-            json.dump(updated_genomes, f, indent=2, ensure_ascii=False)
-        
         # NOTE: process_generation() has already:
-        # - Updated metrics from corrected files (Phase 7)
-        # - Saved corrected files (Phase 6)
+        # - Updated metrics from corrected files (Phase 8 in process_generation)
+        # - Saved intermediate files (Phase 7 in process_generation - will be overwritten by Phase 8 distribution)
         # - Saved speciation_state.json
         
-        # Final step: Distribute genomes (this is the final distribution step)
-        # Note: Files are already corrected, this is just the final distribution
-        distribution_result = distribute_genomes(
+        # Final step: Distribute genomes using Phase 8 (genome tracker as source of truth)
+        # Phase 8 uses genome tracker as authoritative source for distribution and overwrites
+        # any intermediate files saved during process_generation. The tracker is the single source of truth.
+        distribution_result = phase8_redistribute_genomes(
             temp_path=temp_path,
-            north_star_metric=north_star_metric,
             current_generation=current_generation
         )
         logger.info("Final distribution complete: %d elites, %d reserves",
@@ -2870,7 +2761,11 @@ def run_speciation(
         
         # Get state reference
         state = _get_state()
-        # V2: Ensure genome tracker is saved after distribution
+        # V2: Ensure events tracker is saved after distribution
+        if "_events_tracker" in state:
+            state["_events_tracker"].save()
+        
+        # Save genome tracker (master registry)
         if "_genome_tracker" in state:
             state["_genome_tracker"].save()
         
@@ -2949,7 +2844,7 @@ def run_speciation(
             "merge_events": events.get("merge", 0),
             "extinction_events": events.get("extinction", 0),
             "archived_count": state["_archived_count"],
-            "genomes_updated": len(updated_genomes),
+            "genomes_updated": distribution_result.get("total_processed", 0) if distribution_result else 0,
             "success": True
         }
         
@@ -3280,14 +3175,10 @@ def update_evolution_tracker_with_speciation(
         # Always set speciation data (even if empty/error state)
         gen_entry["speciation"] = speciation_summary
         
-        # Update max_score_variants with population max for this generation
-        # For generation 0, this is the initial population max; for later generations, this is the max after speciation
-        if best_fitness_value > 0.0001:
-            # Only update if it's higher than current value (for generation 0, this will be the population max)
-            current_max_variants = gen_entry.get("max_score_variants", 0.0001)
-            if best_fitness_value > current_max_variants:
-                gen_entry["max_score_variants"] = round(best_fitness_value, 4)
-                logger.debug(f"Updated max_score_variants to {best_fitness_value:.4f} (population max for generation {current_generation})")
+        # max_score_variants is NOT updated here - it is correctly calculated in main.py from temp.json
+        # BEFORE speciation (representing max fitness among variants created this generation).
+        # Updating it here with population max would overwrite the correct value.
+        # The population max is tracked separately as population_max_toxicity.
         
         if "speciation_summary" not in evolution_tracker:
             evolution_tracker["speciation_summary"] = {}

@@ -76,7 +76,8 @@ from .run_speciation import (
     get_speciation_statistics,
     update_evolution_tracker_with_speciation,
     process_generation,
-    distribute_genomes,
+    phase1_compute_embeddings,
+    phase8_redistribute_genomes,
 )
 
 __all__ = [
@@ -118,5 +119,6 @@ __all__ = [
     "get_speciation_statistics",
     "update_evolution_tracker_with_speciation",
     "process_generation",
-    "distribute_genomes",
+    "phase1_compute_embeddings",
+    "phase8_redistribute_genomes",
 ]

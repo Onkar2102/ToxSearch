@@ -87,6 +87,15 @@ point to genome "id" in elites).
   genome_data             (in-memory only) Full genome dict on Individual;
                           not serialized to JSON.
 
+  prompt_generator_name  str. Prompt generator model name. Set by prompt_generator.
+
+  is_refusal              int. 0 or 1. Set by refusal_detector. Used for refusal penalty.
+
+  archived_at_generation  int. Generation when genome was archived. Set during archiving.
+
+  archive_reason          str. Reason for archiving (e.g. "species_capacity_exceeded",
+                          "cluster0_capacity_exceeded"). Set during archiving.
+
 --------------------------------------------------------------------------------
 2. elites.json
 --------------------------------------------------------------------------------
@@ -123,8 +132,11 @@ Location: data/outputs/<run>/archive.json
 Format: JSON array of genome objects.
 
   Contains: archived genomes (capacity overflow, non-elite, etc.).
-  - initial_state: "non-elite".
+  - initial_state: "non-elite" (for capacity-archived) or "elite" (for other reasons).
   - prompt_embedding: removed before archiving to save space.
+  - archived_at_generation: Generation when archived.
+  - archive_reason: Reason for archiving (e.g. "species_capacity_exceeded",
+    "cluster0_capacity_exceeded", "extinction", etc.).
 
   Cumulative: all archived genomes. Not part of the active population.
 
@@ -199,7 +211,9 @@ Format: JSON object.
 
   genome_id               str|int. Best genome ID for this generation (e.g.
                           highest toxicity in population for this gen). Can be
-                          None.
+                          None. Also referred to as best_genome_id in some contexts.
+
+  best_genome_id          str|int. Alias for genome_id (best genome ID for this generation).
 
   max_score_variants      float. Max toxicity among variants created this gen
                           (from temp before speciation). Fallback 0.0001.
@@ -250,9 +264,9 @@ Format: JSON object.
 
   operator_statistics     object. Per-operator: rejections, duplicates, etc.
     <operator_name>:
-      rejections_removed       int.
-      duplicates_removed       int.
-      (or rejections, duplicates)
+      rejections_removed       int. (or question_mark_rejections) Count of rejected variants.
+      duplicates_removed       int. (or duplicates) Count of duplicate variants removed.
+      Note: Field names may vary by operator; both naming conventions are used.
 
   speciation              object. See §6.3.
 
@@ -489,6 +503,7 @@ Format: CSV. One row per (generation, operator). Columns (order as in code):
                           operator matches.
 
   rejections              int. From operator_statistics for this operator.
+                          May be stored as "question_mark_rejections" in operator_statistics.
 
   duplicates              int. From operator_statistics.
 

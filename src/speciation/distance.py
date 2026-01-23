@@ -107,6 +107,13 @@ def ensemble_distance(
     
     Then: D_ensemble = wg * D_cos_normalized + wp * D_pheno
     
+    IMPORTANT: When phenotype is None (missing):
+    - d_phenotype is set to 0.0 (intentional: do not measure distance when phenotype unavailable)
+    - This results in range [0, w_genotype] instead of [0, 1]
+    - With default weights (wg=0.7, wp=0.3), range is [0, 0.7] when phenotype missing
+    - Thresholds (theta_sim, theta_merge) are effectively more lenient when phenotype is missing
+    - This is by design: genomes without phenotype data rely only on genotype similarity
+    
     Args:
         e1: First prompt embedding (L2-normalized, shape: (embedding_dim,))
         e2: Second prompt embedding (L2-normalized, shape: (embedding_dim,))
@@ -116,7 +123,7 @@ def ensemble_distance(
         w_phenotype: Weight for phenotype (response scores) distance (default: 0.3)
     
     Returns:
-        Ensemble distance in range [0, 1]
+        Ensemble distance in range [0, 1] when phenotype available, [0, w_genotype] when phenotype missing
     """
     # Validate weights
     if abs(w_genotype + w_phenotype - 1.0) > 1e-6:
@@ -129,10 +136,12 @@ def ensemble_distance(
     d_genotype_norm = d_genotype / 2.0
     
     # Compute phenotype distance (normalized Euclidean, range [0, 1])
+    # When phenotype is None, set to 0.0 (intentional: do not measure distance when unavailable)
+    # This results in range [0, w_genotype] instead of [0, 1] when phenotype missing
     if p1 is not None and p2 is not None:
         d_phenotype = phenotype_distance(p1, p2)
     else:
-        d_phenotype = 0.0
+        d_phenotype = 0.0  # Intentional: phenotype unavailable, use genotype-only distance
     
     # Ensemble distance
     d_ensemble = w_genotype * d_genotype_norm + w_phenotype * d_phenotype
@@ -163,7 +172,8 @@ def ensemble_distances_batch(
         w_phenotype: Weight for phenotype distance (default: 0.3)
     
     Returns:
-        1D numpy array of ensemble distances (shape: (num_targets,)) in range [0, 1]
+        1D numpy array of ensemble distances (shape: (num_targets,)) in range [0, 1] when phenotype available,
+        [0, w_genotype] when phenotype missing
     """
     # Validate weights
     if abs(w_genotype + w_phenotype - 1.0) > 1e-6:
@@ -182,10 +192,12 @@ def ensemble_distances_batch(
     d_genotype = semantic_distances_batch(query_embedding, embeddings_2d)
     
     # Normalize to [0, 1]
+    # Cosine distance is in range [0, 2], so divide by 2.0 to normalize to [0, 1]
     d_genotype_norm = d_genotype / 2.0
     
     # Compute phenotype distances if available
-    # If phenotype unavailable or None, treat as 0 (do not measure distance)
+    # If phenotype unavailable or None, treat as 0.0 (intentional: do not measure distance when unavailable)
+    # This results in range [0, w_genotype] instead of [0, 1] when phenotype missing
     if query_phenotype is not None and phenotypes is not None:
         # Handle both numpy array and list of Optional[np.ndarray]
         if isinstance(phenotypes, np.ndarray):
@@ -211,15 +223,16 @@ def ensemble_distances_batch(
                 from .phenotype_distance import phenotype_distances_batch
                 phenotypes_array = np.array(valid_phenotypes)
                 d_phenotype_valid = phenotype_distances_batch(query_phenotype, phenotypes_array)
-                # Build full array with 0.0 for missing phenotypes
+                # Build full array with 0.0 for missing phenotypes (intentional: do not measure distance when unavailable)
                 d_phenotype = np.full(num_targets, 0.0)
                 for idx, orig_idx in enumerate(valid_indices):
                     d_phenotype[orig_idx] = d_phenotype_valid[idx]
             else:
-                # No valid phenotypes, all are None
+                # No valid phenotypes, all are None - use 0.0 (intentional: genotype-only distances)
                 d_phenotype = np.full(num_targets, 0.0)
     else:
-        # If phenotype unavailable, treat as 0 (fallback to genotype-only distances)
+        # If phenotype unavailable, treat as 0.0 (intentional: fallback to genotype-only distances)
+        # This results in range [0, w_genotype] instead of [0, 1] when phenotype missing
         d_phenotype = np.full(num_targets, 0.0)
     
     # Ensemble distances

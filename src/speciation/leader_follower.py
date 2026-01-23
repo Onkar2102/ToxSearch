@@ -366,7 +366,8 @@ def leader_follower_clustering(
         
         # 2. For Generation 0: Check against potential leaders
         if not assigned and is_generation_0 and potential_leaders:
-            for pl_id, (pl_species_id, pl_emb, pl_pheno, pl_ind, followers) in potential_leaders.items():
+            # Use list() to create snapshot - prevents RuntimeError when modifying dict during iteration
+            for pl_id, (pl_species_id, pl_emb, pl_pheno, pl_ind, followers) in list(potential_leaders.items()):
                 dist = ensemble_distance(
                     ind.embedding, pl_emb,
                     ind.phenotype, pl_pheno,
@@ -386,10 +387,10 @@ def leader_follower_clustering(
                             all_members = [pl_ind] + followers
                             leader = max(all_members, key=lambda x: x.fitness)
                             
-                            # CRITICAL FIX: After choosing the new leader, verify all members are within radius
-                            # This prevents species from being created with members outside the new leader's radius
-                            # which would cause them to be removed immediately in radius cleanup
-                            # This matches the logic in check_speciation() for consistency
+                            # After choosing the new leader, verify all members are within the leader's radius
+                            # This ensures species are created only with members within the radius threshold,
+                            # preventing members from being removed immediately in radius cleanup phase.
+                            # This matches the logic in check_speciation() for consistency.
                             valid_members = [leader]  # Leader always included
                             for member in all_members:
                                 if member.id == leader.id:
@@ -478,7 +479,8 @@ def leader_follower_clustering(
         
         # 3. For Generation N: Check against cluster 0 outliers (potential leaders)
         if not assigned and not is_generation_0 and cluster0_potential_leaders:
-            for pl_id, (pl_species_id, pl_emb, pl_pheno, pl_ind, followers) in cluster0_potential_leaders.items():
+            # Use list() to create snapshot - prevents RuntimeError when modifying dict during iteration
+            for pl_id, (pl_species_id, pl_emb, pl_pheno, pl_ind, followers) in list(cluster0_potential_leaders.items()):
                 dist = ensemble_distance(
                     ind.embedding, pl_emb,
                     ind.phenotype, pl_pheno,
@@ -498,7 +500,7 @@ def leader_follower_clustering(
                             all_members = [pl_ind] + followers
                             leader = max(all_members, key=lambda x: x.fitness)
                             
-                            # CRITICAL FIX: After choosing the new leader, verify all members are within radius
+                            # After choosing the new leader, verify all members are within the leader's radius
                             # This prevents species from being created with members outside the new leader's radius
                             # which would cause them to be removed immediately in radius cleanup
                             # This matches the logic in Generation 0 and check_speciation() for consistency
@@ -616,14 +618,62 @@ def leader_follower_clustering(
                 logger.debug(f"  ({outliers_with_followers} outliers have some followers but haven't reached min_size yet)")
     
     # Update temp.json with species_id for each genome
+    # Also update genome tracker (master registry) if available
     genome_id_to_species = {ind.id: ind.species_id for ind in valid_population}
+    
+    # Try to get genome tracker from state
+    try:
+        from .run_speciation import _get_state
+        state = _get_state()
+        genome_tracker = state.get("_genome_tracker")
+    except Exception:
+        genome_tracker = None
+    
+    updates_for_tracker = {}
     for genome in genomes:
         genome_id = genome.get("id")
         if genome_id in genome_id_to_species:
-            genome["species_id"] = genome_id_to_species[genome_id]
+            species_id = genome_id_to_species[genome_id]
+            genome["species_id"] = species_id
+            # Prepare batch update for tracker
+            if genome_tracker and species_id is not None:
+                updates_for_tracker[str(genome_id)] = species_id if species_id is not None else 0
         else:
             # Genome without embedding gets species_id=None
             genome["species_id"] = None
+            if genome_tracker:
+                updates_for_tracker[str(genome_id)] = 0
+    
+    # Batch update genome tracker
+    if genome_tracker and updates_for_tracker:
+        result = genome_tracker.batch_update(updates_for_tracker, current_generation, "leader_follower_clustering")
+        if result["failed"] > 0:
+            logger.warning(f"Genome tracker batch update had {result['failed']} failures")
+        
+        # Log reassignment events for genomes that were archived but are now active
+        reassigned_from_archive = result.get("reassigned_from_archive", [])
+        if reassigned_from_archive:
+            # Try to get events tracker from state
+            try:
+                from .run_speciation import _get_state
+                state = _get_state()
+                events_tracker = state.get("_events_tracker")
+                if events_tracker:
+                    for genome_id, old_species_id, new_species_id in reassigned_from_archive:
+                        events_tracker.log(
+                            genome_id, "reassigned_from_archive",
+                            {
+                                "from_species_id": old_species_id,
+                                "to_species_id": new_species_id,
+                                "reason": "leader_follower_clustering",
+                                "note": "Genome was previously archived but is now active"
+                            }
+                        )
+                    logger.info(f"Logged {len(reassigned_from_archive)} reassignment events for genomes reactivated from archive")
+                else:
+                    logger.warning(f"Events tracker not available - {len(reassigned_from_archive)} reassignment events not logged (genomes: {[gid for gid, _, _ in reassigned_from_archive[:5]]})")
+            except Exception as e:
+                logger.warning(f"Could not log reassignment events: {e} (this may indicate events_tracker is not initialized)")
     
     # Save updated temp.json
     with open(temp_path_obj, 'w', encoding='utf-8') as f:

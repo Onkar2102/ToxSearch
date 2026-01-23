@@ -202,6 +202,20 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         logger.info("Generating responses using response generation model...")
         temp_path = str(get_outputs_path() / "temp.json")
         response_generator.process_population(pop_path=temp_path)
+        
+        # Validate that temp.json has content
+        temp_path_obj = get_outputs_path() / "temp.json"
+        if temp_path_obj.exists():
+            with open(temp_path_obj, 'r', encoding='utf-8') as f:
+                temp_genomes = json.load(f)
+                if not temp_genomes or len(temp_genomes) == 0:
+                    logger.error("Generation 0 failed: temp.json is empty after response generation.")
+                    logger.error("No initial population was generated. Check seed file and model configuration.")
+                    return
+                logger.info("Generated %d initial genomes in temp.json", len(temp_genomes))
+        else:
+            logger.error("Generation 0 failed: temp.json was not created.")
+            return
     except Exception as e:
         logger.error("Generation failed: %s", e, exc_info=True)
         return
@@ -217,6 +231,16 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             north_star_metric=north_star_metric,
             moderation_methods=moderation_methods
         )
+        
+        # Validate that temp.json still has content after evaluation
+        temp_path_obj = get_outputs_path() / "temp.json"
+        if temp_path_obj.exists():
+            with open(temp_path_obj, 'r', encoding='utf-8') as f:
+                temp_genomes = json.load(f)
+                if not temp_genomes or len(temp_genomes) == 0:
+                    logger.error("Generation 0 failed: temp.json is empty after evaluation.")
+                    logger.error("All genomes were removed during evaluation.")
+                    return
     except Exception as e:
         logger.error("Evaluation failed: %s", e, exc_info=True)
         return
@@ -423,6 +447,37 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     gen0_stats.get("archived_count", 0), gen0_stats["total_population"], gen0_stats["avg_fitness_generation"])
     except Exception as e:
         logger.warning("Failed to update generation 0 metrics in EvolutionTracker: %s", e)
+
+    # Validate that Generation 0 populated the population files before proceeding
+    elites_path = get_outputs_path() / "elites.json"
+    reserves_path = get_outputs_path() / "reserves.json"
+    has_population = False
+    
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_data = json.load(f)
+                if isinstance(elites_data, list) and len(elites_data) > 0:
+                    has_population = True
+                    logger.info("Generation 0 validation: elites.json has %d genomes", len(elites_data))
+        except Exception as e:
+            logger.warning("Failed to read elites.json for validation: %s", e)
+    
+    if not has_population and reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_data = json.load(f)
+                if isinstance(reserves_data, list) and len(reserves_data) > 0:
+                    has_population = True
+                    logger.info("Generation 0 validation: reserves.json has %d genomes", len(reserves_data))
+        except Exception as e:
+            logger.warning("Failed to read reserves.json for validation: %s", e)
+    
+    if not has_population:
+        logger.error("Generation 0 failed: No genomes in elites.json or reserves.json after speciation.")
+        logger.error("This indicates that Generation 0 did not complete successfully.")
+        logger.error("Possible causes: empty temp.json, all genomes archived, or speciation failure.")
+        return
 
     evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
     if evolution_tracker_path.exists():
@@ -703,9 +758,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                 try:
                     outputs_path = str(get_outputs_path())
                     temp_path_obj = get_outputs_path() / "temp.json"
-                    previous_max_toxicity = 0.0
+                    
+                    # Get previous max from EvolutionTracker (for stagnation detection)
                     if generation_count > 1:
-                        # Get previous max from EvolutionTracker
                         try:
                             with open(get_outputs_path() / "EvolutionTracker.json", 'r', encoding='utf-8') as f:
                                 tracker = json.load(f)
@@ -714,6 +769,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                         except Exception:
                             pass
                     
+                    # Get current max from temp.json (variants created this generation)
+                    max_toxicity = 0.0
                     if temp_path_obj.exists():
                         with open(temp_path_obj, 'r', encoding='utf-8') as f:
                             temp_genomes = json.load(f)

@@ -80,7 +80,7 @@ def process_extinctions(
     
     # Step 2: Move small species to cluster 0 (NOT extinction, just reorganization)
     # Species get state="incubator" and are kept in speciation_state.json for reference
-    # CRITICAL: Use in-memory size (sp.size), NOT elites.json size
+    # Use in-memory size (sp.size), NOT elites.json size (which is cumulative across generations)
     # elites.json accumulates genomes from ALL generations (cumulative), so it's not accurate for current state
     # We want to move species to incubator based on CURRENT size (after radius cleanup, capacity enforcement)
     # In-memory size reflects the current generation's actual state
@@ -120,11 +120,26 @@ def process_extinctions(
         
         # Move all members to cluster 0
         moved_count = 0
+        moved_member_ids = []
         for member in sp.members:
             if cluster0.size >= cluster0.max_capacity:
                 break  # Stop if capacity reached
             cluster0.add(member, current_generation)
+            moved_member_ids.append(member.id)
             moved_count += 1
+        
+        # Update genome tracker: mark moved members as species_id=0 (reserves)
+        try:
+            from .run_speciation import _get_state
+            state = _get_state()
+            genome_tracker = state.get("_genome_tracker")
+            if genome_tracker and moved_member_ids:
+                updates = {str(mid): 0 for mid in moved_member_ids}
+                result = genome_tracker.batch_update(updates, current_generation, f"extinct_to_reserves_species_{sid}")
+                if result["failed"] > 0:
+                    logger.warning(f"Genome tracker batch update had {result['failed']} failures during extinction")
+        except Exception as e:
+            logger.debug(f"Could not update genome tracker during extinction: {e}")
         
         # Mark species as incubator (species ID is deceased, but kept for reference)
         sp.species_state = "incubator"
@@ -137,7 +152,8 @@ def process_extinctions(
             "action": "moved_to_cluster0",
             "new_state": "incubator",
             "size": original_size,  # Use original size before clearing members
-            "moved_count": moved_count
+            "moved_count": moved_count,
+            "moved_member_ids": moved_member_ids  # Track IDs for file patching
         })
         logger.info(f"Moved species {sid} ({moved_count} members) to cluster 0 - state=incubator (NOT extinction)")
     

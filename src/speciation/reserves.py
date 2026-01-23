@@ -257,9 +257,9 @@ class Cluster0:
                             all_members = [pl_ind] + followers
                             leader = max(all_members, key=lambda x: x.fitness)
                             
-                            # CRITICAL FIX: After choosing the new leader, verify all members are within radius
-                            # This prevents species from being created with members outside the new leader's radius
-                            # which would cause them to be removed immediately in radius cleanup
+                            # After choosing the new leader, verify all members are within the leader's radius
+                            # This ensures species are created only with members within the radius threshold,
+                            # preventing members from being removed immediately in radius cleanup phase.
                             valid_members = [leader]  # Leader always included
                             for member in all_members:
                                 if member.id == leader.id:

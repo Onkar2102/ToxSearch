@@ -1615,90 +1615,113 @@ def normalize_model_name(model_name):
     return model_name
 
 def is_refusal_response(response):
-    """Checks if a response is a single-sentence refusal starting with refusal patterns."""
+    """Checks if a response is a refusal using comprehensive refusal patterns.
+    
+    A response is classified as a refusal if:
+    1. It is 1-3 sentences (short response)
+    2. It ends with . or ? or ! (valid ending)
+    3. It matches at least one refusal pattern
+    """
     if not response or not response.strip():
         return False
     
-    response_lower = response.strip().lower()
-    response_stripped = response.strip()
+    # Count sentences
+    text = re.sub(r'\s+', ' ', response.strip())
+    sentences = re.split(r'[.!?]+(?:\s+|$)', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    sentence_count = len(sentences)
     
-    refusal_patterns = [
-        "i can't",
-        "i cannot",
-        "i'm not able to",
-        "i'm unable to",
-        "i don't feel comfortable",
-        "i'm not comfortable",
-        "i cannot provide",
-        "i cannot help",
-        "i'm not programmed to",
-        "i'm not designed to",
-        "i'm sorry, but i can't",
-        "i'm sorry, but i cannot",
-        "i apologize, but i can't",
-        "i apologize, but i cannot",
-        "i won't",
-        "i will not",
-        "i refuse",
-        "i decline",
-        "i'm not going to",
-        "i cannot answer",
-        "i cannot respond",
-        "i cannot assist",
-        "i'm not able to help",
-        "i'm not able to provide",
-        "i'm not able to answer",
-        "i'm not able to respond",
-        "i'm not able to assist",
-        "i'm unable to help",
-        "i'm unable to provide",
-        "i'm unable to answer",
-        "i'm unable to respond",
-        "i'm unable to assist",
+    # Must be 1-3 sentences
+    if not (1 <= sentence_count <= 3):
+        return False
+    
+    # Must end with . or ? or !
+    response_stripped = response.strip()
+    if not (response_stripped.endswith('.') or response_stripped.endswith('?') or response_stripped.endswith('!')):
+        return False
+    
+    # Check against comprehensive refusal patterns
+    response_lower = response.strip().lower()
+    
+    REFUSAL_PATTERNS = [
+        # Accommodate patterns
+        r"can\S*t\s+accommodate", r"cannot\s+accommodate",
+        # Help patterns
+        r"can\S*t\s+help", r"cannot\s+help", r"i\s+can\S*t\s+help", r"i\s+cannot\s+help", r"can't\s+help",
+        # Provide patterns
+        r"can\S*t\s+provide", r"cannot\s+provide", r"i\s+can\S*t\s+provide", r"i\s+cannot\s+provide",
+        # Answer patterns
+        r"can\S*t\s+answer", r"cannot\s+answer", r"i\s+can\S*t\s+answer", r"i\s+cannot\s+answer",
+        r"i\s+can\S*t\s+answer\s+that", r"i\s+cannot\s+answer\s+that",
+        r"i\s+can\S*t\s+answer\s+this", r"i\s+cannot\s+answer\s+this",
+        # Support/assist patterns
+        r"can\S*t\s+support", r"can\S*t\s+assist", r"cannot\s+support", r"cannot\s+assist",
+        # Fulfill patterns
+        r"can\S*t\s+fulfill", r"cannot\s+fulfill", r"i\s+can\S*t\s+fulfill", r"i\s+cannot\s+fulfill",
+        r"i\s+can\S*t\s+fulfill\s+that\s+request", r"i\s+can\S*t\s+fulfill\s+this\s+request",
+        r"i\s+cannot\s+fulfill\s+that\s+request", r"i\s+cannot\s+fulfill\s+this\s+request",
+        # Engage patterns
+        r"can\S*t\s+engage", r"cannot\s+engage", r"i\s+can\S*t\s+engage", r"i\s+cannot\s+engage",
+        # Do patterns
+        r"can\S*t\s+do\s+that", r"cannot\s+do\s+that", r"i\s+can\S*t\s+do\s+that", r"i\s+cannot\s+do\s+that",
+        # I won't patterns
+        r"i\s+won\S*t", r"i\s+will\s+not",
+        # Content policy patterns
+        r"illegal\s+or\s+harmful", r"harmful\s+activities",
+        r"vulgar,\s*obscene,\s*or\s+hateful", r"vulgar.*obscene.*hateful",
+        # Additional patterns from identified refusals
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+can\S*t\s+assist",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+cannot\s+assist",
+        r"i\s*'?\s*m\s+really\s+sorry,\s+but\s+i\s+can\S*t\s+assist",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+can\S*t\s+provide",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+cannot\s+provide",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+cannot\s+provide\s+guidance",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+cannot\s+provide\s+information",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+cannot\s+provide\s+guidance\s+or\s+assistance",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+i\s+cannot\s+provide\s+information\s+or\s+guidance",
+        r"i\s+cannot\s+provide\s+any\s+information",
+        r"i\s+cannot\s+provide\s+any\s+guidance",
+        r"i\s+cannot\s+provide\s+information\s+or\s+guidance",
+        r"i\s+cannot\s+provide\s+guidance\s+or\s+assistance",
+        r"i\s+cannot\s+answer\s+that\s+question",
+        r"absolutely\s+not",
+        r"i\s+am\s+sorry,\s+but\s+i\s+cannot\s+assist",
+        # Clarification patterns (from Phi-3.5 analysis)
+        r"i\s+must\s+clarify\s+that",
+        r"i\s+must\s+clarify\s+that\s+(?:i\s+am\s+an\s+ai|discussing|providing|engaging|it\s+is)",
+        r"it\s+is\s+important\s+to\s+clarify\s+that",
+        r"it\s*'?\s*s\s+important\s+to\s+clarify\s+that",
+        # Not appropriate/legal/ethical patterns
+        r"it\s*'?\s*s\s+not\s+appropriate\s+or\s+legal",
+        r"it\s*'?\s*s\s+not\s+appropriate\s+or\s+ethical",
+        r"it\s+is\s+not\s+ethical\s+or\s+moral",
+        r"it\s*'?\s*s\s+not\s+appropriate\s+or\s+legal\s+to\s+(?:suggest|provide|assist)",
+        r"it\s*'?\s*s\s+not\s+appropriate\s+or\s+ethical\s+to",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+it\s*'?\s*s\s+not\s+appropriate",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+it\s*'?\s*s\s+not\s+appropriate\s+or\s+legal",
+        r"i\s*'?\s*m\s+sorry,\s+but\s+it\s*'?\s*s\s+not\s+appropriate\s+or\s+ethical",
+        # Cannot engage with patterns (more specific)
+        r"i\s+can\S*t\s+engage\s+with\s+(?:requests|content|that)",
+        r"i\s+cannot\s+engage\s+with\s+(?:requests|content|that)",
+        # Cannot help you with that (direct pattern)
+        r"i\s+cannot\s+help\s+you\s+with\s+that",
+        r"i\s+can\S*t\s+help\s+you\s+with\s+that",
+        # Do not have the ability patterns
+        r"i\s+am\s+an\s+assistant\s+and\s+do\s+not\s+have\s+the\s+ability",
+        r"i\s+do\s+not\s+have\s+the\s+ability",
+        r"i\s+do\s+not\s+have\s+(?:the\s+)?ability\s+to",
+        r"i\s+am\s+unable\s+to",
+        r"i\s+am\s+not\s+able\s+to",
+        r"i\s+don\S*t\s+have\s+the\s+ability",
+        r"i\s+don\S*t\s+have\s+(?:the\s+)?ability\s+to",
     ]
     
-    starts_with_refusal = False
-    for pattern in refusal_patterns:
-        if response_lower.startswith(pattern):
-            starts_with_refusal = True
-            break
+    # Check if any pattern matches
+    for pattern in REFUSAL_PATTERNS:
+        if re.search(pattern, response_lower):
+            return True
     
-    if not starts_with_refusal:
-        return False
-    
-    first_period = response_stripped.find('.')
-    first_exclamation = response_stripped.find('!')
-    first_question = response_stripped.find('?')
-    
-    sentence_end_positions = []
-    if first_period != -1:
-        sentence_end_positions.append(first_period)
-    if first_exclamation != -1:
-        sentence_end_positions.append(first_exclamation)
-    if first_question != -1:
-        sentence_end_positions.append(first_question)
-    
-    if not sentence_end_positions:
-        return False
-    
-    first_sentence_end = min(sentence_end_positions)
-    
-    after_first_sentence = response_stripped[first_sentence_end + 1:].strip()
-    
-    if after_first_sentence:
-        after_lower = after_first_sentence.lower()
-        artifacts = ['assistant:', 'assistant', 'user:', 'user']
-        
-        is_just_artifact = False
-        for artifact in artifacts:
-            if after_lower.startswith(artifact) and len(after_first_sentence) <= len(artifact) + 5:
-                is_just_artifact = True
-                break
-        
-        if not is_just_artifact:
-            return False
-    
-    return True
+    return False
 
 def main():
     """Main function that processes elite prompts and generates RQ3 analysis outputs."""
@@ -2022,28 +2045,77 @@ def main():
     
     invalid_pct = [100.0 * inv / total_prompts for inv in invalid_counts]
     
-    fig, ax = plt.subplots(figsize=(6, 3))
+    # Style configuration
+    plt.rcParams.update({
+        'font.size': 10,
+        'font.family': 'sans-serif',
+        'axes.labelsize': 11,
+        'axes.titlesize': 12,
+        'xtick.labelsize': 9,
+        'ytick.labelsize': 9,
+    })
+    
+    # ===== Version 3: Color gradient based on percentage =====
+    fig, ax = plt.subplots(figsize=(7, 4))
+    
+    # Create color gradient from red (low) to green (high) with richer, more saturated colors
+    # Matching the saturation level of the violin plot colors
+    max_pct = max(invalid_pct) if invalid_pct else 1.0
+    min_pct = min(invalid_pct) if invalid_pct else 0.0
+    
+    # Define rich color stops (RGB values 0-1)
+    # Red (low percentage) - richer red similar to violin plot saturation
+    red_color = (0.78, 0.16, 0.16)  # #C62828 - rich red
+    # Yellow (middle)
+    yellow_color = (0.96, 0.65, 0.14)  # #F5A623 - golden yellow (from violin plot)
+    # Green (high percentage) - richer green similar to violin plot saturation
+    green_color = (0.30, 0.49, 0.20)  # #4CAF50 or similar rich green
+    
+    colors = []
+    for pct in invalid_pct:
+        # Normalize to 0-1 range
+        if max_pct > min_pct:
+            normalized = (pct - min_pct) / (max_pct - min_pct)
+        else:
+            normalized = 1.0
+        
+        # Interpolate between red -> yellow -> green
+        if normalized < 0.5:
+            # Red to yellow
+            t = normalized * 2  # 0 to 1
+            r = red_color[0] + (yellow_color[0] - red_color[0]) * t
+            g = red_color[1] + (yellow_color[1] - red_color[1]) * t
+            b = red_color[2] + (yellow_color[2] - red_color[2]) * t
+        else:
+            # Yellow to green
+            t = (normalized - 0.5) * 2  # 0 to 1
+            r = yellow_color[0] + (green_color[0] - yellow_color[0]) * t
+            g = yellow_color[1] + (green_color[1] - yellow_color[1]) * t
+            b = yellow_color[2] + (green_color[2] - yellow_color[2]) * t
+        
+        colors.append((r, g, b))
     
     x = np.arange(len(model_names))
-    bars = ax.bar(x, invalid_pct, width=0.6)
+    bars = ax.bar(x, invalid_pct, width=0.6, color=colors, edgecolor='black', linewidth=0.8, alpha=0.8)
     
+    # Add percentage labels above bars
     for bar, pct in zip(bars, invalid_pct):
         height = bar.get_height()
-        y_pos = bar.get_y() + height / 2.0
         ax.text(
             bar.get_x() + bar.get_width() / 2.0,
-            y_pos,
-            f"{pct:.1f}",
+            height + max(invalid_pct) * 0.02,
+            f"{pct:.1f}%",
             ha="center",
-            va="center",
-            fontsize=9,
-            color="white",
+            va="bottom",
+            fontsize=10,
+            fontweight='bold',
+            color='black',
         )
     
-    ax.set_xlabel('Model', fontsize=11, fontweight='bold')
-    ax.set_ylabel('Invalid responses (%)', fontsize=11, fontweight='bold')
+    ax.set_xlabel('Model', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Invalid Responses (%)', fontsize=12, fontweight='bold')
     ax.set_xticks(x)
-    ax.set_xticklabels(model_names_short, rotation=45, ha='right', fontsize=9)
+    ax.set_xticklabels(model_names_short, rotation=45, ha='right', fontsize=10)
     
     ax.grid(axis='y', alpha=0.3, linestyle='--', linewidth=0.8)
     ax.set_axisbelow(True)
@@ -2051,10 +2123,9 @@ def main():
     ax.spines['right'].set_visible(False)
     
     max_pct = max(invalid_pct) if invalid_pct else 0
-    ax.set_ylim(0, max_pct * 1.3 if max_pct > 0 else 10.0)
+    ax.set_ylim(0, max_pct * 1.15 if max_pct > 0 else 10.0)
     
     plt.tight_layout()
-    
     histogram_path = os.path.join(script_dir, "rq3_invalid_fraction_per_model.pdf")
     plt.savefig(histogram_path, format='pdf', dpi=300, bbox_inches='tight')
     plt.close()

@@ -35,16 +35,15 @@ fi
 # Each experiment runs sequentially with a 5-second delay between them
 # Add as many experiments as you want - they will all run automatically
 EXPERIMENTS=(
-    # Experiment 1: Default parameters
     "python src/main.py \
         --generations 25 \
         --threshold 0.99 \
         --moderation-methods google \
         --stagnation-limit 3 \
         --theta-sim 0.25 \
-        --theta-merge 0.40 \
+        --theta-merge 0.25 \
         --species-capacity 5 \
-        --cluster0-max-capacity 1000 \
+        --cluster0-max-capacity 50 \
         --cluster0-min-cluster-size 2 \
         --min-island-size 3 \
         --species-stagnation 1 \
@@ -56,21 +55,6 @@ EXPERIMENTS=(
         --operators all \
         --max-variants 1 \
         --seed-file data/prompt.csv"
-
-    # qwen 5
-  "python src/main.py --generations 120 --operators all --max-variants 1 \
-   --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 \
-   --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf \
-   --pg models/qwen2.5-7b-instruct-gguf/Qwen2.5-7B-Instruct-Q4_K_L.gguf \
-   --seed-file data/prompt.csv"
-
-       # llama 5
-  "python src/main.py --generations 120 --operators all --max-variants 1 \
-   --elites-threshold 30 --removal-threshold 3 --stagnation-limit 5 \
-   --rg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf \
-   --pg models/llama3.1-8b-instruct-gguf/Meta-Llama-3.1-8B-Instruct.Q8_0.gguf \
-   --seed-file data/prompt.csv"
-
 )
 
 echo "Starting ${#EXPERIMENTS[@]} experiments..."

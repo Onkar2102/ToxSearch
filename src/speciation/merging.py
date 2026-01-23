@@ -18,7 +18,6 @@ def merge_islands(
     sp2: Species,
     current_generation: int,
     theta_sim: float = 0.2,
-    max_capacity: int = 100,
     w_genotype: float = 0.7,
     w_phenotype: float = 0.3,
     logger=None
@@ -43,7 +42,6 @@ def merge_islands(
         sp2: Second species to merge
         current_generation: Current generation number
         theta_sim: Constant radius for the merged species (default: 0.2, matches config.py)
-        max_capacity: Deprecated - not used (kept for backward compatibility)
         logger: Optional logger instance
     
     Returns:
@@ -94,6 +92,39 @@ def merge_islands(
     for m in combined:
         m.species_id = merged.id
     
+    # Update genome tracker if available
+    try:
+        from .run_speciation import _get_state
+        state = _get_state()
+        genome_tracker = state.get("_genome_tracker")
+        if genome_tracker:
+            # Prepare batch update: all members from both parents -> new merged species_id
+            updates = {str(m.id): merged.id for m in combined}
+            result = genome_tracker.batch_update(updates, current_generation, f"merge_{sp1.id}_{sp2.id}_to_{merged.id}")
+            if result["failed"] > 0:
+                logger.warning(f"Genome tracker batch update had {result['failed']} failures during merge")
+            
+            # Log reassignment events for genomes that were archived but are now in merged species
+            reassigned_from_archive = result.get("reassigned_from_archive", [])
+            if reassigned_from_archive:
+                events_tracker = state.get("_events_tracker")
+                if events_tracker:
+                    for genome_id, old_species_id, new_species_id in reassigned_from_archive:
+                        events_tracker.log(
+                            genome_id, "reassigned_from_archive",
+                            {
+                                "from_species_id": old_species_id,
+                                "to_species_id": new_species_id,
+                                "reason": "species_merge",
+                                "merged_species": [sp1.id, sp2.id],
+                                "result_species": merged.id,
+                                "note": "Genome was previously archived but is now in merged species"
+                            }
+                        )
+                    logger.debug(f"Logged {len(reassigned_from_archive)} reassignment events for genomes reactivated from archive during merge")
+    except Exception as e:
+        logger.debug(f"Could not update genome tracker during merge: {e}")
+    
     logger.info(f"Merged species {sp1.id} + {sp2.id} -> {merged.id} ({merged.size} members, no filtering applied - will be enforced in Phase 4)")
     return merged, []  # Return empty outliers list (no filtering during merge)
 
@@ -104,8 +135,6 @@ def process_merges(
     theta_sim: float = 0.2,
     min_stability_gens: int = 1,
     current_gen: int = 0,
-    max_capacity: int = 100,
-    max_merges_per_gen: int = 3,
     w_genotype: float = 0.7,
     w_phenotype: float = 0.3,
     historical_species: Optional[Dict[int, Species]] = None,
@@ -139,8 +168,6 @@ def process_merges(
         theta_sim: Constant radius for merged species
         min_stability_gens: Minimum age (generations) for species to be mergeable (default 1: can merge if created in last or prior generation)
         current_gen: Current generation number
-        max_capacity: Maximum members after merge (default: 100)
-        max_merges_per_gen: Deprecated parameter (kept for backward compatibility, not used)
         historical_species: Optional dict for storing extinct parent species
         logger: Optional logger instance
     
@@ -162,7 +189,7 @@ def process_merges(
     # Frozen species can merge with active or other frozen species
     # Both active and frozen species are "alive" - only difference is parent selection preference
     # Note: Frozen species are now in the active species dict (not historical_species)
-    # CRITICAL: Filter out species without leaders or with incubator state (should not merge)
+    # Filter out species without leaders or with incubator state (should not merge)
     all_species_for_merging = {}
     for sid, sp in species.items():
         # Only include species that have a leader and are not incubator
@@ -172,24 +199,6 @@ def process_merges(
             logger.debug(f"Skipping species {sid} from merge candidates: incubator state (no leader)")
         elif sp.leader is None:
             logger.warning(f"Skipping species {sid} from merge candidates: no leader (state={sp.species_state})")
-    
-    # BACKWARD COMPATIBILITY: Check historical_species for any frozen species
-    # This handles state files from before the refactoring where frozen species were in historical_species
-    # TODO: Remove this after confirming all old state files have been migrated (track usage via logs)
-    frozen_in_historical_count = 0
-    if historical_species:
-        for sid, sp in historical_species.items():
-            if sp.species_state == "frozen" and sp.leader and sp.leader.embedding is not None:
-                # Frozen species preserve all members from when they were active
-                all_species_for_merging[sid] = sp
-                frozen_in_historical_count += 1
-    
-    if frozen_in_historical_count > 0:
-        logger.warning(
-            f"Found {frozen_in_historical_count} frozen species in historical_species (backward compatibility). "
-            f"This indicates an old state file format. Frozen species should now be in the active species dict. "
-            f"Consider migrating your state files."
-        )
     
     # Continue merging until no more candidates are found
     while True:
@@ -233,7 +242,7 @@ def process_merges(
             logger.warning(f"Skipping merge {id1}+{id2}: one or both species have no leader (sp1.leader={sp1.leader is not None}, sp2.leader={sp2.leader is not None})")
             continue
         
-        merged, outliers = merge_islands(sp1, sp2, current_gen, theta_sim, max_capacity, w_genotype, w_phenotype, logger)
+        merged, outliers = merge_islands(sp1, sp2, current_gen, theta_sim, w_genotype, w_phenotype, logger)
         
         # Remove old species from active dict
         species.pop(id1, None)

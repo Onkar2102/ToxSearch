@@ -68,7 +68,7 @@ class Individual:
         Extracts fitness from various possible locations in the genome dict (priority order):
         - "north_star_score" (primary - pre-computed metric)
         - "moderation_result"["google"]["scores"]["toxicity"] (standard format)
-        - "moderation_result"["scores"]["toxicity"] (legacy format)
+        - "moderation_result"["scores"]["toxicity"]
         - "toxicity" (direct)
         - "scores"["toxicity"] (nested)
         
@@ -322,6 +322,12 @@ class Species:
         
         Note: Computed fields (size, best_fitness, avg_fitness) are not included
         as they can be derived from members and are not used by load_state().
+        
+        IMPORTANT: Members Storage:
+        - Only member_ids (list of genome IDs) are saved, not full Individual objects
+        - This is a storage optimization - full member data is in elites.json
+        - Members are reconstructed lazily from elites.json when load_state() is called
+        - The members list in memory may be empty even if size > 0 - this is EXPECTED
         """
         return {
             "id": self.id,

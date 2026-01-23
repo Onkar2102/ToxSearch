@@ -3,6 +3,7 @@ ToxSearch with Speciation — Project Notes
 ================================================================================
 
 --- Quick ref ---
+  PROCESS_FLOW.md      complete end-to-end process flow (initialization → evolution loop → termination)
   ARCHITECTURE.md       modules, flow, parent selection, speciation, metrics
   FIELD_DEFINITIONS.txt field definitions for all JSON/CSV
   experiments/FLOW_AND_VALIDATION.md  flow, validation, field basis (variants vs post-gen vs cumulative)
@@ -39,8 +40,17 @@ ToxSearch with Speciation — Project Notes
   experiments/validate_outputs_extra.py     extra checks (e.g. duplicate IDs across files)
 
 --- Output dir (data/outputs/YYYYMMDD_HHMM/) ---
-  elites, reserves, archive, temp, EvolutionTracker, speciation_state, genome_tracker,
-  operator_effectiveness_cumulative.csv, figures/
+  elites.json          all genomes with species_id > 0 (cumulative)
+  reserves.json        all genomes with species_id = 0 (cumulative, sorted by toxicity desc)
+  archive.json         archived genomes (capacity overflow, non-elite, cumulative)
+  temp.json            transient variants for current generation (cleared/updated during speciation)
+  EvolutionTracker.json  per-generation statistics, cumulative metrics, budget, speciation summary
+  speciation_state.json  species structure, cluster 0 state, metrics history, config
+  genome_tracker.json   event log of genome movements (clustering, archiving, merging)
+  operator_effectiveness_cumulative.csv  per-operator metrics (NE, EHR, IR, cEHR, Δμ, Δσ)
+  figures/             visualizations (fitness evolution, speciation, operator effectiveness, etc.)
+  parents.json          slimmed parent genomes for selection
+  top_10.json           top 10 genomes by toxicity
 
 --- Run ---
   bash run_experiments_local.sh

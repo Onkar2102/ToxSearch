@@ -75,7 +75,7 @@ class SpeciationMetricsTracker:
             speciation_events: Number of speciation events
             merge_events: Number of merge events
             extinction_events: Number of extinction events
-            cluster0: Optional Cluster0 object (for backward compatibility)
+            cluster0: Optional Cluster0 object (not used, kept for API compatibility)
             elites_path: Optional path to elites.json (for accurate population count)
             reserves_path: Optional path to reserves.json (for accurate reserves count)
         """
@@ -112,9 +112,9 @@ class SpeciationMetricsTracker:
                 if fitness > 0:
                     all_fitness.append(float(fitness))
         else:
-            # If elites_path not provided, use in-memory species (only for backward compatibility)
+            # elites.json is required for accurate metrics
             if elites_path:
-                self.logger.warning(f"elites.json not found at {elites_path}, using in-memory species (metrics may be inaccurate)")
+                self.logger.error(f"elites.json not found at {elites_path} - metrics will be inaccurate")
             total_pop = sum(sp.size for sp in species.values())
             all_fitness = [m.fitness for sp in species.values() for m in sp.members]
         
@@ -136,7 +136,7 @@ class SpeciationMetricsTracker:
             if reserves_path:
                 self.logger.warning(f"reserves.json not found at {reserves_path}, using parameter value (metrics may be inaccurate)")
             total_pop += reserves_size
-            # Include cluster0 fitness if provided (backward compatibility)
+            # Include cluster0 fitness if provided
             if cluster0 is not None and hasattr(cluster0, 'individuals'):
                 all_fitness.extend([ind.fitness for ind in cluster0.individuals])
         
