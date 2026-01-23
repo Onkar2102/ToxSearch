@@ -60,7 +60,11 @@ def merge_islands(
             combined.append(m)
             seen.add(m.id)
     
-    # Select new leader as highest fitness from ALL combined members
+    # Sort ALL members by fitness score (descending order)
+    combined.sort(key=lambda x: x.fitness, reverse=True)
+    
+    # Select genome with highest fitness score as leader
+    # This leader will NOT be changed until a new genome with higher fitness score is added to the species
     if not combined:
         # Fallback: use highest fitness leader from either species (both should exist)
         if not sp1.leader or not sp2.leader:
@@ -68,10 +72,11 @@ def merge_islands(
             raise ValueError(f"Cannot merge species {sp1.id} and {sp2.id}: insufficient members and leaders")
         new_leader = max([sp1.leader, sp2.leader], key=lambda x: x.fitness)
     else:
-        new_leader = max(combined, key=lambda x: x.fitness)  # Highest fitness from all members
+        new_leader = combined[0]  # Highest fitness (first after sorting)
     
-    # Note: Duplicate leader check is done in run_speciation.py Phase 4 after merge
-    # Note: Radius enforcement is done in Phase 3 (after merging) and capacity enforcement in Phase 4
+    # Note: Leader selection happens BEFORE radius enforcement (Phase 3 Step 7)
+    # Note: Leader will only change if a new genome with higher fitness is added (handled in Phase 1/Phase 3)
+    # Note: Capacity enforcement happens in Phase 4 (does NOT change leader for merged species)
     
     # Create merged species with ALL members (NO radius/capacity filtering)
     merged = Species(

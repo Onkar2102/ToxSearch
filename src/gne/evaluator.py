@@ -374,7 +374,7 @@ class HybridModerationEvaluator:
                         genome['moderation_result'] = evaluation_result
                         
                         if hasattr(self, '_last_evaluation_time'):
-                            genome['evaluation_duration'] = self._last_evaluation_time['duration']
+                            genome['evaluation_duration'] = round(self._last_evaluation_time['duration'], 4)
                         
                         north_star_score = self._extract_north_star_score(evaluation_result, north_star_metric)
                         

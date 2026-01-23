@@ -371,6 +371,11 @@ def validate_flow2_speciation(
     try:
         # Load state
         if not state_file_path.exists():
+            # For Generation 0, speciation_state.json might not exist yet
+            # This is not an error - it will be created when species are formed
+            if generation == 0:
+                logger.debug("speciation_state.json not found for Generation 0 Flow 2 validation (will be created)")
+                return True, []  # Skip validation for Generation 0
             errors.append("speciation_state.json not found for Flow 2 validation")
             return False, errors
         

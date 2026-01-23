@@ -12,11 +12,12 @@ Data root: archive/output/toxsearch_outputs/
        Same files as RQ1 plus operator_statistics_* columns in EvolutionTracker
        (question_mark_rejections, duplicates_removed).
 
-  RQ3: **/elites.json under the data root, plus:
+  RQ3: Same source as RQ2 (run*_comb/elites.json), plus:
        - Model dirs: direct children of data root that do NOT start with "run"
          or "2025" (elites.json, non_elites.json, under_performing.json).
-       - Run dirs: direct children starting with "run" (for Meta-Llama-3.1-8B-
+       - Run dirs: direct children starting with "run*_comb" (for Meta-Llama-3.1-8B-
          Instruct.Q3_K_S enrichment).
+       - Uses same pattern as RQ2: run*_comb only
 
 ================================================================================
 RQ1: Evolution and Fitness

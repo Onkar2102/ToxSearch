@@ -131,7 +131,7 @@ class ResponseGenerator:
                     if response:
                         genome['model_name'] = self.model_cfg.get("name", "")
                         genome['generated_output'] = response
-                        genome['response_duration'] = response_duration
+                        genome['response_duration'] = round(response_duration, 4)
                         genome['status'] = 'pending_evaluation'
                         
                         total_processed += 1

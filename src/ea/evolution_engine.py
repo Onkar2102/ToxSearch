@@ -237,7 +237,7 @@ class EvolutionEngine:
         }
 
         if hasattr(operator, '_last_operation_time'):
-            child['variant_creation_duration'] = operator._last_operation_time.get('duration', 0.0)
+            child['variant_creation_duration'] = round(operator._last_operation_time.get('duration', 0.0), 4)
 
         self.next_id += 1
         return child

@@ -25,6 +25,78 @@ get_logger, _, _, _ = get_custom_logging()
 _, _, _, get_outputs_path, _, _ = get_system_utils()
 
 
+def _update_files_immediately(
+    genome_id: int,
+    species_id: int,
+    species: Dict[int, Species],
+    speciation_state_path_obj: Path,
+    genome_tracker,
+    events_tracker,
+    current_generation: int,
+    logger
+):
+    """Update all files immediately after variant assignment or leader update."""
+    # 1. Update genome tracker
+    if genome_tracker:
+        genome_tracker.update_species_id(str(genome_id), species_id, current_generation, "variant_assignment")
+    
+    # 2. Update speciation_state.json
+    if speciation_state_path_obj.exists():
+        state_dict = {
+            "species": {str(sid): sp.to_dict() for sid, sp in species.items()},
+            "generation": current_generation
+        }
+        # Preserve other fields
+        try:
+            with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+            state_dict["cluster0"] = existing.get("cluster0", {})
+            state_dict["global_best_id"] = existing.get("global_best_id")
+            state_dict["metrics"] = existing.get("metrics", {})
+        except Exception:
+            pass  # If can't read, just save new structure
+        with open(speciation_state_path_obj, 'w', encoding='utf-8') as f:
+            json.dump(state_dict, f, indent=2, ensure_ascii=False)
+    
+    # 3. Log to events tracker
+    if events_tracker:
+        events_tracker.log(genome_id, "assigned_to_species", {"species_id": species_id})
+
+
+def _update_files_after_leader_update(
+    species_id: int,
+    species: Dict[int, Species],
+    speciation_state_path_obj: Path,
+    events_tracker,
+    current_generation: int,
+    logger
+):
+    """Update files immediately after leader update."""
+    # Update speciation_state.json
+    if speciation_state_path_obj.exists():
+        state_dict = {
+            "species": {str(sid): sp.to_dict() for sid, sp in species.items()},
+            "generation": current_generation
+        }
+        # Preserve other fields
+        try:
+            with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+            state_dict["cluster0"] = existing.get("cluster0", {})
+            state_dict["global_best_id"] = existing.get("global_best_id")
+            state_dict["metrics"] = existing.get("metrics", {})
+        except Exception:
+            pass
+        with open(speciation_state_path_obj, 'w', encoding='utf-8') as f:
+            json.dump(state_dict, f, indent=2, ensure_ascii=False)
+    
+    # Log to events tracker
+    if events_tracker and species_id in species:
+        sp = species[species_id]
+        if sp.leader:
+            events_tracker.log(sp.leader.id, "leader_updated", {"species_id": species_id, "fitness": sp.leader.fitness})
+
+
 def _ensure_unique_leader(species: Dict[int, Species], new_leader: Individual, current_species_id: int, logger) -> None:
     """
     Ensure new_leader is not already leader of another species.
@@ -73,7 +145,10 @@ def leader_follower_clustering(
     w_phenotype: float = 0.3,
     min_island_size: int = 2,
     skip_cluster0_outliers: bool = False,
-    logger=None) -> Tuple[Dict[int, Species], Set[int]]:
+    logger=None,
+    genome_tracker=None,  # NEW: Pass tracker for immediate updates
+    events_tracker=None  # NEW: Pass events tracker for immediate logging
+) -> Tuple[Dict[int, Species], Set[int]]:
     """
     Leader-Follower clustering algorithm that reads and writes files directly.
     
@@ -346,6 +421,13 @@ def leader_follower_clustering(
                 ind.species_id = nearest_leader_id
                 species_with_new_members.add(nearest_leader_id)
                 assigned = True
+                
+                # Update files immediately after assignment
+                _update_files_immediately(
+                    ind.id, nearest_leader_id, species, speciation_state_path_obj,
+                    genome_tracker, events_tracker, current_generation, logger
+                )
+                
                 # Update leader if this new member has higher fitness
                 if ind.fitness > sp.leader.fitness:
                     if ind.fitness > sp.max_fitness:
@@ -363,6 +445,12 @@ def leader_follower_clustering(
                         if sid == nearest_leader_id:
                             leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
                             break
+                    
+                    # Update files immediately after leader update
+                    _update_files_after_leader_update(
+                        nearest_leader_id, species, speciation_state_path_obj,
+                        events_tracker, current_generation, logger
+                    )
         
         # 2. For Generation 0: Check against potential leaders
         if not assigned and is_generation_0 and potential_leaders:
@@ -430,11 +518,23 @@ def leader_follower_clustering(
                                 # Assign species_id to all valid members
                                 for member in valid_members:
                                     member.species_id = new_species_id
+                                    # Update files immediately for each member
+                                    if genome_tracker:
+                                        genome_tracker.update_species_id(str(member.id), new_species_id, current_generation, "species_formed")
+                                    if events_tracker:
+                                        events_tracker.log(member.id, "species_formed", {"species_id": new_species_id})
                                 species_with_new_members.add(new_species_id)
                                 # Update potential_leaders entry with new species ID (use new leader's embedding/phenotype)
                                 potential_leaders[pl_id] = (new_species_id, leader.embedding, leader.phenotype, leader, followers)
                                 # Add to leaders list for future distance checks (use new leader's embedding/phenotype)
                                 leaders.append((new_species_id, leader.embedding, leader.phenotype))
+                                
+                                # Update speciation_state.json immediately after species formation
+                                _update_files_after_leader_update(
+                                    new_species_id, species, speciation_state_path_obj,
+                                    events_tracker, current_generation, logger
+                                )
+                                
                                 logger.info(
                                     f"Species {new_species_id} formed: leader {leader.id} + {len(other_members)} followers "
                                     f"(total={len(valid_members)}, min={min_island_size}, filtered from {len(all_members)} candidates)"
@@ -458,6 +558,13 @@ def leader_follower_clustering(
                         sp.add_member(ind)
                         ind.species_id = pl_species_id
                         species_with_new_members.add(pl_species_id)
+                        
+                        # Update files immediately after assignment
+                        _update_files_immediately(
+                            ind.id, pl_species_id, species, speciation_state_path_obj,
+                            genome_tracker, events_tracker, current_generation, logger
+                        )
+                        
                         # Update leader if higher fitness
                         if ind.fitness > sp.leader.fitness:
                             if ind.fitness > sp.max_fitness:
@@ -474,6 +581,12 @@ def leader_follower_clustering(
                                 if sid == pl_species_id:
                                     leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
                                     break
+                            
+                            # Update files immediately after leader update
+                            _update_files_after_leader_update(
+                                pl_species_id, species, speciation_state_path_obj,
+                                events_tracker, current_generation, logger
+                            )
                     assigned = True
                     break
         
@@ -543,7 +656,18 @@ def leader_follower_clustering(
                                 # Assign species_id to all valid members
                                 for member in valid_members:
                                     member.species_id = new_species_id
+                                    # Update files immediately for each member
+                                    if genome_tracker:
+                                        genome_tracker.update_species_id(str(member.id), new_species_id, current_generation, "species_formed_from_cluster0")
+                                    if events_tracker:
+                                        events_tracker.log(member.id, "species_formed_from_cluster0", {"species_id": new_species_id})
                                 species_with_new_members.add(new_species_id)
+                                
+                                # Update speciation_state.json immediately after species formation
+                                _update_files_after_leader_update(
+                                    new_species_id, species, speciation_state_path_obj,
+                                    events_tracker, current_generation, logger
+                                )
                                 # Update cluster0_potential_leaders entry with new species ID (use new leader's embedding/phenotype)
                                 cluster0_potential_leaders[pl_id] = (new_species_id, leader.embedding, leader.phenotype, leader, followers)
                                 # Add to leaders list for future distance checks (use new leader's embedding/phenotype)
@@ -571,6 +695,13 @@ def leader_follower_clustering(
                         sp.add_member(ind)
                         ind.species_id = pl_species_id
                         species_with_new_members.add(pl_species_id)
+                        
+                        # Update files immediately after assignment
+                        _update_files_immediately(
+                            ind.id, pl_species_id, species, speciation_state_path_obj,
+                            genome_tracker, events_tracker, current_generation, logger
+                        )
+                        
                         # Update leader if higher fitness
                         if ind.fitness > sp.leader.fitness:
                             if ind.fitness > sp.max_fitness:
@@ -589,6 +720,12 @@ def leader_follower_clustering(
                                 if sid == pl_species_id:
                                     leaders[i] = (sid, sp.leader.embedding, sp.leader.phenotype)
                                     break
+                            
+                            # Update files immediately after leader update
+                            _update_files_after_leader_update(
+                                pl_species_id, species, speciation_state_path_obj,
+                                events_tracker, current_generation, logger
+                            )
                     assigned = True
                     break
         
@@ -716,28 +853,31 @@ def leader_follower_clustering(
             except Exception as e:
                 logger.warning(f"Failed to update reserves.json for outliers: {e}")
     
-    # Update speciation_state.json with new species structure
-    # Note: This only updates species, cluster0 is managed separately by SpeciationModule
-    state_dict = {
-        "species": {str(sid): sp.to_dict() for sid, sp in species.items()},
-        "generation": current_generation
-    }
-    
-    # If speciation_state.json exists, preserve cluster0 and other fields (but NOT config)
-    if speciation_state_path_obj.exists():
-        try:
-            with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
-                existing_state = json.load(f)
-            # Preserve cluster0, global_best_id, metrics (config is not saved - it's passed as project args)
-            state_dict["cluster0"] = existing_state.get("cluster0", {})
-            state_dict["global_best_id"] = existing_state.get("global_best_id")
-            state_dict["metrics"] = existing_state.get("metrics", {})
-        except Exception:
-            pass  # If can't read, just save new structure
-    
-    # Save updated speciation_state.json
-    with open(speciation_state_path_obj, 'w', encoding='utf-8') as f:
-        json.dump(state_dict, f, indent=2, ensure_ascii=False)
+    # Update speciation_state.json with new species structure (only if immediate updates weren't done)
+    # Note: If genome_tracker and events_tracker are provided, files are updated immediately after each assignment/leader update
+    # This end-of-function save is a fallback for cases where immediate updates weren't done
+    if genome_tracker is None or events_tracker is None:
+        # Fallback: Save at end if immediate updates weren't configured
+        state_dict = {
+            "species": {str(sid): sp.to_dict() for sid, sp in species.items()},
+            "generation": current_generation
+        }
+        
+        # If speciation_state.json exists, preserve cluster0 and other fields (but NOT config)
+        if speciation_state_path_obj.exists():
+            try:
+                with open(speciation_state_path_obj, 'r', encoding='utf-8') as f:
+                    existing_state = json.load(f)
+                # Preserve cluster0, global_best_id, metrics (config is not saved - it's passed as project args)
+                state_dict["cluster0"] = existing_state.get("cluster0", {})
+                state_dict["global_best_id"] = existing_state.get("global_best_id")
+                state_dict["metrics"] = existing_state.get("metrics", {})
+            except Exception:
+                pass  # If can't read, just save new structure
+        
+        # Save updated speciation_state.json
+        with open(speciation_state_path_obj, 'w', encoding='utf-8') as f:
+            json.dump(state_dict, f, indent=2, ensure_ascii=False)
     
     logger.info(f"Leader-Follower clustering: {len(valid_population)} individuals -> {len(species)} species")
     logger.debug(f"Species with new members: {sorted(species_with_new_members)}")

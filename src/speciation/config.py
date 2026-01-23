@@ -18,13 +18,13 @@ class SpeciationConfig:
         theta_sim: Similarity threshold for species assignment (ensemble distance).
                   Individuals within this distance of a leader become followers.
                   Range: [0, 1] where 0 = identical, 1 = maximally different.
-                  Default: 0.2 (equivalent to 0.4 in old cosine distance scale)
+                  Default: 0.25 (species radius - moderate similarity)
                   Also used as the constant radius for all species.
         
         theta_merge: Merge threshold for combining similar species.
                      Species with leader distance < theta_merge are candidates for merging.
-                     Must be <= theta_sim to prevent premature merging.
-                     Default: 0.1 (equivalent to 0.2 in old cosine distance scale)
+                     Must be <= theta_sim (typically < theta_sim for effective merging).
+                     Default: 0.1 (stricter threshold - only very similar species merge)
         
         # Cluster 0 Parameters
         cluster0_min_cluster_size: Minimum cluster size required for cluster 0 speciation.
@@ -64,8 +64,8 @@ class SpeciationConfig:
     """
     
     # Clustering (thresholds in [0, 1] for ensemble distance)
-    theta_sim: float = 0.2  # Scaled from 0.4 (old cosine distance) to 0.2 (ensemble distance)
-    theta_merge: float = 0.1  # Scaled from 0.2 (old cosine distance) to 0.1 (ensemble distance)
+    theta_sim: float = 0.25  # Species radius threshold - individuals within this distance join a species
+    theta_merge: float = 0.1  # Merge threshold - species with leader distance < this value can merge (must be <= theta_sim)
     
     # Cluster 0
     cluster0_min_cluster_size: int = 2
@@ -90,7 +90,8 @@ class SpeciationConfig:
         # Validate clustering thresholds (now in [0, 1] for ensemble distance)
         assert 0 <= self.theta_sim <= 1, f"theta_sim must be in [0, 1] for ensemble distance"
         assert 0 <= self.theta_merge <= 1, f"theta_merge must be in [0, 1] for ensemble distance"
-        assert self.theta_merge <= self.theta_sim, "theta_merge should be <= theta_sim"
+        assert self.theta_merge <= self.theta_sim, \
+            f"theta_merge ({self.theta_merge}) must be <= theta_sim ({self.theta_sim})"
         
         # Validate ensemble weights
         assert abs(self.w_genotype + self.w_phenotype - 1.0) < 1e-6, \
