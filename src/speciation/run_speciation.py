@@ -2561,15 +2561,43 @@ def save_state(path: str) -> None:
                 leader_genome = species_genomes[0]
                 leader_fitness = get_fitness(leader_genome)
                 
-                # Create minimal species entry (frozen state since it's not in active state)
-                # This is a recovery mechanism - species should ideally be in state
-                # Try to preserve cluster_origin from historical_species if it exists
+                # Create minimal species entry (recovery mechanism - species should ideally be in state)
+                # Try to preserve state and metadata from historical_species or saved speciation_state.json
                 preserved_cluster_origin = "natural"  # Default to natural (most common)
                 preserved_parent_ids = None
+                preserved_state = "active"  # Default to active (frozen requires stagnation >= threshold)
+                preserved_stagnation = 0
+                preserved_created_at = 0
+                preserved_last_improvement = 0
+                
+                # First, check historical_species for preserved state
                 if species_id in state.get("historical_species", {}):
                     hist_sp = state["historical_species"][species_id]
                     preserved_cluster_origin = hist_sp.cluster_origin if hist_sp.cluster_origin else "natural"
                     preserved_parent_ids = hist_sp.parent_ids
+                    # Note: historical_species contains extinct/incubator, not active/frozen
+                
+                # Try to load from saved speciation_state.json to get actual state
+                state_path = outputs_path / "speciation_state.json"
+                if state_path.exists():
+                    try:
+                        with open(state_path, 'r', encoding='utf-8') as f:
+                            saved_state = json.load(f)
+                        saved_species = saved_state.get("species", {})
+                        if str(species_id) in saved_species:
+                            saved_sp = saved_species[str(species_id)]
+                            # Preserve actual state from saved file (active/frozen)
+                            saved_state_value = saved_sp.get("species_state", "active")
+                            if saved_state_value in ["active", "frozen"]:
+                                preserved_state = saved_state_value
+                                preserved_stagnation = saved_sp.get("stagnation", 0)
+                                preserved_created_at = saved_sp.get("created_at", 0)
+                                preserved_last_improvement = saved_sp.get("last_improvement", 0)
+                                preserved_cluster_origin = saved_sp.get("cluster_origin", preserved_cluster_origin)
+                                preserved_parent_ids = saved_sp.get("parent_ids", preserved_parent_ids)
+                                logger.debug(f"Reconstructing species {species_id}: preserved state={preserved_state}, stagnation={preserved_stagnation} from saved speciation_state.json")
+                    except Exception as e:
+                        logger.debug(f"Could not load saved state for species {species_id}: {e}")
                 
                 # Use member IDs from species_member_ids if available (already calculated above)
                 # Otherwise use the species_genomes we just found
@@ -2583,6 +2611,18 @@ def save_state(path: str) -> None:
                 if leader_id_str not in member_ids:
                     member_ids.insert(0, leader_id_str)  # Add leader at the beginning
                 
+                # CRITICAL: Only mark as frozen if stagnation >= threshold OR explicitly frozen in saved state
+                # Default to "active" since frozen requires stagnation >= species_stagnation
+                final_state = preserved_state
+                if preserved_state == "frozen" and preserved_stagnation < state["config"].species_stagnation:
+                    # Saved state says frozen but stagnation doesn't justify it - reset to active
+                    logger.warning(
+                        f"Species {species_id}: saved state=frozen but stagnation={preserved_stagnation} < "
+                        f"threshold={state['config'].species_stagnation} - resetting to active"
+                    )
+                    final_state = "active"
+                    preserved_stagnation = 0  # Reset stagnation
+                
                 species_dict[str(species_id)] = {
                     "id": species_id,
                     "leader_id": leader_genome.get("id"),
@@ -2591,12 +2631,12 @@ def save_state(path: str) -> None:
                     "leader_fitness": round(leader_fitness, 4),
                     "member_ids": member_ids,  # All member IDs from elites.json (unique, includes leader)
                     "radius": state["config"].theta_sim,
-                    "stagnation": 0,  # Unknown
+                    "stagnation": preserved_stagnation,  # Preserve from saved state if available
                     "max_fitness": round(leader_fitness, 4),
                     "min_fitness": round(min(get_fitness(g) for g in species_genomes), 4) if species_genomes else round(leader_fitness, 4),
-                    "species_state": "frozen",  # Assume frozen since not in active state
-                    "created_at": 0,  # Unknown
-                    "last_improvement": 0,  # Unknown
+                    "species_state": final_state,  # Use preserved state (active/frozen) or default to active
+                    "created_at": preserved_created_at,  # Preserve from saved state if available
+                    "last_improvement": preserved_last_improvement,  # Preserve from saved state if available
                     "fitness_history": [round(leader_fitness, 4)],
                     "labels": [],
                     "label_history": [],
@@ -2604,7 +2644,7 @@ def save_state(path: str) -> None:
                     "parent_ids": preserved_parent_ids,  # Preserve original parent_ids if available
                     "size": len(member_ids)  # Must match elites.json unique count
                 }
-                logger.info(f"Reconstructed species {species_id} entry from elites.json (size={len(member_ids)}, state=frozen)")
+                logger.info(f"Reconstructed species {species_id} entry from elites.json (size={len(member_ids)}, state={final_state}, stagnation={preserved_stagnation})")
     
     # Validate consistency
     from collections import Counter
