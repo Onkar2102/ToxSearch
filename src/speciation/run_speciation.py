@@ -2367,8 +2367,19 @@ def save_state(path: str) -> None:
     species_member_ids = {}  # species_id -> list of all member IDs from elites.json
     elites_genomes = []  # Store for later use in species reconstruction
     
-    if elites_path.exists():
-        # Re-read elites.json to ensure we have the most recent data after distribution
+    # Use genome_tracker as authoritative source for member_ids (not elites.json which may be stale)
+    if "_genome_tracker" in state:
+        genome_tracker = state["_genome_tracker"]
+        # Get member IDs from tracker for each species (authoritative source)
+        for species_id in state["species"].keys():
+            member_ids = genome_tracker.get_all_genomes_by_species(species_id)
+            if member_ids:
+                species_member_ids[species_id] = sorted([str(mid) for mid in member_ids])
+                species_sizes[species_id] = len(member_ids)
+        logger.debug(f"Calculated species sizes from genome_tracker: {len(species_sizes)} species")
+    elif elites_path.exists():
+        # Fallback to elites.json if tracker not available (shouldn't happen)
+        logger.warning("Genome tracker not available, falling back to elites.json (may be stale)")
         with open(elites_path, 'r', encoding='utf-8') as f:
             elites_genomes = json.load(f)
         
@@ -2392,9 +2403,9 @@ def save_state(path: str) -> None:
         # Use unique count as species_sizes (size = number of distinct genomes, not raw rows)
         for species_id, ids in species_member_ids.items():
             species_sizes[species_id] = len(ids)
-        logger.debug(f"Calculated species sizes from elites.json: {len(species_sizes)} species, {len(elites_genomes)} total genomes")
+        logger.debug(f"Calculated species sizes from elites.json (fallback): {len(species_sizes)} species, {len(elites_genomes)} total genomes")
     else:
-        logger.warning(f"elites.json not found at {elites_path} - species sizes will use in-memory counts")
+        logger.warning(f"Neither genome_tracker nor elites.json available - species sizes will use in-memory counts")
     
     # Build species dict - only save full data for active and frozen species
     species_dict = {}
