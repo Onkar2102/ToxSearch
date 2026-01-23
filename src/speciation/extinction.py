@@ -118,9 +118,19 @@ def process_extinctions(
         # Store original size before clearing members
         original_size = sp.size
         
-        # Move all members to cluster 0
+        # Move all members to cluster 0 (including leader if it exists)
         moved_count = 0
         moved_member_ids = []
+        member_ids_set = {m.id for m in sp.members}
+        
+        # Also move leader if it exists and not already in members list
+        if sp.leader and sp.leader.id not in member_ids_set:
+            # Leader is not in members list, add it separately
+            if cluster0.size < cluster0.max_capacity:
+                cluster0.add(sp.leader, current_generation)
+                moved_member_ids.append(sp.leader.id)
+                moved_count += 1
+        
         for member in sp.members:
             if cluster0.size >= cluster0.max_capacity:
                 break  # Stop if capacity reached
@@ -128,7 +138,7 @@ def process_extinctions(
             moved_member_ids.append(member.id)
             moved_count += 1
         
-        # Update genome tracker: mark moved members as species_id=0 (reserves)
+        # Update genome tracker: mark moved members (including leader) as species_id=0 (reserves)
         try:
             from .run_speciation import _get_state
             state = _get_state()

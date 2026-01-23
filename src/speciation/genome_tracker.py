@@ -164,28 +164,47 @@ class GenomeTracker:
                 failed.append(genome_id)
                 errors.append(f"Error updating {genome_id}: {str(e)}")
         
-        # If partial failure, retry failed items individually
+        # If partial failure, retry failed items individually with exponential backoff
         if failed:
-            self.logger.warning(f"Batch update partially failed: {len(failed)}/{total} failed, retrying individually")
+            self.logger.warning(f"Batch update partially failed: {len(failed)}/{total} failed, retrying individually with exponential backoff")
+            import time
+            max_retries = 3
             retry_failed = failed.copy()
-            failed = []
-            errors = []
             
-            for genome_id in retry_failed:
-                try:
-                    new_species_id = updates[genome_id]
-                    success, reassignment_info = self.update_species_id(genome_id, new_species_id, generation, f"{reason}_retry" if reason else "retry")
-                    if success:
-                        succeeded.append(genome_id)
-                        # Track reassignment from archive (-1) to active species (>0) in retry
-                        if reassignment_info:
-                            reassigned_from_archive.append(reassignment_info)
-                    else:
-                        failed.append(genome_id)
-                        errors.append(f"Retry failed for {genome_id}")
-                except Exception as e:
-                    failed.append(genome_id)
-                    errors.append(f"Retry error for {genome_id}: {str(e)}")
+            for retry_num in range(max_retries):
+                if not retry_failed:
+                    break
+                
+                # Exponential backoff: 0.1s, 0.2s, 0.4s
+                if retry_num > 0:
+                    time.sleep(0.1 * (2 ** (retry_num - 1)))
+                
+                failed_this_round = []
+                for genome_id in retry_failed:
+                    try:
+                        new_species_id = updates[genome_id]
+                        success, reassignment_info = self.update_species_id(
+                            genome_id, new_species_id, generation, 
+                            f"{reason}_retry_{retry_num + 1}" if reason else f"retry_{retry_num + 1}"
+                        )
+                        if success:
+                            succeeded.append(genome_id)
+                            # Track reassignment from archive (-1) to active species (>0) in retry
+                            if reassignment_info:
+                                reassigned_from_archive.append(reassignment_info)
+                        else:
+                            failed_this_round.append(genome_id)
+                            errors.append(f"Retry {retry_num + 1} failed for {genome_id}")
+                    except Exception as e:
+                        failed_this_round.append(genome_id)
+                        errors.append(f"Retry {retry_num + 1} error for {genome_id}: {str(e)}")
+                
+                retry_failed = failed_this_round
+            
+            # Update failed list with any remaining failures after all retries
+            failed = retry_failed
+            if failed:
+                self.logger.error(f"Batch update failed for {len(failed)} genomes after {max_retries} retries: {failed[:5]}{'...' if len(failed) > 5 else ''}")
         
         result = {
             "total": total,
@@ -273,6 +292,54 @@ class GenomeTracker:
             "last_updated": datetime.now().isoformat()
         }
     
+    def validate_internal_state(self) -> Tuple[bool, List[str]]:
+        """
+        Validate internal tracker state consistency.
+        
+        Checks:
+        - No duplicate genome IDs
+        - All species_id values are valid (-1, 0, or >0)
+        - Generation numbers are reasonable (non-negative)
+        - Required fields exist for each genome
+        
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+        """
+        errors = []
+        seen_ids = set()
+        
+        for genome_id, data in self.genomes.items():
+            # Check for duplicate genome IDs (should not happen due to dict key uniqueness, but verify)
+            if genome_id in seen_ids:
+                errors.append(f"Duplicate genome ID found in tracker: {genome_id}")
+            seen_ids.add(genome_id)
+            
+            # Check required fields exist
+            if "species_id" not in data:
+                errors.append(f"Genome {genome_id} missing required field 'species_id'")
+                continue
+            
+            # Check species_id is valid (-1, 0, or >0)
+            species_id = data["species_id"]
+            if not isinstance(species_id, int):
+                errors.append(f"Genome {genome_id} has invalid species_id type: {type(species_id)}, expected int")
+            elif species_id < -1:
+                errors.append(f"Genome {genome_id} has invalid species_id value: {species_id} (must be -1, 0, or >0)")
+            
+            # Check generation numbers are reasonable
+            if "created_generation" in data:
+                created_gen = data["created_generation"]
+                if not isinstance(created_gen, int) or created_gen < 0:
+                    errors.append(f"Genome {genome_id} has invalid created_generation: {created_gen}")
+            
+            if "last_updated_generation" in data:
+                updated_gen = data["last_updated_generation"]
+                if not isinstance(updated_gen, int) or updated_gen < 0:
+                    errors.append(f"Genome {genome_id} has invalid last_updated_generation: {updated_gen}")
+        
+        is_valid = len(errors) == 0
+        return is_valid, errors
+    
     def validate_consistency(self, elites_path: Path, reserves_path: Path, archive_path: Path, 
                             load_archive: bool = False) -> Tuple[bool, List[str]]:
         """
@@ -288,6 +355,11 @@ class GenomeTracker:
             Tuple of (is_consistent, list_of_errors)
         """
         errors = []
+        
+        # First validate internal state
+        is_internal_valid, internal_errors = self.validate_internal_state()
+        if not is_internal_valid:
+            errors.extend(internal_errors)
         
         # Check if we need to load archive
         stats = self.get_distribution_stats()

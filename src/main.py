@@ -407,7 +407,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         
         # Add additional metrics to stats
         # max_score_variants should reflect the highest fitness from temp.json (variants created in this generation)
-        gen0_stats["population_max_toxicity"] = gen0_max_score
+        # NOTE: population_max_toxicity should be max from elites+reserves (after distribution),
+        # NOT from temp.json variants. calculate_generation_statistics() already calculates this correctly.
+        # For generation 0, gen0_stats["population_max_toxicity"] is already set correctly by calculate_generation_statistics()
         gen0_stats["best_genome_id"] = None  # Can be calculated if needed
         gen0_stats["avg_fitness"] = avg_fitness_before_speciation  # Before speciation, after evaluation
         gen0_stats["variants_created"] = 0  # No variants in generation 0
@@ -748,11 +750,6 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             # Recompute thresholds, redistribute files, and update tracker for this generation
             try:
                 previous_max_toxicity = 0.0001
-                evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
-                if evolution_tracker_path.exists():
-                    with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                        tracker = json.load(f)
-                    previous_max_toxicity = tracker.get("population_max_toxicity", 0.0001)
                 
                 # Update adaptive selection logic (for parent selection, not speciation)
                 try:
@@ -760,14 +757,24 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     temp_path_obj = get_outputs_path() / "temp.json"
                     
                     # Get previous max from EvolutionTracker (for stagnation detection)
+                    # Use max_score_variants from previous generation (not population_max_toxicity which is cumulative)
                     if generation_count > 1:
                         try:
-                            with open(get_outputs_path() / "EvolutionTracker.json", 'r', encoding='utf-8') as f:
-                                tracker = json.load(f)
-                            prev_gen = tracker.get("generations", [{}])[-1] if tracker.get("generations") else {}
-                            previous_max_toxicity = prev_gen.get("population_max_toxicity", 0.0)
-                        except Exception:
-                            pass
+                            evolution_tracker_path = get_outputs_path() / "EvolutionTracker.json"
+                            if evolution_tracker_path.exists():
+                                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
+                                    tracker = json.load(f)
+                                generations = tracker.get("generations", [])
+                                if generations and len(generations) >= 2:
+                                    # Get max_score_variants from previous generation (generation_count - 1)
+                                    prev_gen_num = generation_count - 1
+                                    for gen in generations:
+                                        if gen.get("generation_number") == prev_gen_num:
+                                            previous_max_toxicity = gen.get("max_score_variants", 0.0001)
+                                            break
+                        except Exception as e:
+                            logger.debug(f"Failed to get previous max from tracker: {e}")
+                            previous_max_toxicity = 0.0001
                     
                     # Get current max from temp.json (variants created this generation)
                     max_toxicity = 0.0
@@ -815,7 +822,10 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     gen_stats["avg_fitness"] = avg_fitness_before_speciation
                     
                     # Add additional metrics
-                    gen_stats["population_max_toxicity"] = max_toxicity
+                    # NOTE: population_max_toxicity should be max from elites+reserves (after distribution),
+                    # NOT from temp.json variants. calculate_generation_statistics() already calculates this correctly.
+                    # Do NOT override it with max_toxicity (which is from temp.json variants).
+                    # gen_stats["population_max_toxicity"] is already set correctly by calculate_generation_statistics()
                     gen_stats["best_genome_id"] = best_genome_id
                     gen_stats["variants_created"] = variant_counts["variants_created"]
                     gen_stats["mutation_variants"] = variant_counts["mutation_variants"]

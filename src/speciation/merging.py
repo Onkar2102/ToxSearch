@@ -33,7 +33,7 @@ def merge_islands(
     - Origin: "merge" with parent_ids = [sp1.id, sp2.id]
     
     NOTE: This function does NOT enforce radius or capacity. All combined members are kept.
-    Radius and capacity enforcement will be done in Phase 4 of run_speciation.py after all merges.
+    Radius enforcement is done in Phase 3 (after merging) and capacity enforcement in Phase 4 of run_speciation.py.
     
     Note: Creates a NEW species ID (not reusing sp1.id or sp2.id) to avoid confusion.
     
@@ -70,8 +70,8 @@ def merge_islands(
     else:
         new_leader = max(combined, key=lambda x: x.fitness)  # Highest fitness from all members
     
-    # Note: Duplicate leader check will be done in run_speciation.py Phase 4 after merge
-    # Note: Radius and capacity enforcement will be done in run_speciation.py Phase 4 after all merges
+    # Note: Duplicate leader check is done in run_speciation.py Phase 4 after merge
+    # Note: Radius enforcement is done in Phase 3 (after merging) and capacity enforcement in Phase 4
     
     # Create merged species with ALL members (NO radius/capacity filtering)
     merged = Species(

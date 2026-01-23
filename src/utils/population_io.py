@@ -1884,9 +1884,21 @@ def calculate_generation_statistics(
         # Calculate counts (cumulative - files contain all genomes from all generations)
         # elites.json and reserves.json are cumulative, so we count genomes up to and including current generation
         # Filter genomes by generation to get cumulative count up to current generation
-        elites_up_to_gen = [g for g in elites_genomes if g.get("generation", 0) <= current_generation]
-        reserves_up_to_gen = [g for g in reserves_genomes if g.get("generation", 0) <= current_generation]
-        archive_up_to_gen = [g for g in archive_genomes if g.get("generation", 0) <= current_generation]
+        # Note: Genomes without generation field default to 0, which means they're included for all generations
+        # This is correct for cumulative metrics (include all genomes up to and including current generation)
+        # However, genomes should have generation field set during distribution (see Phase 7 redistribution in run_speciation.py)
+        def _get_generation_value(genome, current_gen):
+            """Get generation value for filtering, handling missing values."""
+            gen_val = genome.get("generation")
+            if gen_val is None:
+                # If generation is missing, default to 0 (include in all generations for cumulative metrics)
+                # This handles edge cases but genomes should have generation set during distribution
+                return 0
+            return gen_val
+        
+        elites_up_to_gen = [g for g in elites_genomes if _get_generation_value(g, current_generation) <= current_generation]
+        reserves_up_to_gen = [g for g in reserves_genomes if _get_generation_value(g, current_generation) <= current_generation]
+        archive_up_to_gen = [g for g in archive_genomes if _get_generation_value(g, current_generation) <= current_generation]
         
         stats["elites_count"] = len(elites_up_to_gen)
         stats["reserves_count"] = len(reserves_up_to_gen)

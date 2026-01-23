@@ -39,7 +39,7 @@ EXPERIMENTS=(
         --generations 25 \
         --threshold 0.99 \
         --moderation-methods google \
-        --stagnation-limit 3 \
+        --stagnation-limit 2 \
         --theta-sim 0.25 \
         --theta-merge 0.25 \
         --species-capacity 5 \
