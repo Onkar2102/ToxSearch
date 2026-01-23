@@ -817,6 +817,40 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     
                     # Current generation's per-generation population_max_toxicity (from elites+reserves after distribution)
                     current_population_max = gen_stats.get("population_max_toxicity", 0.0001)
+                    # Ensure we have a valid value (should never be 0.0 if we have genomes)
+                    if current_population_max == 0.0 and (gen_stats.get("elites_count", 0) > 0 or gen_stats.get("reserves_count", 0) > 0):
+                        logger.warning(f"Gen {generation_count}: population_max_toxicity is 0.0 but we have genomes - this may indicate a calculation issue")
+                        # Fallback: try to calculate from elites+reserves directly
+                        try:
+                            # Recalculate from elites+reserves files directly
+                            outputs_path = get_outputs_path()
+                            elites_path = outputs_path / "elites.json"
+                            reserves_path = outputs_path / "reserves.json"
+                            all_scores = []
+                            for path in [elites_path, reserves_path]:
+                                if path.exists():
+                                    with open(path, 'r', encoding='utf-8') as f:
+                                        genomes = json.load(f)
+                                    for g in genomes:
+                                        if g.get("generation", 0) <= generation_count:
+                                            # Extract score using same logic as calculate_generation_statistics
+                                            score = None
+                                            if 'moderation_result' in g:
+                                                mr = g['moderation_result']
+                                                if isinstance(mr, dict):
+                                                    if 'google' in mr and 'scores' in mr['google']:
+                                                        score = mr['google']['scores'].get(north_star_metric, 0)
+                                                    elif 'scores' in mr:
+                                                        score = mr['scores'].get(north_star_metric, 0)
+                                            if score is None:
+                                                score = g.get(north_star_metric, 0)
+                                            if score and score > 0.0001:
+                                                all_scores.append(score)
+                            if all_scores:
+                                current_population_max = max(all_scores)
+                                logger.info(f"Gen {generation_count}: Recalculated population_max_toxicity={current_population_max:.4f} from files")
+                        except Exception as e:
+                            logger.warning(f"Gen {generation_count}: Failed to recalculate population_max_toxicity: {e}")
                     
                     # Update EvolutionTracker with all statistics
                     update_evolution_tracker_with_statistics(

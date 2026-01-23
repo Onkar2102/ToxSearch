@@ -1943,7 +1943,18 @@ def calculate_generation_statistics(
             stats["avg_fitness_generation"] = round(sum(all_scores) / len(all_scores), 4)
             # population_max_toxicity (per-gen): max over elites+reserves; cumulative is
             # updated in update_evolution_tracker_with_statistics. Used for Pareto quality.
-            stats["population_max_toxicity"] = round(max(all_scores), 4)
+            max_score = max(all_scores)
+            if max_score > 0.0001:  # Ensure we have a valid score
+                stats["population_max_toxicity"] = round(max_score, 4)
+            else:
+                # If all scores are <= 0.0001, something is wrong - log warning but set to 0.0001
+                _logger.warning(f"Gen {current_generation}: All fitness scores <= 0.0001, setting population_max_toxicity to 0.0001")
+                stats["population_max_toxicity"] = 0.0001
+        else:
+            # No scores found - this should not happen if we have genomes
+            if stats.get("total_population", 0) > 0:
+                _logger.warning(f"Gen {current_generation}: No fitness scores found but total_population={stats.get('total_population')} - setting population_max_toxicity to 0.0001")
+            stats["population_max_toxicity"] = 0.0001
         
         # avg_fitness is not computed here; it is supplied by main from
         # calculate_average_fitness(include_temp=True) before speciation.

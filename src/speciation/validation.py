@@ -411,18 +411,57 @@ def validate_flow2_speciation(
                 errors.append(f"Species {sid}: leader {leader_id} not in member_ids {member_ids[:5]}...")
             
             # Check 2: All members in elites.json have correct species_id
+            # NOTE: This validation runs BEFORE Phase 7 (redistribution), so genomes may not be in elites.json yet.
+            # They could be in temp.json (new variants) or reserves.json (from cluster 0).
+            # We check elites.json but don't treat missing genomes as errors if they're in other files.
             elites_for_species = [g for g in elites if g.get("species_id") == sid]
             elites_member_ids = {g.get("id") for g in elites_for_species}
             
-            missing_in_elites = set(member_ids) - elites_member_ids
-            if missing_in_elites:
-                errors.append(f"Species {sid}: {len(missing_in_elites)} member_ids not found in elites.json: {list(missing_in_elites)[:5]}...")
+            # Also check reserves.json and temp.json (genomes may not be distributed yet)
+            reserves_path = outputs_path / "reserves.json"
+            temp_path = outputs_path / "temp.json"
+            other_member_ids = set()
+            
+            if reserves_path.exists():
+                try:
+                    with open(reserves_path, 'r', encoding='utf-8') as f:
+                        reserves = json.load(f)
+                    # Check if any member_ids are in reserves (they may have species_id=0 or not yet updated)
+                    for g in reserves:
+                        gid = g.get("id")
+                        if gid in member_ids:
+                            other_member_ids.add(gid)
+                except Exception:
+                    pass
+            
+            if temp_path.exists():
+                try:
+                    with open(temp_path, 'r', encoding='utf-8') as f:
+                        temp_genomes = json.load(f)
+                    for g in temp_genomes:
+                        gid = g.get("id")
+                        if gid in member_ids:
+                            other_member_ids.add(gid)
+                except Exception:
+                    pass
+            
+            # Only report error if member_ids are missing from ALL files (elites, reserves, temp)
+            # This means they're truly missing, not just not yet distributed
+            missing_in_all = set(member_ids) - elites_member_ids - other_member_ids
+            if missing_in_all:
+                # This is a real error - genomes are in speciation_state but not in any population file
+                errors.append(f"Species {sid}: {len(missing_in_all)} member_ids not found in any population file (elites/reserves/temp): {list(missing_in_all)[:5]}...")
+            elif set(member_ids) - elites_member_ids:
+                # Genomes exist but not in elites.json yet (expected before Phase 7)
+                logger.debug(f"Species {sid}: {len(set(member_ids) - elites_member_ids)} member_ids not yet in elites.json (will be distributed in Phase 7)")
             
             # Check 3: Size consistency
-            expected_size = len(elites_for_species)
+            # Use member_ids from state (authoritative) rather than elites.json count
+            # since distribution hasn't happened yet
+            expected_size = len(member_ids)  # Use member_ids from state (authoritative)
             actual_size = sp_dict.get("size", 0)
             if expected_size != actual_size:
-                errors.append(f"Species {sid}: size mismatch - expected {expected_size} (from elites.json), got {actual_size} (from state)")
+                errors.append(f"Species {sid}: size mismatch - expected {expected_size} (from member_ids), got {actual_size} (from state.size)")
             
             # Check 4: Cluster origin should be "natural" for newly formed species
             cluster_origin = sp_dict.get("cluster_origin")
