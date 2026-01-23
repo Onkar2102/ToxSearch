@@ -2534,6 +2534,18 @@ def save_state(path: str) -> None:
         if str(sid) not in species_dict:  # Avoid duplicates
             if sp.species_state == "extinct":
                 # Extinct species - just track ID (like incubators, not really helpful but preserved for reference)
+                # CRITICAL: Verify extinct species truly have no active members in genome_tracker (authoritative source)
+                # Note: elites.json may still show old species_id until Phase 7 redistribution, but tracker is updated immediately
+                if "_genome_tracker" in state:
+                    active_member_count = len(state["_genome_tracker"].get_all_genomes_by_species(sid))
+                    if active_member_count > 0:
+                        logger.warning(
+                            f"Extinct species {sid} has {active_member_count} genomes in genome_tracker "
+                            f"(should be 0 after merge). This indicates genomes were NOT properly reassigned to merged species. "
+                            f"Check merge events in events_tracker.json for details."
+                        )
+                    else:
+                        logger.debug(f"Extinct species {sid} verified: 0 active members in genome_tracker (correctly extinct)")
                 extinct_ids.append(sid)
             elif sp.species_state == "incubator":
                 # Incubator species - just track ID
@@ -2545,8 +2557,18 @@ def save_state(path: str) -> None:
     from .distance import ensemble_distance
     
     for species_id, size in species_sizes.items():
-        if str(species_id) not in species_dict and species_id not in incubator_ids:
+        # Skip if already in species_dict, or if extinct/incubator (should not be reconstructed as active)
+        # Also check historical_species directly to ensure extinct species are not reconstructed
+        is_extinct = (species_id in extinct_ids or 
+                     (species_id in state.get("historical_species", {}) and 
+                      state["historical_species"][species_id].species_state == "extinct"))
+        is_incubator = (species_id in incubator_ids or 
+                       (species_id in state.get("historical_species", {}) and 
+                        state["historical_species"][species_id].species_state == "incubator"))
+        
+        if str(species_id) not in species_dict and not is_incubator and not is_extinct:
             # Species exists in elites.json but not in state - need to reconstruct basic info
+            # NOTE: Extinct/incubator species should NOT be reconstructed - they are in historical_species only
             logger.warning(f"Species {species_id} found in elites.json ({size} genomes) but missing from state - reconstructing basic entry")
             
             # Find leader (highest fitness genome in this species)
