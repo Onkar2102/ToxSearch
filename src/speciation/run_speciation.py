@@ -2367,7 +2367,19 @@ def save_state(path: str) -> None:
     species_member_ids = {}  # species_id -> list of all member IDs from elites.json
     elites_genomes = []  # Store for later use in species reconstruction
     
+    # Always load elites_genomes for validation and reconstruction (needed even when using tracker)
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load elites.json: {e}")
+            elites_genomes = []
+    else:
+        elites_genomes = []
+    
     # Use genome_tracker as authoritative source for member_ids (not elites.json which may be stale)
+    # But also populate from elites.json for species not in tracker (recovery mechanism)
     if "_genome_tracker" in state:
         genome_tracker = state["_genome_tracker"]
         # Get member IDs from tracker for each species (authoritative source)
@@ -2376,12 +2388,30 @@ def save_state(path: str) -> None:
             if member_ids:
                 species_member_ids[species_id] = sorted([str(mid) for mid in member_ids])
                 species_sizes[species_id] = len(member_ids)
-        logger.debug(f"Calculated species sizes from genome_tracker: {len(species_sizes)} species")
-    elif elites_path.exists():
+        
+        # Also populate from elites.json for species NOT in state (for reconstruction)
+        # This handles cases where species exist in elites.json but were lost from in-memory state
+        species_member_ids_sets = {}  # Track unique IDs per species from elites.json
+        for genome in elites_genomes:
+            species_id = genome.get("species_id")
+            if species_id is not None and species_id > 0:
+                # Only add if not already populated from tracker
+                if species_id not in species_member_ids:
+                    genome_id = genome.get("id")
+                    if genome_id is not None:
+                        if species_id not in species_member_ids_sets:
+                            species_member_ids_sets[species_id] = set()
+                        species_member_ids_sets[species_id].add(genome_id)
+                        species_sizes[species_id] = species_sizes.get(species_id, 0) + 1
+        
+        # Convert sets to lists for species found only in elites.json
+        for species_id, id_set in species_member_ids_sets.items():
+            species_member_ids[species_id] = sorted([str(mid) for mid in id_set])
+        
+        logger.debug(f"Calculated species sizes: {len([s for s in species_sizes if s in state['species']])} from tracker, {len(species_member_ids_sets)} from elites.json")
+    elif elites_genomes:
         # Fallback to elites.json if tracker not available (shouldn't happen)
         logger.warning("Genome tracker not available, falling back to elites.json (may be stale)")
-        with open(elites_path, 'r', encoding='utf-8') as f:
-            elites_genomes = json.load(f)
         
         # Count genomes per species and collect all member IDs
         # Use sets to track unique IDs since elites.json is cumulative
@@ -2496,9 +2526,14 @@ def save_state(path: str) -> None:
                 # Use member IDs from species_member_ids if available (already calculated above)
                 # Otherwise use the species_genomes we just found
                 if species_id in species_member_ids:
-                    member_ids = species_member_ids[species_id]
+                    member_ids = list(species_member_ids[species_id])  # Make a copy
                 else:
                     member_ids = [str(g.get("id")) for g in species_genomes if g.get("id") is not None]  # Convert to strings
+                
+                # Ensure leader_id is always in member_ids (critical for consistency)
+                leader_id_str = str(leader_genome.get("id"))
+                if leader_id_str not in member_ids:
+                    member_ids.insert(0, leader_id_str)  # Add leader at the beginning
                 
                 species_dict[str(species_id)] = {
                     "id": species_id,
@@ -2506,7 +2541,7 @@ def save_state(path: str) -> None:
                     "leader_prompt": leader_genome.get("prompt", ""),
                     "leader_embedding": leader_genome.get("prompt_embedding", []),
                     "leader_fitness": round(leader_fitness, 4),
-                    "member_ids": member_ids,  # All member IDs from elites.json (unique)
+                    "member_ids": member_ids,  # All member IDs from elites.json (unique, includes leader)
                     "radius": state["config"].theta_sim,
                     "stagnation": 0,  # Unknown
                     "max_fitness": round(leader_fitness, 4),
@@ -2533,13 +2568,19 @@ def save_state(path: str) -> None:
     if elites_path.exists() and elites_genomes:
         for sid_str, sp_dict in species_dict.items():
             try:
-                sid, member_ids = int(sid_str), set(sp_dict.get("member_ids", []))
-                species_genome_ids = {g.get("id") for g in elites_genomes if g.get("species_id") == sid and g.get("id")}
-                if sp_dict.get("leader_id") not in member_ids:
-                    logger.warning(f"Species {sid}: leader_id not in member_ids")
+                sid = int(sid_str)
+                # Convert member_ids to strings for comparison (member_ids are stored as strings)
+                member_ids = {str(mid) for mid in sp_dict.get("member_ids", [])}
+                # Convert genome IDs from elites.json to strings for comparison
+                species_genome_ids = {str(g.get("id")) for g in elites_genomes if g.get("species_id") == sid and g.get("id") is not None}
+                leader_id_str = str(sp_dict.get("leader_id")) if sp_dict.get("leader_id") is not None else None
+                
+                if leader_id_str and leader_id_str not in member_ids:
+                    logger.warning(f"Species {sid}: leader_id ({leader_id_str}) not in member_ids")
                 if extra := species_genome_ids - member_ids:
-                    logger.warning(f"Species {sid}: {len(extra)} genomes in elites.json not in member_ids")
-            except (ValueError, KeyError):
+                    logger.warning(f"Species {sid}: {len(extra)} genomes in elites.json not in member_ids: {sorted(list(extra))[:5]}")
+            except (ValueError, KeyError) as e:
+                logger.debug(f"Validation error for species {sid_str}: {e}")
                 continue
 
     # Ensure size always equals len(member_ids) (source of truth: genome_tracker via elites.json after Phase 7 distribution)
@@ -2683,39 +2724,45 @@ def load_state(path: str) -> bool:
             members = [leader]  # Start with leader
             member_ids = sp_dict.get("member_ids", [])
             
-            # Load members from elites.json if member_ids are provided
-            # NOTE: This is lazy loading - members are reconstructed from elites.json
+            # Load members from elites.json, reserves.json, temp.json if member_ids are provided
+            # NOTE: This is lazy loading - members are reconstructed from genome files
             # The members list in saved state is empty (only member_ids are stored for efficiency)
-            # This is EXPECTED behavior: full member data is in elites.json, only IDs in state
+            # This is EXPECTED behavior: full member data is in genome files, only IDs in state
+            # Genomes may be in elites.json, reserves.json, or temp.json depending on their current state
             if member_ids:
                 outputs_path = get_outputs_path()
-                elites_path = outputs_path / "elites.json"
-                if elites_path.exists():
-                    try:
-                        with open(elites_path, 'r', encoding='utf-8') as f:
-                            elites_genomes = json.load(f)
-                        
-                        # Create a lookup for genomes by ID
-                        genome_by_id = {g.get("id"): g for g in elites_genomes}
-                        
-                        # Load all members (excluding leader if it's in member_ids).
-                        # Include all that exist in elites so sp.size matches len(member_ids) for process_extinctions.
-                        loaded_count = 0
-                        for member_id in member_ids:
-                            if member_id == leader.id:
-                                continue  # Leader already added
-                            if member_id in genome_by_id:
-                                member_genome = genome_by_id[member_id]
-                                member = Individual.from_genome(member_genome)
-                                members.append(member)
-                                loaded_count += 1
-                        
-                        # Validation: verify all member_ids were loaded (except leader)
-                        expected_count = len(member_ids) - (1 if leader.id in member_ids else 0)
-                        if loaded_count != expected_count:
-                            logger.warning(f"Species {sid}: member loading incomplete - loaded {loaded_count}/{expected_count} members from elites.json")
-                    except Exception as e:
-                        logger.warning(f"Failed to load members for species {sid} from elites.json: {e}")
+                try:
+                    # Use helper function that searches all relevant files (elites.json, temp.json, reserves.json)
+                    # This handles cases where genomes were moved between files
+                    member_ids_to_load = [mid for mid in member_ids if str(mid) != str(leader.id)]
+                    loaded_genomes = _load_genomes_by_ids(member_ids_to_load, outputs_path, logger)
+                    
+                    # Create a lookup for genomes by ID
+                    genome_by_id = {str(g.get("id")): g for g in loaded_genomes}
+                    
+                    # Load all members (excluding leader if it's in member_ids).
+                    # Include all that exist so sp.size matches len(member_ids) for process_extinctions.
+                    loaded_count = 0
+                    for member_id in member_ids:
+                        member_id_str = str(member_id)
+                        if member_id_str == str(leader.id):
+                            continue  # Leader already added
+                        if member_id_str in genome_by_id:
+                            member_genome = genome_by_id[member_id_str]
+                            member = Individual.from_genome(member_genome)
+                            members.append(member)
+                            loaded_count += 1
+                    
+                    # Validation: verify all member_ids were loaded (except leader)
+                    expected_count = len(member_ids) - (1 if str(leader.id) in [str(mid) for mid in member_ids] else 0)
+                    if loaded_count != expected_count:
+                        missing_ids = set(str(mid) for mid in member_ids_to_load) - set(str(g.get("id")) for g in loaded_genomes)
+                        logger.warning(
+                            f"Species {sid}: member loading incomplete - loaded {loaded_count}/{expected_count} members. "
+                            f"Missing IDs: {sorted(missing_ids)[:10]} (may be in archive.json or not yet created)"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to load members for species {sid} from genome files: {e}")
             
             # max_fitness = actual max over current members only, no merge with stored value.
             max_fit = max((m.fitness for m in members), default=0.0)
