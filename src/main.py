@@ -817,8 +817,11 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     
                     # Current generation's per-generation population_max_toxicity (from elites+reserves after distribution)
                     current_population_max = gen_stats.get("population_max_toxicity", 0.0001)
-                    # Ensure we have a valid value (should never be 0.0 if we have genomes)
-                    if current_population_max == 0.0 and (gen_stats.get("elites_count", 0) > 0 or gen_stats.get("reserves_count", 0) > 0):
+                    logger.debug(f"Gen {generation_count}: Extracted population_max_toxicity={current_population_max:.4f} from gen_stats")
+                    
+                    # Ensure we have a valid value (should never be 0.0 or default 0.0001 if we have genomes)
+                    if (current_population_max == 0.0 or current_population_max == 0.0001) and (gen_stats.get("elites_count", 0) > 0 or gen_stats.get("reserves_count", 0) > 0):
+                        logger.warning(f"Gen {generation_count}: population_max_toxicity is {current_population_max:.4f} but we have genomes (elites={gen_stats.get('elites_count', 0)}, reserves={gen_stats.get('reserves_count', 0)}) - recalculating...")
                         logger.warning(f"Gen {generation_count}: population_max_toxicity is 0.0 but we have genomes - this may indicate a calculation issue")
                         # Fallback: try to calculate from elites+reserves directly
                         try:

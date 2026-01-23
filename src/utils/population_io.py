@@ -1681,8 +1681,14 @@ def update_adaptive_selection_logic(
         # Use the passed previous_max_toxicity instead of reading from tracker
         _logger.info(f"Adaptive selection comparison: current_max_toxicity={current_max_toxicity:.4f}, previous_max_toxicity={previous_max_toxicity:.4f}")
         
+        # Debug: Log the comparison result
+        comparison_result = current_max_toxicity > previous_max_toxicity
+        _logger.debug(f"Comparison result: {current_max_toxicity:.6f} > {previous_max_toxicity:.6f} = {comparison_result}")
+        
         # Update generations_since_improvement
-        if current_max_toxicity > previous_max_toxicity:
+        # Use a small epsilon for comparison to handle floating-point precision
+        epsilon = 1e-6
+        if current_max_toxicity > previous_max_toxicity + epsilon:
             tracker["generations_since_improvement"] = 0
             _logger.info(f"Improvement detected! Max toxicity increased from {previous_max_toxicity:.4f} to {current_max_toxicity:.4f}")
         else:
@@ -1943,9 +1949,11 @@ def calculate_generation_statistics(
             stats["avg_fitness_generation"] = round(sum(all_scores) / len(all_scores), 4)
             # population_max_toxicity (per-gen): max over elites+reserves; cumulative is
             # updated in update_evolution_tracker_with_statistics. Used for Pareto quality.
+            # NOTE: This is cumulative max (all genomes with generation <= current_generation)
             max_score = max(all_scores)
             if max_score > 0.0001:  # Ensure we have a valid score
                 stats["population_max_toxicity"] = round(max_score, 4)
+                _logger.debug(f"Gen {current_generation}: Calculated population_max_toxicity={stats['population_max_toxicity']:.4f} from {len(all_scores)} scores (cumulative max)")
             else:
                 # If all scores are <= 0.0001, something is wrong - log warning but set to 0.0001
                 _logger.warning(f"Gen {current_generation}: All fitness scores <= 0.0001, setting population_max_toxicity to 0.0001")
