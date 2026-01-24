@@ -672,7 +672,49 @@ def load_and_initialize_population(
 
             # ---------------------------- Load CSV File -----------------------
             with PerformanceLogger(logger, "Load CSV File"):
-                df = pd.read_csv(input_path)
+                # Read CSV with Python engine which is more lenient with malformed CSV
+                # This handles cases where fields contain commas without proper quoting
+                try:
+                    df = pd.read_csv(
+                        input_path,
+                        engine='python',
+                        on_bad_lines='skip',
+                        sep=',',
+                        quotechar='"',
+                        skipinitialspace=True
+                    )
+                except Exception as e:
+                    # Fallback: read manually line by line
+                    logger.warning("CSV parsing failed, trying manual line-by-line parsing: %s", e)
+                    import csv
+                    rows = []
+                    with open(input_path, 'r', encoding='utf-8') as f:
+                        reader = csv.reader(f)
+                        header = next(reader, None)
+                        if header and len(header) > 0:
+                            # Find questions column (case-insensitive)
+                            col_idx = None
+                            for i, col in enumerate(header):
+                                if col.strip().lower() == 'questions':
+                                    col_idx = i
+                                    break
+                            
+                            if col_idx is None:
+                                # If no header found, assume first column
+                                col_idx = 0
+                            
+                            for row in reader:
+                                if row and len(row) > col_idx:
+                                    # Join all fields from col_idx onwards in case comma split the field
+                                    question = ','.join(row[col_idx:]).strip()
+                                    if question:
+                                        rows.append({'questions': question})
+                                elif row:
+                                    # If row exists but might have been split incorrectly
+                                    question = ','.join(row).strip()
+                                    if question:
+                                        rows.append({'questions': question})
+                    df = pd.DataFrame(rows)
                 logger.info(
                     "Successfully loaded CSV file with %d rows and %d columns",
                     len(df),
