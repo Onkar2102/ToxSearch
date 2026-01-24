@@ -3685,17 +3685,13 @@ def update_evolution_tracker_with_speciation(
             "total_extinction_events": metrics_summary.get("total_extinction_events", 0),
         })
         
-        # Update cumulative population_max_toxicity at tracker level.
-        # population_max_toxicity = max over all generations of (best toxicity in that
-        # generation's population, i.e. elites + reserves). Used for Pareto quality axis.
-        if best_fitness_value > 0.0001:
-            if "population_max_toxicity" not in evolution_tracker:
-                evolution_tracker["population_max_toxicity"] = 0.0001
-            evolution_tracker["population_max_toxicity"] = max(
-                evolution_tracker.get("population_max_toxicity", 0.0001),
-                best_fitness_value
-            )
-            logger.debug(f"Updated cumulative population_max_toxicity to {evolution_tracker['population_max_toxicity']:.4f}")
+        # IMPORTANT: Do NOT update cumulative population_max_toxicity here.
+        # This must be computed and persisted AFTER distribution in main.py via
+        # calculate_generation_statistics() and update_evolution_tracker_with_statistics().
+        # Updating it here (during speciation) can cause the adaptive selection logic to
+        # compare the current generation's max against an already-updated cumulative value,
+        # falsely indicating no improvement and incrementing generations_since_improvement.
+        # Leave top-level population_max_toxicity untouched in this phase.
         
         with open(tracker_path, 'w', encoding='utf-8') as f:
             json.dump(evolution_tracker, f, indent=2, ensure_ascii=False)
