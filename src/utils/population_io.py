@@ -1679,21 +1679,41 @@ def update_adaptive_selection_logic(
             tracker = json.load(f)
         
         # Use the passed previous_max_toxicity instead of reading from tracker
-        _logger.info(f"Adaptive selection comparison: current_max_toxicity={current_max_toxicity:.4f}, previous_max_toxicity={previous_max_toxicity:.4f}")
+        _logger.info(f"Adaptive selection comparison: current_max_toxicity={current_max_toxicity:.6f}, previous_max_toxicity={previous_max_toxicity:.6f}")
         
-        # Debug: Log the comparison result
-        comparison_result = current_max_toxicity > previous_max_toxicity
-        _logger.debug(f"Comparison result: {current_max_toxicity:.6f} > {previous_max_toxicity:.6f} = {comparison_result}")
+        # Validate values are reasonable
+        if current_max_toxicity < 0 or previous_max_toxicity < 0:
+            _logger.error(f"Invalid toxicity values: current={current_max_toxicity:.6f}, previous={previous_max_toxicity:.6f}")
         
-        # Update generations_since_improvement
-        # Use a small epsilon for comparison to handle floating-point precision
+        # Cross-check with tracker (for debugging)
+        tracker_current_max = tracker.get("population_max_toxicity", 0.0001)
+        _logger.debug(f"Tracker population_max_toxicity (after update): {tracker_current_max:.6f}")
+        
+        # Enhanced comparison with explicit validation
         epsilon = 1e-6
-        if current_max_toxicity > previous_max_toxicity + epsilon:
+        comparison_result = current_max_toxicity > previous_max_toxicity + epsilon
+        _logger.debug(f"Comparison: {current_max_toxicity:.6f} > {previous_max_toxicity:.6f} + {epsilon} = {comparison_result}")
+        
+        # Explicit improvement detection with validation
+        if comparison_result:
             tracker["generations_since_improvement"] = 0
-            _logger.info(f"Improvement detected! Max toxicity increased from {previous_max_toxicity:.4f} to {current_max_toxicity:.4f}")
+            _logger.info(f"✓ Improvement detected! Max toxicity increased from {previous_max_toxicity:.4f} to {current_max_toxicity:.4f}")
         else:
-            tracker["generations_since_improvement"] = tracker.get("generations_since_improvement", 0) + 1
-            _logger.info(f"No improvement. Generations since improvement: {tracker['generations_since_improvement']}")
+            # Additional validation: if current is very close to previous, log warning
+            if abs(current_max_toxicity - previous_max_toxicity) < 0.001:
+                _logger.warning(f"Values are very close: current={current_max_toxicity:.6f}, previous={previous_max_toxicity:.6f}")
+            
+            old_value = tracker.get("generations_since_improvement", 0)
+            tracker["generations_since_improvement"] = old_value + 1
+            _logger.info(f"No improvement. Generations since improvement: {old_value} → {tracker['generations_since_improvement']}")
+        
+        # Post-comparison validation: ensure improvement is detected when it should be
+        if tracker["generations_since_improvement"] > 0:
+            # If we didn't detect improvement, verify it was correct
+            if current_max_toxicity > previous_max_toxicity + 0.001:  # Significant difference
+                _logger.error(f"BUG: Improvement should have been detected! current={current_max_toxicity:.6f} > previous={previous_max_toxicity:.6f}")
+                _logger.error("Forcing reset to 0")
+                tracker["generations_since_improvement"] = 0
         
         # Use avg_fitness for current gen when provided (slope must use avg_fitness consistently).
         # Otherwise fall back to mean(elites+reserves) after distribution.

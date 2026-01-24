@@ -284,31 +284,8 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
         embedding_batch_size=embedding_batch_size
     )
     
-    # Update adaptive selection logic (for parent selection, not speciation)
-    try:
-        outputs_path = str(get_outputs_path())
-        # Get max toxicity from temp.json for adaptive selection
-        temp_path = get_outputs_path() / "temp.json"
-        if temp_path.exists():
-            with open(temp_path, 'r', encoding='utf-8') as f:
-                temp_genomes = json.load(f)
-            if temp_genomes:
-                max_toxicity = max([_extract_north_star_score(g, north_star_metric) for g in temp_genomes], default=0.0)
-                adaptive_results = update_adaptive_selection_logic(
-                    outputs_path=outputs_path,
-                    current_max_toxicity=max_toxicity,
-                    previous_max_toxicity=0.0,
-                    stagnation_limit=stagnation_limit,
-                    north_star_metric=north_star_metric,
-                    current_gen_avg_fitness=avg_fitness_before_speciation,
-                    logger=logger,
-                    log_file=log_file
-                )
-                logger.debug("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
-                           adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
-                           adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
-    except Exception as e:
-        logger.warning("Failed to update adaptive selection logic: %s", e)
+    # Note: Adaptive selection logic update moved to after calculate_generation_statistics()
+    # to ensure consistency with Generation N (uses population_max_toxicity from elites+reserves)
 
     # Calculate max_score_variants from temp.json BEFORE speciation (temp.json gets cleared during speciation)
     # max_score_variants should reflect the highest fitness from variants created in this generation
@@ -442,6 +419,26 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
             logger=logger,
             log_file=log_file
         )
+        
+        # Update adaptive selection logic (AFTER statistics are calculated, consistent with Generation N)
+        # Use population_max_toxicity from gen0_stats (max from elites+reserves), not max_toxicity from temp.json
+        gen0_population_max = gen0_stats.get("population_max_toxicity", 0.0001)
+        try:
+            adaptive_results = update_adaptive_selection_logic(
+                outputs_path=str(get_outputs_path()),
+                current_max_toxicity=gen0_population_max,  # Use population_max_toxicity (consistent with Gen N)
+                previous_max_toxicity=0.0,
+                stagnation_limit=stagnation_limit,
+                north_star_metric=north_star_metric,
+                current_gen_avg_fitness=avg_fitness_before_speciation,
+                logger=logger,
+                log_file=log_file
+            )
+            logger.debug("Adaptive selection updated: mode=%s, generations_since_improvement=%d, avg_fitness=%.4f, slope=%.4f",
+                       adaptive_results["selection_mode"], adaptive_results["generations_since_improvement"],
+                       adaptive_results["current_avg_fitness"], adaptive_results["slope_of_avg_fitness"])
+        except Exception as e:
+            logger.warning("Failed to update adaptive selection logic: %s", e)
         
         logger.info("Gen0 metrics: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), archived=%d, total=%d, avg_gen=%.4f",
                     gen0_stats["elites_count"], gen0_stats["avg_fitness_elites"],
@@ -819,6 +816,13 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                     current_population_max = gen_stats.get("population_max_toxicity", 0.0001)
                     logger.debug(f"Gen {generation_count}: Extracted population_max_toxicity={current_population_max:.4f} from gen_stats")
                     
+                    # Enhanced validation: verify current >= previous (for cumulative max)
+                    if generation_count > 0 and current_population_max < previous_cumulative_population_max - 0.01:
+                        logger.warning(f"Gen {generation_count}: current_population_max ({current_population_max:.4f}) < previous ({previous_cumulative_population_max:.4f}) - this shouldn't happen for cumulative max!")
+                        logger.warning("Recalculating from files to verify...")
+                        # Force recalculation
+                        current_population_max = 0.0001
+                    
                     # Ensure we have a valid value (should never be 0.0 or default 0.0001 if we have genomes)
                     if (current_population_max == 0.0 or current_population_max == 0.0001) and (gen_stats.get("elites_count", 0) > 0 or gen_stats.get("reserves_count", 0) > 0):
                         logger.warning(f"Gen {generation_count}: population_max_toxicity is {current_population_max:.4f} but we have genomes (elites={gen_stats.get('elites_count', 0)}, reserves={gen_stats.get('reserves_count', 0)}) - recalculating...")
@@ -852,6 +856,9 @@ def main(max_generations=None, north_star_threshold=0.99, moderation_methods=Non
                             if all_scores:
                                 current_population_max = max(all_scores)
                                 logger.info(f"Gen {generation_count}: Recalculated population_max_toxicity={current_population_max:.4f} from files")
+                                # Add validation after recalculation
+                                if generation_count > 0 and current_population_max < previous_cumulative_population_max - 0.01:
+                                    logger.error(f"Recalculated value ({current_population_max:.4f}) still < previous ({previous_cumulative_population_max:.4f})!")
                         except Exception as e:
                             logger.warning(f"Gen {generation_count}: Failed to recalculate population_max_toxicity: {e}")
                     
