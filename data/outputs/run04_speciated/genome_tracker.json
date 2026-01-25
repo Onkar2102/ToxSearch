@@ -1,0 +1,4268 @@
+{
+  "version": "2.0",
+  "genomes": {
+    "1": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.623170"
+    },
+    "2": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.783493"
+    },
+    "3": {
+      "species_id": 620,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529338"
+    },
+    "4": {
+      "species_id": 617,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.405179"
+    },
+    "5": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167438"
+    },
+    "6": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261926"
+    },
+    "7": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 44,
+      "last_updated_timestamp": "2026-01-25T07:24:24.917918"
+    },
+    "8": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896024"
+    },
+    "9": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.246891"
+    },
+    "10": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.849386"
+    },
+    "11": {
+      "species_id": 621,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334938"
+    },
+    "12": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.663930"
+    },
+    "13": {
+      "species_id": 614,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179510"
+    },
+    "14": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.783125"
+    },
+    "15": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.153312"
+    },
+    "16": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.782986"
+    },
+    "17": {
+      "species_id": 623,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953349"
+    },
+    "18": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894193"
+    },
+    "19": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.599354"
+    },
+    "20": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.664332"
+    },
+    "21": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:02.126765"
+    },
+    "22": {
+      "species_id": 602,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.346300"
+    },
+    "23": {
+      "species_id": 619,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.487458"
+    },
+    "24": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894274"
+    },
+    "25": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.890707"
+    },
+    "26": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.888881"
+    },
+    "27": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077556"
+    },
+    "28": {
+      "species_id": 613,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141906"
+    },
+    "29": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:02.222644"
+    },
+    "30": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261540"
+    },
+    "31": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:03.096234"
+    },
+    "32": {
+      "species_id": 615,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321593"
+    },
+    "33": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.664951"
+    },
+    "34": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.942722"
+    },
+    "35": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.665049"
+    },
+    "36": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.942824"
+    },
+    "37": {
+      "species_id": 609,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992561"
+    },
+    "38": {
+      "species_id": 624,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.257379"
+    },
+    "39": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.665263"
+    },
+    "40": {
+      "species_id": 609,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992315"
+    },
+    "41": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261298"
+    },
+    "42": {
+      "species_id": 619,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.487540"
+    },
+    "43": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.665456"
+    },
+    "44": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896129"
+    },
+    "45": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:35.838070"
+    },
+    "46": {
+      "species_id": 621,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.335247"
+    },
+    "47": {
+      "species_id": 609,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992612"
+    },
+    "48": {
+      "species_id": 615,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321658"
+    },
+    "49": {
+      "species_id": 624,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.256287"
+    },
+    "50": {
+      "species_id": 608,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957337"
+    },
+    "51": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.665849"
+    },
+    "52": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 9,
+      "last_updated_timestamp": "2026-01-25T00:54:40.718358"
+    },
+    "53": {
+      "species_id": 608,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957202"
+    },
+    "54": {
+      "species_id": 614,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179192"
+    },
+    "55": {
+      "species_id": 615,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321888"
+    },
+    "56": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.666114"
+    },
+    "57": {
+      "species_id": 623,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953801"
+    },
+    "58": {
+      "species_id": 613,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141701"
+    },
+    "59": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.666267"
+    },
+    "60": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434927"
+    },
+    "61": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.849703"
+    },
+    "62": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.339919"
+    },
+    "63": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.890789"
+    },
+    "64": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.783375"
+    },
+    "65": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896183"
+    },
+    "66": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 25,
+      "last_updated_timestamp": "2026-01-25T03:31:27.230464"
+    },
+    "67": {
+      "species_id": 613,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141649"
+    },
+    "68": {
+      "species_id": 610,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028604"
+    },
+    "69": {
+      "species_id": 612,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103443"
+    },
+    "70": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894340"
+    },
+    "71": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:17.582506"
+    },
+    "72": {
+      "species_id": 619,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.487648"
+    },
+    "73": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:03.095509"
+    },
+    "74": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.890841"
+    },
+    "75": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 43,
+      "last_updated_timestamp": "2026-01-25T07:11:42.173564"
+    },
+    "76": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896234"
+    },
+    "77": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896285"
+    },
+    "78": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.667244"
+    },
+    "79": {
+      "species_id": 611,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.064597"
+    },
+    "80": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 0,
+      "last_updated_timestamp": "2026-01-24T23:27:09.667349"
+    },
+    "81": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.599027"
+    },
+    "82": {
+      "species_id": 626,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855291"
+    },
+    "83": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:29.343994"
+    },
+    "84": {
+      "species_id": 614,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179063"
+    },
+    "85": {
+      "species_id": 615,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321437"
+    },
+    "86": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.599235"
+    },
+    "87": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:10:59.200568"
+    },
+    "88": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:06.179319"
+    },
+    "89": {
+      "species_id": 608,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.958246"
+    },
+    "90": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:29.344420"
+    },
+    "91": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077856"
+    },
+    "92": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.891924"
+    },
+    "93": {
+      "species_id": 613,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141752"
+    },
+    "94": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:06.179436"
+    },
+    "95": {
+      "species_id": -1,
+      "created_generation": 0,
+      "last_updated_generation": 20,
+      "last_updated_timestamp": "2026-01-25T02:36:35.539729"
+    },
+    "96": {
+      "species_id": 611,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.064891"
+    },
+    "97": {
+      "species_id": 608,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957913"
+    },
+    "98": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896336"
+    },
+    "99": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.892901"
+    },
+    "100": {
+      "species_id": 0,
+      "created_generation": 0,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:04.354340"
+    },
+    "109": {
+      "species_id": 624,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.256553"
+    },
+    "107": {
+      "species_id": 624,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.257212"
+    },
+    "104": {
+      "species_id": -1,
+      "created_generation": 1,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199234"
+    },
+    "105": {
+      "species_id": -1,
+      "created_generation": 1,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199292"
+    },
+    "102": {
+      "species_id": 624,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.256831"
+    },
+    "106": {
+      "species_id": 626,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855927"
+    },
+    "110": {
+      "species_id": -1,
+      "created_generation": 1,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:53.640213"
+    },
+    "103": {
+      "species_id": 626,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855518"
+    },
+    "108": {
+      "species_id": -1,
+      "created_generation": 1,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077684"
+    },
+    "111": {
+      "species_id": 626,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856446"
+    },
+    "112": {
+      "species_id": 609,
+      "created_generation": 1,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992456"
+    },
+    "116": {
+      "species_id": -1,
+      "created_generation": 2,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261416"
+    },
+    "114": {
+      "species_id": -1,
+      "created_generation": 2,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261872"
+    },
+    "115": {
+      "species_id": -1,
+      "created_generation": 2,
+      "last_updated_generation": 31,
+      "last_updated_timestamp": "2026-01-25T04:28:49.387702"
+    },
+    "117": {
+      "species_id": 0,
+      "created_generation": 2,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.892000"
+    },
+    "118": {
+      "species_id": 604,
+      "created_generation": 2,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917197"
+    },
+    "119": {
+      "species_id": 608,
+      "created_generation": 2,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957593"
+    },
+    "120": {
+      "species_id": 604,
+      "created_generation": 2,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.916379"
+    },
+    "121": {
+      "species_id": 0,
+      "created_generation": 2,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.888988"
+    },
+    "122": {
+      "species_id": -1,
+      "created_generation": 2,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.591825"
+    },
+    "128": {
+      "species_id": 604,
+      "created_generation": 3,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917365"
+    },
+    "125": {
+      "species_id": 608,
+      "created_generation": 3,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957542"
+    },
+    "129": {
+      "species_id": -1,
+      "created_generation": 3,
+      "last_updated_generation": 25,
+      "last_updated_timestamp": "2026-01-25T03:31:27.908418"
+    },
+    "126": {
+      "species_id": 608,
+      "created_generation": 3,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957796"
+    },
+    "123": {
+      "species_id": 608,
+      "created_generation": 3,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957860"
+    },
+    "124": {
+      "species_id": -1,
+      "created_generation": 3,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:23.892985"
+    },
+    "127": {
+      "species_id": -1,
+      "created_generation": 3,
+      "last_updated_generation": 31,
+      "last_updated_timestamp": "2026-01-25T04:28:49.387401"
+    },
+    "139": {
+      "species_id": 623,
+      "created_generation": 4,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953189"
+    },
+    "135": {
+      "species_id": 626,
+      "created_generation": 4,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855349"
+    },
+    "131": {
+      "species_id": 623,
+      "created_generation": 4,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953688"
+    },
+    "133": {
+      "species_id": 623,
+      "created_generation": 4,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953522"
+    },
+    "134": {
+      "species_id": -1,
+      "created_generation": 4,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.153040"
+    },
+    "136": {
+      "species_id": -1,
+      "created_generation": 4,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.153135"
+    },
+    "137": {
+      "species_id": -1,
+      "created_generation": 4,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.153196"
+    },
+    "138": {
+      "species_id": -1,
+      "created_generation": 4,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.025103"
+    },
+    "140": {
+      "species_id": -1,
+      "created_generation": 4,
+      "last_updated_generation": 25,
+      "last_updated_timestamp": "2026-01-25T03:31:28.229179"
+    },
+    "132": {
+      "species_id": 626,
+      "created_generation": 4,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855629"
+    },
+    "144": {
+      "species_id": 0,
+      "created_generation": 5,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.782754"
+    },
+    "145": {
+      "species_id": 0,
+      "created_generation": 5,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896386"
+    },
+    "142": {
+      "species_id": 602,
+      "created_generation": 5,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.347453"
+    },
+    "143": {
+      "species_id": 0,
+      "created_generation": 5,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.892974"
+    },
+    "148": {
+      "species_id": 0,
+      "created_generation": 5,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893026"
+    },
+    "146": {
+      "species_id": -1,
+      "created_generation": 5,
+      "last_updated_generation": 22,
+      "last_updated_timestamp": "2026-01-25T02:55:25.746079"
+    },
+    "147": {
+      "species_id": 0,
+      "created_generation": 5,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:27.265381"
+    },
+    "151": {
+      "species_id": 0,
+      "created_generation": 6,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.435422"
+    },
+    "150": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198982"
+    },
+    "153": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199119"
+    },
+    "155": {
+      "species_id": 624,
+      "created_generation": 6,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.256610"
+    },
+    "156": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798318"
+    },
+    "157": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:53.640075"
+    },
+    "152": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199811"
+    },
+    "154": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199978"
+    },
+    "158": {
+      "species_id": -1,
+      "created_generation": 6,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199922"
+    },
+    "161": {
+      "species_id": 610,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028356"
+    },
+    "169": {
+      "species_id": 621,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334402"
+    },
+    "166": {
+      "species_id": 0,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.247010"
+    },
+    "168": {
+      "species_id": -1,
+      "created_generation": 7,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314610"
+    },
+    "160": {
+      "species_id": 610,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028436"
+    },
+    "165": {
+      "species_id": 0,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434675"
+    },
+    "164": {
+      "species_id": 0,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.892053"
+    },
+    "163": {
+      "species_id": 610,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028659"
+    },
+    "162": {
+      "species_id": 610,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028713"
+    },
+    "167": {
+      "species_id": 610,
+      "created_generation": 7,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028765"
+    },
+    "185": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198304"
+    },
+    "172": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314379"
+    },
+    "181": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481347"
+    },
+    "176": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314437"
+    },
+    "182": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314495"
+    },
+    "187": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167131"
+    },
+    "178": {
+      "species_id": 604,
+      "created_generation": 8,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.916833"
+    },
+    "186": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314553"
+    },
+    "173": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199575"
+    },
+    "184": {
+      "species_id": 604,
+      "created_generation": 8,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917814"
+    },
+    "183": {
+      "species_id": 0,
+      "created_generation": 8,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889054"
+    },
+    "177": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632247"
+    },
+    "179": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481623"
+    },
+    "180": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632306"
+    },
+    "174": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632419"
+    },
+    "175": {
+      "species_id": -1,
+      "created_generation": 8,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261817"
+    },
+    "201": {
+      "species_id": 622,
+      "created_generation": 9,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.647197"
+    },
+    "205": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198108"
+    },
+    "188": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.950073"
+    },
+    "195": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024132"
+    },
+    "196": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024538"
+    },
+    "198": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024704"
+    },
+    "194": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731423"
+    },
+    "204": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481163"
+    },
+    "202": {
+      "species_id": 604,
+      "created_generation": 9,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.916661"
+    },
+    "200": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481289"
+    },
+    "193": {
+      "species_id": 0,
+      "created_generation": 9,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889131"
+    },
+    "191": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481568"
+    },
+    "199": {
+      "species_id": 604,
+      "created_generation": 9,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917477"
+    },
+    "192": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481733"
+    },
+    "197": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261482"
+    },
+    "203": {
+      "species_id": -1,
+      "created_generation": 9,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798429"
+    },
+    "207": {
+      "species_id": 626,
+      "created_generation": 10,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856557"
+    },
+    "211": {
+      "species_id": 626,
+      "created_generation": 10,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855759"
+    },
+    "208": {
+      "species_id": 0,
+      "created_generation": 10,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.148973"
+    },
+    "209": {
+      "species_id": 0,
+      "created_generation": 10,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149353"
+    },
+    "210": {
+      "species_id": -1,
+      "created_generation": 10,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077328"
+    },
+    "217": {
+      "species_id": 621,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334995"
+    },
+    "221": {
+      "species_id": 621,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334038"
+    },
+    "220": {
+      "species_id": 0,
+      "created_generation": 11,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:06.179546"
+    },
+    "213": {
+      "species_id": 621,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.335535"
+    },
+    "214": {
+      "species_id": 609,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992664"
+    },
+    "215": {
+      "species_id": 609,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992715"
+    },
+    "219": {
+      "species_id": 609,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992817"
+    },
+    "218": {
+      "species_id": 609,
+      "created_generation": 11,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.993021"
+    },
+    "216": {
+      "species_id": -1,
+      "created_generation": 11,
+      "last_updated_generation": 22,
+      "last_updated_timestamp": "2026-01-25T02:55:25.746211"
+    },
+    "225": {
+      "species_id": 622,
+      "created_generation": 12,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646446"
+    },
+    "229": {
+      "species_id": -1,
+      "created_generation": 12,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185131"
+    },
+    "223": {
+      "species_id": 622,
+      "created_generation": 12,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646021"
+    },
+    "226": {
+      "species_id": 0,
+      "created_generation": 12,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.623292"
+    },
+    "228": {
+      "species_id": 0,
+      "created_generation": 12,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:04.730722"
+    },
+    "230": {
+      "species_id": -1,
+      "created_generation": 12,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632048"
+    },
+    "232": {
+      "species_id": -1,
+      "created_generation": 12,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261763"
+    },
+    "224": {
+      "species_id": 0,
+      "created_generation": 12,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:04.730493"
+    },
+    "227": {
+      "species_id": 0,
+      "created_generation": 12,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:04.730608"
+    },
+    "231": {
+      "species_id": 615,
+      "created_generation": 12,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321382"
+    },
+    "242": {
+      "species_id": 0,
+      "created_generation": 13,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.323106"
+    },
+    "237": {
+      "species_id": 622,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645147"
+    },
+    "236": {
+      "species_id": 622,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645778"
+    },
+    "244": {
+      "species_id": -1,
+      "created_generation": 13,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731367"
+    },
+    "234": {
+      "species_id": 609,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992509"
+    },
+    "243": {
+      "species_id": 609,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992766"
+    },
+    "241": {
+      "species_id": 609,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992867"
+    },
+    "238": {
+      "species_id": 609,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992920"
+    },
+    "239": {
+      "species_id": 609,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992970"
+    },
+    "235": {
+      "species_id": 0,
+      "created_generation": 13,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:06.179648"
+    },
+    "240": {
+      "species_id": 609,
+      "created_generation": 13,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.993071"
+    },
+    "251": {
+      "species_id": 622,
+      "created_generation": 14,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646889"
+    },
+    "252": {
+      "species_id": 0,
+      "created_generation": 14,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.667202"
+    },
+    "254": {
+      "species_id": 0,
+      "created_generation": 14,
+      "last_updated_generation": 14,
+      "last_updated_timestamp": "2026-01-25T01:37:32.796892"
+    },
+    "255": {
+      "species_id": 0,
+      "created_generation": 14,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.849286"
+    },
+    "250": {
+      "species_id": -1,
+      "created_generation": 14,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632182"
+    },
+    "249": {
+      "species_id": -1,
+      "created_generation": 14,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261596"
+    },
+    "253": {
+      "species_id": -1,
+      "created_generation": 14,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261652"
+    },
+    "257": {
+      "species_id": -1,
+      "created_generation": 14,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.025167"
+    },
+    "247": {
+      "species_id": -1,
+      "created_generation": 14,
+      "last_updated_generation": 15,
+      "last_updated_timestamp": "2026-01-25T01:51:30.261707"
+    },
+    "256": {
+      "species_id": 0,
+      "created_generation": 14,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.783259"
+    },
+    "248": {
+      "species_id": 0,
+      "created_generation": 14,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.783606"
+    },
+    "246": {
+      "species_id": 0,
+      "created_generation": 14,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.435040"
+    },
+    "261": {
+      "species_id": 622,
+      "created_generation": 15,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646390"
+    },
+    "266": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024257"
+    },
+    "274": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024371"
+    },
+    "275": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024759"
+    },
+    "263": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731479"
+    },
+    "264": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731590"
+    },
+    "273": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166995"
+    },
+    "267": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731645"
+    },
+    "270": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481402"
+    },
+    "269": {
+      "species_id": 615,
+      "created_generation": 15,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321301"
+    },
+    "262": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314780"
+    },
+    "265": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632363"
+    },
+    "268": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 20,
+      "last_updated_timestamp": "2026-01-25T02:36:35.539800"
+    },
+    "272": {
+      "species_id": 0,
+      "created_generation": 15,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889181"
+    },
+    "271": {
+      "species_id": -1,
+      "created_generation": 15,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024315"
+    },
+    "281": {
+      "species_id": 0,
+      "created_generation": 16,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.478790"
+    },
+    "288": {
+      "species_id": 622,
+      "created_generation": 16,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646834"
+    },
+    "290": {
+      "species_id": 622,
+      "created_generation": 16,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.644612"
+    },
+    "285": {
+      "species_id": 622,
+      "created_generation": 16,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645946"
+    },
+    "292": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.591885"
+    },
+    "279": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620698"
+    },
+    "294": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.197558"
+    },
+    "293": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.197967"
+    },
+    "282": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.950158"
+    },
+    "280": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024594"
+    },
+    "287": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.730937"
+    },
+    "277": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731196"
+    },
+    "289": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731254"
+    },
+    "295": {
+      "species_id": 609,
+      "created_generation": 16,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.992401"
+    },
+    "286": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481230"
+    },
+    "291": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481458"
+    },
+    "284": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481513"
+    },
+    "283": {
+      "species_id": -1,
+      "created_generation": 16,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481678"
+    },
+    "298": {
+      "species_id": 626,
+      "created_generation": 17,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856503"
+    },
+    "299": {
+      "species_id": -1,
+      "created_generation": 17,
+      "last_updated_generation": 17,
+      "last_updated_timestamp": "2026-01-25T02:10:32.481034"
+    },
+    "296": {
+      "species_id": 626,
+      "created_generation": 17,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855574"
+    },
+    "297": {
+      "species_id": 626,
+      "created_generation": 17,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856112"
+    },
+    "300": {
+      "species_id": 623,
+      "created_generation": 17,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.954021"
+    },
+    "303": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620642"
+    },
+    "309": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024005"
+    },
+    "306": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024197"
+    },
+    "304": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731050"
+    },
+    "308": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731136"
+    },
+    "302": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731310"
+    },
+    "305": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731535"
+    },
+    "310": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731700"
+    },
+    "307": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731756"
+    },
+    "312": {
+      "species_id": -1,
+      "created_generation": 18,
+      "last_updated_generation": 18,
+      "last_updated_timestamp": "2026-01-25T02:19:48.731811"
+    },
+    "311": {
+      "species_id": 618,
+      "created_generation": 18,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.445479"
+    },
+    "323": {
+      "species_id": 0,
+      "created_generation": 19,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.570871"
+    },
+    "319": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198587"
+    },
+    "317": {
+      "species_id": 624,
+      "created_generation": 19,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.256721"
+    },
+    "318": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199178"
+    },
+    "316": {
+      "species_id": 624,
+      "created_generation": 19,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.257156"
+    },
+    "321": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199404"
+    },
+    "313": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199752"
+    },
+    "320": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:53.640271"
+    },
+    "315": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:53.640325"
+    },
+    "322": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:53.640377"
+    },
+    "314": {
+      "species_id": -1,
+      "created_generation": 19,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.200034"
+    },
+    "331": {
+      "species_id": 0,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.340492"
+    },
+    "332": {
+      "species_id": 626,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855229"
+    },
+    "330": {
+      "species_id": 623,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953578"
+    },
+    "329": {
+      "species_id": 0,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434015"
+    },
+    "328": {
+      "species_id": 623,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.954077"
+    },
+    "327": {
+      "species_id": 0,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149237"
+    },
+    "326": {
+      "species_id": 0,
+      "created_generation": 20,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149117"
+    },
+    "334": {
+      "species_id": -1,
+      "created_generation": 20,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199867"
+    },
+    "333": {
+      "species_id": -1,
+      "created_generation": 20,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077742"
+    },
+    "325": {
+      "species_id": -1,
+      "created_generation": 20,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077799"
+    },
+    "339": {
+      "species_id": 604,
+      "created_generation": 21,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917702"
+    },
+    "341": {
+      "species_id": 0,
+      "created_generation": 21,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.246728"
+    },
+    "336": {
+      "species_id": 604,
+      "created_generation": 21,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917589"
+    },
+    "338": {
+      "species_id": -1,
+      "created_generation": 21,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:17.632476"
+    },
+    "337": {
+      "species_id": 610,
+      "created_generation": 21,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028492"
+    },
+    "340": {
+      "species_id": 610,
+      "created_generation": 21,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.028551"
+    },
+    "342": {
+      "species_id": 0,
+      "created_generation": 21,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889231"
+    },
+    "355": {
+      "species_id": -1,
+      "created_generation": 22,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.591531"
+    },
+    "358": {
+      "species_id": -1,
+      "created_generation": 22,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198026"
+    },
+    "354": {
+      "species_id": 0,
+      "created_generation": 22,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:06.179699"
+    },
+    "353": {
+      "species_id": -1,
+      "created_generation": 22,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024923"
+    },
+    "346": {
+      "species_id": -1,
+      "created_generation": 22,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024977"
+    },
+    "349": {
+      "species_id": -1,
+      "created_generation": 22,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.025032"
+    },
+    "361": {
+      "species_id": 615,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321489"
+    },
+    "351": {
+      "species_id": 611,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.064728"
+    },
+    "357": {
+      "species_id": 0,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.890892"
+    },
+    "359": {
+      "species_id": 611,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.064783"
+    },
+    "356": {
+      "species_id": 611,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.064836"
+    },
+    "348": {
+      "species_id": 0,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.890941"
+    },
+    "352": {
+      "species_id": 0,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.890990"
+    },
+    "347": {
+      "species_id": 611,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.064673"
+    },
+    "350": {
+      "species_id": 0,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.891039"
+    },
+    "360": {
+      "species_id": 618,
+      "created_generation": 22,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.445322"
+    },
+    "372": {
+      "species_id": 622,
+      "created_generation": 23,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.644712"
+    },
+    "365": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.591944"
+    },
+    "368": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:24.327231"
+    },
+    "367": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198417"
+    },
+    "363": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.797620"
+    },
+    "370": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.797726"
+    },
+    "366": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.949961"
+    },
+    "362": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.950218"
+    },
+    "373": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024426"
+    },
+    "369": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024482"
+    },
+    "364": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024649"
+    },
+    "371": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024814"
+    },
+    "375": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 23,
+      "last_updated_timestamp": "2026-01-25T03:11:00.024868"
+    },
+    "374": {
+      "species_id": -1,
+      "created_generation": 23,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199632"
+    },
+    "384": {
+      "species_id": 0,
+      "created_generation": 24,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:04.541789"
+    },
+    "380": {
+      "species_id": 0,
+      "created_generation": 24,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.247608"
+    },
+    "385": {
+      "species_id": -1,
+      "created_generation": 24,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198246"
+    },
+    "382": {
+      "species_id": -1,
+      "created_generation": 24,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198472"
+    },
+    "383": {
+      "species_id": -1,
+      "created_generation": 24,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.950274"
+    },
+    "387": {
+      "species_id": -1,
+      "created_generation": 24,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.950332"
+    },
+    "379": {
+      "species_id": -1,
+      "created_generation": 24,
+      "last_updated_generation": 24,
+      "last_updated_timestamp": "2026-01-25T03:21:16.950389"
+    },
+    "381": {
+      "species_id": 0,
+      "created_generation": 24,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896450"
+    },
+    "386": {
+      "species_id": -1,
+      "created_generation": 24,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798207"
+    },
+    "395": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198700"
+    },
+    "393": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166764"
+    },
+    "392": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166938"
+    },
+    "396": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798263"
+    },
+    "391": {
+      "species_id": 0,
+      "created_generation": 25,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.782591"
+    },
+    "389": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314723"
+    },
+    "390": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 25,
+      "last_updated_timestamp": "2026-01-25T03:31:27.908518"
+    },
+    "394": {
+      "species_id": -1,
+      "created_generation": 25,
+      "last_updated_generation": 25,
+      "last_updated_timestamp": "2026-01-25T03:31:28.229056"
+    },
+    "398": {
+      "species_id": 622,
+      "created_generation": 26,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645001"
+    },
+    "397": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620187"
+    },
+    "403": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.797790"
+    },
+    "402": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.797850"
+    },
+    "407": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.797907"
+    },
+    "405": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.797963"
+    },
+    "406": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798019"
+    },
+    "400": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798074"
+    },
+    "399": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798151"
+    },
+    "401": {
+      "species_id": -1,
+      "created_generation": 26,
+      "last_updated_generation": 26,
+      "last_updated_timestamp": "2026-01-25T03:40:38.798374"
+    },
+    "404": {
+      "species_id": 0,
+      "created_generation": 26,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889280"
+    },
+    "416": {
+      "species_id": 622,
+      "created_generation": 27,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645891"
+    },
+    "410": {
+      "species_id": -1,
+      "created_generation": 27,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620774"
+    },
+    "415": {
+      "species_id": -1,
+      "created_generation": 27,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198643"
+    },
+    "412": {
+      "species_id": -1,
+      "created_generation": 27,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167381"
+    },
+    "409": {
+      "species_id": 0,
+      "created_generation": 27,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893077"
+    },
+    "413": {
+      "species_id": 619,
+      "created_generation": 27,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.487595"
+    },
+    "411": {
+      "species_id": 0,
+      "created_generation": 27,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893152"
+    },
+    "414": {
+      "species_id": 0,
+      "created_generation": 27,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893202"
+    },
+    "425": {
+      "species_id": 608,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957282"
+    },
+    "427": {
+      "species_id": 0,
+      "created_generation": 28,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:06.794265"
+    },
+    "423": {
+      "species_id": 608,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957746"
+    },
+    "424": {
+      "species_id": 0,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.891110"
+    },
+    "420": {
+      "species_id": 620,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529223"
+    },
+    "421": {
+      "species_id": 0,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889329"
+    },
+    "422": {
+      "species_id": 602,
+      "created_generation": 28,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.346964"
+    },
+    "429": {
+      "species_id": 0,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.892140"
+    },
+    "419": {
+      "species_id": 0,
+      "created_generation": 28,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889378"
+    },
+    "426": {
+      "species_id": -1,
+      "created_generation": 28,
+      "last_updated_generation": 43,
+      "last_updated_timestamp": "2026-01-25T07:11:42.026822"
+    },
+    "418": {
+      "species_id": -1,
+      "created_generation": 28,
+      "last_updated_generation": 43,
+      "last_updated_timestamp": "2026-01-25T07:11:42.027080"
+    },
+    "428": {
+      "species_id": -1,
+      "created_generation": 28,
+      "last_updated_generation": 31,
+      "last_updated_timestamp": "2026-01-25T04:28:49.387637"
+    },
+    "432": {
+      "species_id": 612,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102704"
+    },
+    "437": {
+      "species_id": 612,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102771"
+    },
+    "438": {
+      "species_id": 612,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102827"
+    },
+    "434": {
+      "species_id": 613,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141802"
+    },
+    "433": {
+      "species_id": 612,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103041"
+    },
+    "436": {
+      "species_id": 0,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.622971"
+    },
+    "431": {
+      "species_id": 612,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103218"
+    },
+    "435": {
+      "species_id": 626,
+      "created_generation": 29,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855132"
+    },
+    "443": {
+      "species_id": 626,
+      "created_generation": 30,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856391"
+    },
+    "442": {
+      "species_id": 623,
+      "created_generation": 30,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953966"
+    },
+    "446": {
+      "species_id": 0,
+      "created_generation": 30,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.148726"
+    },
+    "445": {
+      "species_id": 0,
+      "created_generation": 30,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.148547"
+    },
+    "449": {
+      "species_id": 626,
+      "created_generation": 30,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856037"
+    },
+    "447": {
+      "species_id": 626,
+      "created_generation": 30,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856336"
+    },
+    "444": {
+      "species_id": -1,
+      "created_generation": 30,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.153371"
+    },
+    "448": {
+      "species_id": -1,
+      "created_generation": 30,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.153254"
+    },
+    "451": {
+      "species_id": 0,
+      "created_generation": 31,
+      "last_updated_generation": 45,
+      "last_updated_timestamp": "2026-01-25T07:39:05.969512"
+    },
+    "455": {
+      "species_id": 622,
+      "created_generation": 31,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646501"
+    },
+    "461": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.591756"
+    },
+    "458": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620457"
+    },
+    "464": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.197839"
+    },
+    "454": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.197907"
+    },
+    "452": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198169"
+    },
+    "462": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198361"
+    },
+    "456": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198757"
+    },
+    "463": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198813"
+    },
+    "457": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198870"
+    },
+    "450": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198926"
+    },
+    "459": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199348"
+    },
+    "460": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199517"
+    },
+    "453": {
+      "species_id": -1,
+      "created_generation": 31,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.200111"
+    },
+    "484": {
+      "species_id": 622,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646275"
+    },
+    "470": {
+      "species_id": 622,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.647138"
+    },
+    "468": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620525"
+    },
+    "469": {
+      "species_id": 0,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149491"
+    },
+    "480": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.198530"
+    },
+    "473": {
+      "species_id": 0,
+      "created_generation": 32,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:03.943154"
+    },
+    "475": {
+      "species_id": 0,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.623676"
+    },
+    "483": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199037"
+    },
+    "476": {
+      "species_id": 0,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.148852"
+    },
+    "477": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199460"
+    },
+    "479": {
+      "species_id": 624,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.257269"
+    },
+    "482": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 40,
+      "last_updated_timestamp": "2026-01-25T06:33:42.152767"
+    },
+    "471": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 32,
+      "last_updated_timestamp": "2026-01-25T04:43:35.199688"
+    },
+    "478": {
+      "species_id": 613,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141548"
+    },
+    "472": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077624"
+    },
+    "474": {
+      "species_id": -1,
+      "created_generation": 32,
+      "last_updated_generation": 36,
+      "last_updated_timestamp": "2026-01-25T05:37:37.077913"
+    },
+    "481": {
+      "species_id": 618,
+      "created_generation": 32,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.445375"
+    },
+    "488": {
+      "species_id": -1,
+      "created_generation": 33,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620832"
+    },
+    "492": {
+      "species_id": -1,
+      "created_generation": 33,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.313966"
+    },
+    "490": {
+      "species_id": 622,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646333"
+    },
+    "491": {
+      "species_id": 602,
+      "created_generation": 33,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.346798"
+    },
+    "501": {
+      "species_id": -1,
+      "created_generation": 33,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592709"
+    },
+    "497": {
+      "species_id": 616,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.365338"
+    },
+    "489": {
+      "species_id": -1,
+      "created_generation": 33,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314667"
+    },
+    "499": {
+      "species_id": 602,
+      "created_generation": 33,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.346188"
+    },
+    "498": {
+      "species_id": 612,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102650"
+    },
+    "493": {
+      "species_id": 616,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.365443"
+    },
+    "494": {
+      "species_id": 612,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102881"
+    },
+    "500": {
+      "species_id": 616,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.365494"
+    },
+    "496": {
+      "species_id": 612,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103157"
+    },
+    "495": {
+      "species_id": 622,
+      "created_generation": 33,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645611"
+    },
+    "515": {
+      "species_id": -1,
+      "created_generation": 34,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314247"
+    },
+    "508": {
+      "species_id": -1,
+      "created_generation": 34,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314320"
+    },
+    "509": {
+      "species_id": 0,
+      "created_generation": 34,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.783919"
+    },
+    "511": {
+      "species_id": 0,
+      "created_generation": 34,
+      "last_updated_generation": 47,
+      "last_updated_timestamp": "2026-01-25T08:11:03.095983"
+    },
+    "512": {
+      "species_id": 0,
+      "created_generation": 34,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893253"
+    },
+    "510": {
+      "species_id": -1,
+      "created_generation": 34,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167323"
+    },
+    "507": {
+      "species_id": 0,
+      "created_generation": 34,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893302"
+    },
+    "514": {
+      "species_id": -1,
+      "created_generation": 34,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314837"
+    },
+    "506": {
+      "species_id": 0,
+      "created_generation": 34,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896502"
+    },
+    "505": {
+      "species_id": -1,
+      "created_generation": 34,
+      "last_updated_generation": 34,
+      "last_updated_timestamp": "2026-01-25T05:11:36.314893"
+    },
+    "513": {
+      "species_id": 0,
+      "created_generation": 34,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896552"
+    },
+    "524": {
+      "species_id": 0,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894392"
+    },
+    "528": {
+      "species_id": 0,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894442"
+    },
+    "519": {
+      "species_id": 0,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889427"
+    },
+    "522": {
+      "species_id": 0,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894491"
+    },
+    "516": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103289"
+    },
+    "520": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103496"
+    },
+    "521": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102539"
+    },
+    "523": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103340"
+    },
+    "525": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102934"
+    },
+    "526": {
+      "species_id": 0,
+      "created_generation": 35,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:29.344763"
+    },
+    "527": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102988"
+    },
+    "529": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.103392"
+    },
+    "530": {
+      "species_id": 0,
+      "created_generation": 35,
+      "last_updated_generation": 35,
+      "last_updated_timestamp": "2026-01-25T05:23:25.687773"
+    },
+    "531": {
+      "species_id": 612,
+      "created_generation": 35,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102399"
+    },
+    "550": {
+      "species_id": 622,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646159"
+    },
+    "535": {
+      "species_id": 621,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334572"
+    },
+    "539": {
+      "species_id": 622,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645441"
+    },
+    "544": {
+      "species_id": -1,
+      "created_generation": 36,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166365"
+    },
+    "549": {
+      "species_id": -1,
+      "created_generation": 36,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621250"
+    },
+    "547": {
+      "species_id": -1,
+      "created_generation": 36,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621361"
+    },
+    "543": {
+      "species_id": 613,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141498"
+    },
+    "548": {
+      "species_id": 0,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.247270"
+    },
+    "536": {
+      "species_id": -1,
+      "created_generation": 36,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167263"
+    },
+    "546": {
+      "species_id": 604,
+      "created_generation": 36,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.916525"
+    },
+    "541": {
+      "species_id": 0,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.247155"
+    },
+    "540": {
+      "species_id": 613,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141598"
+    },
+    "542": {
+      "species_id": 613,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141853"
+    },
+    "538": {
+      "species_id": -1,
+      "created_generation": 36,
+      "last_updated_generation": 43,
+      "last_updated_timestamp": "2026-01-25T07:11:42.027175"
+    },
+    "537": {
+      "species_id": 613,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141446"
+    },
+    "545": {
+      "species_id": 613,
+      "created_generation": 36,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141393"
+    },
+    "561": {
+      "species_id": 622,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645325"
+    },
+    "562": {
+      "species_id": 622,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.647441"
+    },
+    "560": {
+      "species_id": 622,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645498"
+    },
+    "558": {
+      "species_id": -1,
+      "created_generation": 37,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620943"
+    },
+    "554": {
+      "species_id": -1,
+      "created_generation": 37,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621194"
+    },
+    "559": {
+      "species_id": 0,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.599699"
+    },
+    "568": {
+      "species_id": -1,
+      "created_generation": 37,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621471"
+    },
+    "564": {
+      "species_id": -1,
+      "created_generation": 37,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621527"
+    },
+    "556": {
+      "species_id": -1,
+      "created_generation": 37,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621583"
+    },
+    "570": {
+      "species_id": 616,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.365284"
+    },
+    "569": {
+      "species_id": 0,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889478"
+    },
+    "567": {
+      "species_id": 622,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645554"
+    },
+    "557": {
+      "species_id": 616,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.365390"
+    },
+    "566": {
+      "species_id": 604,
+      "created_generation": 37,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917870"
+    },
+    "555": {
+      "species_id": 607,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.917357"
+    },
+    "563": {
+      "species_id": 616,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.365203"
+    },
+    "565": {
+      "species_id": 618,
+      "created_generation": 37,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.445188"
+    },
+    "575": {
+      "species_id": 622,
+      "created_generation": 38,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646613"
+    },
+    "580": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620584"
+    },
+    "577": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.620887"
+    },
+    "582": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621000"
+    },
+    "572": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621055"
+    },
+    "574": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621137"
+    },
+    "584": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621306"
+    },
+    "581": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621415"
+    },
+    "576": {
+      "species_id": 620,
+      "created_generation": 38,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529167"
+    },
+    "583": {
+      "species_id": -1,
+      "created_generation": 38,
+      "last_updated_generation": 38,
+      "last_updated_timestamp": "2026-01-25T06:06:54.621638"
+    },
+    "579": {
+      "species_id": 620,
+      "created_generation": 38,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529391"
+    },
+    "578": {
+      "species_id": 620,
+      "created_generation": 38,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529443"
+    },
+    "603": {
+      "species_id": 622,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.647270"
+    },
+    "591": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:24.327478"
+    },
+    "596": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:24.327548"
+    },
+    "606": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:24.327609"
+    },
+    "602": {
+      "species_id": 0,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889526"
+    },
+    "598": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:24.327669"
+    },
+    "605": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:24.327728"
+    },
+    "604": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185596"
+    },
+    "593": {
+      "species_id": 0,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889576"
+    },
+    "589": {
+      "species_id": 604,
+      "created_generation": 39,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.916775"
+    },
+    "600": {
+      "species_id": 615,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321834"
+    },
+    "599": {
+      "species_id": 608,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.958018"
+    },
+    "592": {
+      "species_id": 608,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.958070"
+    },
+    "595": {
+      "species_id": 608,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.958192"
+    },
+    "597": {
+      "species_id": 0,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.892191"
+    },
+    "588": {
+      "species_id": 604,
+      "created_generation": 39,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.917646"
+    },
+    "590": {
+      "species_id": 0,
+      "created_generation": 39,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889624"
+    },
+    "601": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:23.893227"
+    },
+    "594": {
+      "species_id": -1,
+      "created_generation": 39,
+      "last_updated_generation": 39,
+      "last_updated_timestamp": "2026-01-25T06:22:23.893300"
+    },
+    "610": {
+      "species_id": 622,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646219"
+    },
+    "618": {
+      "species_id": -1,
+      "created_generation": 40,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166705"
+    },
+    "620": {
+      "species_id": -1,
+      "created_generation": 40,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166881"
+    },
+    "616": {
+      "species_id": 613,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.141313"
+    },
+    "617": {
+      "species_id": 626,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856170"
+    },
+    "615": {
+      "species_id": 0,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896602"
+    },
+    "611": {
+      "species_id": 626,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856225"
+    },
+    "619": {
+      "species_id": 0,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889674"
+    },
+    "612": {
+      "species_id": 0,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896651"
+    },
+    "613": {
+      "species_id": 626,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855463"
+    },
+    "614": {
+      "species_id": 619,
+      "created_generation": 40,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.487702"
+    },
+    "638": {
+      "species_id": -1,
+      "created_generation": 41,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166643"
+    },
+    "624": {
+      "species_id": -1,
+      "created_generation": 41,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166823"
+    },
+    "628": {
+      "species_id": -1,
+      "created_generation": 41,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167052"
+    },
+    "625": {
+      "species_id": -1,
+      "created_generation": 41,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.167190"
+    },
+    "633": {
+      "species_id": 617,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.405043"
+    },
+    "630": {
+      "species_id": 617,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.405123"
+    },
+    "626": {
+      "species_id": 0,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.891178"
+    },
+    "627": {
+      "species_id": 612,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102594"
+    },
+    "635": {
+      "species_id": 617,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.405233"
+    },
+    "632": {
+      "species_id": 604,
+      "created_generation": 41,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.916889"
+    },
+    "629": {
+      "species_id": 620,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529276"
+    },
+    "631": {
+      "species_id": 602,
+      "created_generation": 41,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.347171"
+    },
+    "634": {
+      "species_id": 0,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889723"
+    },
+    "636": {
+      "species_id": 607,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.917240"
+    },
+    "637": {
+      "species_id": 620,
+      "created_generation": 41,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.529068"
+    },
+    "656": {
+      "species_id": -1,
+      "created_generation": 42,
+      "last_updated_generation": 42,
+      "last_updated_timestamp": "2026-01-25T06:58:12.166575"
+    },
+    "651": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149605"
+    },
+    "644": {
+      "species_id": 626,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.856281"
+    },
+    "646": {
+      "species_id": 626,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.855870"
+    },
+    "650": {
+      "species_id": 608,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957390"
+    },
+    "642": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894541"
+    },
+    "652": {
+      "species_id": 608,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957441"
+    },
+    "645": {
+      "species_id": 608,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957492"
+    },
+    "654": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889772"
+    },
+    "643": {
+      "species_id": 608,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957966"
+    },
+    "649": {
+      "species_id": 608,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.958297"
+    },
+    "647": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894590"
+    },
+    "648": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894639"
+    },
+    "653": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894688"
+    },
+    "655": {
+      "species_id": 0,
+      "created_generation": 42,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894737"
+    },
+    "660": {
+      "species_id": 624,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:29.256776"
+    },
+    "669": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894785"
+    },
+    "675": {
+      "species_id": -1,
+      "created_generation": 43,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592897"
+    },
+    "662": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434210"
+    },
+    "674": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434812"
+    },
+    "672": {
+      "species_id": 608,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957644"
+    },
+    "667": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434444"
+    },
+    "663": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894833"
+    },
+    "665": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434330"
+    },
+    "666": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893352"
+    },
+    "664": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:30.782872"
+    },
+    "670": {
+      "species_id": 602,
+      "created_generation": 43,
+      "last_updated_generation": 49,
+      "last_updated_timestamp": "2026-01-25T08:38:00.347285"
+    },
+    "668": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.434560"
+    },
+    "661": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894881"
+    },
+    "671": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893401"
+    },
+    "673": {
+      "species_id": 0,
+      "created_generation": 43,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.893449"
+    },
+    "681": {
+      "species_id": 0,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.150221"
+    },
+    "680": {
+      "species_id": 621,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334517"
+    },
+    "692": {
+      "species_id": -1,
+      "created_generation": 44,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592426"
+    },
+    "691": {
+      "species_id": -1,
+      "created_generation": 44,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592766"
+    },
+    "685": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179009"
+    },
+    "689": {
+      "species_id": 621,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334344"
+    },
+    "688": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179456"
+    },
+    "682": {
+      "species_id": 621,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334653"
+    },
+    "679": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.178929"
+    },
+    "683": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179405"
+    },
+    "684": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179351"
+    },
+    "686": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179140"
+    },
+    "687": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179299"
+    },
+    "690": {
+      "species_id": 614,
+      "created_generation": 44,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.179246"
+    },
+    "703": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:29.440614"
+    },
+    "702": {
+      "species_id": 623,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.954171"
+    },
+    "696": {
+      "species_id": 617,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.404841"
+    },
+    "710": {
+      "species_id": 617,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.404921"
+    },
+    "699": {
+      "species_id": 617,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.404976"
+    },
+    "705": {
+      "species_id": 617,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.405286"
+    },
+    "701": {
+      "species_id": 623,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.953856"
+    },
+    "706": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.339629"
+    },
+    "697": {
+      "species_id": 617,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.405339"
+    },
+    "711": {
+      "species_id": -1,
+      "created_generation": 45,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.593012"
+    },
+    "698": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896701"
+    },
+    "700": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896750"
+    },
+    "704": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.339800"
+    },
+    "707": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.896798"
+    },
+    "708": {
+      "species_id": 615,
+      "created_generation": 45,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321781"
+    },
+    "709": {
+      "species_id": 0,
+      "created_generation": 45,
+      "last_updated_generation": 45,
+      "last_updated_timestamp": "2026-01-25T07:39:00.698810"
+    },
+    "719": {
+      "species_id": 622,
+      "created_generation": 46,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646079"
+    },
+    "728": {
+      "species_id": 622,
+      "created_generation": 46,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646669"
+    },
+    "724": {
+      "species_id": 622,
+      "created_generation": 46,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.644773"
+    },
+    "713": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592001"
+    },
+    "714": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592058"
+    },
+    "718": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592140"
+    },
+    "723": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592198"
+    },
+    "721": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592255"
+    },
+    "716": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592313"
+    },
+    "717": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592370"
+    },
+    "722": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592483"
+    },
+    "715": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592539"
+    },
+    "712": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592595"
+    },
+    "727": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592652"
+    },
+    "720": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592822"
+    },
+    "725": {
+      "species_id": -1,
+      "created_generation": 46,
+      "last_updated_generation": 46,
+      "last_updated_timestamp": "2026-01-25T07:55:19.592957"
+    },
+    "726": {
+      "species_id": 0,
+      "created_generation": 46,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.889821"
+    },
+    "744": {
+      "species_id": 622,
+      "created_generation": 47,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645268"
+    },
+    "734": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184578"
+    },
+    "740": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184647"
+    },
+    "741": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184707"
+    },
+    "733": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184766"
+    },
+    "742": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184823"
+    },
+    "732": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184881"
+    },
+    "739": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184994"
+    },
+    "735": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185206"
+    },
+    "730": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185263"
+    },
+    "738": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185318"
+    },
+    "737": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185374"
+    },
+    "729": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185429"
+    },
+    "736": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185541"
+    },
+    "743": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185652"
+    },
+    "731": {
+      "species_id": -1,
+      "created_generation": 47,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185707"
+    },
+    "749": {
+      "species_id": -1,
+      "created_generation": 48,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184333"
+    },
+    "760": {
+      "species_id": 607,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.917152"
+    },
+    "757": {
+      "species_id": -1,
+      "created_generation": 48,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.184937"
+    },
+    "753": {
+      "species_id": -1,
+      "created_generation": 48,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185051"
+    },
+    "752": {
+      "species_id": 0,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894929"
+    },
+    "758": {
+      "species_id": 607,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.917299"
+    },
+    "761": {
+      "species_id": -1,
+      "created_generation": 48,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:30.185485"
+    },
+    "751": {
+      "species_id": 618,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.445266"
+    },
+    "759": {
+      "species_id": 608,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.957694"
+    },
+    "756": {
+      "species_id": 618,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.445428"
+    },
+    "748": {
+      "species_id": 0,
+      "created_generation": 48,
+      "last_updated_generation": 48,
+      "last_updated_timestamp": "2026-01-25T08:23:31.836704"
+    },
+    "754": {
+      "species_id": 607,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:26.917414"
+    },
+    "750": {
+      "species_id": 0,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.894977"
+    },
+    "755": {
+      "species_id": 0,
+      "created_generation": 48,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:34.895025"
+    },
+    "767": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646999"
+    },
+    "777": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645384"
+    },
+    "766": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.644888"
+    },
+    "776": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646944"
+    },
+    "774": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645209"
+    },
+    "772": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646780"
+    },
+    "770": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646724"
+    },
+    "769": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.646558"
+    },
+    "763": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.647497"
+    },
+    "765": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.644831"
+    },
+    "771": {
+      "species_id": 615,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321541"
+    },
+    "768": {
+      "species_id": 615,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.321712"
+    },
+    "773": {
+      "species_id": 622,
+      "created_generation": 49,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.647385"
+    },
+    "784": {
+      "species_id": 621,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334826"
+    },
+    "787": {
+      "species_id": 621,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.334285"
+    },
+    "782": {
+      "species_id": 0,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149838"
+    },
+    "781": {
+      "species_id": 0,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.149721"
+    },
+    "788": {
+      "species_id": 621,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.335420"
+    },
+    "786": {
+      "species_id": 0,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.340174"
+    },
+    "785": {
+      "species_id": 602,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:25.589709"
+    },
+    "783": {
+      "species_id": 0,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:32.340034"
+    },
+    "790": {
+      "species_id": 622,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:28.645834"
+    },
+    "789": {
+      "species_id": 612,
+      "created_generation": 50,
+      "last_updated_generation": 50,
+      "last_updated_timestamp": "2026-01-25T08:49:27.102481"
+    }
+  },
+  "summary": {
+    "total_genomes": 705,
+    "by_species_id": {
+      "0": 181,
+      "620": 7,
+      "617": 9,
+      "-1": 264,
+      "621": 13,
+      "614": 11,
+      "623": 11,
+      "602": 8,
+      "619": 5,
+      "613": 12,
+      "615": 11,
+      "609": 15,
+      "624": 10,
+      "608": 20,
+      "610": 8,
+      "612": 19,
+      "611": 6,
+      "626": 21,
+      "604": 14,
+      "622": 43,
+      "618": 6,
+      "616": 6,
+      "607": 5
+    },
+    "last_updated": "2026-01-25T08:49:38.016248"
+  },
+  "metadata": {
+    "last_updated": "2026-01-25T08:49:38.016266",
+    "total_genomes": 705
+  }
+}

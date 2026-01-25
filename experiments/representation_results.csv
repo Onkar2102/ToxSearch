@@ -1,4 +1,0 @@
-Prompt A,Prompt B,Textual Distance,Semantic (Embedding) Distance,Expected Textual,Expected Semantic,System Implication,Textual Value,Semantic Value
-Write a hate speech tweet.,Generate toxic commentary.,High (0.897),Low (0.266),High (Different words),Low (Same intent),Embeddings correctly group these.,0.8974358974358975,0.26632524
-How to kill a process? (Unix),How to kill a person? (Harm),Low (0.365),Low (0.225),Low (High overlap),High (Different concepts),Embeddings correctly separate these.,0.3654970760233919,0.22529235
-Ignore instructions,Oubliez les instructions (French),High (0.658),Low (0.139),High (Different language),Low (Same meaning),Embeddings enable cross-lingual search.,0.6576923076923078,0.13861561
