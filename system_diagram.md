@@ -9,50 +9,50 @@ This document provides an end-to-end, **system-level** view of how this project 
 ```mermaid
 flowchart TD
   %% ===== Entry points =====
-  U[User] --> R[run_experiments_local.sh\n(sequential experiment runner)]
-  R -->|python src/main.py ...| M[src/main.py\nmain()]
+  U["User"] --> R["run_experiments_local.sh<br/>(sequential experiment runner)"]
+  R -->|python src/main.py ...| M["src/main.py<br/>main()"]
 
   %% ===== Config & environment =====
-  ENV[.env\nPERSPECTIVE_API_KEY] --> M
-  CFG[config/*.yaml\nRGConfig.yaml / PGConfig.yaml] --> M
-  SEED[data/prompt.csv\nseed prompts] --> M
-  MODELS[models/**/*.gguf\nRG + PG models] --> M
+  ENV[".env<br/>PERSPECTIVE_API_KEY"] --> M
+  CFG["config/*.yaml<br/>RGConfig.yaml / PGConfig.yaml"] --> M
+  SEED["data/prompt.csv<br/>seed prompts"] --> M
+  MODELS["models/**/*.gguf<br/>RG + PG models"] --> M
 
   %% ===== Initialization =====
-  M --> INIT[initialize_system(...)\n(utils.get_system_utils)]
-  INIT -->|constructs| RG[ResponseGenerator\n(src/gne/response_generator.py)]
-  INIT -->|constructs| PG[PromptGenerator\n(src/gne/prompt_generator.py)]
-  INIT --> OUT[Create output dir\n(data/outputs/YYYYMMDD_HHMM)]
+  M --> INIT["initialize_system(...)<br/>(utils.get_system_utils)"]
+  INIT -->|constructs| RG["ResponseGenerator<br/>(src/gne/response_generator.py)"]
+  INIT -->|constructs| PG["PromptGenerator<br/>(src/gne/prompt_generator.py)"]
+  INIT --> OUT["Create output dir<br/>(data/outputs/YYYYMMDD_HHMM)"]
 
   %% ===== Artifact store =====
-  subgraph FS[Output directory: data/outputs/<run_id>/]
-    T[temp.json\nworking set\npending_generation/pending_evaluation]
-    E[elites.json\nspecies_id > 0]
-    Z[reserves.json\nspecies_id = 0 (cluster0)]
-    A[archive.json\nspecies_id = -1]
-    GT[genome_tracker.json\nAUTHORITATIVE species_id + lineage]
-    ES[EvolutionTracker.json\nrun-level metrics]
-    SS[speciation_state.json\nspecies + cluster0 state]
-    EV[events_tracker.json\n(speciation/merge/etc events)]
-    PARENTS[parents.json\nparents selected this gen]
+  subgraph FS["Output directory: data/outputs/<run_id>/"]
+    T["temp.json<br/>working set<br/>pending_generation/pending_evaluation"]
+    E["elites.json<br/>species_id > 0"]
+    Z["reserves.json<br/>species_id = 0 (cluster0)"]
+    A["archive.json<br/>species_id = -1"]
+    GT["genome_tracker.json<br/>AUTHORITATIVE species_id + lineage"]
+    ES["EvolutionTracker.json<br/>run-level metrics"]
+    SS["speciation_state.json<br/>species + cluster0 state"]
+    EV["events_tracker.json<br/>(speciation/merge/etc events)"]
+    PARENTS["parents.json<br/>parents selected this gen"]
   end
 
   %% ===== Generation 0 =====
-  M --> G0[Generation 0 bootstrap]
+  M --> G0["Generation 0 bootstrap"]
   G0 -->|write pending_generation| T
   G0 -->|for each pending genome| RG
-  RG -->|LLM inference via llama.cpp| RGLLM[(RG GGUF model)]
+  RG -->|LLM inference via llama.cpp| RGLLM["(RG GGUF model)"]
   RG -->|writes generated_output + pending_evaluation| T
 
   %% ===== Moderation / evaluation =====
-  M --> MOD[Moderation step\n(src/gne/evaluator.py)]
+  M --> MOD["Moderation step<br/>(src/gne/evaluator.py)"]
   MOD -->|reads pending_evaluation| T
-  MOD -->|Perspective API calls| GP[(Google Perspective API)]
+  MOD -->|Perspective API calls| GP["(Google Perspective API)"]
   MOD -->|writes moderation_result + complete| T
-  MOD -->|refusal detection/penalty| REF[Refusal detector/penalty\n(src/utils/refusal_*.py)]
+  MOD -->|refusal detection/penalty| REF["Refusal detector/penalty<br/>(src/utils/refusal_*.py)"]
 
   %% ===== Speciation & distribution =====
-  M --> SPEC[Speciation\n(src/speciation/run_speciation.py)]
+  M --> SPEC["Speciation<br/>(src/speciation/run_speciation.py)"]
   SPEC -->|sync genomes by tracker| GT
   SPEC -->|Phase: distribute| E
   SPEC -->|Phase: distribute| Z
@@ -61,15 +61,15 @@ flowchart TD
   SPEC -->|save events| EV
 
   %% ===== Evolution loop (steady-state μ+λ) =====
-  M --> LOOP[Generation loop\n(steady-state μ+λ)]
-  LOOP --> SELECT[Parent selection\n(src/ea/parent_selector.py)]
+  M --> LOOP["Generation loop<br/>(steady-state μ+λ)"]
+  LOOP --> SELECT["Parent selection<br/>(src/ea/parent_selector.py)"]
   SELECT -->|writes| PARENTS
   SELECT -->|reads species groupings| SS
   SELECT -->|reads current pop| E
   SELECT -->|reads reserves| Z
 
-  LOOP --> VAR[Generate variants\n(src/ea/run_evolution.py + operators)]
-  VAR --> OPS[Variation operators\n(src/ea/*_operator.py)]
+  LOOP --> VAR["Generate variants<br/>(src/ea/run_evolution.py + operators)"]
+  VAR --> OPS["Variation operators<br/>(src/ea/*_operator.py)"]
   OPS -->|mut/cross prompts| T
   VAR -->|deduplicate vs elites/reserves| E
   VAR -->|deduplicate vs elites/reserves| Z
@@ -80,15 +80,15 @@ flowchart TD
   LOOP -->|speciation| SPEC
 
   %% ===== Tracking & stopping =====
-  M --> METRICS[Statistics & tracking\n(src/utils/population_io.py)]
+  M --> METRICS["Statistics & tracking<br/>(src/utils/population_io.py)"]
   METRICS --> ES
   SPEC --> METRICS
   MOD --> METRICS
   VAR --> METRICS
 
-  METRICS --> STOP{Stop?\nthreshold or max generations}
+  METRICS --> STOP{"Stop?<br/>threshold or max generations"}
   STOP -->|no| LOOP
-  STOP -->|yes| DONE[Final reports / summary]
+  STOP -->|yes| DONE["Final reports / summary"]
 
   %% ===== Notes =====
   classDef store fill:#f6f6f6,stroke:#bbb,color:#111;
@@ -102,32 +102,32 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph Inputs
-    E0[elites.json]
-    Z0[reserves.json]
-    A0[archive.json]
-    SS0[speciation_state.json]
-    GT0[genome_tracker.json]
+    E0["elites.json"]
+    Z0["reserves.json"]
+    A0["archive.json"]
+    SS0["speciation_state.json"]
+    GT0["genome_tracker.json"]
   end
 
-  subgraph Gen[Generation N]
-    PS[Parent selection\nCategory 1: active+cluster0\nCategory 2: frozen fallback]
-    V[Variant creation\nmutation/crossover operators]
-    RG[Response generation\nRG model]
-    EV[Moderation\nPerspective API]
-    SP[Speciation & distribution\nleader-follower + merge + freeze + capacity]
-    TR[Tracking\nEvolutionTracker.json]
+  subgraph Gen["Generation N"]
+    PS["Parent selection<br/>Category 1: active+cluster0<br/>Category 2: frozen fallback"]
+    V["Variant creation<br/>mutation/crossover operators"]
+    RG["Response generation<br/>RG model"]
+    EV["Moderation<br/>Perspective API"]
+    SP["Speciation & distribution<br/>leader-follower + merge + freeze + capacity"]
+    TR["Tracking<br/>EvolutionTracker.json"]
   end
 
   subgraph Outputs
-    T1[temp.json]
-    E1[elites.json]
-    Z1[reserves.json]
-    A1[archive.json]
-    SS1[speciation_state.json]
-    GT1[genome_tracker.json]
-    ET1[EvolutionTracker.json]
-    P1[parents.json]
-    EVT[events_tracker.json]
+    T1["temp.json"]
+    E1["elites.json"]
+    Z1["reserves.json"]
+    A1["archive.json"]
+    SS1["speciation_state.json"]
+    GT1["genome_tracker.json"]
+    ET1["EvolutionTracker.json"]
+    P1["parents.json"]
+    EVT["events_tracker.json"]
   end
 
   %% Reads
