@@ -52,6 +52,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import seaborn as sns
 from scipy import stats
 from scipy.stats import mannwhitneyu
@@ -800,7 +801,12 @@ print(f"\nSaved: {OUT / 'rq1_stats.json'}")
 # Section 5: Figure 1 - Cumulative Population Max Toxicity and Cumulative Max Avg Fitness
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(12, 7))
+# GECCO/ACM two-column friendly sizing
+# Single-column width is ~3.33 in; use ~3.35 for safety.
+FIG_W_IN = 3.35
+FIG_H_IN = 2.10
+
+fig, ax = plt.subplots(figsize=(FIG_W_IN, FIG_H_IN))
 
 # Collect series by condition (runs 01-05)
 baseline_pop_max_series = [cumulative_pop_max_tox_data[f"run0{i}_comb"] for i in range(1, 6)]
@@ -810,67 +816,73 @@ baseline_avg_fit_series = [cumulative_max_avg_fit_data[f"run0{i}_comb"] for i in
 speciated_avg_fit_series = [cumulative_max_avg_fit_data[f"run0{i}_speciated"] for i in range(1, 6)]
 
 # Pad to same length
-max_len = max(max(len(s) for s in baseline_pop_max_series), max(len(s) for s in speciated_pop_max_series))
+max_len = max(
+    max(len(s) for s in baseline_pop_max_series) if baseline_pop_max_series else 0,
+    max(len(s) for s in speciated_pop_max_series) if speciated_pop_max_series else 0,
+)
 
 def pad_series(series_list, max_len):
     padded = []
     for s in series_list:
         if len(s) < max_len:
-            padded.append(s + [s[-1]] * (max_len - len(s)) if s else [0] * max_len)
+            padded.append(s + ([s[-1]] * (max_len - len(s))) if s else ([0.0] * max_len))
         else:
             padded.append(s[:max_len])
-    return np.array(padded)
+    return np.array(padded, dtype=np.float32)
 
 baseline_pop_max_arr = pad_series(baseline_pop_max_series, max_len)
 speciated_pop_max_arr = pad_series(speciated_pop_max_series, max_len)
 baseline_avg_fit_arr = pad_series(baseline_avg_fit_series, max_len)
 speciated_avg_fit_arr = pad_series(speciated_avg_fit_series, max_len)
 
-# Compute maximum across runs (to show the best performance)
 generations = np.arange(max_len)
 
+# Compute maximum across runs (to show the best performance) for cumulative max toxicity
 base_pop_max_max = np.max(baseline_pop_max_arr, axis=0)
 spec_pop_max_max = np.max(speciated_pop_max_arr, axis=0)
 
+# Median for avg fitness
 base_avg_fit_median = np.median(baseline_avg_fit_arr, axis=0)
 spec_avg_fit_median = np.median(speciated_avg_fit_arr, axis=0)
 
-# Plot main lines (cumulative population max toxicity - showing maximum across runs)
-ax.plot(generations, base_pop_max_max, color=COLOR_BASELINE, linewidth=2.5, linestyle='-')
-ax.plot(generations, spec_pop_max_max, color=COLOR_SPECIATION, linewidth=2.5, linestyle='-')
+# Plot cumulative max toxicity (maximum across all runs for each generation) - solid lines
+l1, = ax.plot(generations, base_pop_max_max, color=COLOR_BASELINE, linewidth=1.8, linestyle='-', label='Baseline')
+l2, = ax.plot(generations, spec_pop_max_max, color=COLOR_SPECIATION, linewidth=1.8, linestyle='-', label='Speciated')
 
 # Plot dotted lines (cumulative max avg_fitness_generation)
-ax.plot(generations, base_avg_fit_median, color=COLOR_BASELINE, linewidth=2.0, 
-        linestyle='--', alpha=0.8)
-ax.plot(generations, spec_avg_fit_median, color=COLOR_SPECIATION, linewidth=2.0, 
-        linestyle='--', alpha=0.8)
+ax.plot(generations, base_avg_fit_median, color=COLOR_BASELINE, linewidth=1.4, linestyle='--', alpha=0.8)
+ax.plot(generations, spec_avg_fit_median, color=COLOR_SPECIATION, linewidth=1.4, linestyle='--', alpha=0.8)
 
-# Publication-ready styling (matching analysis.py standards)
-ax.set_xlabel("Generation", fontsize=11, fontweight='bold')
-ax.set_ylabel("Toxicity Score", fontsize=11, fontweight='bold')
-# Remove title as requested
+# Labels (GECCO-friendly sizes)
+ax.set_xlabel("Generation", fontsize=8, fontweight='bold')
+ax.set_ylabel("Toxicity Score", fontsize=8, fontweight='bold')
 
-# Create simple legend showing only baseline vs speciated colors
-legend_elements = [
-    Line2D([0], [0], color=COLOR_BASELINE, linewidth=2.5, label='Baseline'),
-    Line2D([0], [0], color=COLOR_SPECIATION, linewidth=2.5, label='Speciated')
-]
-ax.legend(handles=legend_elements, loc='upper left', frameon=False, fontsize=9)
+# Ticks
+ax.tick_params(axis='both', labelsize=7, width=0.8)
 
-ax.set_xlim(left=0, right=max_len - 1)
-ax.set_ylim(bottom=0, top=1.0)
-ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.7)
-ax.tick_params(axis='both', labelsize=9)
-ax.spines['bottom'].set_linewidth(1.0)
-ax.spines['left'].set_linewidth(1.0)
+# Limits
+ax.set_xlim(0, max_len - 1)
+ax.set_ylim(0.0, 1.0)
+
+# Grid + spines
+ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.6)
+ax.set_axisbelow(True)
+for side in ['bottom', 'left']:
+    ax.spines[side].set_linewidth(0.9)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
-ax.set_axisbelow(True)  # Grid behind plot elements
 
-plt.tight_layout()
+# Legend: colour only for Baseline / Speciated (solid = toxicity, dotted = avg fitness)
+legend_elements = [
+    Patch(facecolor=COLOR_BASELINE, edgecolor='none', label='Baseline'),
+    Patch(facecolor=COLOR_SPECIATION, edgecolor='none', label='Speciated'),
+]
+ax.legend(handles=legend_elements, loc='upper left', frameon=False, fontsize=7)
+
+plt.tight_layout(pad=0.2)
 plt.savefig(OUT / "figures" / "fig1_trajectory.png", dpi=300, bbox_inches='tight')
 plt.savefig(OUT / "figures" / "fig1_trajectory.pdf", bbox_inches='tight')
-plt.close()  # Close figure to free memory
+plt.close()
 print("Saved: fig1_trajectory.png/pdf")
 
 # =============================================================================
@@ -1145,10 +1157,11 @@ if BERTOPIC_AVAILABLE:
     print(f"\nNovel Topic Rate (Speciated): {np.mean(novel_rates):.3f} ± {np.std(novel_rates):.3f}")
     print(f"  (Fraction of speciated topics not found in baseline)")
     
-    # Create Figure 2 Alternative: Topic Diversity
+    # Create Figure 2 Alternative: Topic Diversity (formatting aligned with Fig 1 / Fig 2 diversity)
     print("\nCreating Figure 2 Alternative: Topic-as-Species Diversity...")
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    # Two-panel width ~2× single-column; height consistent with other figures
+    fig, axes = plt.subplots(1, 2, figsize=(6.8, 2.6))
     
     # Panel A: Effective number of topics (N_1)
     ax = axes[0]
@@ -1160,22 +1173,26 @@ if BERTOPIC_AVAILABLE:
         "N_1": list(baseline_N1) + list(spec_N1)
     })
     
-    sns.boxplot(data=data_N1, x="Condition", y="N_1", ax=ax, palette=[COLOR_BASELINE, COLOR_SPECIATION],
-                linewidth=1.5, width=0.6)
-    sns.stripplot(data=data_N1, x="Condition", y="N_1", ax=ax, color="black", alpha=0.6, size=6, linewidth=0.5)
-    ax.set_ylabel("Effective Number of Topics (N₁)", fontweight='bold')
-    ax.set_xlabel("Condition", fontweight='bold')
-    ax.set_title("(A) Topic Diversity: Effective Topics", fontweight='bold', pad=10)
-    ax.spines['bottom'].set_linewidth(1.2)
-    ax.spines['left'].set_linewidth(1.2)
-    
-    # Statistical test
+    # Same colours as Fig 1 / Fig 2: Baseline #00B8D9, Speciated #FF5630
+    sns.boxplot(data=data_N1, x="Condition", y="N_1", ax=ax,
+                order=["Baseline", "Speciated"],
+                palette={"Baseline": COLOR_BASELINE, "Speciated": COLOR_SPECIATION},
+                linewidth=0.7, width=0.6)
+    sns.stripplot(data=data_N1, x="Condition", y="N_1", ax=ax, color="black", alpha=0.5, size=2.5, linewidth=0.3)
+    ax.set_ylabel(r"Effective Number of Topics ($N_1$)", fontsize=8, fontweight='bold')
+    ax.set_xlabel("Condition", fontsize=8, fontweight='bold')
+    # Statistical test and title with p, d
     if len(baseline_N1) > 0 and len(spec_N1) > 0:
-        _, p = mannwhitneyu(baseline_N1, spec_N1, alternative='two-sided')
-        delta = cliffs_delta(spec_N1, baseline_N1)
-        ax.text(0.5, 0.95, f"p={p:.3f}, d={delta:.2f}", transform=ax.transAxes,
-                ha='center', fontsize=10, fontweight='bold',
-                bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.8, edgecolor='black', linewidth=1))
+        _, p_n1 = mannwhitneyu(baseline_N1, spec_N1, alternative='two-sided')
+        delta_n1 = cliffs_delta(spec_N1, baseline_N1)
+        ax.set_title(f"(A) Topic Diversity: Effective Topics (p={p_n1:.3f}, d={delta_n1:.2f})", fontsize=8, fontweight='bold', pad=6)
+    else:
+        ax.set_title("(A) Topic Diversity: Effective Topics", fontsize=8, fontweight='bold', pad=6)
+    ax.tick_params(axis='both', labelsize=7, width=0.8)
+    for side in ['bottom', 'left']:
+        ax.spines[side].set_linewidth(0.9)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     
     # Panel B: Raw topic count (K_topics)
     ax = axes[1]
@@ -1187,25 +1204,28 @@ if BERTOPIC_AVAILABLE:
         "K_topics": list(baseline_K) + list(spec_K)
     })
     
-    sns.boxplot(data=data_K, x="Condition", y="K_topics", ax=ax, palette=[COLOR_BASELINE, COLOR_SPECIATION],
-                linewidth=1.5, width=0.6)
-    sns.stripplot(data=data_K, x="Condition", y="K_topics", ax=ax, color="black", alpha=0.6, size=6, linewidth=0.5)
-    ax.set_ylabel("Number of Unique Topics", fontweight='bold')
-    ax.set_xlabel("Condition", fontweight='bold')
-    ax.set_title("(B) Topic Coverage: Unique Topics", fontweight='bold', pad=10)
-    ax.spines['bottom'].set_linewidth(1.2)
-    ax.spines['left'].set_linewidth(1.2)
-    
-    # Statistical test
+    # Same colours as Fig 1 / Fig 2: Baseline #00B8D9, Speciated #FF5630
+    sns.boxplot(data=data_K, x="Condition", y="K_topics", ax=ax,
+                order=["Baseline", "Speciated"],
+                palette={"Baseline": COLOR_BASELINE, "Speciated": COLOR_SPECIATION},
+                linewidth=0.7, width=0.6)
+    sns.stripplot(data=data_K, x="Condition", y="K_topics", ax=ax, color="black", alpha=0.5, size=2.5, linewidth=0.3)
+    ax.set_ylabel("Number of Unique Topics", fontsize=8, fontweight='bold')
+    ax.set_xlabel("Condition", fontsize=8, fontweight='bold')
+    # Statistical test and title with p, d
     if len(baseline_K) > 0 and len(spec_K) > 0:
-        _, p = mannwhitneyu(baseline_K, spec_K, alternative='two-sided')
-        delta = cliffs_delta(spec_K, baseline_K)
-        ax.text(0.5, 0.95, f"p={p:.3f}, d={delta:.2f}", transform=ax.transAxes,
-                ha='center', fontsize=10, fontweight='bold',
-                bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.8, edgecolor='black', linewidth=1))
+        _, p_k = mannwhitneyu(baseline_K, spec_K, alternative='two-sided')
+        delta_k = cliffs_delta(spec_K, baseline_K)
+        ax.set_title(f"(B) Topic Coverage: Unique Topics (p={p_k:.3f}, d={delta_k:.2f})", fontsize=8, fontweight='bold', pad=6)
+    else:
+        ax.set_title("(B) Topic Coverage: Unique Topics", fontsize=8, fontweight='bold', pad=6)
+    ax.tick_params(axis='both', labelsize=7, width=0.8)
+    for side in ['bottom', 'left']:
+        ax.spines[side].set_linewidth(0.9)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     
-    plt.suptitle("Topic-as-Species Diversity", y=1.02)
-    plt.tight_layout()
+    plt.tight_layout(pad=0.2)
     plt.savefig(OUT / "figures" / "fig2_topic_diversity.png", dpi=300, bbox_inches='tight')
     plt.savefig(OUT / "figures" / "fig2_topic_diversity.pdf", bbox_inches='tight')
     plt.close()
@@ -1334,38 +1354,51 @@ if BERTOPIC_AVAILABLE:
                 base_rgb = np.array([int(COLOR_SPECIATION[i:i+2], 16) for i in (1, 3, 5)]) / 255.0
             
             # Adjust brightness: higher toxicity = brighter (more intense), lower toxicity = darker
-            # Scale from 30% brightness (low toxicity) to 100% brightness (high toxicity)
-            brightness = 0.3 + 0.7 * intensity
+            # Limit shade range so it never goes too dark: floor at 0.70, ceiling at 0.95
+            brightness_floor = 0.70   # do not go darker than this (avoids very dark shades)
+            brightness_ceiling = 0.95
+            raw = brightness_floor + (brightness_ceiling - brightness_floor) * intensity
+            brightness = np.clip(raw, brightness_floor, brightness_ceiling)
             color = base_rgb * brightness
             
             return tuple(np.clip(color, 0, 1))
         
-        # Create 2D figure with MDS (X, Y) and Toxicity as color shade
-        fig, ax = plt.subplots(1, 1, figsize=(14, 12))
+        # Create 2D figure with MDS (X, Y) and Toxicity as color shade (formatting aligned with Fig 1/2)
+        fig, ax = plt.subplots(1, 1, figsize=(5.5, 5.0))
         
-        # Plot baseline points in 2D
-        # X, Y = MDS dimensions, color shade = toxicity score
+        # Plot baseline points in 2D (same base colours as Fig 1/2: Baseline #00B8D9, Speciated #FF5630)
         baseline_colors = [get_color_with_intensity(t, "baseline", baseline_max_tox_by_topic.get(t, 0.0))
                           for t in baseline_topics_plot]
-        scatter1 = ax.scatter(baseline_2d_mds[:, 0], baseline_2d_mds[:, 1],
-                            c=baseline_colors, s=50, alpha=0.7, 
-                            edgecolors='black', linewidths=0.3, label='Baseline', marker='o')
+        ax.scatter(baseline_2d_mds[:, 0], baseline_2d_mds[:, 1],
+                   c=baseline_colors, s=14, alpha=0.75,
+                   edgecolors='black', linewidths=0.2, marker='o')
         
         # Plot speciated points in 2D
         spec_colors = [get_color_with_intensity(t, "speciation", spec_max_tox_by_topic.get(t, 0.0))
                       for t in spec_topics_plot]
-        scatter2 = ax.scatter(spec_2d_mds[:, 0], spec_2d_mds[:, 1],
-                            c=spec_colors, s=50, alpha=0.7,
-                            edgecolors='black', linewidths=0.3, label='Speciated', marker='^')
+        ax.scatter(spec_2d_mds[:, 0], spec_2d_mds[:, 1],
+                   c=spec_colors, s=14, alpha=0.75,
+                   edgecolors='black', linewidths=0.2, marker='o')
         
-        ax.set_title("MDS Topic Visualization\n(Color = Condition, Shade Intensity = Max Toxicity per Topic)", 
-                    fontsize=14, fontweight='bold', pad=15)
-        ax.set_xlabel("MDS Dimension 1", fontsize=12, fontweight='bold')
-        ax.set_ylabel("MDS Dimension 2", fontsize=12, fontweight='bold')
-        ax.legend(loc='upper right', frameon=True, framealpha=0.95, fancybox=True, shadow=True)
-        ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
-        ax.spines['bottom'].set_linewidth(1.2)
-        ax.spines['left'].set_linewidth(1.2)
+        # Labels and ticks (match Fig 1/2)
+        ax.set_xlabel("MDS Dimension 1", fontsize=8, fontweight='bold')
+        ax.set_ylabel("MDS Dimension 2", fontsize=8, fontweight='bold')
+        ax.tick_params(axis='both', labelsize=7, width=0.8)
+        
+        # Legend: colour only for Baseline / Speciated (match Fig 1/2)
+        legend_elements = [
+            Patch(facecolor=COLOR_BASELINE, edgecolor='none', label='Baseline'),
+            Patch(facecolor=COLOR_SPECIATION, edgecolor='none', label='Speciated'),
+        ]
+        ax.legend(handles=legend_elements, loc='upper right', frameon=False, fontsize=7)
+        
+        # Grid + spines (match Fig 1/2)
+        ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.6)
+        ax.set_axisbelow(True)
+        for side in ['bottom', 'left']:
+            ax.spines[side].set_linewidth(0.9)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
             
         # Add toxicity range information as text annotation
         # Compute toxicity stats per topic for each condition
@@ -1402,7 +1435,7 @@ if BERTOPIC_AVAILABLE:
             f.write(summary_text)
         print(f"Saved toxicity summary to {OUT / 'rq1_topic_toxicity_summary.txt'}")
         
-        plt.tight_layout()
+        plt.tight_layout(pad=0.2)
         plt.savefig(OUT / "figures" / "fig3_topic_visualization_mds.png", dpi=300, bbox_inches='tight')
         plt.savefig(OUT / "figures" / "fig3_topic_visualization_mds.pdf", bbox_inches='tight')
         plt.close()
@@ -1494,8 +1527,8 @@ def plot_ecdf(data, ax, label, color):
     # ECDF: y = (number of values <= x) / n
     y = np.arange(1, n + 1) / n
     
-    # Plot step function
-    ax.plot(sorted_data, y, label=label, color=color, linewidth=2.5, drawstyle='steps-post')
+    # Plot step function (linewidth matches Fig 1 main lines)
+    ax.plot(sorted_data, y, label=label, color=color, linewidth=1.8, drawstyle='steps-post')
     
     return sorted_data, y
 
@@ -1508,12 +1541,12 @@ df_diversity_comparison = pd.DataFrame(baseline_diversity + speciated_diversity)
 baseline_toxicities = compute_prompt_toxicities(RUNS_BASELINE, "baseline")
 speciated_toxicities = compute_prompt_toxicities(RUNS_SPECIATION, "speciation")
 
-# Create figure with single ECDF plot
-fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+# Create figure with single ECDF plot (wider than Fig 1 for readability)
+fig, ax = plt.subplots(1, 1, figsize=(3.9, 2.6))
 
 # Plot ECDF curves
-baseline_sorted, baseline_y = plot_ecdf(baseline_toxicities, ax, "Baseline (elites+non_elites)", COLOR_BASELINE)
-spec_sorted, spec_y = plot_ecdf(speciated_toxicities, ax, "Speciated (elites+reserves)", COLOR_SPECIATION)
+baseline_sorted, baseline_y = plot_ecdf(baseline_toxicities, ax, "Baseline", COLOR_BASELINE)
+spec_sorted, spec_y = plot_ecdf(speciated_toxicities, ax, "Speciated", COLOR_SPECIATION)
 
 # Compute statistics for markers
 if len(baseline_toxicities) > 0:
@@ -1522,20 +1555,20 @@ if len(baseline_toxicities) > 0:
     baseline_top10 = np.percentile(baseline_toxicities, 100 - (10/len(baseline_toxicities)*100)) if len(baseline_toxicities) >= 10 else baseline_qmax
     baseline_top10_median = np.median(np.sort(baseline_toxicities)[-10:]) if len(baseline_toxicities) >= 10 else baseline_qmax
     
-    # Add vertical markers
-    ax.axvline(baseline_q95, color=COLOR_BASELINE, linestyle='--', linewidth=2, alpha=0.7)
-    ax.axvline(baseline_top10_median, color=COLOR_BASELINE, linestyle=':', linewidth=2, alpha=0.7)
-    ax.axvline(baseline_qmax, color=COLOR_BASELINE, linestyle='-', linewidth=2, alpha=0.7)
+    # Add vertical markers (thinner, subtler so ECDF curves stand out)
+    ax.axvline(baseline_q95, color=COLOR_BASELINE, linestyle='--', linewidth=1.2, alpha=0.55)
+    ax.axvline(baseline_top10_median, color=COLOR_BASELINE, linestyle=':', linewidth=1.2, alpha=0.55)
+    ax.axvline(baseline_qmax, color=COLOR_BASELINE, linestyle='-', linewidth=1.2, alpha=0.55)
 
 if len(speciated_toxicities) > 0:
     spec_q95 = np.percentile(speciated_toxicities, 95)
     spec_qmax = np.max(speciated_toxicities)
     spec_top10_median = np.median(np.sort(speciated_toxicities)[-10:]) if len(speciated_toxicities) >= 10 else spec_qmax
     
-    # Add vertical markers
-    ax.axvline(spec_q95, color=COLOR_SPECIATION, linestyle='--', linewidth=2, alpha=0.7)
-    ax.axvline(spec_top10_median, color=COLOR_SPECIATION, linestyle=':', linewidth=2, alpha=0.7)
-    ax.axvline(spec_qmax, color=COLOR_SPECIATION, linestyle='-', linewidth=2, alpha=0.7)
+    # Add vertical markers (thinner, subtler)
+    ax.axvline(spec_q95, color=COLOR_SPECIATION, linestyle='--', linewidth=1.2, alpha=0.55)
+    ax.axvline(spec_top10_median, color=COLOR_SPECIATION, linestyle=':', linewidth=1.2, alpha=0.55)
+    ax.axvline(spec_qmax, color=COLOR_SPECIATION, linestyle='-', linewidth=1.2, alpha=0.55)
 
 # Print ECDF statistics for validation
 print("\n" + "="*80)
@@ -1555,25 +1588,32 @@ if len(speciated_toxicities) > 0:
     print(f"  Total prompts: {len(speciated_toxicities)}")
 print("="*80 + "\n")
 
-ax.set_xlabel("Toxicity Score", fontweight='bold')
-ax.set_ylabel("ECDF", fontweight='bold')
-ax.set_title("Fig 2: Distribution of Discovered Prompt Toxicities", fontweight='bold', pad=15)
-ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+# Labels (GECCO-friendly, bold, same as Fig 1)
+ax.set_xlabel("Toxicity Score", fontsize=8, fontweight='bold')
+ax.set_ylabel("ECDF", fontsize=8, fontweight='bold')
+
+# Ticks
+ax.tick_params(axis='both', labelsize=7, width=0.8)
+
+# Limits
 ax.set_xlim(left=0, right=1.0)
 ax.set_ylim(bottom=0, top=1.0)
-ax.spines['bottom'].set_linewidth(1.2)
-ax.spines['left'].set_linewidth(1.2)
 
-# Add legend entries for statistical markers
+# Grid + spines (match Fig 1)
+ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.6)
+ax.set_axisbelow(True)
+for side in ['bottom', 'left']:
+    ax.spines[side].set_linewidth(0.9)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# Legend: colour only for Baseline/Speciated (match Fig 1; vertical markers are same colours)
 legend_elements = [
-    Line2D([0], [0], color=COLOR_BASELINE, linewidth=2.5, label="Baseline (elites+non_elites)"),
-    Line2D([0], [0], color=COLOR_SPECIATION, linewidth=2.5, label="Speciated (elites+reserves)"),
-    Line2D([0], [0], color='black', linestyle='--', linewidth=2, label="--- Qp95"),
-    Line2D([0], [0], color='black', linestyle=':', linewidth=2, label=".... Top-10 median"),
-    Line2D([0], [0], color='black', linestyle='-', linewidth=2, label="--- Qmax"),
+    Patch(facecolor=COLOR_BASELINE, edgecolor='none', label='Baseline'),
+    Patch(facecolor=COLOR_SPECIATION, edgecolor='none', label='Speciated'),
 ]
-ax.legend(handles=legend_elements, loc="lower right", frameon=True, framealpha=0.95, fancybox=True, shadow=True)
-plt.tight_layout()
+ax.legend(handles=legend_elements, loc='upper right', frameon=False, fontsize=7)
+plt.tight_layout(pad=0.2)
 plt.savefig(OUT / "figures" / "fig2_diversity_comparison.png", dpi=300, bbox_inches='tight')
 plt.savefig(OUT / "figures" / "fig2_diversity_comparison.pdf", bbox_inches='tight')
 plt.close()  # Close figure to free memory

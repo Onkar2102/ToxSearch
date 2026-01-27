@@ -696,12 +696,20 @@ for run_dir in RUNS_SPECIATION:
 print(f"\nCollected {len(all_species_data)} species from all runs")
 
 # Build word cloud: include ALL labels from ALL species
-# Frequency = count of occurrences (no weighting by species)
-# Color = assign each term to a species (if appears in multiple, pick one)
-# Shade = based on toxicity of the species that owns the term
+# Current weighting: term_freq[word] = number of species whose top-10 labels include that word.
+# Color = species that "owns" the term (if multiple, the one with higher max_toxicity).
+# Shade = toxicity of that species (darker = higher).
+#
+# Alternatives for word size (you can replace how term_freq is built):
+#   (1) Current: count of species containing the term (term_freq[term] += 1 per species).
+#   (2) Uniform: term_freq[term] = 1 for all terms → all words same size (use relative_scaling=0).
+#   (3) Toxicity-weighted: term_freq[term] = sum of max_toxicity over species that have it.
+#   (4) Rank-weighted: weight by inverse rank within each species (e.g. 1/rank), then sum.
+#   (5) Binary + toxicity: term_freq[term] = max(max_toxicity) over species that have it.
+# Export: term frequencies are written to fig2_term_frequencies.csv below.
 
 if HAS_WORDCLOUD and len(all_species_data) > 0:
-    # Count frequency of each term (simple count, no weighting)
+    # Count frequency of each term: how many species include it in their top-10 labels
     term_freq = defaultdict(int)
     term_to_species = {}  # term -> (run_id, species_id, max_toxicity) - tracks which species owns it
     
@@ -719,6 +727,17 @@ if HAS_WORDCLOUD and len(all_species_data) > 0:
     
     print(f"  Total unique terms: {len(term_freq)}")
     print(f"  Total term occurrences: {sum(term_freq.values())}")
+    
+    # Save term frequencies and owner species for inspection
+    # term_freq[word] = number of species whose top-10 labels include that word
+    freq_path = OUT / "fig2_term_frequencies.csv"
+    with open(freq_path, "w") as f:
+        f.write("term,count,run_id,species_id,max_toxicity\n")
+        for term in sorted(term_freq.keys(), key=lambda t: (-term_freq[t], t)):
+            cnt = term_freq[term]
+            run_id, sid, tox = term_to_species.get(term, ("", "", 0.0))
+            f.write(f"{repr(term)},{cnt},{run_id},{sid},{tox}\n")
+    print(f"  Saved term frequencies to {freq_path}")
     
     # Use global species color mapping for consistency across all figures
     species_to_color = {}  # (run_id, species_id) -> base RGB color
@@ -755,39 +774,35 @@ if HAS_WORDCLOUD and len(all_species_data) > 0:
         r, g, b = shade_rgb(base_color, max_tox)
         return f"rgb({int(r*255)},{int(g*255)},{int(b*255)})"
     
-    # Create word cloud with term frequencies
-    # Use rectangular aspect ratio (wider than tall)
-    fig, ax = plt.subplots(figsize=(20, 10))
+    # Create word cloud with term frequencies (formatting aligned with rq1 / rq2 fig4)
+    fig, ax = plt.subplots(figsize=(5.5, 3.5))
     ax.axis('off')
     
-    # Show ALL labels - no max_words limit (we have 620 unique terms)
-    # Use rectangular dimensions for word cloud (wider)
+    # Word cloud dimensions scaled to figure aspect
     wc = WordCloud(
-        width=2000,  # Wider
-        height=1200,  # Taller but still rectangular
+        width=1100,
+        height=700,
         background_color='white',
-        max_words=None,  # No limit - show all labels
+        max_words=None,
         prefer_horizontal=0.9,
         random_state=SEED,
         collocations=False,
-        min_font_size=6  # Smaller fonts to fit all words
+        min_font_size=5,
+        max_font_size=100
     ).generate_from_frequencies(term_freq)
     
-    # Recolor with our per-term species/toxicity mapping
     wc = wc.recolor(color_func=color_func, random_state=SEED)
     
     ax.imshow(wc, interpolation='bilinear')
-    ax.set_title("Mega Species Word Cloud\n(All species labels, shade = toxicity)", 
-                 fontsize=18, pad=20)
+    ax.set_title("Species labels (shade = toxicity)", fontsize=8, fontweight='bold', pad=6)
     
-    # Add annotation showing coverage
     total_labels_in_wc = len([w for w in wc.words_.keys()])
-    ax.text(0.02, 0.02, 
-            f"All {total_labels_in_wc} unique labels from {len(all_species_data)} species",
-            transform=ax.transAxes, ha='left', fontsize=11,
-            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    ax.text(0.02, 0.02,
+            f"{total_labels_in_wc} terms from {len(all_species_data)} species",
+            transform=ax.transAxes, ha='left', fontsize=7,
+            bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, linewidth=0.5))
     
-    plt.tight_layout()
+    plt.tight_layout(pad=0.2)
     plt.savefig(OUT / "figures" / "fig2_semantic_map_wordcloud.png", dpi=300, bbox_inches='tight')
     plt.savefig(OUT / "figures" / "fig2_semantic_map_wordcloud.pdf", bbox_inches='tight')
     plt.close()
@@ -1006,7 +1021,8 @@ if HAS_NETWORKX:
         print(f"  - Found {len(leader_positions)} species with leader positions for radius circles")
         
         if len(all_genome_data) > 0:
-            fig, ax = plt.subplots(figsize=(12, 12))  # Square figure
+            # Formatting aligned with rq1 figures: compact size, spines, grid, labels
+            fig, ax = plt.subplots(figsize=(5.5, 5.0))
             
             # Separate genomes by type (only leaders and outliers, no followers)
             leader_genomes = [g for g in all_genome_data if g["is_leader"]]
@@ -1053,9 +1069,9 @@ if HAS_NETWORKX:
                     pos, circle_radius,
                     fill=False,
                     edgecolor='gray',
-                    linestyle='--',  # Dotted line
-                    linewidth=0.5,
-                    alpha=0.15  # Very faint
+                    linestyle='--',
+                    linewidth=0.3,
+                    alpha=0.15
                 )
                 ax.add_patch(circle)
             
@@ -1068,7 +1084,7 @@ if HAS_NETWORKX:
                 scatter_outliers = ax.scatter(
                     outlier_positions[:, 0], outlier_positions[:, 1],
                     c=outlier_colors,
-                    s=15,  # Small dots
+                    s=6,  # Small dots (scaled for compact figure)
                     alpha=0.05,  # Very very faint
                     edgecolors='none'
                 )
@@ -1077,8 +1093,8 @@ if HAS_NETWORKX:
             if leader_genomes:
                 leader_positions_arr = np.array([g["pos_2d"] for g in leader_genomes])
                 leader_toxicities = [g["toxicity"] for g in leader_genomes]
-                # Size: based on toxicity
-                leader_sizes = [50 + 200 * ((tox - min_tox) / tox_range) if tox_range > 0 else 100 
+                # Size: based on toxicity (scaled for compact figure)
+                leader_sizes = [18 + 72 * ((tox - min_tox) / tox_range) if tox_range > 0 else 36 
                                for tox in leader_toxicities]
                 
                 # Color: based on species (consistent across all figures)
@@ -1088,9 +1104,9 @@ if HAS_NETWORKX:
                     leader_positions_arr[:, 0], leader_positions_arr[:, 1],
                     c=leader_colors,
                     s=leader_sizes,
-                    alpha=0.8,  # Normal visibility
+                    alpha=0.8,
                     edgecolors='black',
-                    linewidths=0.2,  # Reduced border thickness
+                    linewidths=0.15,
                 )
             
             # No labels for now (as requested)
@@ -1213,7 +1229,7 @@ if HAS_NETWORKX:
                             subgraph = G_labels.edge_subgraph(edges_by_weight[weight])
                             nx.draw_networkx_edges(
                                 subgraph, pos_anchored,
-                                width=0.4,
+                                width=0.25,
                                 alpha=alpha,
                                 edge_color='blue',
                                 style='solid',
@@ -1224,7 +1240,7 @@ if HAS_NETWORKX:
                 # Note: Leaders are already drawn in scatter plot, so we draw graph nodes
                 # with a distinct style (blue border) to show they're part of the graph
                 node_toxicities = [G_labels.nodes[n]["toxicity"] for n in G_labels.nodes()]
-                node_sizes_fd = [120 + 250 * ((tox - min_tox) / tox_range) if tox_range > 0 else 150
+                node_sizes_fd = [45 + 95 * ((tox - min_tox) / tox_range) if tox_range > 0 else 70
                                 for tox in node_toxicities]
                 
                 # Color: based on species (consistent across all figures)
@@ -1239,32 +1255,26 @@ if HAS_NETWORKX:
                     G_labels, pos_anchored,
                     node_color=node_colors_fd,
                     node_size=node_sizes_fd,
-                    alpha=0.7,  # Slightly transparent to show underlying scatter
-                    edgecolors='blue',  # Blue borders to match edges
-                    linewidths=2.0,  # Thicker borders for visibility
+                    alpha=0.7,
+                    edgecolors='blue',
+                    linewidths=0.8,
                     ax=ax
                 )
                 
                 # No labels for now (as requested)
             
-            ax.set_title(
-                f"Multi-View Species Visualization\n"
-                f"Base: Embedding space (MDS) with radius circles\n"
-                f"Overlay: Label-based graph (anchored to MDS)\n"
-                f"({leaders_count} leaders (active+frozen), {outliers_count} reserves, "
-                f"{len(leader_positions)} species, {edges_added} label connections)",
-                fontsize=16, pad=20
-            )
-            # Fix axis formatting
-            ax.set_xlabel("MDS Dimension 1", fontsize=14, fontweight='bold')
-            ax.set_ylabel("MDS Dimension 2", fontsize=14, fontweight='bold')
-            ax.tick_params(axis='both', labelsize=12)
-            ax.grid(True, alpha=0.3)
+            # Labels and ticks (match rq1 figures)
+            ax.set_xlabel("MDS Dimension 1", fontsize=8, fontweight='bold')
+            ax.set_ylabel("MDS Dimension 2", fontsize=8, fontweight='bold')
+            ax.tick_params(axis='both', labelsize=7, width=0.8)
+            ax.grid(True, alpha=0.25, linestyle='--', linewidth=0.6)
+            ax.set_axisbelow(True)
+            for side in ['bottom', 'left']:
+                ax.spines[side].set_linewidth(0.9)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
             
-            # No colorbar (using species colors, not toxicity colormap)
-            # Legend removed - will be in caption/answer
-            
-            plt.tight_layout()
+            plt.tight_layout(pad=0.2)
             plt.savefig(OUT / "figures" / "fig4_label_similarity_graph.png", dpi=300, bbox_inches='tight')
             plt.savefig(OUT / "figures" / "fig4_label_similarity_graph.pdf", bbox_inches='tight')
             plt.close()
