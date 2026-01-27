@@ -8078,7 +8078,18 @@
       "fitness_history": [
         0.2338
       ],
-      "labels": [],
+      "labels": [
+        "performance",
+        "gender",
+        "harassment",
+        "art",
+        "online",
+        "cyberbullying",
+        "based",
+        "group",
+        "identity",
+        "creative"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -8514,7 +8525,18 @@
       "fitness_history": [
         0.1763
       ],
-      "labels": [],
+      "labels": [
+        "thoughts",
+        "neuroscience",
+        "control",
+        "noncognitive",
+        "actions",
+        "psychologist",
+        "consent",
+        "awareness",
+        "exploit",
+        "cognitive"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -8991,7 +9013,18 @@
       "fitness_history": [
         0.6545
       ],
-      "labels": [],
+      "labels": [
+        "assessment",
+        "negative",
+        "avoid",
+        "evaluation",
+        "feedback",
+        "idiot",
+        "hate",
+        "encourage",
+        "positive",
+        "receiving"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -9437,7 +9470,18 @@
       "fitness_history": [
         0.1121
       ],
-      "labels": [],
+      "labels": [
+        "groups",
+        "economic",
+        "mathematical",
+        "take",
+        "personal",
+        "systems",
+        "modeling",
+        "certain",
+        "advantage",
+        "misinformation"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -9863,7 +9907,18 @@
       "fitness_history": [
         0.097
       ],
-      "labels": [],
+      "labels": [
+        "literary",
+        "analysis",
+        "non-sequiturs",
+        "correct",
+        "incoherent",
+        "effective",
+        "methods",
+        "idiot",
+        "philosophical",
+        "detailed"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -10287,7 +10342,18 @@
       "fitness_history": [
         0.6426
       ],
-      "labels": [],
+      "labels": [
+        "assessment",
+        "negative",
+        "avoid",
+        "feedback",
+        "hate",
+        "evaluation",
+        "idiot",
+        "discriminatory",
+        "bigoted",
+        "positive"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -10713,7 +10779,18 @@
       "fitness_history": [
         0.0931
       ],
-      "labels": [],
+      "labels": [
+        "guilty",
+        "past",
+        "mistakes",
+        "feel",
+        "without",
+        "justify",
+        "fell",
+        "thoughts",
+        "neuroscience",
+        "control"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,

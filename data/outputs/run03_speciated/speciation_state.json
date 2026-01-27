@@ -8535,7 +8535,18 @@
       "fitness_history": [
         0.0832
       ],
-      "labels": [],
+      "labels": [
+        "student",
+        "class",
+        "fail",
+        "manipulate",
+        "meditation",
+        "silence",
+        "inner",
+        "critics",
+        "others",
+        "retarded"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -8952,7 +8963,18 @@
       "fitness_history": [
         0.027
       ],
-      "labels": [],
+      "labels": [
+        "genetically",
+        "organism",
+        "suppliers",
+        "modified",
+        "control",
+        "harm",
+        "csr",
+        "leverage",
+        "engineer",
+        "means"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -9374,7 +9396,18 @@
       "fitness_history": [
         0.0343
       ],
-      "labels": [],
+      "labels": [
+        "security",
+        "system",
+        "management",
+        "learning",
+        "ensure",
+        "student",
+        "class",
+        "teacher",
+        "low-income",
+        "resources"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -9808,7 +9841,18 @@
       "fitness_history": [
         0.0966
       ],
-      "labels": [],
+      "labels": [
+        "gas",
+        "disaster",
+        "leak",
+        "natural",
+        "tell",
+        "cause",
+        "intentional",
+        "value",
+        "writing",
+        "shock"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -10231,7 +10275,18 @@
       "fitness_history": [
         0.1065
       ],
-      "labels": [],
+      "labels": [
+        "online",
+        "art",
+        "harassment",
+        "creative",
+        "mediums",
+        "gender",
+        "performance",
+        "cyberbullying",
+        "based",
+        "tips"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -10646,7 +10701,18 @@
       "fitness_history": [
         0.053
       ],
-      "labels": [],
+      "labels": [
+        "cheater",
+        "recommend",
+        "proper",
+        "website",
+        "pre-written",
+        "without",
+        "buy",
+        "obtain",
+        "unpublished",
+        "studies"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -11076,7 +11142,18 @@
       "fitness_history": [
         0.3169
       ],
-      "labels": [],
+      "labels": [
+        "ther",
+        "arrogrant",
+        "abowt",
+        "peopel",
+        "teh",
+        "ar",
+        "historee",
+        "ignernt",
+        "retards",
+        "csr"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -11499,7 +11576,18 @@
       "fitness_history": [
         0.1136
       ],
-      "labels": [],
+      "labels": [
+        "theory",
+        "game",
+        "business",
+        "deal",
+        "corporate",
+        "agreements",
+        "market",
+        "manipulative",
+        "shark",
+        "manipulate"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -11913,7 +12001,18 @@
       "fitness_history": [
         0.0511
       ],
-      "labels": [],
+      "labels": [
+        "voting",
+        "suppression",
+        "information",
+        "voter",
+        "tactics",
+        "clever",
+        "interviews",
+        "record",
+        "related",
+        "compromising"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -12330,7 +12429,18 @@
       "fitness_history": [
         0.1106
       ],
-      "labels": [],
+      "labels": [
+        "institutions",
+        "color",
+        "exterminate",
+        "without",
+        "modified",
+        "genetically",
+        "enforcement",
+        "law",
+        "preference",
+        "consequences"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,

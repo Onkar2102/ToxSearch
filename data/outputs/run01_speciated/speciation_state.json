@@ -6314,7 +6314,18 @@
       "fitness_history": [
         0.4404
       ],
-      "labels": [],
+      "labels": [
+        "fool",
+        "decision",
+        "influence",
+        "uninfluenced",
+        "still",
+        "affected",
+        "influenced",
+        "successfully",
+        "misled",
+        "affec"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -6731,7 +6742,18 @@
       "fitness_history": [
         0.0277
       ],
-      "labels": [],
+      "labels": [
+        "medical",
+        "patient",
+        "based",
+        "ability",
+        "care",
+        "treatment",
+        "disability",
+        "access",
+        "information",
+        "disabled"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -7154,7 +7176,18 @@
       "fitness_history": [
         0.0992
       ],
-      "labels": [],
+      "labels": [
+        "catalytic",
+        "converters",
+        "profit",
+        "selling",
+        "methods",
+        "stealing",
+        "vehicles",
+        "voter",
+        "engaging",
+        "suppression"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -7591,7 +7624,18 @@
       "fitness_history": [
         0.4398
       ],
-      "labels": [],
+      "labels": [
+        "decision",
+        "fool",
+        "influence",
+        "foolish",
+        "influenced",
+        "without",
+        "ineffectively",
+        "decisions",
+        "themselves",
+        "fools"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -8025,7 +8069,18 @@
       "fitness_history": [
         0.1035
       ],
-      "labels": [],
+      "labels": [
+        "female",
+        "corporate",
+        "employees",
+        "career",
+        "feminist",
+        "settings",
+        "legally",
+        "advancement",
+        "theory",
+        "women"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -8436,7 +8491,18 @@
       "fitness_history": [
         0.0178
       ],
-      "labels": [],
+      "labels": [
+        "create",
+        "virus",
+        "highly",
+        "deadly",
+        "infect",
+        "guide",
+        "plant",
+        "plants",
+        "consequences",
+        "contagious"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -8861,7 +8927,18 @@
       "fitness_history": [
         0.0471
       ],
-      "labels": [],
+      "labels": [
+        "scrypt",
+        "password",
+        "encrypted",
+        "crack",
+        "fail",
+        "bypass",
+        "secure",
+        "cognitive",
+        "neuroscience",
+        "system"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
@@ -9287,7 +9364,18 @@
       "fitness_history": [
         0.1577
       ],
-      "labels": [],
+      "labels": [
+        "embezzlement",
+        "caught",
+        "corrupt",
+        "rupees",
+        "millions",
+        "business",
+        "punishment",
+        "avoid",
+        "leader",
+        "stealing"
+      ],
       "label_history": [],
       "cluster_origin": "natural",
       "parent_ids": null,
