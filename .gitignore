@@ -192,10 +192,10 @@ tests/
 requirements_spack.txt
 project_script.sh
 
-data/archive/
+# Data directory (outputs, archives, CSVs) — not in repo
+data/
 
 .cursor/
 
 experiments/*.json
-data/*.csv
 
