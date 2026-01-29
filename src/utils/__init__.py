@@ -18,8 +18,7 @@ def get_population_io():
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
-        get_population_stats_steady_state,
-        finalize_initial_population
+        get_population_stats_steady_state
     )
     return (
         load_and_initialize_population, 
@@ -33,8 +32,7 @@ def get_population_io():
         sort_population_by_elite_criteria,
         load_elites,
         save_elites,
-        get_population_stats_steady_state,
-        finalize_initial_population
+        get_population_stats_steady_state
     )
 
 def get_system_utils():
@@ -56,8 +54,27 @@ def get_system_utils():
         initialize_system
     )
 
+def get_cluster_quality():
+    """Lazy import of cluster quality functions"""
+    from .cluster_quality import (
+        calculate_silhouette_score,
+        calculate_davies_bouldin_index,
+        calculate_calinski_harabasz_index,
+        calculate_cluster_quality_metrics,
+        save_cluster_quality_to_tracker
+    )
+    return (
+        calculate_silhouette_score,
+        calculate_davies_bouldin_index,
+        calculate_calinski_harabasz_index,
+        calculate_cluster_quality_metrics,
+        save_cluster_quality_to_tracker
+    )
+
+
 __all__ = [
     "get_custom_logging",
     "get_population_io",
     "get_system_utils",
+    "get_cluster_quality",
 ]

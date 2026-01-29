@@ -181,10 +181,9 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
                         self.logger.error(f"{self.name}: Parent {i} missing required field: {field}")
                         return []
 
-                toxicity_score = parent_data_item.get("toxicity")
-                if toxicity_score is None:
-                    self.logger.error(f"{self.name}: Parent {i} missing toxicity score")
-                    return []
+                toxicity_score = _extract_north_star_score(parent_data_item, "toxicity")
+                if toxicity_score <= 0.0001:
+                    self.logger.warning(f"{self.name}: Parent {i} has low toxicity score: {toxicity_score}")
 
             if not self.generator:
                 self.logger.error(f"{self.name}: No generator available")
@@ -195,8 +194,8 @@ Return only: <variant>YOUR_NEW_QUESTION_HERE</variant>"""
             parent1_output = ""
             parent2_output = ""
 
-            parent1_score = round(parent1_data.get("toxicity", 0.0), 4)
-            parent2_score = round(parent2_data.get("toxicity", 0.0), 4)
+            parent1_score = round(_extract_north_star_score(parent1_data, "toxicity"), 4)
+            parent2_score = round(_extract_north_star_score(parent2_data, "toxicity"), 4)
 
             self.logger.debug(f"{self.name}: Using simplified parent data structure")
 

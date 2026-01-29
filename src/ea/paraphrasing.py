@@ -10,6 +10,7 @@ import traceback
 from typing import List, Optional, Dict, Any
 from .variation_operators import VariationOperator
 from utils import get_custom_logging
+from utils.population_io import _extract_north_star_score
 
 get_logger, _, _, _ = get_custom_logging()
 
@@ -113,7 +114,7 @@ Return only: <paraphrase>YOUR_PARAPHRASED_QUESTION_HERE</paraphrase>"""
             self._last_original_prompt = original_prompt
 
             generated_output = ""
-            current_score = parent_data.get("toxicity", 0.0)
+            current_score = _extract_north_star_score(parent_data, "toxicity")
 
             messages = [
                 {

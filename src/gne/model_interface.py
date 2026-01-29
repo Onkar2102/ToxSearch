@@ -9,6 +9,7 @@ import os
 import time
 import psutil
 import re
+import random
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from llama_cpp import Llama
@@ -73,9 +74,11 @@ class LlamaCppChatInterface(ModelInterface):
         if self._MODEL_CACHE_LOCK is None:
             self._MODEL_CACHE_LOCK = threading.Lock()
         
-        self.logger.info(f"Loading fresh llama.cpp model (caching disabled): {absolute_model_path}")
+        self._model_cache_key = absolute_model_path
+
+        self.logger.info(f"Loading llama.cpp model: {absolute_model_path}")
         self._load_model(absolute_model_path)
-        self.model = self._MODEL_CACHE[absolute_model_path]
+        self.model = self._MODEL_CACHE[self._model_cache_key]
         self.generation_args = model_cfg.get("generation_args", {})
         
         self.last_memory_check = time.time()
@@ -84,10 +87,11 @@ class LlamaCppChatInterface(ModelInterface):
     @classmethod
     def clear_model_cache(cls):
         """Clear the entire model cache to force fresh model loading."""
+        logger = get_logger("LlamaCppChatInterface")
         with cls._MODEL_CACHE_LOCK:
             cls._MODEL_CACHE.clear()
             cls._MODEL_CACHE_ACCESS_COUNT.clear()
-            cls.logger.info("Model cache cleared - all models will be reloaded")
+            logger.info("Model cache cleared - all models will be reloaded")
     
     def _cleanup_model_cache_if_needed(self):
         """Clean up unused models from cache, but preserve main RG/PG models."""
@@ -120,16 +124,28 @@ class LlamaCppChatInterface(ModelInterface):
                 from pathlib import Path
                 project_root = Path(__file__).resolve().parents[2]
                 model_path = str(project_root / model_path)
+
+            self._model_cache_key = model_path
+
+            if model_path in self._MODEL_CACHE:
+                # Reuse cached model and bump access count
+                self._MODEL_CACHE_ACCESS_COUNT[model_path] = self._MODEL_CACHE_ACCESS_COUNT.get(model_path, 0) + 1
+                self.logger.debug(f"Reusing cached model: {model_path} (accesses={self._MODEL_CACHE_ACCESS_COUNT[model_path]})")
+                self._cleanup_model_cache_if_needed()
+                return
             
             if not os.path.exists(model_path):
                 gguf_path = f"{model_path}.gguf"
                 if os.path.exists(gguf_path):
                     model_path = gguf_path
+                    self._model_cache_key = model_path
                 else:
                     self.logger.warning(f"Model file not found: {model_path}")
                     self.logger.info("Creating mock model for testing purposes")
                     mock_model = self._create_mock_model()
                     self._MODEL_CACHE[model_path] = mock_model
+                    self._MODEL_CACHE_ACCESS_COUNT[model_path] = 1
+                    self._cleanup_model_cache_if_needed()
                     return
             
             device_config = self._get_device_specific_config()
@@ -173,13 +189,17 @@ class LlamaCppChatInterface(ModelInterface):
             model = Llama(**llama_params)
             
             self._MODEL_CACHE[model_path] = model
+            self._MODEL_CACHE_ACCESS_COUNT[model_path] = 1
             self.logger.info(f"Model loaded successfully: {model_path}")
+            self._cleanup_model_cache_if_needed()
             
         except Exception as e:
             self.logger.error(f"Failed to load model: {e}")
             self.logger.info("Creating mock model as fallback")
             mock_model = self._create_mock_model()
             self._MODEL_CACHE[model_path] = mock_model
+            self._MODEL_CACHE_ACCESS_COUNT[model_path] = 1
+            self._cleanup_model_cache_if_needed()
     
     def _get_device_specific_config(self) -> Dict[str, Any]:
         """Get device-specific configuration for llama.cpp."""
@@ -452,6 +472,11 @@ class LlamaCppChatInterface(ModelInterface):
         
         try:
             self._check_memory_usage()
+
+            if hasattr(self, "_model_cache_key"):
+                with self._MODEL_CACHE_LOCK:
+                    self._MODEL_CACHE_ACCESS_COUNT[self._model_cache_key] = self._MODEL_CACHE_ACCESS_COUNT.get(self._model_cache_key, 0) + 1
+                self._cleanup_model_cache_if_needed()
             
             formatted_prompt = self._convert_messages_to_prompt(messages)
             
@@ -476,6 +501,7 @@ class LlamaCppChatInterface(ModelInterface):
                 top_k=generation_kwargs.get("top_k", 40),
                 repeat_penalty=generation_kwargs.get("repetition_penalty", 1.1),
                 stop=["</s>", "<|endoftext|>", "User:", "System:"],
+                seed=random.randint(0, 2**31 - 1),
                 echo=False,
             )
             

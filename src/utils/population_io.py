@@ -40,6 +40,80 @@ def get_data_path():
 # Global variable to store the outputs path for the current run
 _current_outputs_path = None
 
+def get_max_genome_id_from_all_files(outputs_path: Optional[Union[str, Path]] = None) -> int:
+    """
+    Find the maximum genome ID across all genome files (elites.json, reserves.json, archive.json).
+    
+    This ensures that new genomes always get unique IDs that don't conflict with existing
+    genomes in alive or dead populations.
+    
+    Args:
+        outputs_path: Path to outputs directory. If None, uses get_outputs_path()
+        
+    Returns:
+        Maximum genome ID found across all files, or 0 if no genomes exist
+    """
+    if outputs_path is None:
+        outputs_path = get_outputs_path()
+    else:
+        outputs_path = Path(outputs_path)
+    
+    max_id = 0
+    
+    # Check elites.json
+    elites_path = outputs_path / "elites.json"
+    if elites_path.exists():
+        try:
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites = json.load(f)
+            for genome in elites:
+                genome_id = genome.get("id")
+                if genome_id is not None and isinstance(genome_id, (int, float)):
+                    max_id = max(max_id, int(genome_id))
+        except Exception as e:
+            logger = get_logger("GetMaxGenomeID")
+            logger.warning(f"Failed to read elites.json for max ID: {e}")
+    
+    # Check reserves.json
+    reserves_path = outputs_path / "reserves.json"
+    if reserves_path.exists():
+        try:
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves = json.load(f)
+            for genome in reserves:
+                genome_id = genome.get("id")
+                if genome_id is not None and isinstance(genome_id, (int, float)):
+                    max_id = max(max_id, int(genome_id))
+        except Exception as e:
+            logger = get_logger("GetMaxGenomeID")
+            logger.warning(f"Failed to read reserves.json for max ID: {e}")
+    
+    # Check archive.json
+    archive_path = outputs_path / "archive.json"
+    if archive_path.exists():
+        try:
+            with open(archive_path, 'r', encoding='utf-8') as f:
+                archive = json.load(f)
+            # archive.json can be a list or empty dict
+            if isinstance(archive, list):
+                for genome in archive:
+                    genome_id = genome.get("id")
+                    if genome_id is not None and isinstance(genome_id, (int, float)):
+                        max_id = max(max_id, int(genome_id))
+            elif isinstance(archive, dict) and len(archive) > 0:
+                # Handle dict format (shouldn't happen, but handle gracefully)
+                for genome in archive.values():
+                    if isinstance(genome, dict):
+                        genome_id = genome.get("id")
+                        if genome_id is not None and isinstance(genome_id, (int, float)):
+                            max_id = max(max_id, int(genome_id))
+        except Exception as e:
+            logger = get_logger("GetMaxGenomeID")
+            logger.warning(f"Failed to read archive.json for max ID: {e}")
+    
+    return max_id
+
+
 def get_outputs_path():
     """Get the absolute path to the outputs directory"""
     global _current_outputs_path
@@ -58,22 +132,50 @@ def get_outputs_path():
     return outputs_dir
 
 def _extract_north_star_score(genome, metric="toxicity"):
-    """Extract the north star metric score from a genome using only moderation_result.google.scores.
+    """Extract the north star metric score from a genome.
+    
+    Priority order:
+    1. moderation_result.google.scores[metric] (standard format)
+    2. moderation_result.scores[metric] (legacy format)
+    3. Direct field: metric (e.g., "toxicity" for top_10.json slimmed format)
+    4. scores[metric] (nested field)
     
     Returns minimum 0.0001 for consistency across the project.
     """
     if not genome:
         return 0.0001
     
+    # Priority 1: moderation_result.google.scores[metric] (standard format)
     if "moderation_result" in genome:
         moderation_result = genome["moderation_result"]
         
-        if moderation_result is not None and "google" in moderation_result:
+        # Skip if moderation_result is None
+        if moderation_result is None:
+            pass  # Fall through to other priorities
+        elif "google" in moderation_result:
             google_scores = moderation_result["google"]
-            if "scores" in google_scores:
+            if google_scores is not None and "scores" in google_scores:
                 score = google_scores["scores"].get(metric, 0.0001)
                 if score is not None and score > 0:
                     return round(float(score), 4)
+        
+        # Priority 2: moderation_result.scores[metric] (legacy format)
+        if moderation_result is not None and "scores" in moderation_result:
+            score = moderation_result["scores"].get(metric, 0.0001)
+            if score is not None and score > 0:
+                return round(float(score), 4)
+    
+    # Priority 3: Direct field (e.g., "toxicity" for top_10.json slimmed format)
+    if metric in genome:
+        score = genome.get(metric)
+        if score is not None and score > 0:
+            return round(float(score), 4)
+    
+    # Priority 4: scores[metric] (nested field)
+    if "scores" in genome and isinstance(genome["scores"], dict):
+        score = genome["scores"].get(metric, 0.0001)
+        if score is not None and score > 0:
+            return round(float(score), 4)
     
     return 0.0001
 
@@ -95,7 +197,7 @@ def initialize_system(logger, log_file, seed_file="data/prompt.csv"):
     
     population_io_functions = get_population_io()
     
-    load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, load_elites, save_elites, get_population_stats_steady_state, finalize_initial_population = get_population_io()
+    load_and_initialize_population, get_population_files_info, load_population, save_population, sort_population_json, load_genome_by_id, consolidate_generations_to_single_file, migrate_from_split_to_single, sort_population_by_elite_criteria, load_elites, save_elites, get_population_stats_steady_state = get_population_io()
     
     ResponseGenerator = get_ResponseGenerator()
     response_generator = ResponseGenerator(model_key="response_generator", config_path="config/RGConfig.yaml", log_file=log_file)
@@ -187,10 +289,15 @@ def clean_population(population: List[Dict[str, Any]], *, logger=None, log_file:
 
 
 def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
-    """Get information about population files including non_elites.json and elites.json"""
+    """Get information about population files including elites.json and reserves.json
+    
+    Note: Active population = elites.json + reserves.json (archive.json is NOT part of population).
+    """
     
     base_path = Path(base_dir).resolve()
-    population_file = base_path / "non_elites.json"
+    # Use reserves.json as default population file
+    # Note: We only maintain elites (in species or reserves). Active population = elites + reserves.
+    population_file = base_path / "reserves.json"
     elites_file = base_path / "elites.json"
     evolution_tracker_file = base_path / "EvolutionTracker.json"
     
@@ -221,7 +328,7 @@ def get_population_files_info(base_dir: str = "outputs") -> Dict[str, Any]:
             # Fall back to file scanning if tracker read fails
             pass
     
-    # Count genomes in non_elites.json
+    # Count genomes in reserves.json (fallback if EvolutionTracker not available)
     if population_file.exists():
         try:
             with open(population_file, 'r', encoding='utf-8') as f:
@@ -414,35 +521,11 @@ def get_latest_generation(base_dir: str = "outputs") -> int:
     return info["total_generations"] - 1 if info["total_generations"] > 0 else 0
 
 
-def get_pending_genomes_by_status(status: str, max_generations: Optional[int] = None, 
-                                 base_dir: str = "outputs", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Get genomes with specific status from the single non_elites.json file"""
-    
-    _logger = logger or get_logger("population_io", log_file)
-    
-    with PerformanceLogger(_logger, f"Find genomes with status '{status}'"):
-        try:
-            all_genomes = load_population(base_dir, logger=_logger, log_file=log_file)
-            
-            pending_genomes = [g for g in all_genomes if g and g.get("status") == status]
-            
-            if max_generations is not None:
-                pending_genomes = [g for g in pending_genomes if g.get("generation", 0) < max_generations]
-            
-            _logger.info("Found %d genomes with status '%s' from non_elites.json", len(pending_genomes), status)
-            return pending_genomes
-            
-        except Exception as e:
-            _logger.error("Failed to get pending genomes: %s", e, exc_info=True)
-            return []
-
-
-
-def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
+def load_population(pop_path: str = "data/outputs/reserves.json", *, logger=None, log_file: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Load population with automatic detection of split vs monolithic format
     
-    If pop_path points to non_elites.json and it exists, use it directly.
+    If pop_path points to a JSON file and it exists, use it directly.
     Otherwise, fall back to split files if they exist.
     
     Parameters
@@ -467,13 +550,13 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
             
             if pop_path_obj.is_dir():
                 base_dir = pop_path_obj
-                population_file = base_dir / "non_elites.json"
+                population_file = base_dir / "reserves.json"
             else:
                 population_file = pop_path_obj
                 base_dir = pop_path_obj.parent
             if population_file.exists():
                 if pop_path_obj.is_dir():
-                    _logger.info("Using monolithic non_elites.json file (preferred)")
+                    _logger.info("Using monolithic population file (preferred)")
                 else:
                     _logger.info("Using specified population file: %s", pop_path)
                 try:
@@ -482,12 +565,12 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
 
                     population = clean_population(population, logger=_logger, log_file=log_file)
                     if pop_path_obj.is_dir():
-                        _logger.info("Successfully loaded population with %d genomes from non_elites.json", len(population))
+                        _logger.info("Successfully loaded population with %d genomes", len(population))
                     else:
                         _logger.info("Successfully loaded population with %d genomes from %s", len(population), pop_path)
                     return population
                 except Exception as e:
-                    _logger.warning("Failed to load non_elites.json: %s, falling back to split files", e)
+                    _logger.warning("Failed to load population file: %s, falling back to split files", e)
             
             info = get_population_files_info(str(base_dir))
             
@@ -500,7 +583,7 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
                 return all_genomes
             else:
                 if not os.path.exists(pop_path):
-                    _logger.error("No population files found: neither non_elites.json nor split files exist")
+                    _logger.error("No population files found: neither reserves.json nor split files exist")
                     raise FileNotFoundError(f"No population files found in {base_dir}")
                 else:
                     _logger.info("Using fallback population file: %s", pop_path)
@@ -516,10 +599,10 @@ def load_population(pop_path: str = "data/outputs/non_elites.json", *, logger=No
             raise
 
 
-def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outputs/non_elites.json", 
+def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outputs/reserves.json", 
                    *, logger=None, log_file: Optional[str] = None, preserve_sort_order: bool = False) -> None:
     """
-    Save entire population to single non_elites.json file
+    Save entire population to a JSON file
     
     Parameters
     ----------
@@ -539,7 +622,7 @@ def save_population(population: List[Dict[str, Any]], pop_path: str = "data/outp
             cleaned_population = clean_population(population, logger=_logger, log_file=log_file)
             
             pop_path_obj = Path(pop_path)
-            output_file = pop_path_obj if pop_path_obj.suffix else pop_path_obj / "non_elites.json"
+            output_file = pop_path_obj if pop_path_obj.suffix else pop_path_obj / "reserves.json"
             
             output_file.parent.mkdir(parents=True, exist_ok=True)
             
@@ -589,7 +672,49 @@ def load_and_initialize_population(
 
             # ---------------------------- Load CSV File -----------------------
             with PerformanceLogger(logger, "Load CSV File"):
-                df = pd.read_csv(input_path)
+                # Read CSV with Python engine which is more lenient with malformed CSV
+                # This handles cases where fields contain commas without proper quoting
+                try:
+                    df = pd.read_csv(
+                        input_path,
+                        engine='python',
+                        on_bad_lines='skip',
+                        sep=',',
+                        quotechar='"',
+                        skipinitialspace=True
+                    )
+                except Exception as e:
+                    # Fallback: read manually line by line
+                    logger.warning("CSV parsing failed, trying manual line-by-line parsing: %s", e)
+                    import csv
+                    rows = []
+                    with open(input_path, 'r', encoding='utf-8') as f:
+                        reader = csv.reader(f)
+                        header = next(reader, None)
+                        if header and len(header) > 0:
+                            # Find questions column (case-insensitive)
+                            col_idx = None
+                            for i, col in enumerate(header):
+                                if col.strip().lower() == 'questions':
+                                    col_idx = i
+                                    break
+                            
+                            if col_idx is None:
+                                # If no header found, assume first column
+                                col_idx = 0
+                            
+                            for row in reader:
+                                if row and len(row) > col_idx:
+                                    # Join all fields from col_idx onwards in case comma split the field
+                                    question = ','.join(row[col_idx:]).strip()
+                                    if question:
+                                        rows.append({'questions': question})
+                                elif row:
+                                    # If row exists but might have been split incorrectly
+                                    question = ','.join(row).strip()
+                                    if question:
+                                        rows.append({'questions': question})
+                    df = pd.DataFrame(rows)
                 logger.info(
                     "Successfully loaded CSV file with %d rows and %d columns",
                     len(df),
@@ -608,6 +733,17 @@ def load_and_initialize_population(
             logger.info("Extracted %d unique prompts from 'questions' column", len(prompts))
 
             # -------------------------- Create genomes ---------------------
+            # Get prompt generator name if available (lazy import to avoid circular dependency)
+            prompt_generator_name = None
+            try:
+                from ea.evolution_engine import get_prompt_generator
+                pg = get_prompt_generator()
+                if pg and hasattr(pg, 'model_cfg'):
+                    prompt_generator_name = pg.model_cfg.get("name", "")
+            except Exception:
+                # Prompt generator not initialized yet, will be None
+                pass
+
             population: List[Dict[str, Any]] = []
             for i, prompt in enumerate(prompts):
                 population.append(
@@ -615,6 +751,7 @@ def load_and_initialize_population(
                         "id": i + 1,
                         "prompt": prompt,
                         "model_name": None,
+                        "prompt_generator_name": prompt_generator_name,
                         "moderation_result": None,
                         "operator": None,
                         "parents": [],
@@ -639,13 +776,6 @@ def load_and_initialize_population(
                     json.dump(population, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized temp.json with %d genomes (staging)", len(population))
 
-            # ----------------------------- Initialize empty non_elites.json ----------------------------
-            with PerformanceLogger(logger, "Initialize empty non_elites.json"):
-                # non_elites.json starts empty
-                empty_population = []
-                save_population(empty_population, output_path, logger=logger, log_file=log_file)
-                logger.info("Initialized empty non_elites.json")
-
             # ----------------------------- Initialize empty elites.json ----------------------------
             with PerformanceLogger(logger, "Initialize empty elites.json"):
                 # elites.json starts empty
@@ -656,15 +786,25 @@ def load_and_initialize_population(
                     json.dump(empty_elites, f, indent=2, ensure_ascii=False)
                 logger.info("Initialized empty elites.json")
 
-            # ----------------------------- Initialize empty under_performing.json ----------------------------
-            with PerformanceLogger(logger, "Initialize empty under_performing.json"):
-                # under_performing.json starts empty - archive for low-scoring genomes
-                empty_under_performing = []
-                under_performing_path = Path(output_path) / "under_performing.json"
-                under_performing_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(under_performing_path, 'w', encoding='utf-8') as f:
-                    json.dump(empty_under_performing, f, indent=2, ensure_ascii=False)
-                logger.info("Initialized empty under_performing.json")
+            # ----------------------------- Initialize empty reserves.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty reserves.json"):
+                # reserves.json starts empty - buffer for high-fitness outliers that don't fit species
+                empty_reserves = []
+                reserves_path = Path(output_path) / "reserves.json"
+                reserves_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(reserves_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_reserves, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty reserves.json")
+            
+            # ----------------------------- Initialize empty archive.json ----------------------------
+            with PerformanceLogger(logger, "Initialize empty archive.json"):
+                # archive.json starts empty - stores genomes removed due to capacity limits
+                empty_archive = []
+                archive_path = Path(output_path) / "archive.json"
+                archive_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(archive_path, 'w', encoding='utf-8') as f:
+                    json.dump(empty_archive, f, indent=2, ensure_ascii=False)
+                logger.info("Initialized empty archive.json")
 
             # ----------------------------- Initialize empty parents.json ----------------------------
             with PerformanceLogger(logger, "Initialize empty parents.json"):
@@ -706,7 +846,6 @@ def load_and_initialize_population(
                             "variants_created": None,
                             "mutation_variants": None,
                             "crossover_variants": None,
-                            "elites_threshold": 0.0,  # Will be updated with actual threshold during threshold check
                             "operator_statistics": {}
                         }
                     ]
@@ -1059,7 +1198,7 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
     
     with PerformanceLogger(_logger, "Migrate from Split to Single File"):
         try:
-            if not consolidate_generations_to_single_file(base_dir, "non_elites.json", logger=_logger, log_file=log_file):
+            if not consolidate_generations_to_single_file(base_dir, "reserves.json", logger=_logger, log_file=log_file):
                 _logger.error("Failed to consolidate generation files")
                 return False
             
@@ -1073,9 +1212,9 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                     
                     tracker["population_metadata"] = {
                         "single_file_mode": True,
-                        "population_file": "non_elites.json",
+                        "population_file": "reserves.json",
                         "elites_file": "elites.json",
-                        "migration_note": "Migrated from split files to single non_elites.json"
+                        "migration_note": "Migrated from split files to single reserves.json"
                     }
                     
                     with open(evolution_tracker_file, 'w', encoding='utf-8') as f:
@@ -1085,13 +1224,14 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                 except Exception as e:
                     _logger.warning(f"Failed to update EvolutionTracker: {e}")
             
-            population_file = base_path / "non_elites.json"
+            # Check for consolidated file (now uses reserves.json instead of non_elites.json)
+            population_file = base_path / "reserves.json"
             if population_file.exists():
                 try:
                     with open(population_file, 'r', encoding='utf-8') as f:
                         consolidated_genomes = json.load(f)
                     
-                    _logger.info(f"Migration successful! non_elites.json contains {len(consolidated_genomes)} genomes")
+                    _logger.info(f"Migration successful! reserves.json contains {len(consolidated_genomes)} genomes")
                     _logger.info("You can now use the single file approach")
                     
                     return True
@@ -1100,7 +1240,7 @@ def migrate_from_split_to_single(base_dir: str = "outputs",
                     _logger.error(f"Failed to verify consolidated file: {e}")
                     return False
             else:
-                _logger.error("non_elites.json was not created during consolidation")
+                _logger.error("reserves.json was not created during consolidation")
                 return False
                 
         except Exception as e:
@@ -1151,306 +1291,6 @@ def sort_population_by_elite_criteria(population: List[Dict[str, Any]], north_st
 
 
 from .constants import EvolutionConstants, FileConstants
-
-
-
-
-def redistribute_population_with_threshold(population_file_path: str = None, 
-                                          elites_file_path: str = None,
-                                          elite_threshold: float = None,
-                                          north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
-                                          *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Redistribute population using threshold-based elite selection:
-    - Genomes with score >= elite_threshold → elites.json
-    - Genomes with score < elite_threshold → non_elites.json
-    
-    Parameters
-    ----------
-    population_file_path : str
-        Path to the non_elites.json file
-    elites_file_path : str
-        Path to the elites.json file
-    elite_threshold : float
-        Threshold score for elite selection (genomes >= threshold become elites)
-    north_star_metric : str
-        Metric to use for scoring (default: "toxicity")
-    logger : logging.Logger | None
-        Existing logger to reuse; if *None* a new one is created
-    log_file : str | None
-        Optional log-file path when a new logger is created
-        
-    Returns
-    -------
-    Dict[str, Any]
-        Statistics about the redistribution process
-    """
-    _logger = logger or get_logger("population_io", log_file)
-    
-    # Use centralized paths if not provided
-    if population_file_path is None:
-        outputs_path = get_outputs_path()
-        population_file_path = str(outputs_path / "non_elites.json")
-    if elites_file_path is None:
-        outputs_path = get_outputs_path()
-        elites_file_path = str(outputs_path / "elites.json")
-    
-    with PerformanceLogger(_logger, "Redistribute Population with Threshold", 
-                         population_file=population_file_path, elites_file=elites_file_path, 
-                         elite_threshold=elite_threshold):
-        
-        if elite_threshold is None:
-            _logger.warning("No elite threshold provided for threshold-based redistribution")
-            return {"elites_count": 0, "total_count": 0, "elite_threshold": 0}
-        
-        # Load current population
-        population = load_population(population_file_path, logger=_logger)
-        if not population:
-            _logger.warning("No population found to redistribute")
-            return {"elites_count": 0, "total_count": 0, "elite_threshold": elite_threshold}
-        
-        # Load current elites
-        current_elites = load_elites(elites_file_path, logger=_logger)
-        
-        # Combine all genomes for threshold-based redistribution
-        all_genomes = population + current_elites
-        total_count = len(all_genomes)
-        
-        _logger.info(f"Total genomes: {total_count}, Elite threshold: {elite_threshold}")
-        
-        # Separate genomes based on threshold
-        new_elites = []
-        new_population = []
-        
-        for genome in all_genomes:
-            score = _extract_north_star_score(genome, north_star_metric)
-            if score >= elite_threshold:
-                new_elites.append(genome)
-            else:
-                new_population.append(genome)
-        
-        # Save elites and population
-        save_elites(new_elites, elites_file_path, logger=_logger)
-        save_population(new_population, population_file_path, logger=_logger)
-        
-        # Log statistics
-        elites_count = len(new_elites)
-        _logger.info(f"Threshold-based redistribution complete: {elites_count} elites (>= {elite_threshold}), {len(new_population)} population (< {elite_threshold})")
-        
-        return {
-            "elites_count": elites_count,
-            "total_count": total_count,
-            "elite_threshold": elite_threshold
-        }
-
-
-def redistribute_population_with_dynamic_elite_threshold(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE, 
-                                                       elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
-                                                       elite_percentage: float = EvolutionConstants.DEFAULT_ELITE_PERCENTAGE,
-                                                       north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
-                                                       *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Redistribute population with dynamic elite threshold:
-    - Calculate top 25% (or specified percentage) of total population
-    - Move top performers to elites.json
-    - Move remaining to population.json
-    - Threshold updates dynamically based on total population size
-    
-    Parameters
-    ----------
-    population_file_path : str
-        Path to the non_elites.json file
-    elites_file_path : str
-        Path to the elites.json file
-    elite_percentage : float
-        Percentage of population to keep as elites (default: 0.25 = 25%)
-    north_star_metric : str
-        Metric to use for scoring (default: "toxicity")
-    logger : logging.Logger | None
-        Existing logger to reuse; if *None* a new one is created
-    log_file : str | None
-        Optional log-file path when a new logger is created
-        
-    Returns
-    -------
-    Dict[str, Any]
-        Statistics about the redistribution process
-    """
-    _logger = logger or get_logger("population_io", log_file)
-    
-    with PerformanceLogger(_logger, "Redistribute Population with Dynamic Elite Threshold", 
-                         population_file=population_file_path, elites_file=elites_file_path, 
-                         elite_percentage=elite_percentage):
-        
-        # Load current population
-        population = load_population(population_file_path, logger=_logger)
-        if not population:
-            _logger.warning("No population found to redistribute")
-            return {"elites_count": 0, "total_count": 0, "elite_threshold": 0}
-        
-        # Load current elites
-        current_elites = load_elites(elites_file_path, logger=_logger)
-        
-        # Combine all genomes for sorting
-        all_genomes = population + current_elites
-        total_count = len(all_genomes)
-        
-        # Calculate dynamic elite threshold
-        elite_threshold = max(1, int(total_count * elite_percentage))
-        
-        _logger.info(f"Total genomes: {total_count}, Elite threshold: {elite_threshold} ({elite_percentage*100:.1f}%)")
-        
-        # Sort all genomes by elite criteria
-        sorted_genomes = sort_population_by_elite_criteria(all_genomes, north_star_metric, logger=_logger)
-        
-        # Split into elites and population
-        new_elites = sorted_genomes[:elite_threshold]
-        new_population = sorted_genomes[elite_threshold:]
-        
-        # Save elites and population
-        save_elites(new_elites, elites_file_path, logger=_logger)
-        save_population(new_population, population_file_path, logger=_logger)
-        
-        # Log statistics
-        elites_count = len(new_elites)
-        
-        _logger.info(f"Redistribution complete: {elites_count} elites, {len(new_population)} population")
-        
-        return {
-            "elites_count": elites_count,
-            "total_count": total_count,
-            "elite_threshold": elite_threshold,
-            "elite_percentage": elite_percentage
-        }
-
-
-def initialize_population_with_elites(initial_population: List[Dict[str, Any]], 
-                                     elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
-                                     population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE,
-                                     elite_percentage: float = EvolutionConstants.DEFAULT_ELITE_PERCENTAGE,
-                                     north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
-                                     *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Initialize population by placing all genomes in elites.json initially.
-    After evaluation, the top 25% will remain in elites.json and the rest will move to population.json.
-    
-    Parameters
-    ----------
-    initial_population : List[Dict[str, Any]]
-        Initial population of genomes
-    elites_file_path : str
-        Path to the elites.json file
-    population_file_path : str
-        Path to the non_elites.json file
-    elite_percentage : float
-        Percentage of population to keep as elites (default: 0.25 = 25%)
-    north_star_metric : str
-        Metric to use for scoring (default: "toxicity")
-    logger : logging.Logger | None
-        Existing logger to reuse; if *None* a new one is created
-    log_file : str | None
-        Optional log-file path when a new logger is created
-        
-    Returns
-    -------
-    Dict[str, Any]
-        Statistics about the initialization process
-    """
-    _logger = logger or get_logger("population_io", log_file)
-    
-    with PerformanceLogger(_logger, "Initialize Population with Elites", 
-                         elites_file=elites_file_path, population_file=population_file_path,
-                         elite_percentage=elite_percentage):
-        
-        if not initial_population:
-            _logger.warning("No initial population provided")
-            return {"elites_count": 0, "total_count": 0}
-        
-        # Clear existing files
-        save_elites([], elites_file_path, logger=_logger)
-        save_population([], population_file_path, logger=_logger)
-        
-        # Place all initial population in elites.json
-        save_elites(initial_population, elites_file_path, logger=_logger)
-        
-        total_count = len(initial_population)
-        _logger.info(f"Initialized with {total_count} genomes in elites.json")
-        
-        return {
-            "elites_count": total_count,
-            "total_count": total_count,
-            "elite_percentage": elite_percentage
-        }
-
-
-def get_elite_population_stats(elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
-                              population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE,
-                              north_star_metric: str = EvolutionConstants.DEFAULT_NORTH_STAR_METRIC,
-                              *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Get comprehensive statistics about the elite population system.
-    
-    Parameters
-    ----------
-    elites_file_path : str
-        Path to the elites.json file
-    population_file_path : str
-        Path to the non_elites.json file
-    north_star_metric : str
-        Metric to use for scoring (default: "toxicity")
-    logger : logging.Logger | None
-        Existing logger to reuse; if *None* a new one is created
-    log_file : str | None
-        Optional log-file path when a new logger is created
-        
-    Returns
-    -------
-    Dict[str, Any]
-        Comprehensive statistics about the elite population system
-    """
-    _logger = logger or get_logger("population_io", log_file)
-    
-    try:
-        # Load elites and population
-        elites = load_elites(elites_file_path, logger=_logger)
-        population = load_population(population_file_path, logger=_logger)
-        
-        total_genomes = len(elites) + len(population)
-        elite_percentage = (len(elites) / total_genomes * 100) if total_genomes > 0 else 0
-        
-        # Calculate score statistics
-        elite_scores = [_extract_score(genome, north_star_metric) for genome in elites]
-        population_scores = [_extract_score(genome, north_star_metric) for genome in population]
-        
-        stats = {
-            "elites_count": len(elites),
-            "total_count": total_genomes,
-            "elite_percentage": elite_percentage,
-            "elite_scores": {
-                "min": min(elite_scores) if elite_scores else 0,
-                "max": max(elite_scores) if elite_scores else 0,
-                "avg": sum(elite_scores) / len(elite_scores) if elite_scores else 0
-            },
-            "population_scores": {
-                "min": min(population_scores) if population_scores else 0,
-                "max": max(population_scores) if population_scores else 0,
-                "avg": sum(population_scores) / len(population_scores) if population_scores else 0
-            },
-            "north_star_metric": north_star_metric
-        };
-        
-        _logger.info(f"Elite stats: {len(elites)} elites ({elite_percentage:.1f}%), {len(population)} population")
-        
-        return stats
-        
-    except Exception as e:
-        _logger.error(f"Failed to get elite population stats: {e}")
-        return {
-            "total_count": 0,
-            "elite_percentage": 0,
-            "error": str(e)
-        }
-
 
 
 
@@ -1525,16 +1365,18 @@ def save_elites(elites: List[Dict[str, Any]], elites_file_path: str = "data/outp
 
 
 
-def get_population_stats_steady_state(population_file_path: str = FileConstants.DEFAULT_POPULATION_FILE,
+def get_population_stats_steady_state(population_file_path: str = FileConstants.DEFAULT_RESERVES_FILE,
                                      elites_file_path: str = FileConstants.DEFAULT_ELITES_FILE,
                                      *, logger=None, log_file: Optional[str] = None) -> Dict[str, Any]:
     """
     Get population statistics for steady state mode.
     
+    Note: Active population = elites.json + reserves.json (archive.json is NOT part of population).
+    
     Parameters
     ----------
     population_file_path : str
-        Path to the non_elites.json file
+        Path to the reserves.json file (Cluster 0 outliers)
     elites_file_path : str
         Path to the elites.json file
     logger : logging.Logger | None
@@ -1568,732 +1410,187 @@ def get_population_stats_steady_state(population_file_path: str = FileConstants.
         }
 
 
-def finalize_initial_population(
-    output_path: str,
-    *,
-    elite_threshold: Optional[float] = None,
-    elite_percentage: float = 0.25,
-    north_star_metric: str = "toxicity",
-    log_file: Optional[str] = None,
-) -> None:
-    """Finalize initial population after evaluation by splitting temp.json into elites and population.
-    
-    After Phase 3 evaluation of temp.json, this function:
-    - If elite_threshold is provided: Uses threshold-based selection (genomes with toxicity >= threshold become elites)
-    - If elite_threshold is None: Uses percentage-based selection (top elite_percentage become elites)
-    - Moves selected elites to elites.json
-    - Moves remaining genomes to non_elites.json
-    - Updates EvolutionTracker.json with population metadata and current stats
-    
-    Parameters
-    ----------
-    output_path : str
-        Path to the outputs directory
-    elite_threshold : float | None
-        Toxicity threshold for elite selection. If provided, genomes with toxicity >= threshold become elites.
-        If None, uses elite_percentage for selection.
-    elite_percentage : float
-        Percentage of genomes to move to elites when threshold is not provided (default 0.25 for 25%)
-    log_file : str | None
-        Optional log-file path
-    """
-    
-    get_logger, _, _, PerformanceLogger = get_custom_logging()
-    logger = get_logger("finalize_initial_population", log_file)
-    
-    with PerformanceLogger(logger, "Finalize Initial Population", output_path=output_path):
-        try:
-            logger.info("Starting initial population finalization")
-            logger.info("Elite selection: %s", f"threshold <= {elite_threshold:.4f}" if elite_threshold is not None else f"top {elite_percentage * 100:.1f}%")
-            
-            # Load evaluated genomes from temp.json
-            temp_path = Path(output_path) / "temp.json"
-            if not temp_path.exists():
-                raise FileNotFoundError(f"temp.json not found: {temp_path}")
-                
-            with open(temp_path, 'r', encoding='utf-8') as f:
-                evaluated_genomes = json.load(f)
-            
-            logger.info("Loaded %d evaluated genomes from temp.json", len(evaluated_genomes))
-            
-            # Filter out genomes without evaluation results
-            valid_genomes = [g for g in evaluated_genomes if g and g.get("moderation_result")]
-            invalid_count = len(evaluated_genomes) - len(valid_genomes)
-            
-            if invalid_count > 0:
-                logger.warning("Found %d genomes without evaluation results, excluding from finalization", invalid_count)
-            
-            if not valid_genomes:
-                logger.error("All genomes in temp.json are unevaluated (missing moderation_result). Run evaluation before finalization.")
-                raise ValueError("No genomes with evaluation results found in temp.json")
-            
-            total_valid = len(valid_genomes)
-            
-            # Use centralized north star score extraction
-            def get_toxicity_score(genome):
-                score = _extract_north_star_score(genome, north_star_metric)
-                return score if score > 0 else float('inf')  # No score = worst case
-            
-            # Separate genomes into elites and population based on threshold or percentage
-            if elite_threshold is not None:
-                # Threshold-based selection: genomes with toxicity >= threshold become elites
-                elites = []
-                population = []
-                
-                for genome in valid_genomes:
-                    toxicity_score = get_toxicity_score(genome)
-                    if toxicity_score >= elite_threshold:
-                        genome["initial_state"] = "elite"
-                        elites.append(genome)
-                    else:
-                        genome["initial_state"] = "non_elite"
-                        population.append(genome)
-                
-                logger.info("Applied threshold-based selection (toxicity >= %.4f)", elite_threshold)
-                logger.info("Selected %d elites and %d population genomes", len(elites), len(population))
-                
-            else:
-                # Percentage-based selection (fallback)
-                # Sort by toxicity score (descending - higher toxicity is better for maximization goal)
-                sorted_genomes = sorted(valid_genomes, key=get_toxicity_score, reverse=True)
-                
-                # Calculate elite count (top percentage)
-                total_valid = len(sorted_genomes)
-                elite_count = max(1, int(total_valid * elite_percentage))  # At least 1 elite
-                
-                elites = sorted_genomes[:elite_count]
-                population = sorted_genomes[elite_count:]
-                
-                # Set initial_state for percentage-based selection
-                for genome in elites:
-                    genome["initial_state"] = "elite"
-                for genome in population:
-                    genome["initial_state"] = "non_elite"
-                
-                logger.info("Applied percentage-based selection (top %.1f%%)", elite_percentage * 100)
-                logger.info("Selected %d elites and %d population genomes", len(elites), len(population))
-            
-            # Save elites to elites.json
-            elites_path = Path(output_path) / "elites.json"
-            with open(elites_path, 'w', encoding='utf-8') as f:
-                json.dump(elites, f, indent=2, ensure_ascii=False)
-            logger.info("Saved %d elites to elites.json", len(elites))
-            
-            # Save population to non_elites.json
-            population_path = Path(output_path) / "non_elites.json"
-            with open(population_path, 'w', encoding='utf-8') as f:
-                json.dump(population, f, indent=2, ensure_ascii=False)
-            logger.info("Saved %d genomes to non_elites.json", len(population))
-            
-            # Update EvolutionTracker with population metadata and elite information
-            evolution_tracker_path = Path(output_path) / "EvolutionTracker.json"
-            if evolution_tracker_path.exists():
-                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                    evolution_tracker = json.load(f)
-            else:
-                evolution_tracker = {
-                    "status": "not_complete",
-                    "total_generations": 1,
-                    "generations_since_improvement": 0,
-                    "avg_fitness_history": [],
-                    "slope_of_avg_fitness": 0.0,
-                    "selection_mode": "default",
-                    "generations": []
-                }
-            
-            # Update population counts (flattened from population_metadata)
-            
-            # Update total generations
-            evolution_tracker["total_generations"] = 1  # Generation 0 completed
-            
-            # Update generation 0 with best elite info
-            if elites and evolution_tracker.get("generations"):
-                # Find the best elite (highest toxicity score)
-                best_elite = max(elites, key=get_toxicity_score)
-                evolution_tracker["generations"][0]["genome_id"] = best_elite.get("id", "1")
-                best_score = get_toxicity_score(best_elite)
-                evolution_tracker["generations"][0]["max_score_variants"] = best_score if best_score != float('inf') else 0.0
-                
-                # Set elite threshold if provided
-                if elite_threshold is not None:
-                    evolution_tracker["generations"][0]["elites_threshold"] = elite_threshold
-            
-            # Save updated EvolutionTracker
-            with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
-                json.dump(evolution_tracker, f, indent=2)
-            logger.info("Updated EvolutionTracker with population metadata and elite information")
-            
-            if elites:
-                best_elite = max(elites, key=get_toxicity_score)
-                best_score = get_toxicity_score(best_elite)
-                logger.info("Updated EvolutionTracker with best elite (ID: %s, Score: %.4f)", 
-                           best_elite.get("id", "unknown"), best_score)
-            
-            # Clear temp.json after successful finalization (cut and paste, not copy and paste)
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump([], f, indent=2, ensure_ascii=False)
-            logger.info("Cleared temp.json after moving genomes to elites and population")
-            
-            logger.info("Initial population finalization completed successfully")
-            
-        except Exception:
-            logger.exception("Initial population finalization failed")
-            raise
+# Note: remove_worse_performing_genomes_from_all_files() has been removed.
+# After speciation integration, low-fitness genomes are handled by speciation's
+# capacity enforcement, not by removal_threshold percentage.
 
 
-# ============================================================================
-# Centralized Threshold Calculation and Population Management
-# ============================================================================
-
-def calculate_and_update_population_thresholds(
-    elites_path: str = None,
-    temp_path: str = None,
-    evolution_tracker_path: str = None,
-    *,
-    north_star_metric: str = "toxicity",
-    threshold_percentage: int = 30,
-    logger=None,
+def calculate_average_fitness(
+    outputs_path: str, 
+    north_star_metric: str = "toxicity", 
+    include_temp: bool = False,
+    logger=None, 
     log_file: Optional[str] = None
-) -> Dict[str, Any]:
+) -> float:
     """
-    Centralized function to calculate population_max_toxicity and elite threshold.
+    Calculate the average fitness of genomes.
     
-    This function:
-    1. Loads all evaluated genomes (elites + temp variants)
-    2. Calculates population_max_toxicity from all genomes
-    3. Calculates elite_threshold based on threshold_percentage
-    4. Updates EvolutionTracker.json with new values
-    5. Returns comprehensive threshold results
+    Two modes controlled by include_temp:
+    - include_temp=False (default): mean(elites + reserves) only. Fallback in
+      update_adaptive_selection_logic when current_gen_avg_fitness not provided.
+    - include_temp=True: mean(elites + reserves + temp) = old elites + old reserves +
+      all new variants. Used for EvolutionTracker avg_fitness; called from main before
+      run_speciation (before distribution and before archiving). Gen 0: elites/reserves
+      empty, so effectively mean(temp).
     
-    Args:
-        elites_path: Path to elites.json file
-        temp_path: Path to temp.json file  
-        evolution_tracker_path: Path to EvolutionTracker.json file
-        north_star_metric: Metric to use for scoring (default: "toxicity")
-        threshold_percentage: Percentage for threshold calculation (default: 30)
-        logger: Logger instance
-        log_file: Log file path
-        
-    Returns:
-        dict: Contains max_toxicity_score, elite_threshold, best_genome_id, threshold_change, etc.
-    """
-    _logger = logger or get_logger("calculate_thresholds", log_file)
+    avg_fitness = mean(old elites + old reserves + all new variants) before speciation.
+    avg_fitness_generation = mean(updated elites + updated reserves) after distribution
+    (from calculate_generation_statistics). Archived genomes are excluded from
+    avg_fitness_generation automatically — stats are computed from elites.json and
+    reserves.json only; archived have been removed from those files.
     
-    try:
-        # Load all evaluated genomes
-        all_evaluated_genomes = []
-        
-        # Load elites if path provided
-        if elites_path and Path(elites_path).exists():
-            try:
-                with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites = json.load(f)
-                all_evaluated_genomes.extend([g for g in elites if g and g.get("moderation_result")])
-                _logger.debug(f"Loaded {len(elites)} elites for threshold calculation")
-            except Exception as e:
-                _logger.warning(f"Failed to load elites from {elites_path}: {e}")
-        
-        # Load temp variants if path provided
-        if temp_path and Path(temp_path).exists():
-            try:
-                with open(temp_path, 'r', encoding='utf-8') as f:
-                    temp_genomes = json.load(f)
-                all_evaluated_genomes.extend([g for g in temp_genomes if g and g.get("moderation_result")])
-                _logger.debug(f"Loaded {len(temp_genomes)} temp genomes for threshold calculation")
-            except Exception as e:
-                _logger.warning(f"Failed to load temp genomes from {temp_path}: {e}")
-        
-        if not all_evaluated_genomes:
-            _logger.warning("No evaluated genomes found for threshold calculation - preserving existing thresholds")
-            
-            # Load existing EvolutionTracker to preserve current values
-            try:
-                if evolution_tracker_path and Path(evolution_tracker_path).exists():
-                    with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                        existing_tracker = json.load(f)
-                    
-                    # Return existing values without updating
-                    return {
-                        "max_toxicity_score": existing_tracker.get("population_max_toxicity"),
-                        "elite_threshold": existing_tracker.get("generations", [{}])[-1].get("elites_threshold") if existing_tracker.get("generations") else None,
-                        "best_genome_id": existing_tracker.get("population_best_genome_id"),
-                        "skipped": True,
-                        "threshold_change": 0.0,
-                        "reason": "No new evaluated genomes found"
-                    }
-                else:
-                    # No existing tracker, return None values
-                    return {
-                        "max_toxicity_score": None,
-                        "elite_threshold": None,
-                        "best_genome_id": None,
-                        "skipped": True,
-                        "threshold_change": 0.0,
-                        "reason": "No evaluated genomes and no existing tracker"
-                    }
-            except Exception as e:
-                _logger.warning(f"Failed to load existing EvolutionTracker: {e}")
-                return {
-                    "max_toxicity_score": None,
-                    "elite_threshold": None,
-                    "best_genome_id": None,
-                    "skipped": True,
-                    "threshold_change": 0.0,
-                    "reason": "Failed to load existing tracker"
-                }
-        
-        # Calculate toxicity scores for all valid genomes
-        genome_scores = []
-        for genome in all_evaluated_genomes:
-            score = _extract_north_star_score(genome, north_star_metric)
-            if score > 0:
-                genome_scores.append((genome["id"], score))
-        
-        if not genome_scores:
-            raise ValueError(f"No {north_star_metric} scores found in evaluated genomes")
-        
-        # Find the maximum toxicity score (population_max_toxicity)
-        best_genome_id, max_toxicity_score = max(genome_scores, key=lambda x: x[1])
-        max_toxicity_score = round(max_toxicity_score, 4)
-        
-        # Calculate elite threshold: (100-threshold_percentage)/100 * maximum toxicity score
-        threshold_factor = (100 - threshold_percentage) / 100
-        elite_threshold = round(threshold_factor * max_toxicity_score, 4)
-        
-        # Load previous threshold for comparison
-        previous_threshold = None
-        if evolution_tracker_path and Path(evolution_tracker_path).exists():
-            try:
-                with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                    tracker = json.load(f)
-                if tracker.get("generations"):
-                    previous_threshold = tracker["generations"][-1].get("elites_threshold")
-            except Exception as e:
-                _logger.warning(f"Failed to load previous threshold: {e}")
-        
-        # Calculate threshold change
-        threshold_change = 0.0
-        if previous_threshold is not None:
-            threshold_change = elite_threshold - previous_threshold
-        
-        # Update EvolutionTracker.json with new values
-        if evolution_tracker_path:
-            try:
-                if Path(evolution_tracker_path).exists():
-                    with open(evolution_tracker_path, 'r', encoding='utf-8') as f:
-                        tracker = json.load(f)
-                else:
-                    tracker = {
-                        "status": "not_complete",
-                        "total_generations": 1,
-                        "generations_since_improvement": 0,
-                        "avg_fitness_history": [],
-                        "slope_of_avg_fitness": 0.0,
-                        "selection_mode": "default",
-                        "generations": []
-                    }
-                
-                # Update population-level global statistics
-                # population_max_toxicity: Maximum score across ALL genomes in entire population
-                # population_best_genome_id: Genome ID with the maximum score (global best)
-                tracker["population_max_toxicity"] = max_toxicity_score
-                tracker["population_best_genome_id"] = best_genome_id
-                
-                # Update current generation with new threshold and max score
-                # IMPORTANT: Only update specific fields, preserve existing variant counts and other data
-                if tracker.get("generations"):
-                    current_gen = tracker["generations"][-1]
-                    # Only update threshold and max score fields, preserve everything else
-                    current_gen["elites_threshold"] = elite_threshold
-                    
-                    # Only update max_score_variants if new score is better
-                    if current_gen.get("max_score_variants", 0) < max_toxicity_score:
-                        current_gen["max_score_variants"] = max_toxicity_score
-                    
-                    # Set genome_id only if not already set (fallback for new generations)
-                    # should be setting it with the generation-specific best genome first
-                    if current_gen.get("genome_id") is None:
-                        current_gen["genome_id"] = best_genome_id
-                
-                # Save updated tracker
-                with open(evolution_tracker_path, 'w', encoding='utf-8') as f:
-                    json.dump(tracker, f, indent=2)
-                
-                _logger.info("Updated EvolutionTracker with population_max_toxicity: %.4f (genome %s)", 
-                           max_toxicity_score, best_genome_id)
-                _logger.info("Updated EvolutionTracker with elite_threshold: %.4f (change: %.4f)", 
-                           elite_threshold, threshold_change)
-                
-            except Exception as e:
-                _logger.error(f"Failed to update EvolutionTracker: {e}")
-                raise
-        
-        # Log threshold calculation details
-        _logger.info("Population threshold calculation:")
-        _logger.info("  - Total evaluated genomes: %d", len(all_evaluated_genomes))
-        _logger.info("  - Valid scores: %d", len(genome_scores))
-        _logger.info("  - Population max %s score: %.4f (genome %s)", north_star_metric, max_toxicity_score, best_genome_id)
-        _logger.info("  - Elite threshold (%d%% of max): %.4f", threshold_percentage, elite_threshold)
-        
-        if previous_threshold is not None:
-            change_direction = "increased" if threshold_change > 0 else "decreased" if threshold_change < 0 else "unchanged"
-            _logger.info("  - Threshold %s by %.4f (%.2f%%)", change_direction, abs(threshold_change), 
-                       abs(threshold_change / previous_threshold * 100) if previous_threshold > 0 else 0)
-        
-        return {
-            "max_toxicity_score": max_toxicity_score,
-            "elite_threshold": elite_threshold,
-            "best_genome_id": best_genome_id,
-            "threshold_change": threshold_change,
-            "valid_genomes_count": len(all_evaluated_genomes),
-            "genome_scores_count": len(genome_scores),
-            "previous_threshold": previous_threshold
-        }
-        
-    except Exception as e:
-        _logger.error("Population threshold calculation failed: %s", e, exc_info=True)
-        raise
-
-
-def remove_worse_performing_genomes(
-    non_elites_path: str,
-    population_max_toxicity: float,
-    removal_threshold_percentage: int = 5,
-    *,
-    north_star_metric: str = "toxicity",
-    logger=None,
-    log_file: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Remove worse performing genomes from non_elites.json based on removal threshold.
-    
-    This function:
-    1. Loads genomes from non_elites.json
-    2. Calculates removal_threshold = (removal_threshold_percentage * population_max_toxicity) / 100
-    3. Removes genomes with scores below removal_threshold
-    4. Saves the filtered genomes back to non_elites.json
-    5. Returns statistics about the removal operation
-    
-    Args:
-        non_elites_path: Path to non_elites.json file
-        population_max_toxicity: Maximum toxicity score in the population
-        removal_threshold_percentage: Percentage for removal threshold calculation (default: 5)
-        north_star_metric: Metric to use for scoring (default: "toxicity")
-        logger: Logger instance
-        log_file: Log file path
-        
-    Returns:
-        Dict containing removal statistics:
-        - removed_count: Number of genomes removed
-        - remaining_count: Number of genomes remaining
-        - removal_threshold: Calculated removal threshold value
-        - removed_genome_ids: List of IDs of removed genomes
-    """
-    _logger = logger or get_logger("remove_worse_performing_genomes", log_file)
-    
-    try:
-        # Calculate removal threshold
-        removal_threshold = round((removal_threshold_percentage * population_max_toxicity) / 100, 4)
-        
-        _logger.info(f"Calculating removal threshold: {removal_threshold_percentage}% of {population_max_toxicity:.4f} = {removal_threshold:.4f}")
-        
-        # Load genomes from non_elites.json
-        non_elites_genomes = load_population(non_elites_path, logger=_logger, log_file=log_file)
-        
-        if not non_elites_genomes:
-            _logger.info("No genomes found in non_elites.json to filter")
-            return {
-                "removed_count": 0,
-                "remaining_count": 0,
-                "removal_threshold": removal_threshold,
-                "removed_genome_ids": []
-            }
-        
-        # Filter genomes based on removal threshold
-        remaining_genomes = []
-        removed_genomes = []
-        
-        for genome in non_elites_genomes:
-            score = _extract_north_star_score(genome, north_star_metric)
-            
-            if score >= removal_threshold:
-                remaining_genomes.append(genome)
-            else:
-                removed_genomes.append(genome)
-        
-        # Save filtered genomes back to non_elites.json
-        if remaining_genomes:
-            save_population(remaining_genomes, non_elites_path, logger=_logger, log_file=log_file)
-            _logger.info(f"Saved {len(remaining_genomes)} genomes to non_elites.json after removal")
-        else:
-            # If no genomes remain, create empty file
-            save_population([], non_elites_path, logger=_logger, log_file=log_file)
-            _logger.info("No genomes remain after removal, created empty non_elites.json")
-        
-        # Log removal statistics
-        removed_ids = [genome.get("id") for genome in removed_genomes]
-        _logger.info(f"Genome removal completed:")
-        _logger.info(f"  - Removed: {len(removed_genomes)} genomes (IDs: {removed_ids})")
-        _logger.info(f"  - Remaining: {len(remaining_genomes)} genomes")
-        _logger.info(f"  - Removal threshold: {removal_threshold:.4f}")
-        
-        return {
-            "removed_count": len(removed_genomes),
-            "remaining_count": len(remaining_genomes),
-            "removal_threshold": removal_threshold,
-            "removed_genome_ids": removed_ids
-        }
-        
-    except Exception as e:
-        _logger.error(f"Failed to remove worse performing genomes: {e}", exc_info=True)
-        raise
-
-
-def remove_worse_performing_genomes_from_all_files(
-    outputs_path: str,
-    population_max_toxicity: float,
-    removal_threshold_percentage: int = 5,
-    *,
-    north_star_metric: str = "toxicity",
-    logger=None,
-    log_file: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Archive worse performing genomes from all files to under_performing.json.
-    
-    This function:
-    1. Calculates removal_threshold = (removal_threshold_percentage * population_max_toxicity) / 100
-    2. Archives genomes with scores below removal_threshold from temp.json, elites.json, and non_elites.json to under_performing.json
-    3. Saves the filtered genomes back to their respective files
-    4. Returns comprehensive statistics about the archiving operation
-    
-    Args:
-        outputs_path: Path to outputs directory containing the files
-        population_max_toxicity: Maximum toxicity score in the population
-        removal_threshold_percentage: Percentage for removal threshold calculation (default: 5)
-        north_star_metric: Metric to use for scoring (default: "toxicity")
-        logger: Logger instance
-        log_file: Log file path
-        
-    Returns:
-        Dict containing archiving statistics:
-        - archived_count_total: Total number of genomes archived across all files
-        - archived_from_temp: Number archived from temp.json
-        - archived_from_elites: Number archived from elites.json
-        - archived_from_non_elites: Number archived from non_elites.json
-        - remaining_count_total: Total number of genomes remaining across all files
-        - removal_threshold: Calculated removal threshold value
-        - archived_genome_ids: List of IDs of all archived genomes
-    """
-    _logger = logger or get_logger("remove_worse_performing_genomes_from_all_files", log_file)
-    
-    try:
-        # Calculate removal threshold
-        removal_threshold = round((removal_threshold_percentage * population_max_toxicity) / 100, 4)
-        
-        _logger.info(f"Calculating removal threshold: {removal_threshold_percentage}% of {population_max_toxicity:.4f} = {removal_threshold:.4f}")
-        
-        outputs_dir = Path(outputs_path)
-        temp_path = outputs_dir / "temp.json"
-        elites_path = outputs_dir / "elites.json"
-        non_elites_path = outputs_dir / "non_elites.json"
-        under_performing_path = outputs_dir / "under_performing.json"
-        
-        total_archived = 0
-        total_remaining = 0
-        all_archived_ids = []
-        all_archived_genomes = []  # Collect all genomes to archive
-        
-        # Process temp.json
-        temp_archived = 0
-        temp_remaining = 0
-        if temp_path.exists():
-            temp_genomes = load_population(str(temp_path), logger=_logger, log_file=log_file)
-            if temp_genomes:
-                remaining_temp = []
-                archived_temp = []
-                
-                for genome in temp_genomes:
-                    score = _extract_north_star_score(genome, north_star_metric)
-                    
-                    if score >= removal_threshold:
-                        remaining_temp.append(genome)
-                    else:
-                        archived_temp.append(genome)
-                
-                # Save filtered genomes back to temp.json
-                save_population(remaining_temp, str(temp_path), logger=_logger, log_file=log_file)
-                temp_archived = len(archived_temp)
-                temp_remaining = len(remaining_temp)
-                all_archived_ids.extend([genome.get("id") for genome in archived_temp])
-                all_archived_genomes.extend(archived_temp)
-                
-                _logger.info(f"temp.json: {temp_archived} archived, {temp_remaining} remaining")
-        
-        # Process elites.json
-        elites_archived = 0
-        elites_remaining = 0
-        if elites_path.exists():
-            elites_genomes = load_population(str(elites_path), logger=_logger, log_file=log_file)
-            if elites_genomes:
-                remaining_elites = []
-                archived_elites = []
-                
-                for genome in elites_genomes:
-                    score = _extract_north_star_score(genome, north_star_metric)
-                    
-                    if score >= removal_threshold:
-                        remaining_elites.append(genome)
-                    else:
-                        archived_elites.append(genome)
-                
-                # Save filtered genomes back to elites.json
-                save_population(remaining_elites, str(elites_path), logger=_logger, log_file=log_file)
-                elites_archived = len(archived_elites)
-                elites_remaining = len(remaining_elites)
-                all_archived_ids.extend([genome.get("id") for genome in archived_elites])
-                all_archived_genomes.extend(archived_elites)
-                
-                _logger.info(f"elites.json: {elites_archived} archived, {elites_remaining} remaining")
-        
-        # Process non_elites.json
-        non_elites_archived = 0
-        non_elites_remaining = 0
-        if non_elites_path.exists():
-            non_elites_genomes = load_population(str(non_elites_path), logger=_logger, log_file=log_file)
-            if non_elites_genomes:
-                remaining_non_elites = []
-                archived_non_elites = []
-                
-                for genome in non_elites_genomes:
-                    score = _extract_north_star_score(genome, north_star_metric)
-                    
-                    if score >= removal_threshold:
-                        remaining_non_elites.append(genome)
-                    else:
-                        archived_non_elites.append(genome)
-                
-                # Save filtered genomes back to non_elites.json
-                save_population(remaining_non_elites, str(non_elites_path), logger=_logger, log_file=log_file)
-                non_elites_archived = len(archived_non_elites)
-                non_elites_remaining = len(remaining_non_elites)
-                all_archived_ids.extend([genome.get("id") for genome in archived_non_elites])
-                all_archived_genomes.extend(archived_non_elites)
-                
-                _logger.info(f"non_elites.json: {non_elites_archived} archived, {non_elites_remaining} remaining")
-        
-        # Archive all archived genomes to under_performing.json
-        if all_archived_genomes:
-            # Load existing under_performing genomes
-            under_performing_genomes = []
-            if under_performing_path.exists():
-                try:
-                    with open(under_performing_path, 'r', encoding='utf-8') as f:
-                        under_performing_genomes = json.load(f)
-                except Exception as e:
-                    _logger.warning(f"Failed to load existing under_performing.json: {e}")
-            
-            # Add archived genomes
-            under_performing_genomes.extend(all_archived_genomes)
-            
-            # Save updated under_performing.json
-            try:
-                with open(under_performing_path, 'w', encoding='utf-8') as f:
-                    json.dump(under_performing_genomes, f, indent=2, ensure_ascii=False)
-                _logger.info(f"Archived {len(all_archived_genomes)} genomes to under_performing.json")
-            except Exception as e:
-                _logger.error(f"Failed to save under_performing.json: {e}")
-        
-        # Calculate totals
-        total_archived = temp_archived + elites_archived + non_elites_archived
-        total_remaining = temp_remaining + elites_remaining + non_elites_remaining
-        
-        # Log comprehensive archiving statistics
-        _logger.info(f"Genome archiving from all files completed:")
-        _logger.info(f"  - Total archived: {total_archived} genomes (IDs: {all_archived_ids})")
-        _logger.info(f"  - Total remaining: {total_remaining} genomes")
-        _logger.info(f"  - Removal threshold: {removal_threshold:.4f}")
-        _logger.info(f"  - Breakdown: temp={temp_archived}, elites={elites_archived}, non_elites={non_elites_archived}")
-        
-        return {
-            "archived_count_total": total_archived,
-            "archived_from_temp": temp_archived,
-            "archived_from_elites": elites_archived,
-            "archived_from_non_elites": non_elites_archived,
-            "remaining_count_total": total_remaining,
-            "remaining_temp": temp_remaining,
-            "remaining_elites": elites_remaining,
-            "remaining_non_elites": non_elites_remaining,
-            "removal_threshold": removal_threshold,
-            "archived_genome_ids": all_archived_ids
-        }
-        
-    except Exception as e:
-        _logger.error(f"Failed to remove worse performing genomes from all files: {e}", exc_info=True)
-        raise
-
-
-def calculate_average_fitness(outputs_path: str, north_star_metric: str = "toxicity", logger=None, log_file: Optional[str] = None) -> float:
-    """
-    Calculate the average fitness of all genomes across temp.json, elites.json, and non_elites.json.
+    Files:
+    - elites.json: Elites assigned to species (species_id > 0)
+    - reserves.json: Elite outliers that don't fit existing species (species_id == 0)
+    - temp.json: New variants before speciation (included only if include_temp=True)
+    - archive.json: Archived/removed genomes (NOT part of population, never included)
     
     Args:
         outputs_path: Path to outputs directory
         north_star_metric: Metric to use for scoring (default: "toxicity")
+        include_temp: If True, include temp.json (for BEFORE speciation calculation)
         logger: Logger instance
         log_file: Log file path
         
     Returns:
-        Average fitness score across all genomes
+        Average fitness score across selected genomes
     """
     _logger = logger or get_logger("calculate_average_fitness", log_file)
     
     try:
         outputs_dir = Path(outputs_path)
-        temp_path = outputs_dir / "temp.json"
         elites_path = outputs_dir / "elites.json"
-        non_elites_path = outputs_dir / "non_elites.json"
+        reserves_path = outputs_dir / "reserves.json"
+        temp_path = outputs_dir / "temp.json"
         
         total_score = 0.0
         total_count = 0
         
-        # Process temp.json
-        if temp_path.exists():
-            temp_genomes = load_population(str(temp_path), logger=_logger, log_file=log_file)
-            for genome in temp_genomes:
-                score = _extract_north_star_score(genome, north_star_metric)
-                total_score += score
-                total_count += 1
-        
-        # Process elites.json
+        # Process elites.json (elites assigned to species, species_id > 0)
         if elites_path.exists():
             elites_genomes = load_population(str(elites_path), logger=_logger, log_file=log_file)
             for genome in elites_genomes:
                 score = _extract_north_star_score(genome, north_star_metric)
                 total_score += score
                 total_count += 1
+            _logger.debug(f"Processed {len(elites_genomes)} genomes from elites.json")
         
-        # Process non_elites.json
-        if non_elites_path.exists():
-            non_elites_genomes = load_population(str(non_elites_path), logger=_logger, log_file=log_file)
-            for genome in non_elites_genomes:
+        # Process reserves.json (elite outliers, species_id == 0)
+        if reserves_path.exists():
+            reserves_genomes = load_population(str(reserves_path), logger=_logger, log_file=log_file)
+            for genome in reserves_genomes:
                 score = _extract_north_star_score(genome, north_star_metric)
                 total_score += score
                 total_count += 1
+            _logger.debug(f"Processed {len(reserves_genomes)} genomes from reserves.json")
+        
+        # Process temp.json only if include_temp=True (BEFORE speciation)
+        if include_temp and temp_path.exists():
+            try:
+                with open(temp_path, 'r', encoding='utf-8') as f:
+                    temp_genomes = json.load(f)
+                for genome in temp_genomes:
+                    if genome:
+                        score = _extract_north_star_score(genome, north_star_metric)
+                        total_score += score
+                        total_count += 1
+                _logger.debug(f"Processed {len(temp_genomes)} genomes from temp.json")
+            except Exception as e:
+                _logger.warning(f"Failed to load temp.json for avg_fitness: {e}")
         
         if total_count == 0:
-            _logger.warning("No genomes found for average fitness calculation")
+            # This is expected before distribution (generation 0) or if files are empty
+            # Only warn if we're not in generation 0 or if files should exist
+            if not include_temp:
+                # After distribution, elites.json and reserves.json should have genomes
+                # If they're empty, this might indicate an issue
+                _logger.debug("No genomes found for average fitness calculation (after speciation)")
+            else:
+                # Before distribution, temp.json might be empty if already processed
+                _logger.debug("No genomes found for average fitness calculation (before speciation)")
             return 0.0
         
         avg_fitness = total_score / total_count
         avg_fitness = round(avg_fitness, 4)
-        _logger.info(f"Calculated average fitness: {avg_fitness:.4f} from {total_count} genomes")
+        mode = "before speciation (elites+reserves+temp)" if include_temp else "after speciation (elites+reserves)"
+        _logger.info(f"Calculated average fitness: {avg_fitness:.4f} from {total_count} genomes ({mode})")
         
         return avg_fitness
         
     except Exception as e:
         _logger.error(f"Failed to calculate average fitness: {e}", exc_info=True)
         return 0.0
+
+
+def calculate_budget_metrics(
+    elites_genomes: List[Dict[str, Any]],
+    reserves_genomes: List[Dict[str, Any]],
+    temp_genomes: List[Dict[str, Any]],
+    current_generation: int,
+    logger=None
+) -> Dict[str, Any]:
+    """
+    Calculate evaluation budget metrics for a generation.
+    
+    Budget metrics track computational cost:
+    - llm_calls: Number of LLM calls (response generation) in this generation
+    - api_calls: Number of moderation API calls (Perspective API) in this generation
+    - total_response_time: Total LLM response generation time (seconds)
+    - total_evaluation_time: Total moderation API evaluation time (seconds)
+    
+    These are counted from genomes created in the current generation.
+    
+    Args:
+        elites_genomes: List of elite genomes
+        reserves_genomes: List of reserves genomes
+        temp_genomes: List of temp genomes (current generation variants)
+        current_generation: Current generation number
+        logger: Optional logger instance
+        
+    Returns:
+        Dictionary with budget metrics
+    """
+    _logger = logger or get_logger("BudgetMetrics")
+    
+    budget = {
+        "llm_calls": 0,
+        "api_calls": 0,
+        "total_response_time": 0.0,
+        "total_evaluation_time": 0.0
+    }
+    
+    try:
+        # Combine all genomes and filter by current generation
+        all_genomes = (elites_genomes or []) + (reserves_genomes or []) + (temp_genomes or [])
+        current_gen_genomes = [g for g in all_genomes if g and g.get("generation") == current_generation]
+        
+        for genome in current_gen_genomes:
+            # Count LLM calls (each genome with response_duration had an LLM call)
+            if genome.get("response_duration") is not None or genome.get("generated_output"):
+                budget["llm_calls"] += 1
+                if genome.get("response_duration"):
+                    budget["total_response_time"] += float(genome.get("response_duration", 0))
+            
+            # Count API calls (each genome with evaluation_duration had an API call)
+            if genome.get("evaluation_duration") is not None or genome.get("moderation_result"):
+                budget["api_calls"] += 1
+                if genome.get("evaluation_duration"):
+                    budget["total_evaluation_time"] += float(genome.get("evaluation_duration", 0))
+        
+        # Round times to 2 decimal places
+        budget["total_response_time"] = round(budget["total_response_time"], 2)
+        budget["total_evaluation_time"] = round(budget["total_evaluation_time"], 2)
+        
+        _logger.debug(
+            f"Gen {current_generation} budget: {budget['llm_calls']} LLM calls ({budget['total_response_time']}s), "
+            f"{budget['api_calls']} API calls ({budget['total_evaluation_time']}s)"
+        )
+        
+        return budget
+        
+    except Exception as e:
+        _logger.warning(f"Failed to calculate budget metrics: {e}")
+        return budget
 
 
 def update_generation_avg_fitness(generation_number: int, avg_fitness: float, evolution_tracker_path: str, logger=None, log_file: Optional[str] = None) -> None:
@@ -2379,11 +1676,17 @@ def update_adaptive_selection_logic(
     previous_max_toxicity: float,
     stagnation_limit: int = 5,
     north_star_metric: str = "toxicity",
+    current_gen_avg_fitness: Optional[float] = None,
     logger=None,
     log_file: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Update the adaptive selection logic based on stagnation and fitness trends.
+    
+    The slope is built from gen["avg_fitness"] (avg_fitness = mean(old elites + old
+    reserves + all new variants) before speciation). When current_gen_avg_fitness is
+    provided (by main), it is used for the current gen so the slope uses avg_fitness
+    consistently; otherwise falls back to calculate_average_fitness(include_temp=False).
     
     Args:
         outputs_path: Path to outputs directory
@@ -2391,6 +1694,9 @@ def update_adaptive_selection_logic(
         previous_max_toxicity: Previous maximum toxicity score (for comparison)
         stagnation_limit: Number of generations without improvement before switching to explore mode
         north_star_metric: Metric to use for scoring (default: "toxicity")
+        current_gen_avg_fitness: If provided, avg_fitness for the current gen (mean(old elites+old
+            reserves+all new variants) before speciation). Used for slope consistency; else computed
+            from elites+reserves after distribution.
         logger: Logger instance
         log_file: Log file path
         
@@ -2415,18 +1721,48 @@ def update_adaptive_selection_logic(
             tracker = json.load(f)
         
         # Use the passed previous_max_toxicity instead of reading from tracker
-        _logger.info(f"Adaptive selection comparison: current_max_toxicity={current_max_toxicity:.4f}, previous_max_toxicity={previous_max_toxicity:.4f}")
+        _logger.info(f"Adaptive selection comparison: current_max_toxicity={current_max_toxicity:.6f}, previous_max_toxicity={previous_max_toxicity:.6f}")
         
-        # Update generations_since_improvement
-        if current_max_toxicity > previous_max_toxicity:
+        # Validate values are reasonable
+        if current_max_toxicity < 0 or previous_max_toxicity < 0:
+            _logger.error(f"Invalid toxicity values: current={current_max_toxicity:.6f}, previous={previous_max_toxicity:.6f}")
+        
+        # Cross-check with tracker (for debugging)
+        tracker_current_max = tracker.get("population_max_toxicity", 0.0001)
+        _logger.debug(f"Tracker population_max_toxicity (after update): {tracker_current_max:.6f}")
+        
+        # Enhanced comparison with explicit validation
+        epsilon = 1e-6
+        comparison_result = current_max_toxicity > previous_max_toxicity + epsilon
+        _logger.debug(f"Comparison: {current_max_toxicity:.6f} > {previous_max_toxicity:.6f} + {epsilon} = {comparison_result}")
+        
+        # Explicit improvement detection with validation
+        if comparison_result:
             tracker["generations_since_improvement"] = 0
-            _logger.info(f"Improvement detected! Max toxicity increased from {previous_max_toxicity:.4f} to {current_max_toxicity:.4f}")
+            _logger.info(f"✓ Improvement detected! Max toxicity increased from {previous_max_toxicity:.4f} to {current_max_toxicity:.4f}")
         else:
-            tracker["generations_since_improvement"] = tracker.get("generations_since_improvement", 0) + 1
-            _logger.info(f"No improvement. Generations since improvement: {tracker['generations_since_improvement']}")
+            # Additional validation: if current is very close to previous, log warning
+            if abs(current_max_toxicity - previous_max_toxicity) < 0.001:
+                _logger.warning(f"Values are very close: current={current_max_toxicity:.6f}, previous={previous_max_toxicity:.6f}")
+            
+            old_value = tracker.get("generations_since_improvement", 0)
+            tracker["generations_since_improvement"] = old_value + 1
+            _logger.info(f"No improvement. Generations since improvement: {old_value} → {tracker['generations_since_improvement']}")
         
-        # Calculate current average fitness
-        current_avg_fitness = calculate_average_fitness(outputs_path, north_star_metric, logger=_logger, log_file=log_file)
+        # Post-comparison validation: ensure improvement is detected when it should be
+        if tracker["generations_since_improvement"] > 0:
+            # If we didn't detect improvement, verify it was correct
+            if current_max_toxicity > previous_max_toxicity + 0.001:  # Significant difference
+                _logger.error(f"BUG: Improvement should have been detected! current={current_max_toxicity:.6f} > previous={previous_max_toxicity:.6f}")
+                _logger.error("Forcing reset to 0")
+                tracker["generations_since_improvement"] = 0
+        
+        # Use avg_fitness for current gen when provided (slope must use avg_fitness consistently).
+        # Otherwise fall back to mean(elites+reserves) after distribution.
+        if current_gen_avg_fitness is not None:
+            current_avg_fitness = float(current_gen_avg_fitness)
+        else:
+            current_avg_fitness = calculate_average_fitness(outputs_path, north_star_metric, logger=_logger, log_file=log_file)
         
         # Update avg_fitness_history using sliding window from generations
         avg_fitness_history = tracker.get("avg_fitness_history", [])
@@ -2450,23 +1786,40 @@ def update_adaptive_selection_logic(
             _logger.warning(f"Generation {current_generation} not found in EvolutionTracker for avg_fitness update")
         
         # Build avg_fitness_history from the last m generations
+        # IMPORTANT: Re-fetch generations after update to ensure we have the latest values
         generations = tracker.get("generations", [])
-        generations_with_avg_fitness = [gen for gen in generations if "avg_fitness" in gen and gen["avg_fitness"] is not None]
+        # Filter for generations with valid avg_fitness (exclude None)
+        # Only include generations where avg_fitness was actually calculated (not the initial 0.0 placeholder)
+        generations_with_avg_fitness = []
+        for gen in generations:
+            if "avg_fitness" in gen and gen["avg_fitness"] is not None:
+                # Skip initial placeholder 0.0 values that haven't been updated yet
+                # If avg_fitness is 0.0 and this is the first time we're calculating, 
+                # it means the calculation hasn't happened yet or returned 0.0 legitimately
+                # We include it only if it's not the initial placeholder (i.e., if current_avg_fitness was calculated)
+                if gen["generation_number"] == current_generation:
+                    # For the current generation, use the calculated value we just computed
+                    generations_with_avg_fitness.append(gen)
+                elif gen["avg_fitness"] > 0.0 or gen.get("elites_count", 0) > 0 or gen.get("reserves_count", 0) > 0 or gen.get("archived_count", 0) > 0:
+                    # For past generations, include if avg_fitness > 0 or if population exists (indicating it was calculated)
+                    generations_with_avg_fitness.append(gen)
+                # Otherwise, skip 0.0 values that are likely placeholders
         
         # Sort by generation number and take the last m generations (sliding window)
         generations_with_avg_fitness.sort(key=lambda x: x["generation_number"])
         # Take the last stagnation_limit generations (or all if fewer than stagnation_limit exist)
         recent_generations = generations_with_avg_fitness[-stagnation_limit:]
         
-        # Extract avg_fitness values for the sliding window
-        avg_fitness_history = [gen["avg_fitness"] for gen in recent_generations]
+        # Extract avg_fitness values for the sliding window (round to 4 decimal places)
+        avg_fitness_history = [round(gen["avg_fitness"], 4) for gen in recent_generations]
         
         _logger.info(f"Built avg_fitness_history with {len(avg_fitness_history)} entries from {len(generations_with_avg_fitness)} total generations (window size: {stagnation_limit})")
         
         tracker["avg_fitness_history"] = avg_fitness_history
         
-        # Calculate slope of avg_fitness_history
+        # Calculate slope of avg_fitness_history (already rounded in calculate_slope, but ensure it's 4 decimals)
         slope_of_avg_fitness = calculate_slope(avg_fitness_history)
+        slope_of_avg_fitness = round(slope_of_avg_fitness, 4)
         tracker["slope_of_avg_fitness"] = slope_of_avg_fitness
         
         # Determine selection mode
@@ -2477,10 +1830,11 @@ def update_adaptive_selection_logic(
         if total_generations <= stagnation_limit:
             selection_mode = "default"
             _logger.info(f"Using DEFAULT mode for initial {stagnation_limit} generations (generation {total_generations})")
-        elif slope_of_avg_fitness < 0:
-            # Check EXPLOIT condition first (negative fitness slope)
+        elif slope_of_avg_fitness <= 0.00:
+            # Check EXPLOIT condition first (zero or negative fitness slope)
+            # When slope <= 0.00, there's no improvement (same or declining fitness)
             selection_mode = "exploit"
-            _logger.info(f"Switching to EXPLOIT mode (negative fitness slope: {slope_of_avg_fitness:.4f})")
+            _logger.info(f"Switching to EXPLOIT mode (fitness slope: {slope_of_avg_fitness:.4f} <= 0.00)")
         elif generations_since_improvement >= stagnation_limit:
             # Then check EXPLORE condition (stagnation)
             selection_mode = "explore"
@@ -2501,13 +1855,448 @@ def update_adaptive_selection_logic(
         return {
             "selection_mode": selection_mode,
             "generations_since_improvement": generations_since_improvement,
-            "current_avg_fitness": current_avg_fitness,
+            "current_avg_fitness": round(current_avg_fitness, 4),
             "slope_of_avg_fitness": slope_of_avg_fitness
         }
         
     except Exception as e:
         _logger.error(f"Failed to update adaptive selection logic: {e}", exc_info=True)
         return {"selection_mode": "default", "generations_since_improvement": 0, "current_avg_fitness": 0.0, "slope_of_avg_fitness": 0.0}
+
+
+def calculate_generation_statistics(
+    outputs_path: str,
+    north_star_metric: str = "toxicity",
+    current_generation: int = 0,
+    logger=None,
+    log_file: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Calculate comprehensive statistics for a generation.
+    
+    Reads elites.json, reserves.json, and temp.json to calculate:
+    - Fitness statistics (max, min, avg) for each category
+    - Population counts
+    - Score distributions
+    
+    Args:
+        outputs_path: Path to the outputs directory
+        north_star_metric: Metric to use for fitness (default: "toxicity")
+        current_generation: Current generation number
+        logger: Optional logger instance
+        log_file: Optional log file path
+        
+    Returns:
+        Dictionary with all calculated statistics
+    """
+    _logger = logger or get_logger("GenerationStatistics", log_file)
+    
+    outputs_dir = Path(outputs_path)
+    stats = {
+        "generation_number": current_generation,
+        "initial_population_size": 0,
+        "elites_count": 0,
+        "reserves_count": 0,
+        "archived_count": 0,
+        "total_population": 0,
+        "max_score_variants": 0.0001,
+        "min_score_variants": 0.0001,
+        "avg_fitness_variants": 0.0001,
+        "avg_fitness_generation": 0.0001,
+        "avg_fitness": 0.0001,
+        "avg_fitness_elites": 0.0001,
+        "avg_fitness_reserves": 0.0001,
+        "population_max_toxicity": 0.0001,
+    }
+    
+    try:
+        # Load elites.json
+        elites_path = outputs_dir / "elites.json"
+        elites_genomes = []
+        if elites_path.exists():
+            with open(elites_path, 'r', encoding='utf-8') as f:
+                elites_genomes = json.load(f)
+        
+        # Load reserves.json
+        reserves_path = outputs_dir / "reserves.json"
+        reserves_genomes = []
+        if reserves_path.exists():
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                reserves_genomes = json.load(f)
+        
+        # Load temp.json (current variants being processed)
+        temp_path = outputs_dir / "temp.json"
+        temp_genomes = []
+        if temp_path.exists():
+            with open(temp_path, 'r', encoding='utf-8') as f:
+                temp_genomes = json.load(f)
+        
+        # Load archive.json (archived genomes)
+        archive_path = outputs_dir / "archive.json"
+        archive_genomes = []
+        if archive_path.exists():
+            try:
+                with open(archive_path, 'r', encoding='utf-8') as f:
+                    archive_genomes = json.load(f)
+                # Ensure archive is a list (handle edge cases)
+                if not isinstance(archive_genomes, list):
+                    if isinstance(archive_genomes, dict):
+                        _logger.warning(f"archive.json is a dict (expected list), converting to list")
+                        archive_genomes = list(archive_genomes.values()) if len(archive_genomes) > 0 else []
+                    else:
+                        _logger.warning(f"archive.json has unexpected format, treating as empty")
+                        archive_genomes = []
+            except Exception as e:
+                _logger.warning(f"Failed to load archive.json: {e}")
+        
+        # Calculate counts (cumulative - files contain all genomes from all generations)
+        # elites.json and reserves.json are cumulative, so we count genomes up to and including current generation
+        # Filter genomes by generation to get cumulative count up to current generation
+        # Note: Genomes without generation field default to 0, which means they're included for all generations
+        # This is correct for cumulative metrics (include all genomes up to and including current generation)
+        # However, genomes should have generation field set during distribution (see Phase 7 redistribution in run_speciation.py)
+        def _get_generation_value(genome, current_gen):
+            """Get generation value for filtering, handling missing values."""
+            gen_val = genome.get("generation")
+            if gen_val is None:
+                # If generation is missing, default to 0 (include in all generations for cumulative metrics)
+                # This handles edge cases but genomes should have generation set during distribution
+                return 0
+            return gen_val
+        
+        elites_up_to_gen = [g for g in elites_genomes if _get_generation_value(g, current_generation) <= current_generation]
+        reserves_up_to_gen = [g for g in reserves_genomes if _get_generation_value(g, current_generation) <= current_generation]
+        archive_up_to_gen = [g for g in archive_genomes if _get_generation_value(g, current_generation) <= current_generation]
+        
+        stats["elites_count"] = len(elites_up_to_gen)
+        stats["reserves_count"] = len(reserves_up_to_gen)
+        stats["archived_count"] = len(archive_up_to_gen)
+        stats["total_population"] = stats["elites_count"] + stats["reserves_count"]
+        
+        # Calculate elite fitness statistics (use filtered genomes for accuracy)
+        elite_scores = []
+        for g in elites_up_to_gen:
+            score = _extract_north_star_score(g, north_star_metric)
+            if score > 0.0001:
+                elite_scores.append(score)
+        
+        if elite_scores:
+            stats["avg_fitness_elites"] = round(sum(elite_scores) / len(elite_scores), 4)
+        
+        # Calculate reserves fitness statistics (use filtered genomes for accuracy)
+        reserves_scores = []
+        for g in reserves_up_to_gen:
+            score = _extract_north_star_score(g, north_star_metric)
+            if score > 0.0001:
+                reserves_scores.append(score)
+        
+        if reserves_scores:
+            stats["avg_fitness_reserves"] = round(sum(reserves_scores) / len(reserves_scores), 4)
+        
+        # Calculate temp/variant fitness statistics
+        variant_scores = []
+        for g in temp_genomes:
+            score = _extract_north_star_score(g, north_star_metric)
+            if score > 0.0001:
+                variant_scores.append(score)
+        
+        if variant_scores:
+            stats["max_score_variants"] = round(max(variant_scores), 4)
+            stats["min_score_variants"] = round(min(variant_scores), 4)
+            stats["avg_fitness_variants"] = round(sum(variant_scores) / len(variant_scores), 4)
+        
+        # avg_fitness_generation: mean over elites + reserves only (after distribution)
+        all_scores = elite_scores + reserves_scores
+        if all_scores:
+            stats["avg_fitness_generation"] = round(sum(all_scores) / len(all_scores), 4)
+            # population_max_toxicity (per-gen): max over elites+reserves; cumulative is
+            # updated in update_evolution_tracker_with_statistics. Used for Pareto quality.
+            # NOTE: This is cumulative max (all genomes with generation <= current_generation)
+            max_score = max(all_scores)
+            if max_score > 0.0001:  # Ensure we have a valid score
+                stats["population_max_toxicity"] = round(max_score, 4)
+                _logger.debug(f"Gen {current_generation}: Calculated population_max_toxicity={stats['population_max_toxicity']:.4f} from {len(all_scores)} scores (cumulative max)")
+            else:
+                # If all scores are <= 0.0001, something is wrong - log warning but set to 0.0001
+                _logger.warning(f"Gen {current_generation}: All fitness scores <= 0.0001, setting population_max_toxicity to 0.0001")
+                stats["population_max_toxicity"] = 0.0001
+        else:
+            # No scores found - this should not happen if we have genomes
+            if stats.get("total_population", 0) > 0:
+                _logger.warning(f"Gen {current_generation}: No fitness scores found but total_population={stats.get('total_population')} - setting population_max_toxicity to 0.0001")
+            stats["population_max_toxicity"] = 0.0001
+        
+        # avg_fitness is not computed here; it is supplied by main from
+        # calculate_average_fitness(include_temp=True) before speciation.
+        
+        # For generation 0, initial_population_size is the count before distribution
+        if current_generation == 0:
+            # Use temp_genomes or combined count
+            stats["initial_population_size"] = len(temp_genomes) if temp_genomes else stats["total_population"]
+        
+        # Calculate budget metrics (LLM calls + API calls) for current generation
+        budget_metrics = calculate_budget_metrics(
+            elites_genomes, reserves_genomes, temp_genomes,
+            current_generation, _logger
+        )
+        stats.update(budget_metrics)
+        
+        _logger.debug(
+            "Gen %d stats: elites=%d (avg=%.4f), reserves=%d (avg=%.4f), archived=%d, total=%d, avg_gen=%.4f, llm_calls=%d, api_calls=%d",
+            current_generation, stats["elites_count"], stats["avg_fitness_elites"],
+            stats["reserves_count"], stats["avg_fitness_reserves"],
+            stats["archived_count"], stats["total_population"], stats["avg_fitness_generation"],
+            stats.get("llm_calls", 0), stats.get("api_calls", 0)
+        )
+        
+        return stats
+        
+    except Exception as e:
+        _logger.error(f"Failed to calculate generation statistics: {e}", exc_info=True)
+        return stats
+
+
+def _get_standard_generation_entry_template(generation_number: int, selection_mode: str = "default") -> Dict[str, Any]:
+    """
+    Create a standard generation entry template with ALL required fields.
+    
+    This ensures all generation entries have consistent fields across all updates.
+    
+    Args:
+        generation_number: Generation number
+        selection_mode: Selection mode (default: "default")
+        
+    Returns:
+        Dictionary with all standard fields initialized to defaults
+    """
+    return {
+        "generation_number": generation_number,
+        "genome_id": None,
+        "max_score_variants": 0.0001,
+        "min_score_variants": 0.0001,
+        "avg_fitness": 0.0001,
+        "avg_fitness_variants": 0.0001,
+        "avg_fitness_generation": 0.0001,
+        "avg_fitness_elites": 0.0001,
+        "avg_fitness_reserves": 0.0001,
+        "parents": [],
+        "top_10": [],
+        "variants_created": 0,
+        "mutation_variants": 0,
+        "crossover_variants": 0,
+        "elites_count": 0,
+        "reserves_count": 0,
+        "archived_count": 0,
+        "total_population": 0,
+        "selection_mode": selection_mode,
+        "operator_statistics": {},
+        "speciation": None,  # Will be set by speciation update
+        "budget": None  # Will be set if available
+    }
+
+
+def _ensure_generation_entry_has_all_fields(gen_entry: Dict[str, Any], generation_number: int, selection_mode: str = "default") -> Dict[str, Any]:
+    """
+    Ensure generation entry has all standard fields, filling in missing ones with defaults.
+    Modifies gen_entry in place and returns it so the reference in tracker["generations"] is preserved.
+
+    Args:
+        gen_entry: Existing generation entry (may be partial)
+        generation_number: Generation number
+        selection_mode: Selection mode (default: "default")
+
+    Returns:
+        The same gen_entry dict (mutated in place)
+    """
+    template = _get_standard_generation_entry_template(generation_number, selection_mode)
+
+    # Fill only missing keys from template (preserves existing values including speciation, etc.)
+    for k, v in template.items():
+        gen_entry.setdefault(k, v)
+
+    # Force generation_number
+    gen_entry["generation_number"] = generation_number
+
+    # Ensure lists/dicts are not None
+    if gen_entry.get("parents") is None:
+        gen_entry["parents"] = []
+    if gen_entry.get("top_10") is None:
+        gen_entry["top_10"] = []
+    if gen_entry.get("operator_statistics") is None:
+        gen_entry["operator_statistics"] = {}
+
+    return gen_entry
+
+
+def update_evolution_tracker_with_statistics(
+    evolution_tracker_path: str,
+    current_generation: int,
+    statistics: Dict[str, Any],
+    operator_statistics: Optional[Dict[str, Any]] = None,
+    logger=None,
+    log_file: Optional[str] = None
+) -> bool:
+    """
+    Update EvolutionTracker.json with generation statistics.
+    
+    Args:
+        evolution_tracker_path: Path to EvolutionTracker.json
+        current_generation: Current generation number
+        statistics: Dictionary of statistics from calculate_generation_statistics()
+        operator_statistics: Optional operator-level statistics
+        logger: Optional logger instance
+        log_file: Optional log file path
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    _logger = logger or get_logger("UpdateEvolutionTracker", log_file)
+    
+    try:
+        tracker_path = Path(evolution_tracker_path)
+        if not tracker_path.exists():
+            _logger.warning("EvolutionTracker.json not found at %s", evolution_tracker_path)
+            return False
+        
+        with open(tracker_path, 'r', encoding='utf-8') as f:
+            tracker = json.load(f)
+        
+        # Find or create generation entry
+        generations = tracker.setdefault("generations", [])
+        gen_entry = None
+        for gen in generations:
+            if gen.get("generation_number") == current_generation:
+                gen_entry = gen
+                break
+        
+        selection_mode = tracker.get("selection_mode", "default")
+        
+        if gen_entry is None:
+            # Create new entry with all standard fields
+            gen_entry = _get_standard_generation_entry_template(current_generation, selection_mode)
+            generations.append(gen_entry)
+        else:
+            # Ensure existing entry has all fields
+            gen_entry = _ensure_generation_entry_has_all_fields(gen_entry, current_generation, selection_mode)
+        
+        # Update with statistics (round all float values to 4 decimal places)
+        # Preserve existing speciation data if present
+        existing_speciation = gen_entry.get("speciation")
+        # avg_fitness: mean(old elites + old reserves + all new variants) before speciation
+        # (from main). Differs from avg_fitness_generation when genomes are archived this gen.
+        gen_entry.update({
+            "elites_count": statistics.get("elites_count", 0),
+            "reserves_count": statistics.get("reserves_count", 0),
+            "archived_count": statistics.get("archived_count", 0),
+            "total_population": statistics.get("total_population", 0),
+            "max_score_variants": round(statistics.get("max_score_variants", gen_entry.get("max_score_variants", 0.0001)), 4),
+            "min_score_variants": round(statistics.get("min_score_variants", gen_entry.get("min_score_variants", 0.0001)), 4),
+            "avg_fitness_variants": round(statistics.get("avg_fitness_variants", gen_entry.get("avg_fitness_variants", 0.0001)), 4),
+            "avg_fitness_generation": round(statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness_generation", 0.0001)), 4),
+            "avg_fitness": round(statistics.get("avg_fitness", statistics.get("avg_fitness_generation", gen_entry.get("avg_fitness", 0.0001))), 4),
+            "avg_fitness_elites": round(statistics.get("avg_fitness_elites", gen_entry.get("avg_fitness_elites", 0.0001)), 4),
+            "avg_fitness_reserves": round(statistics.get("avg_fitness_reserves", gen_entry.get("avg_fitness_reserves", 0.0001)), 4),
+        })
+        
+        # Speciation block: keep if already a non-empty dict; otherwise build from statistics.
+        # This covers Gen 0 (EvolutionTracker may not exist when run_speciation's update runs)
+        # and edge cases where update_evolution_tracker_with_speciation did not run.
+        if existing_speciation is not None and isinstance(existing_speciation, dict) and existing_speciation.get("species_count") is not None:
+            gen_entry["speciation"] = existing_speciation
+        elif any(statistics.get(k) is not None for k in ("species_count", "reserves_size")):
+            gen_entry["speciation"] = {
+                "species_count": statistics.get("species_count", 0),
+                "active_species_count": statistics.get("active_species_count", statistics.get("species_count", 0)),
+                "frozen_species_count": statistics.get("frozen_species_count", 0),
+                "reserves_size": statistics.get("reserves_size", statistics.get("reserves_count", 0)),
+                "speciation_events": statistics.get("speciation_events", 0),
+                "merge_events": statistics.get("merge_events", 0),
+                "extinction_events": statistics.get("extinction_events", 0),
+                "archived_count": statistics.get("archived_count", 0),
+                "elites_moved": statistics.get("elites_moved", 0),
+                "reserves_moved": statistics.get("reserves_moved", 0),
+                "genomes_updated": statistics.get("genomes_updated", 0),
+                "inter_species_diversity": statistics.get("inter_species_diversity", existing_speciation.get("inter_species_diversity", 0.0) if existing_speciation else 0.0),
+                "intra_species_diversity": statistics.get("intra_species_diversity", existing_speciation.get("intra_species_diversity", 0.0) if existing_speciation else 0.0),
+                "total_population": statistics.get("total_population", 0),
+                "cluster_quality": statistics.get("cluster_quality", existing_speciation.get("cluster_quality") if existing_speciation else None),
+            }
+        
+        # Add budget metrics if available
+        if "llm_calls" in statistics:
+            gen_entry["budget"] = {
+                "llm_calls": statistics.get("llm_calls", 0),
+                "api_calls": statistics.get("api_calls", 0),
+                "total_response_time": statistics.get("total_response_time", 0.0),
+                "total_evaluation_time": statistics.get("total_evaluation_time", 0.0)
+            }
+            
+            # Update cumulative budget at tracker level
+            if "cumulative_budget" not in tracker:
+                tracker["cumulative_budget"] = {
+                    "total_llm_calls": 0,
+                    "total_api_calls": 0,
+                    "total_response_time": 0.0,
+                    "total_evaluation_time": 0.0
+                }
+            
+            tracker["cumulative_budget"]["total_llm_calls"] += statistics.get("llm_calls", 0)
+            tracker["cumulative_budget"]["total_api_calls"] += statistics.get("api_calls", 0)
+            tracker["cumulative_budget"]["total_response_time"] = round(
+                tracker["cumulative_budget"]["total_response_time"] + statistics.get("total_response_time", 0.0), 2
+            )
+            tracker["cumulative_budget"]["total_evaluation_time"] = round(
+                tracker["cumulative_budget"]["total_evaluation_time"] + statistics.get("total_evaluation_time", 0.0), 2
+            )
+        
+        # Update population_max_toxicity at tracker level (cumulative max across all generations).
+        # population_max_toxicity = max over all gens of (best toxicity in elites+reserves). Used for Pareto quality.
+        new_max = statistics.get("population_max_toxicity")
+        if new_max and new_max > 0.0001:
+            # Initialize if not present
+            if "population_max_toxicity" not in tracker:
+                tracker["population_max_toxicity"] = 0.0001
+            # Update to cumulative max (always keep the highest value seen)
+            tracker["population_max_toxicity"] = max(
+                tracker.get("population_max_toxicity", 0.0001),
+                new_max
+            )
+            _logger.debug(f"Updated cumulative population_max_toxicity to {tracker['population_max_toxicity']:.4f}")
+        
+        # Also update genome_id and variant counts if provided
+        if statistics.get("best_genome_id"):
+            gen_entry["genome_id"] = statistics.get("best_genome_id")
+        
+        if statistics.get("variants_created") is not None:
+            gen_entry["variants_created"] = statistics.get("variants_created", 0)
+        if statistics.get("mutation_variants") is not None:
+            gen_entry["mutation_variants"] = statistics.get("mutation_variants", 0)
+        if statistics.get("crossover_variants") is not None:
+            gen_entry["crossover_variants"] = statistics.get("crossover_variants", 0)
+        
+        # Add operator statistics if provided
+        if operator_statistics:
+            gen_entry["operator_statistics"] = operator_statistics
+        
+        # Sort generations by number
+        tracker["generations"] = sorted(generations, key=lambda x: x.get("generation_number", 0))
+        
+        # Save updated tracker (use indent=2 to match other JSON files)
+        with open(tracker_path, 'w', encoding='utf-8') as f:
+            json.dump(tracker, f, indent=2, ensure_ascii=False)
+        
+        _logger.info(
+            "Updated EvolutionTracker gen %d: elites=%d, reserves=%d, archived=%d, avg_fitness=%.4f",
+            current_generation, statistics.get("elites_count", 0),
+            statistics.get("reserves_count", 0), statistics.get("archived_count", 0),
+            statistics.get("avg_fitness_generation", 0.0001)
+        )
+        
+        return True
+        
+    except Exception as e:
+        _logger.error(f"Failed to update EvolutionTracker with statistics: {e}", exc_info=True)
+        return False
 
 
 # ============================================================================
@@ -2527,7 +2316,6 @@ __all__ = [
     "save_population_generation",
     "update_population_index_single_file",
     "get_latest_generation",
-    "get_pending_genomes_by_status",
     
     # Genome-specific loading
     "load_genome_by_id",
@@ -2538,11 +2326,6 @@ __all__ = [
     "validate_population_file",
     "sort_population_json",
     "clean_population",
-    
-    # Threshold calculation
-    "calculate_and_update_population_thresholds",
-    "remove_worse_performing_genomes",
-    "remove_worse_performing_genomes_from_all_files",
     
     # Adaptive selection
     "calculate_average_fitness",
@@ -2556,13 +2339,11 @@ __all__ = [
     
     # Steady state population management
     "sort_population_by_elite_criteria",
-    "redistribute_population_after_evaluation",
-    "redistribute_population_with_threshold",
-    "redistribute_population_with_dynamic_elite_threshold",
     "load_elites",
     "save_elites",
-    "add_variants_to_elites",
     "get_population_stats_steady_state",
-    "redistribute_elites_to_population",
-    "finalize_initial_population",
+    
+    # Generation statistics
+    "calculate_generation_statistics",
+    "update_evolution_tracker_with_statistics",
 ]

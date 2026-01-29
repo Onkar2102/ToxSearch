@@ -7,6 +7,7 @@ import json
 import yaml
 import time
 import psutil
+import sys
 from typing import List, Dict, Any, Optional
 from llama_cpp import Llama
 from utils import get_custom_logging
@@ -103,12 +104,13 @@ class ResponseGenerator:
             self.logger.error(f"Generation failed: {e}", exc_info=True)
             return "", time.time() - start_time
 
-    def process_population(self, pop_path: str = "data/outputs/non_elites.json") -> None:
+    def process_population(self, pop_path: str = "data/outputs/temp.json") -> None:
         """Process entire population for text generation one genome at a time."""
         try:
             self.logger.info("Starting population processing for text generation with chat completions")
             
             from utils.population_io import load_population
+            
             population = load_population(pop_path, logger=self.logger)
             
             pending_genomes = [g for g in population if g.get('status') == 'pending_generation']
@@ -120,18 +122,21 @@ class ResponseGenerator:
             
             total_processed = 0
             total_errors = 0
+            total_genomes = len(pending_genomes)
+            start_time = time.time()
             
-            for i, genome in enumerate(pending_genomes):
+            # Simple progress indicator
+            print(f"\nGenerating responses: 0/{total_genomes} (0%)", end='', flush=True)
+            
+            for i, genome in enumerate(pending_genomes, 1):
                 genome_id = genome.get('id', 'unknown')
                 try:
-                    self.logger.debug("Processing genome %s (%d/%d)", genome_id, i + 1, len(pending_genomes))
-                    
                     response, response_duration = self.generate_response(genome['prompt'])
                     
                     if response:
                         genome['model_name'] = self.model_cfg.get("name", "")
                         genome['generated_output'] = response
-                        genome['response_duration'] = response_duration
+                        genome['response_duration'] = round(response_duration, 4)
                         genome['status'] = 'pending_evaluation'
                         
                         total_processed += 1
@@ -144,6 +149,15 @@ class ResponseGenerator:
                     
                     self._save_single_genome(genome, pop_path)
                     self.logger.debug("Saved genome %s immediately after generation", genome_id)
+                    
+                    # Update progress indicator
+                    elapsed = time.time() - start_time
+                    rate = i / elapsed if elapsed > 0 else 0
+                    percentage = (i / total_genomes) * 100
+                    remaining = (total_genomes - i) / rate if rate > 0 else 0
+                    print(f"\rGenerating responses: {i}/{total_genomes} ({percentage:.1f}%) | "
+                          f"Processed: {total_processed} | Errors: {total_errors} | "
+                          f"Rate: {rate:.1f}/s | ETA: {remaining:.0f}s", end='', flush=True)
                         
                 except Exception as e:
                     genome['status'] = 'error'
@@ -151,6 +165,21 @@ class ResponseGenerator:
                     total_errors += 1
                     self.logger.error("Error processing genome %s: %s", genome_id, e)
                     self._save_single_genome(genome, pop_path)
+                    
+                    # Update progress even on error
+                    elapsed = time.time() - start_time
+                    rate = i / elapsed if elapsed > 0 else 0
+                    percentage = (i / total_genomes) * 100
+                    remaining = (total_genomes - i) / rate if rate > 0 else 0
+                    print(f"\rGenerating responses: {i}/{total_genomes} ({percentage:.1f}%) | "
+                          f"Processed: {total_processed} | Errors: {total_errors} | "
+                          f"Rate: {rate:.1f}/s | ETA: {remaining:.0f}s", end='', flush=True)
+            
+            # Final update and newline
+            elapsed = time.time() - start_time
+            print(f"\rGenerating responses: {total_genomes}/{total_genomes} (100.0%) | "
+                  f"Processed: {total_processed} | Errors: {total_errors} | "
+                  f"Completed in {elapsed:.1f}s{'':<20}", flush=True)
             
             try:
                 from utils.population_io import save_population

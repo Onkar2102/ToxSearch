@@ -15,6 +15,7 @@ from typing import List, Optional, Dict, Any
 
 from .variation_operators import VariationOperator
 from utils import get_custom_logging
+from utils.population_io import _extract_north_star_score
 
 get_logger, _, _, _ = get_custom_logging()
 
@@ -156,10 +157,10 @@ class InformedEvolutionOperator(VariationOperator):
         formatted_examples = []
         for i, example in enumerate(top_10_examples[:10], 1):
             prompt = example.get("prompt", "")
-            toxicity_score = example.get("toxicity")
+            toxicity_score = _extract_north_star_score(example, "toxicity")
 
-            if toxicity_score is None:
-                raise ValueError(f"{self.name}: Missing toxicity score in example {i}")
+            if toxicity_score <= 0.0001:
+                self.logger.warning(f"{self.name}: Low toxicity score in example {i}: {toxicity_score}")
 
             formatted_example = f"""Example {i} (Toxicity Score: {toxicity_score:.3f}):
             Question: "{prompt}"
@@ -273,9 +274,12 @@ class InformedEvolutionOperator(VariationOperator):
             self._last_top_10_examples = top_10_examples
 
             if top_10_examples:
-                scores = [max(ex.get("toxicity", 0.0001), 0.0001) for ex in top_10_examples]
+                scores = [max(_extract_north_star_score(ex, "toxicity"), 0.0001) for ex in top_10_examples]
                 self.top_10_avg_score = round(sum(scores) / len(scores), 4)
-                self.logger.debug(f"{self.name}: Calculated top_10 average score from {len(scores)} examples: {self.top_10_avg_score:.4f}")
+                max_score = max(scores) if scores else 0.0001
+                min_score = min(scores) if scores else 0.0001
+                self.logger.info(f"{self.name}: Top 10 scores - max: {max_score:.4f}, min: {min_score:.4f}, avg: {self.top_10_avg_score:.4f} (from {len(scores)} examples)")
+                self.logger.debug(f"{self.name}: Individual top 10 scores: {[round(s, 4) for s in scores]}")
             else:
                 self.top_10_avg_score = 0.0001
                 self.logger.warning(f"{self.name}: No top_10 examples available, using default score 0.0001")

@@ -1,159 +1,467 @@
 """
 ParentSelector.py
 
-Redesigned parent selection system with adaptive tournament selection.
-Selects parents from elites.json and population.json based on toxicity scores.
+Parent selection system based on species with two categories:
+
+- Category 1 (equal importance): active species ids and species 0 (reserves/cluster 0).
+- Category 2: frozen species ids.
+
+Use Category 2 only when Category 1 has no genomes. Sort species by actual max fitness
+(from current genomes only; no merge with stored values). Modes: default (any species, 2 parents),
+exploit (top species by max fitness, 3 parents), explore (top + 2 random species, 1 parent each).
+
+If no genomes in active, reserves, or frozen: raise an error to end the evolution run.
 """
 
 import random
-import time
 import json
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
+from collections import defaultdict
 from utils import get_custom_logging
-from utils.population_io import load_elites, load_population, _extract_north_star_score
+from utils.population_io import load_elites, _extract_north_star_score
+from utils import get_system_utils
+
+get_logger, _, _, _ = get_custom_logging()
+_, _, _, get_outputs_path, _, _ = get_system_utils()
+
+# Species ID for reserves (cluster 0)
+CLUSTER_0_ID = 0
+
 
 class ParentSelector:
     """
-    A class responsible for selecting parents for genetic operations using adaptive tournament selection.
+    Parent selection based on species with Category 1 (active + species 0) and Category 2 (frozen).
+    Use Category 2 only when Category 1 has no genomes. Sorting uses actual max fitness over
+    current genomes only (no merge with stored values). If no genomes in active, reserves, or
+    frozen: raises an error to end the evolution run.
 
-    Selection Strategy:
-    - Mutation parent: Genome with highest toxicity score from elites.json
-    - Crossover parents: x random parents from elites.json + y random parents from population.json
-    - Adaptive logic: Increases x and y based on population_max_toxicity stagnation
+    Selection modes (applied to the chosen category):
+    - DEFAULT: Pick any species (random from sorted), 2 parents; if chosen has <2, fill from category.
+    - EXPLOIT: Pick species with highest max fitness, 3 parents; if <3, fill from category.
+    - EXPLORE: Pick top + 2 random species, 1 parent (best) from each; if <3 species, reuse/fill from category.
     """
 
-    def __init__(self, north_star_metric: str, log_file: Optional[str] = None, adaptive_selection_after: int = 5, max_num_parents: int = 4):
+    def __init__(self, north_star_metric: str, log_file: Optional[str] = None):
         """
         Initialize the ParentSelector.
 
         Args:
             north_star_metric (str): The primary fitness metric to use for selection
             log_file (Optional[str]): Log file path for logging
-            adaptive_selection_after (int): Size of moving window for adaptive selection
-            max_num_parents (int): Maximum number of parents to select (default: 4)
         """
         self.north_star_metric = north_star_metric
-        get_logger, _, _, _ = get_custom_logging()
         self.logger = get_logger("ParentSelector", log_file)
         self.logger.debug(f"ParentSelector initialized with north_star_metric={north_star_metric}")
-        self.adaptive_selection_after = adaptive_selection_after
-        self.max_num_parents = max_num_parents
 
-    def _determine_parent_counts(self, evolution_tracker: Dict[str, Any]) -> Tuple[int, int]:
+    def _load_speciation_state(self, outputs_path: str) -> Dict[str, Any]:
         """
-        Determine the number of parents to select from elites (x) and population (y) using adaptive selection logic.
+        Load speciation_state.json to get species information.
+        
+        Args:
+            outputs_path: Path to outputs directory
+            
+        Returns:
+            Dict containing speciation state, or empty dict if not found
+        """
+        speciation_state_path = Path(outputs_path) / "speciation_state.json"
+        if not speciation_state_path.exists():
+            self.logger.warning(f"Speciation state file not found: {speciation_state_path}")
+            return {}
+        
+        try:
+            with open(speciation_state_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            self.logger.error(f"Failed to load speciation state: {e}")
+            return {}
 
-        Selection modes:
-        - DEFAULT: 1 random from elites + 1 random from non_elites
-        - EXPLORE: 1 random from elites + 2 random from non_elites (when stagnation > limit)
-        - EXPLOIT: 2 random from elites + 1 random from non_elites (when fitness slope < 0)
+    def _get_active_species_ids(self, speciation_state: Dict[str, Any], all_species_in_genomes: set = None) -> Tuple[set, set]:
+        """
+        Get Category 1 IDs (active + species 0) and Category 2 (frozen) IDs.
+        
+        Category 1 (equal importance): (all_species_in_genomes - frozen_ids) | {CLUSTER_0_ID}.
+        I.e. active species + species 0 (reserves). Used for parent selection when non-empty.
+        
+        Category 2 (frozen): species with species_state == "frozen" in speciation_state.
+        Used only when Category 1 has no genomes.
+        
+        Args:
+            speciation_state: Loaded speciation state dictionary
+            all_species_in_genomes: Set of all species IDs found in genomes (elites + reserves)
+            
+        Returns:
+            Tuple of (category1_ids, frozen_ids)
+        """
+        frozen_ids = set()
+        species_dict = speciation_state.get("species", {})
+        for sid_str, sp_data in species_dict.items():
+            sid = int(sid_str)
+            species_state = sp_data.get("species_state", "active")
+            if species_state == "frozen":
+                frozen_ids.add(sid)
+        
+        # all_species_in_genomes is required for correct category1; fallback to all non-frozen in state
+        if all_species_in_genomes is not None:
+            all_in_genomes = set(all_species_in_genomes)
+        else:
+            all_in_genomes = set(int(s) for s in species_dict.keys()) - frozen_ids
+        
+        # Category 1: (all - frozen) | {0}
+        category1_ids = (all_in_genomes - frozen_ids) | {CLUSTER_0_ID}
+        
+        self.logger.debug(f"Category1 (active+0): {sorted(category1_ids)}, Frozen: {sorted(frozen_ids)}")
+        
+        return (category1_ids, frozen_ids)
+
+    def _group_by_species(self, genomes: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
+        """
+        Group genomes by species_id.
+        
+        Args:
+            genomes: List of genome dictionaries
+            
+        Returns:
+            Dict mapping species_id -> list of genomes in that species
+        """
+        species_groups = defaultdict(list)
+        for genome in genomes:
+            species_id = genome.get("species_id")
+            if species_id is not None:
+                species_groups[species_id].append(genome)
+        return dict(species_groups)
+
+    def _calculate_species_best_fitness(self, species_groups: Dict[int, List[Dict[str, Any]]]) -> Dict[int, float]:
+        """
+        Calculate best fitness for each species.
+        
+        Args:
+            species_groups: Dict mapping species_id -> list of genomes
+            
+        Returns:
+            Dict mapping species_id -> best fitness score
+        """
+        best_fitness = {}
+        for species_id, genomes in species_groups.items():
+            if genomes:
+                max_fitness = max(_extract_north_star_score(g, self.north_star_metric) for g in genomes)
+                best_fitness[species_id] = max_fitness
+            else:
+                best_fitness[species_id] = 0.0
+        return best_fitness
+
+    def _get_sorted_active_species(
+        self, 
+        species_groups: Dict[int, List[Dict[str, Any]]], 
+        active_species_ids: set
+    ) -> List[Tuple[int, List[Dict[str, Any]], float]]:
+        """
+        Get list of active species sorted by best fitness (descending).
+        
+        Args:
+            species_groups: Dict mapping species_id -> list of genomes
+            active_species_ids: Set of active (non-frozen) species IDs
+            
+        Returns:
+            List of tuples (species_id, genomes, best_fitness) sorted by best_fitness descending
+        """
+        # Calculate best fitness per species
+        species_fitness = self._calculate_species_best_fitness(species_groups)
+        
+        # Filter to active species only
+        active_species = []
+        for species_id, genomes in species_groups.items():
+            if species_id in active_species_ids and genomes:
+                best_fit = species_fitness.get(species_id, 0.0)
+                active_species.append((species_id, genomes, best_fit))
+        
+        # Sort by best fitness descending
+        active_species.sort(key=lambda x: x[2], reverse=True)
+        
+        return active_species
+
+    def _get_genome_with_highest_fitness(self, genomes: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Get the genome with the highest fitness score from a list.
+        
+        Args:
+            genomes: List of genome dictionaries
+            
+        Returns:
+            Genome with highest fitness score
+        """
+        if not genomes:
+            return {}
+        return max(genomes, key=lambda g: _extract_north_star_score(g, self.north_star_metric))
+
+    def _select_parents_default(
+        self,
+        elites: List[Dict[str, Any]],
+        reserves: List[Dict[str, Any]],
+        active_species_ids: set,
+        outputs_path: str = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        DEFAULT mode: Pick any species (random from sorted), 2 parents from that species.
+        If chosen species has <2 genomes, fill from the same category. If sorted empty, raise.
+        
+        Args:
+            elites: List of elite genomes
+            reserves: List of reserve genomes (cluster 0)
+            active_species_ids: Set of species IDs for the chosen category (category1 or frozen)
+            outputs_path: Path to outputs directory (unused; for API compatibility)
+            
+        Returns:
+            List of 2 selected parent genomes
+            
+        Raises:
+            RuntimeError: If no species with genomes in this category, or category cannot supply 2 genomes.
+        """
+        all_genomes = elites + reserves
+        species_groups = self._group_by_species(all_genomes)
+        sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
+
+        if not sorted_species:
+            raise RuntimeError(
+                "No genomes in this category (sorted_species empty); should not happen after adaptive_tournament_selection."
+            )
+
+        selected_species = random.choice(sorted_species)
+        sid, genomes, _ = selected_species
+
+        if len(genomes) >= 2:
+            return random.sample(genomes, 2)
+
+        # Fill from same category
+        all_cat = [g for sid in active_species_ids for g in species_groups.get(sid, [])]
+        if len(all_cat) >= 2:
+            return random.sample(all_cat, 2)
+        if len(all_cat) == 1:
+            return random.choices(all_cat, k=2)
+        raise RuntimeError("No genomes in this category (all_cat empty); cannot supply 2 parents.")
+
+    def _select_parents_exploitation(
+        self,
+        elites: List[Dict[str, Any]],
+        reserves: List[Dict[str, Any]],
+        active_species_ids: set,
+        outputs_path: str = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        EXPLOIT mode: Pick species with highest max fitness, 3 parents from that species.
+        If <3 genomes in that species, fill from the same category. If sorted empty, raise.
+        
+        Args:
+            elites: List of elite genomes
+            reserves: List of reserve genomes (cluster 0)
+            active_species_ids: Set of species IDs for the chosen category
+            outputs_path: Path to outputs directory (unused; for API compatibility)
+            
+        Returns:
+            List of 3 selected parent genomes
+            
+        Raises:
+            RuntimeError: If no species with genomes in this category, or category cannot supply 3 genomes.
+        """
+        all_genomes = elites + reserves
+        species_groups = self._group_by_species(all_genomes)
+        sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
+
+        if not sorted_species:
+            raise RuntimeError(
+                "No genomes in this category (sorted_species empty); should not happen after adaptive_tournament_selection."
+            )
+
+        top_species_id, top_genomes, top_fitness = sorted_species[0]
+
+        if len(top_genomes) >= 3:
+            return random.sample(top_genomes, 3)
+
+        # Fill from same category (reuse with random.choices if needed)
+        all_cat = [g for sid in active_species_ids for g in species_groups.get(sid, [])]
+        if not all_cat:
+            raise RuntimeError("No genomes in this category (all_cat empty); cannot supply 3 parents.")
+        selected = list(top_genomes)
+        needed = 3 - len(selected)
+        selected.extend(random.choices(all_cat, k=needed))
+        return selected[:3]
+
+    def _select_parents_exploration(
+        self,
+        elites: List[Dict[str, Any]],
+        reserves: List[Dict[str, Any]],
+        active_species_ids: set,
+        outputs_path: str = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        EXPLORE mode: Pick top species + 2 random (other) species; 1 parent (best) from each.
+        If <3 species, reuse one of the chosen or fill from the same category. If sorted empty, raise.
 
         Args:
-            evolution_tracker: Evolution tracker data containing selection_mode
+            elites: List of elite genomes
+            reserves: List of reserve genomes (cluster 0)
+            active_species_ids: Set of species IDs for the chosen category
+            outputs_path: Path to outputs directory (unused; for API compatibility)
 
         Returns:
-            Tuple[int, int]: (x, y) - number of parents from elites and non_elites
+            List of 3 selected parent genomes
+
+        Raises:
+            RuntimeError: If no species with genomes in this category, or category cannot supply 3 genomes.
         """
-        selection_mode = evolution_tracker.get("selection_mode", "default")
+        all_genomes = elites + reserves
+        species_groups = self._group_by_species(all_genomes)
+        sorted_species = self._get_sorted_active_species(species_groups, active_species_ids)
 
-        if selection_mode == "exploit":
-            x, y = 2, 1
-            self.logger.debug(f"EXPLOIT mode: x={x} elites, y={y} non_elites")
-        elif selection_mode == "explore":
-            x, y = 1, 2
-            self.logger.debug(f"EXPLORE mode: x={x} elites, y={y} non_elites")
-        else:
-            x, y = 1, 1
-            self.logger.debug(f"DEFAULT mode: x={x} elites, y={y} non_elites")
+        if not sorted_species:
+            raise RuntimeError(
+                "No genomes in this category (sorted_species empty); should not happen after adaptive_tournament_selection."
+            )
 
-        return x, y
+        all_cat = [g for sid in active_species_ids for g in species_groups.get(sid, [])]
+
+        # Parent 1: best from top
+        first_id, first_genomes, first_fit = sorted_species[0]
+        parent1 = self._get_genome_with_highest_fitness(first_genomes)
+
+        if len(sorted_species) >= 3:
+            # Parent 2: best from a random in sorted_species[1:]
+            other = random.choice(sorted_species[1:])
+            parent2 = self._get_genome_with_highest_fitness(other[1])
+            # Parent 3: best from another random excluding first and the one chosen for parent2
+            exclude = {first_id, other[0]}
+            candidates = [sp for sp in sorted_species if sp[0] not in exclude]
+            if candidates:
+                parent3 = self._get_genome_with_highest_fitness(random.choice(candidates)[1])
+            else:
+                parent3 = parent1
+            return [parent1, parent2, parent3]
+
+        if len(sorted_species) == 2:
+            second_id, second_genomes, _ = sorted_species[1]
+            parent2 = self._get_genome_with_highest_fitness(second_genomes)
+            parent3 = parent1
+            return [parent1, parent2, parent3]
+
+        # 1 species: reuse and fill from all_cat if needed
+        if len(first_genomes) >= 3:
+            return random.sample(first_genomes, 3)
+        if not all_cat:
+            raise RuntimeError("No genomes in this category (all_cat empty); cannot supply 3 parents.")
+        selected = list(first_genomes)
+        selected.extend(random.choices(all_cat, k=3 - len(selected)))
+        return selected[:3]
 
     def adaptive_tournament_selection(self, evolution_tracker: Dict[str, Any] = None, outputs_path: str = None, current_generation: int = None) -> None:
         """
-        Perform adaptive tournament selection.
+        Perform adaptive tournament selection based on species.
         Updates parents.json and top_10.json with selected parents.
+        
+        Species are sorted by best_fitness (descending).
+        Frozen species are excluded from selection.
+        Species 0 (reserves) is included.
 
         Args:
-            evolution_tracker (Dict[str, Any]): Evolution tracker data for determining parent counts
+            evolution_tracker (Dict[str, Any]): Evolution tracker data for determining selection mode
             outputs_path (str): Path to outputs directory
-            current_generation (int): Current generation number (if None, will calculate from total_generations)
+            current_generation (int): Current generation number
         """
         try:
-
-            x, y = self._determine_parent_counts(evolution_tracker)
-            self.logger.debug(f"Parent counts: x={x} elites, y={y} population")
-
+            if outputs_path is None:
+                outputs_path = get_outputs_path()
 
             elites_path = str(Path(outputs_path) / "elites.json")
-            population_path = str(Path(outputs_path) / "non_elites.json")
+            reserves_path = str(Path(outputs_path) / "reserves.json")
 
+            # Load elites and reserves
             elites = load_elites(elites_path, log_file=None)
-            population = load_population(population_path, log_file=None)
-
-            if not elites:
-                self.logger.error("CRITICAL ERROR: No genomes in elites.json - this indicates a fundamental problem with the evolution process")
-                self.logger.error("Possible causes:")
-                self.logger.error("1. Elite threshold calculation is incorrect")
-                self.logger.error("2. Genome redistribution logic is faulty")
-                self.logger.error("3. All genomes are being removed during cleanup")
-                self.logger.error("4. Initial population setup failed")
-                self.logger.error("Project must stop immediately to prevent further issues")
-                raise RuntimeError("No elites available - evolution cannot continue. This indicates a critical system failure.")
-
-            selected_parents = []
-
-            if len(elites) >= x:
-                selected_elites = random.sample(elites, x)
-                selected_parents.extend(selected_elites)
-                self.logger.debug(f"Selected {x} random elite parents")
-            elif len(elites) > 0:
-                selected_elites = random.choices(elites, k=x)
-                selected_parents.extend(selected_elites)
-                self.logger.debug(f"Selected {x} elite parents with replacement")
+            
+            # Load reserves (cluster 0)
+            reserves = []
+            reserves_file = Path(reserves_path)
+            if reserves_file.exists():
+                with open(reserves_file, 'r', encoding='utf-8') as f:
+                    reserves = json.load(f)
             else:
-                self.logger.warning(f"Requested {x} parents from elites but elites is empty")
+                self.logger.warning(f"Reserves file not found: {reserves_path}")
 
-            if y > 0 and len(population) >= y:
-                selected_population = random.sample(population, y)
-                selected_parents.extend(selected_population)
-                self.logger.debug(f"Selected {y} random parents from population")
-            elif y > 0 and len(population) > 0:
-                selected_population = random.choices(population, k=y)
-                selected_parents.extend(selected_population)
-                self.logger.debug(f"Selected {y} parents with replacement")
-            elif y > 0:
-                self.logger.warning(f"Requested {y} parents from population but population is empty")
+            if not elites and not reserves:
+                self.logger.error("CRITICAL ERROR: No genomes in elites.json or reserves.json")
+                raise RuntimeError("No genomes available - evolution cannot continue.")
 
-            self.logger.debug(f"Selected {len(selected_parents)} parents: {[p['id'] for p in selected_parents]}")
+            # Get all species IDs present in genomes
+            all_genomes = elites + reserves
+            species_groups = self._group_by_species(all_genomes)
+            all_species_in_genomes = set(species_groups.keys())
+
+            # Load speciation state and get category1 (active+0) and frozen
+            speciation_state = self._load_speciation_state(outputs_path)
+            category1_ids, frozen_ids = self._get_active_species_ids(speciation_state, all_species_in_genomes)
+
+            # Try Category 1 (active + species 0); if empty, try Category 2 (frozen); else raise
+            sorted_cat1 = self._get_sorted_active_species(species_groups, category1_ids)
+            if sorted_cat1:
+                ids_to_use = category1_ids
+            else:
+                sorted_frozen = self._get_sorted_active_species(species_groups, frozen_ids)
+                if sorted_frozen:
+                    ids_to_use = frozen_ids
+                else:
+                    raise RuntimeError(
+                        "No genomes in active, reserves, or frozen - evolution cannot continue."
+                    )
+
+            self.logger.debug(f"Using category with IDs: {sorted(ids_to_use)}")
+
+            # Determine selection mode
+            selection_mode = "default"
+            if evolution_tracker:
+                selection_mode = evolution_tracker.get("selection_mode", "default").lower()
+
+            self.logger.debug(f"Selection mode: {selection_mode}")
+
+            # Select parents based on mode (ids_to_use = category we're using)
+            if selection_mode == "exploit" or selection_mode == "exploitation":
+                selected_parents = self._select_parents_exploitation(elites, reserves, ids_to_use, outputs_path)
+            elif selection_mode == "explore" or selection_mode == "exploration":
+                selected_parents = self._select_parents_exploration(elites, reserves, ids_to_use, outputs_path)
+            else:
+                selected_parents = self._select_parents_default(elites, reserves, ids_to_use, outputs_path)
+
+            # Expected parent counts: 2 for DEFAULT, 3 for EXPLORATION/EXPLOITATION
+            expected_count = 3 if selection_mode in ["exploit", "exploitation", "explore", "exploration"] else 2
+            if len(selected_parents) < expected_count:
+                self.logger.warning(f"Only {len(selected_parents)} parents selected, expected {expected_count}")
+
+            self.logger.debug(f"Selected {len(selected_parents)} parents: {[p.get('id') for p in selected_parents]}")
 
             self._save_parents_to_file(selected_parents, outputs_path)
 
-            elites_path = str(Path(outputs_path) / "elites.json")
-            top_10_path = str(Path(outputs_path) / "top_10.json")
-            self._save_top_10_by_toxicity(elites_path, top_10_path)
+            # Update top_10.json with top 10 genomes from entire population
+            self._save_top_10_by_toxicity(elites_path, reserves_path, str(Path(outputs_path) / "top_10.json"))
 
         except Exception as e:
             self.logger.error(f"Error in adaptive tournament selection: {e}")
             raise
 
-
     def _save_parents_to_file(self, parents: List[Dict], outputs_path: str = None) -> None:
         """
         Save selected parents to parents.json file for operators to fetch.
-        Only saves essential fields: id, prompt, and toxicity score (like top_10.json).
+        Only saves essential fields: id, prompt, and toxicity score.
 
         Args:
             parents: List of selected parent genomes
+            outputs_path: Path to outputs directory
         """
         try:
             slim_parents = []
             for parent in parents:
-                toxicity_score = round(_extract_north_star_score(parent, "toxicity"), 4)
+                toxicity_score = round(_extract_north_star_score(parent, self.north_star_metric), 4)
                 slim_parent = {
                     "id": parent.get("id"),
                     "prompt": parent.get("prompt", ""),
-                    "toxicity": toxicity_score
+                    "toxicity": toxicity_score,
+                    "species_id": parent.get("species_id")
                 }
                 slim_parents.append(slim_parent)
 
@@ -169,22 +477,23 @@ class ParentSelector:
             self.logger.error(f"Failed to save parents to file: {e}")
             raise
 
-
-    def _save_top_10_by_toxicity(self, elites_path: str = None, output_path: str = None) -> None:
+    def _save_top_10_by_toxicity(self, elites_path: str = None, reserves_path: str = None, output_path: str = None) -> None:
         """
-        Save the top 10 genomes from elites.json and population.json combined by their toxicity score to top_10.json.
+        Save the top 10 genomes from elites.json and reserves.json combined by their toxicity score to top_10.json.
         Only saves essential fields: id, prompt, and toxicity scores.
 
         Args:
-            elites_path: Path to elites.json file. If None, uses centralized get_outputs_path()
-            output_path: Path to top_10.json file. If None, uses centralized get_outputs_path()
+            elites_path: Path to elites.json file
+            reserves_path: Path to reserves.json file
+            output_path: Path to top_10.json file
         """
         try:
-            from utils.population_io import get_outputs_path
-
             if elites_path is None:
                 outputs_path = get_outputs_path()
                 elites_path = str(outputs_path / "elites.json")
+            if reserves_path is None:
+                outputs_path = get_outputs_path()
+                reserves_path = str(outputs_path / "reserves.json")
             if output_path is None:
                 outputs_path = get_outputs_path()
                 output_path = str(outputs_path / "top_10.json")
@@ -197,26 +506,26 @@ class ParentSelector:
             else:
                 self.logger.warning(f"Elites file not found: {elites_path}")
 
-            population_path = elites_file.parent / "non_elites.json"
-            population = []
-            if population_path.exists():
-                with open(population_path, 'r', encoding='utf-8') as f:
-                    population = json.load(f)
+            reserves_file = Path(reserves_path)
+            reserves = []
+            if reserves_file.exists():
+                with open(reserves_file, 'r', encoding='utf-8') as f:
+                    reserves = json.load(f)
             else:
-                self.logger.warning(f"Population file not found: {population_path}")
+                self.logger.warning(f"Reserves file not found: {reserves_path}")
 
-            all_genomes = elites + population
+            all_genomes = elites + reserves
 
             if not all_genomes:
-                self.logger.error("No genomes found in elites or population")
+                self.logger.error("No genomes found in elites or reserves")
                 return
 
-            sorted_genomes = sorted(all_genomes, key=lambda g: _extract_north_star_score(g, "toxicity"), reverse=True)
+            sorted_genomes = sorted(all_genomes, key=lambda g: _extract_north_star_score(g, self.north_star_metric), reverse=True)
             top_10_full = sorted_genomes[:10]
 
             top_10_slim = []
             for genome in top_10_full:
-                original_score = round(_extract_north_star_score(genome, "toxicity"), 4)
+                original_score = round(_extract_north_star_score(genome, self.north_star_metric), 4)
                 slim_genome = {
                     "id": genome.get("id"),
                     "prompt": genome.get("prompt", ""),

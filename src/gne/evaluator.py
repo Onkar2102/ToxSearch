@@ -12,6 +12,7 @@ import json
 import time
 import hashlib
 import threading
+import sys
 from typing import List, Dict, Optional, Any
 from dotenv import load_dotenv
 from utils import get_custom_logging, get_population_io
@@ -152,14 +153,17 @@ class HybridModerationEvaluator:
             self.logger.error("Failed to initialize API clients: %s", e)
             raise
     
-    def _evaluate_with_google(self, text: str, genome_id: str, max_retries: int = 2) -> Optional[Dict[str, Any]]:
+    def _evaluate_with_google(self, text: str, genome_id: str, max_retries: int = 10) -> Optional[Dict[str, Any]]:
         """
         Evaluate text using Google Perspective API with retry logic.
+        
+        Uses exponential backoff for retries (2^attempt seconds between attempts).
+        This handles Perspective API rate limits (per-minute quotas) gracefully.
         
         Args:
             text: Text to evaluate
             genome_id: ID of the genome being evaluated
-            max_retries: Maximum number of retry attempts (default: 2)
+            max_retries: Maximum number of retry attempts (default: 10, giving 11 total attempts)
             
         Returns:
             Dictionary with scores and metadata, or None if evaluation fails
@@ -349,8 +353,13 @@ class HybridModerationEvaluator:
             
             total_processed = 0
             total_errors = 0
+            total_genomes = len(pending_genomes)
+            start_time = time.time()
             
-            for i, genome in enumerate(pending_genomes):
+            # Simple progress indicator
+            print(f"\nEvaluating toxicity: 0/{total_genomes} (0%)", end='', flush=True)
+            
+            for i, genome in enumerate(pending_genomes, 1):
                 try:
                     genome_id = genome.get('id', 'unknown')
                     generated_text = genome.get('generated_output', '')
@@ -361,9 +370,16 @@ class HybridModerationEvaluator:
                         genome['error'] = 'No generated output'
                         total_errors += 1
                         self._save_single_genome(genome, pop_path)
+                        
+                        # Update progress even on error
+                        elapsed = time.time() - start_time
+                        rate = i / elapsed if elapsed > 0 else 0
+                        percentage = (i / total_genomes) * 100
+                        remaining = (total_genomes - i) / rate if rate > 0 else 0
+                        print(f"\rEvaluating toxicity: {i}/{total_genomes} ({percentage:.1f}%) | "
+                              f"Processed: {total_processed} | Errors: {total_errors} | "
+                              f"Rate: {rate:.1f}/s | ETA: {remaining:.0f}s", end='', flush=True)
                         continue
-                    
-                    self.logger.debug("Evaluating genome %s (%d/%d)", genome_id, i + 1, len(pending_genomes))
                     
                     evaluation_result = self._evaluate_text_hybrid(generated_text, genome_id, moderation_methods=moderation_methods)
                     
@@ -371,7 +387,7 @@ class HybridModerationEvaluator:
                         genome['moderation_result'] = evaluation_result
                         
                         if hasattr(self, '_last_evaluation_time'):
-                            genome['evaluation_duration'] = self._last_evaluation_time['duration']
+                            genome['evaluation_duration'] = round(self._last_evaluation_time['duration'], 4)
                         
                         north_star_score = self._extract_north_star_score(evaluation_result, north_star_metric)
                         
@@ -386,7 +402,19 @@ class HybridModerationEvaluator:
                     self._save_single_genome(genome, pop_path)
                     self.logger.debug("Saved genome %s immediately after evaluation", genome_id)
                     
-                    import time
+                    # Update progress indicator
+                    elapsed = time.time() - start_time
+                    rate = i / elapsed if elapsed > 0 else 0
+                    percentage = (i / total_genomes) * 100
+                    remaining = (total_genomes - i) / rate if rate > 0 else 0
+                    avg_score = ""
+                    if total_processed > 0 and 'google' in evaluation_result:
+                        # Show current score in progress
+                        avg_score = f" | Score: {north_star_score:.3f}"
+                    print(f"\rEvaluating toxicity: {i}/{total_genomes} ({percentage:.1f}%) | "
+                          f"Processed: {total_processed} | Errors: {total_errors}{avg_score} | "
+                          f"Rate: {rate:.1f}/s | ETA: {remaining:.0f}s", end='', flush=True)
+                    
                     time.sleep(0.75)
                         
                 except Exception as e:
@@ -395,7 +423,21 @@ class HybridModerationEvaluator:
                     genome['error'] = str(e)
                     total_errors += 1
                     self._save_single_genome(genome, pop_path)
+                    
+                    # Update progress even on error
+                    elapsed = time.time() - start_time
+                    rate = i / elapsed if elapsed > 0 else 0
+                    percentage = (i / total_genomes) * 100
+                    remaining = (total_genomes - i) / rate if rate > 0 else 0
+                    print(f"\rEvaluating toxicity: {i}/{total_genomes} ({percentage:.1f}%) | "
+                          f"Processed: {total_processed} | Errors: {total_errors} | "
+                          f"Rate: {rate:.1f}/s | ETA: {remaining:.0f}s", end='', flush=True)
             
+            # Final update and newline
+            elapsed = time.time() - start_time
+            print(f"\rEvaluating toxicity: {total_genomes}/{total_genomes} (100.0%) | "
+                  f"Processed: {total_processed} | Errors: {total_errors} | "
+                  f"Completed in {elapsed:.1f}s{'':<20}", flush=True)
             
             self.logger.info("Population evaluation completed:")
             self.logger.info("  - Total genomes: %d", len(population))

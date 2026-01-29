@@ -47,7 +47,7 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
         outputs_path = get_outputs_path()
         temp_path = outputs_path / "temp.json"
         elites_path = outputs_path / "elites.json"
-        population_path = outputs_path / "non_elites.json"
+        reserves_path = outputs_path / "reserves.json"  # Formerly non_elites.json
 
         if not temp_path.exists():
             logger.warning("temp.json not found for deduplication")
@@ -68,15 +68,15 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
                 elites = json.load(f)
                 for genome in elites:
                     if genome and genome.get("prompt"):
-                        existing_prompts.add(genome["prompt"].strip().lower())
+                        existing_prompts.add(genome["prompt"])  # Exact match, no normalization
                         existing_ids.add(genome.get("id"))
 
-        if population_path.exists():
-            with open(population_path, 'r', encoding='utf-8') as f:
-                population = json.load(f)
-                for genome in population:
+        if reserves_path.exists():
+            with open(reserves_path, 'r', encoding='utf-8') as f:
+                cluster0_genomes = json.load(f)
+                for genome in cluster0_genomes:
                     if genome and genome.get("prompt"):
-                        existing_prompts.add(genome["prompt"].strip().lower())
+                        existing_prompts.add(genome["prompt"])  # Exact match, no normalization
                         existing_ids.add(genome.get("id"))
 
         unique_variants = []
@@ -87,10 +87,10 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
                 duplicates_removed += 1
                 continue
 
-            norm_prompt = variant["prompt"].strip().lower()
+            prompt = variant["prompt"]  # Exact match, no normalization
             genome_id = variant.get("id")
 
-            if norm_prompt in existing_prompts or genome_id in existing_ids:
+            if prompt in existing_prompts or genome_id in existing_ids:
                 duplicates_removed += 1
                 if operator_stats:
                     operator_name = variant.get("creation_info", {}).get("operator", "unknown")
@@ -112,124 +112,8 @@ def _deduplicate_variants_in_temp(logger, operator_stats=None):
         raise
 
 
-def distribute_genomes_by_threshold(temp_path, elite_threshold, north_star_metric, logger, removal_threshold=None, north_star_threshold=0.99):
-    """
-    Distribute genomes from temp.json based on thresholds into 3 categories:
-    - Genomes >= elite_threshold → elites.json (elite genomes)
-    - Genomes between removal_threshold and elite_threshold → non_elites.json (for further evolution)
-    - Genomes <= removal_threshold → under_performing.json (archived low-performers)
-
-    Args:
-        temp_path: Path to temp.json file
-        elite_threshold: Toxicity threshold for elite selection
-        north_star_metric: The metric to use for scoring
-        logger: Logger instance
-        removal_threshold: Toxicity threshold for removal/archiving (default: None, no archiving)
-        north_star_threshold: Threshold for toxic genomes (default: 0.99)
-
-    Returns:
-        dict: Distribution statistics with elites_moved, population_moved, under_performing_moved, total_processed
-    """
-    try:
-        outputs_path = get_outputs_path()
-        elites_path = outputs_path / "elites.json"
-        population_path = outputs_path / "non_elites.json"
-        under_performing_path = outputs_path / "under_performing.json"
-
-        if not temp_path.exists():
-            logger.warning("temp.json not found for distribution")
-            return {"elites_moved": 0, "population_moved": 0, "under_performing_moved": 0, "total_processed": 0}
-
-        with open(temp_path, 'r', encoding='utf-8') as f:
-            temp_variants = json.load(f)
-
-        if not temp_variants:
-            logger.debug("No variants in temp.json to distribute")
-            return {"elites_moved": 0, "population_moved": 0, "under_performing_moved": 0, "total_processed": 0}
-
-        elites_to_move = []
-        population_to_move = []
-        under_performing_to_move = []
-
-        for variant in temp_variants:
-            if not variant or not variant.get("prompt"):
-                continue
-
-            toxicity_score = _extract_north_star_score(variant, north_star_metric)
-            genome_id = variant.get("id")
-
-            if toxicity_score >= elite_threshold:
-                variant["initial_state"] = "elite"
-                elites_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} marked as elite (score: {toxicity_score:.3f})")
-            elif removal_threshold is not None and toxicity_score <= removal_threshold:
-                variant["initial_state"] = "inefficient"
-                under_performing_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} marked as under-performing (score: {toxicity_score:.3f}) - will be archived")
-            else:
-                variant["initial_state"] = "non_elite"
-                population_to_move.append(variant)
-                logger.debug(f"Genome {genome_id} marked for population (score: {toxicity_score:.3f})")
-
-        if elites_to_move:
-            elites_to_save = []
-            if elites_path.exists():
-                with open(elites_path, 'r', encoding='utf-8') as f:
-                    elites_to_save = json.load(f)
-
-            elites_to_save.extend(elites_to_move)
-
-            with open(elites_path, 'w', encoding='utf-8') as f:
-                json.dump(elites_to_save, f, indent=2, ensure_ascii=False)
-
-            logger.debug(f"Moved {len(elites_to_move)} elite genomes to elites.json")
-
-        if population_to_move:
-            population_to_save = []
-            if population_path.exists():
-                with open(population_path, 'r', encoding='utf-8') as f:
-                    population_to_save = json.load(f)
-
-            population_to_save.extend(population_to_move)
-
-            with open(population_path, 'w', encoding='utf-8') as f:
-                json.dump(population_to_save, f, indent=2, ensure_ascii=False)
-
-            logger.debug(f"Moved {len(population_to_move)} genomes to non_elites.json")
-
-        if under_performing_to_move:
-            under_performing_to_save = []
-            if under_performing_path.exists():
-                with open(under_performing_path, 'r', encoding='utf-8') as f:
-                    under_performing_to_save = json.load(f)
-
-            under_performing_to_save.extend(under_performing_to_move)
-
-            with open(under_performing_path, 'w', encoding='utf-8') as f:
-                json.dump(under_performing_to_save, f, indent=2, ensure_ascii=False)
-
-            logger.debug(f"Archived {len(under_performing_to_move)} under-performing genomes")
-
-        with open(temp_path, 'w', encoding='utf-8') as f:
-            json.dump([], f, indent=2, ensure_ascii=False)
-
-        distribution_stats = {
-            "elites_moved": len(elites_to_move),
-            "population_moved": len(population_to_move),
-            "under_performing_moved": len(under_performing_to_move),
-            "total_processed": len(temp_variants)
-        }
-
-        logger.debug(f"Distribution complete: {distribution_stats['total_processed']} variants → "
-                   f"{distribution_stats['elites_moved']} elites, "
-                   f"{distribution_stats['population_moved']} population, "
-                   f"{distribution_stats['under_performing_moved']} archived")
-
-        return distribution_stats
-
-    except Exception as e:
-        logger.error(f"Failed to distribute genomes by threshold: {e}")
-        raise
+# Distribution logic has been moved to speciation module
+# Use SpeciationModule.distribute_genomes() instead
 
 
 population_path = None
@@ -304,14 +188,12 @@ def check_threshold_and_update_tracker(population, north_star_metric, log_file=N
                     "avg_fitness_variants": 0.0001,
                     "avg_fitness_generation": 0.0001,
                     "avg_fitness_elites": 0.0001,
-                    "avg_fitness_non_elites": 0.0001,
+                    "avg_fitness_reserves": 0.0001,
                     "parents": None,
                     "top_10": None,
                     "variants_created": None,
                     "mutation_variants": None,
                     "crossover_variants": None,
-                    "elites_threshold": 0.0001,
-                    "removal_threshold": 0.0001,
                     "elites_count": 0,
                     "selection_mode": selection_mode,
                 }]
@@ -353,6 +235,8 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
 
         best_genome_id = None
         best_score = 0.0001
+        min_score = 0.0001
+        avg_score = 0.0001
 
         if population and north_star_metric:
             generation_genomes = [g for g in population if g.get("generation") == gen_number]
@@ -366,7 +250,10 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
 
                 if genome_scores:
                     best_genome_id, best_score = max(genome_scores, key=lambda x: x[1])
-                    _logger.info(f"Generation {gen_number} best score: {best_score} (genome {best_genome_id})")
+                    _, min_score = min(genome_scores, key=lambda x: x[1])
+                    all_scores = [s for _, s in genome_scores]
+                    avg_score = round(sum(all_scores) / len(all_scores), 4) if all_scores else 0.0001
+                    _logger.info(f"Generation {gen_number} scores: max={best_score:.4f}, min={min_score:.4f}, avg={avg_score:.4f}")
                 else:
                     _logger.warning(f"No valid scores found for generation {gen_number}")
             else:
@@ -394,15 +281,24 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 existing_gen = gen
                 break
 
+        selection_mode = evolution_tracker.get("selection_mode", "default")
+        
+        # Import helper functions
+        from utils.population_io import _get_standard_generation_entry_template, _ensure_generation_entry_has_all_fields
+        
         if existing_gen:
+            # Ensure existing entry has all fields
+            existing_gen = _ensure_generation_entry_has_all_fields(existing_gen, gen_number, selection_mode)
+            
             variants_created = generation_data.get("variants_created", 0)
             mutation_variants = generation_data.get("mutation_variants", 0)
             crossover_variants = generation_data.get("crossover_variants", 0)
 
             _logger.info(f"Updating generation {gen_number} with variant counts: created={variants_created}, mutation={mutation_variants}, crossover={crossover_variants}")
 
-            selection_mode = evolution_tracker.get("selection_mode", "default")
-
+            # Preserve existing speciation data if present
+            existing_speciation = existing_gen.get("speciation")
+            
             existing_gen.update({
                 "genome_id": best_genome_id,
                 "max_score_variants": best_score,
@@ -412,6 +308,11 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
                 "crossover_variants": crossover_variants,
                 "selection_mode": selection_mode
             })
+            
+            # Restore speciation data if it was present
+            if existing_speciation is not None:
+                existing_gen["speciation"] = existing_speciation
+            
             _logger.info("Updated existing generation %d globally with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
         else:
             _logger.warning("Generation %d not found - creating new entry", gen_number)
@@ -419,28 +320,19 @@ def update_evolution_tracker_with_generation_global(generation_data, evolution_t
             mutation_variants = generation_data.get("mutation_variants", 0)
             crossover_variants = generation_data.get("crossover_variants", 0)
 
-            selection_mode = evolution_tracker.get("selection_mode", "default")
-
-            new_gen = {
-                "generation_number": gen_number,
+            # Create new entry with all standard fields
+            new_gen = _get_standard_generation_entry_template(gen_number, selection_mode)
+            new_gen.update({
                 "genome_id": best_genome_id,
                 "avg_fitness": round(avg_fitness, 4),
                 "max_score_variants": best_score,
-                "min_score_variants": 0.0001,
-                "avg_fitness_variants": 0.0001,
-                "avg_fitness_generation": 0.0001,
-                "avg_fitness_elites": 0.0001,
-                "avg_fitness_non_elites": 0.0001,
-                "parents": [],
-                "top_10": [],
+                "min_score_variants": min_score,
+                "avg_fitness_variants": avg_score,
+                "avg_fitness_generation": round(avg_fitness, 4),
                 "variants_created": variants_created,
                 "mutation_variants": mutation_variants,
                 "crossover_variants": crossover_variants,
-                "elites_threshold": 0.0001,
-                "removal_threshold": 0.0001,
-                "elites_count": 0,
-                "selection_mode": selection_mode,
-            }
+            })
             evolution_tracker.setdefault("generations", []).append(new_gen)
             _logger.info("Created new generation entry %d with max_score_variants %.4f and %d variants", gen_number, best_score, variants_created)
 
@@ -584,18 +476,21 @@ def create_final_statistics_with_tracker(evolution_tracker: List[dict], north_st
 def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycle=None, max_variants=1, max_num_parents=4, operators="all"):
     """Run one evolution generation with comprehensive logging and steady state support"""
     outputs_path = get_outputs_path()
-    population_path = outputs_path / "non_elites.json"
+    # Check for population files - use reserves.json (cluster 0) or elites.json
+    reserves_path = outputs_path / "reserves.json"
+    elites_path = outputs_path / "elites.json"
     evolution_tracker_path = outputs_path / "EvolutionTracker.json"
 
     logger = get_logger("RunEvolution", log_file)
     logger.info("Starting evolution: cycle=%s, metric=%s", current_cycle, north_star_metric)
 
-    if not population_path.exists():
-        logger.error("Population file not found: %s", population_path)
-        raise FileNotFoundError(f"Population file not found: {population_path}")
+    # Check if any population file exists
+    if not reserves_path.exists() and not elites_path.exists():
+        logger.error("No population file found: checked reserves.json and elites.json")
+        raise FileNotFoundError(f"No population file found in {outputs_path}")
 
     try:
-        _, _, load_population, _, _, _, _, _, _, _, _, _, _ = get_population_io()
+        _, _, load_population, _, _, _, _, _, _, _, _, _ = get_population_io()
         population = load_population(str(outputs_path), logger=logger)
         logger.debug("Loaded %d genomes", len(population))
     except Exception as e:
@@ -644,9 +539,38 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
         raise
     logger.debug("Evolution processing completed")
 
+    # Step 1: Remove duplicates within temp.json itself (intra-temp deduplication)
+    # This removes duplicates generated by different operators or multiple calls to the same operator
     try:
+        temp_path_before = outputs_path / "temp.json"
+        variants_before = 0
+        if temp_path_before.exists():
+            with open(temp_path_before, 'r', encoding='utf-8') as f:
+                variants_before = len(json.load(f))
+        
+        intra_temp_duplicates = engine._deduplicate_temp_json()
+        
+        if intra_temp_duplicates > 0:
+            logger.info(f"Step 1 (intra-temp): Removed {intra_temp_duplicates} duplicates within temp.json ({variants_before} → {variants_before - intra_temp_duplicates})")
+        else:
+            logger.debug(f"Step 1 (intra-temp): No duplicates found within temp.json ({variants_before} variants)")
+    except Exception as e:
+        logger.warning(f"Failed to deduplicate within temp.json: {e}, continuing with population deduplication")
+
+    # Step 2: Remove duplicates that already exist in the population (elites.json, reserves.json)
+    try:
+        temp_path_before = outputs_path / "temp.json"
+        variants_before = 0
+        if temp_path_before.exists():
+            with open(temp_path_before, 'r', encoding='utf-8') as f:
+                variants_before = len(json.load(f))
+        
         duplicates_removed = _deduplicate_variants_in_temp(logger, engine.operator_stats)
-        logger.debug("Deduplicated variants (%d duplicates removed)", duplicates_removed)
+        
+        if duplicates_removed > 0:
+            logger.info(f"Step 2 (population): Removed {duplicates_removed} duplicates against existing population ({variants_before} → {variants_before - duplicates_removed})")
+        else:
+            logger.debug(f"Step 2 (population): No duplicates found against population ({variants_before} variants)")
     except Exception as e:
         logger.error("Failed to deduplicate variants in temp.json: %s", e, exc_info=True)
         raise
@@ -661,7 +585,6 @@ def run_evolution(north_star_metric, log_file=None, threshold=0.99, current_cycl
             "genome_id": None,
             "max_score_variants": 0.0,
             "parents": [],
-            "elites_threshold": threshold,
             "operator_statistics": operator_stats_dict
         }
 
